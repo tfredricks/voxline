@@ -102,33 +102,26 @@ final class AppCoordinator {
     }
 
     /// Ensure the speech-recognition model is downloaded AND loaded into the
-    /// Apple Neural Engine before the user can record. The first launch after
-    /// install does both; later launches just re-prewarm (fast — ANE bundle
-    /// cache makes subsequent loads ~seconds, not minutes).
+    /// Apple Neural Engine before the chord starts working. The setup window
+    /// stays on screen for both phases (download + ANE compile) so the user
+    /// always sees progress before being allowed to record. First-run after
+    /// install: several minutes total. Subsequent launches: a few seconds
+    /// (ANE bundle cache makes prewarm fast).
     private func prepareIfNeeded(state: AppState, transcriber: TranscriptionService) {
         let needsDownload = !TranscriptionService.isModelCached(transcriber.model)
 
-        if needsDownload {
-            state.status = .downloadingModel(progress: 0)
-            let window = ModelDownloadWindow()
-            downloadWindow = window
-            window.show(state: state)
-        } else {
-            // Cached: prewarm silently in the background. No window — but the
-            // chord is gated via state.status.blocksRecording, and the
-            // menu-bar icon switches to gearshape.circle so the user has a
-            // hint if they try to record before prewarm completes.
-            state.status = .preparingModel
-        }
+        // Always show the window so the chord doesn't appear silently broken
+        // while ANE compiles. Status starts in the right phase for the view.
+        state.status = needsDownload ? .downloadingModel(progress: 0) : .preparingModel
+        let window = ModelDownloadWindow()
+        downloadWindow = window
+        window.show(state: state)
 
         Task { @MainActor in
             do {
                 if needsDownload {
                     try await transcriber.prepareModel { progress in
                         Task { @MainActor in
-                            // Only push progress updates while still in the
-                            // downloading state, to avoid clobbering a later
-                            // .error set by a different code path.
                             if case .downloadingModel = state.status {
                                 state.status = .downloadingModel(progress: progress)
                             }
