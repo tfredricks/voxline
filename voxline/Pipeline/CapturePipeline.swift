@@ -86,7 +86,7 @@ final class CapturePipeline {
         do {
             transcript = try await transcriber.transcribe(samples: samples)
         } catch {
-            return setError("Transcription failed: \(error.localizedDescription)")
+            return setError("Transcription failed. Try again or pick a different model in Settings → General.")
         }
         state.lastTranscript = transcript
 
@@ -120,7 +120,7 @@ final class CapturePipeline {
         do {
             try await injector.inject(cleaned)
         } catch {
-            return setError("Paste failed: \(error.localizedDescription)")
+            return setError("Paste failed. The pasteboard may be locked by another app.")
         }
 
         resetIdle()
