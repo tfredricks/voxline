@@ -147,13 +147,23 @@ final class HotkeyMonitor {
 
     /// Poll the global modifier state. If we're still "recording" but the
     /// chord is no longer physically held (we missed the release event), finalize.
+    ///
+    /// IMPORTANT: CGEventSource.flagsState returns COMBINED CGEventFlags
+    /// (.maskControl / .maskAlternate). The per-device masks
+    /// NX_DEVICELCTLKEYMASK / NX_DEVICELALTKEYMASK are only set on flags
+    /// attached to individual events delivered through a tap — they are NOT
+    /// present in flagsState. Using the device masks here always returned
+    /// false even while the user was holding the chord, causing the safety
+    /// net to fire ~0.25s into every recording. Use the combined masks; we
+    /// lose left-vs-right distinction in the safety check, which is fine
+    /// since the tap callback already enforces left-only on the press.
     private func reconcileFlagsState() {
         guard machine.state == .recording else { return }
         let flags = CGEventSource.flagsState(.combinedSessionState)
-        let leftCtrl = flags.contains(CGEventFlags(rawValue: UInt64(NX_DEVICELCTLKEYMASK)))
-        let leftOpt  = flags.contains(CGEventFlags(rawValue: UInt64(NX_DEVICELALTKEYMASK)))
-        if !(leftCtrl && leftOpt) {
-            feed(.flagsChanged(leftCtrlDown: leftCtrl, leftOptDown: leftOpt))
+        let ctrl = flags.contains(CGEventFlags(rawValue: UInt64(CGEventFlags.maskControl.rawValue)))
+        let opt  = flags.contains(CGEventFlags(rawValue: UInt64(CGEventFlags.maskAlternate.rawValue)))
+        if !(ctrl && opt) {
+            feed(.flagsChanged(leftCtrlDown: ctrl, leftOptDown: opt))
         }
     }
 
