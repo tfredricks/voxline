@@ -27,6 +27,7 @@ final class HotkeyMonitor {
 
     /// Install the tap and observers. Throws if Accessibility is not granted.
     func start() throws {
+        guard eventTap == nil else { return }
         let mask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
 
         guard let tap = CGEvent.tapCreate(
@@ -42,10 +43,9 @@ final class HotkeyMonitor {
 
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
-
         eventTap = tap
         runLoopSource = source
+        CGEvent.tapEnable(tap: tap, enable: true)
 
         // Periodic reconciliation: catches missed flagsChanged events.
         reconciliationTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
@@ -97,8 +97,10 @@ final class HotkeyMonitor {
         switch type {
         case .flagsChanged:
             let flags = event.flags
-            // CGEventFlags doesn't distinguish left vs right modifiers directly;
-            // we use the maskNonCoalesced + virtual key check via NX_DEVICELCTLKEYMASK / NX_DEVICELALTKEYMASK.
+            // CGEvent.flags exposes per-device modifier bits
+            // (NX_DEVICELCTLKEYMASK / NX_DEVICELALTKEYMASK) that distinguish
+            // left vs right modifiers, unlike the coalesced
+            // CGEventFlags.maskControl / .maskAlternate.
             let leftCtrl = flags.contains(CGEventFlags(rawValue: UInt64(NX_DEVICELCTLKEYMASK)))
             let leftOpt  = flags.contains(CGEventFlags(rawValue: UInt64(NX_DEVICELALTKEYMASK)))
             Task { @MainActor in
@@ -158,6 +160,27 @@ final class HotkeyMonitor {
     private func cancelMaxDurationTimer() {
         maxDurationTimer?.invalidate()
         maxDurationTimer = nil
+    }
+
+    deinit {
+        // Synchronous cleanup that doesn't require @MainActor isolation:
+        // - Disable the CGEventTap so the C callback can no longer fire and
+        //   read our refcon (which would be a use-after-free).
+        // - Invalidate timers so they stop firing.
+        // - Remove the NSWorkspace observer.
+        // We do NOT touch the @MainActor-isolated assignments (they're going
+        // away anyway). If callers want orderly cleanup, they should call stop().
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+        }
+        if let src = runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes)
+        }
+        maxDurationTimer?.invalidate()
+        reconciliationTimer?.invalidate()
+        if let obs = deactivationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(obs)
+        }
     }
 }
 
