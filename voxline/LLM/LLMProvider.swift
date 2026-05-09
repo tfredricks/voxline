@@ -53,8 +53,10 @@ enum LLMError: Error, LocalizedError {
             return "Rate limited by the provider; try again in a moment."
         case .network(let err):
             return "Network error: \(err.localizedDescription)"
-        case .badStatus(let code, let body):
-            return "Provider returned HTTP \(code): \(body)"
+        case .badStatus(let code, _):
+            // Body intentionally omitted from user-visible text: provider
+            // 401/403 responses can echo the offending API key prefix.
+            return "Provider returned HTTP \(code)."
         case .badResponseShape(let reason):
             return "Could not parse provider response: \(reason)"
         }
