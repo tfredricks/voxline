@@ -71,9 +71,11 @@ final class AppCoordinator {
     private var downloadWindow: ModelDownloadWindow?
     private var modelPrepTask: Task<Void, Never>?
     private var didStart = false
-    private var accessibilityRetryTimer: Timer?
-    private var inputMonitoringWatchdog: Timer?
-    private var hotkeyEnabledObserver: Timer?
+    /// Single 1s timer that reconciles `hotkeyEnabled` + permission state with
+    /// the tap's installed/uninstalled status. Replaces the three separate
+    /// timers (retry, revocation watchdog, enabled observer) that used to race
+    /// over the same eventTap.
+    private var permissionPollTimer: Timer?
     private var firstRunWindow: FirstRunWindowController?
 
     func startIfNeeded(state: AppState) {
@@ -234,95 +236,83 @@ final class AppCoordinator {
             Task { _ = await perms.requestMicrophone() }
         }
 
+        // Save the monitor immediately so the unified reconcile loop owns it.
+        // The first start() attempt may fail (e.g. AX not granted yet); the
+        // loop retries on every tick and clears the error once the tap installs.
+        hotkeyMonitor = monitor
         do {
             try monitor.start()
-            hotkeyMonitor = monitor
-            startInputMonitoringWatchdog(state: state)
         } catch {
-            // Accessibility wasn't granted yet. Macos doesn't deliver a
-            // permission-changed notification to the running process, so
-            // poll until it's granted and then install the tap. The user
-            // does NOT need to restart the app.
+            // macOS doesn't deliver a permission-changed notification to the
+            // running process, so the reconcile loop polls until AX/IM are
+            // granted and then installs the tap. The user does NOT need to
+            // restart the app.
             state.status = .error("Hotkey monitoring requires Accessibility AND Input Monitoring permission. Grant both in System Settings → Privacy & Security — voxline will pick them up automatically.")
-            startAccessibilityRetry(state: state, monitor: monitor)
         }
 
-        observeHotkeyEnabled(state: state)
+        startPermissionAndStateLoop(state: state)
     }
 
-    /// Once the tap is installed, watch for the user toggling Input Monitoring
-    /// in System Settings (or revoking it). This is the permission that makes
-    /// the chord work outside voxline itself; without it the tap exists but is
-    /// silent unless voxline is foreground.
-    private func startInputMonitoringWatchdog(state: AppState) {
-        inputMonitoringWatchdog?.invalidate()
-        inputMonitoringWatchdog = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak state, weak self] _ in
-            Task { @MainActor in
-                guard let state else { return }
-                let perms = PermissionsService()
-                let ax = perms.accessibilityStatus
-                let im = perms.inputMonitoringStatus
-                let mic = perms.microphoneStatus
-                state.debugAccessibilityStatus = String(describing: ax)
-                state.debugInputMonitoringStatus = String(describing: im)
-                state.debugMicrophoneStatus = String(describing: mic)
+    /// Single source of truth for "should the tap be installed right now?".
+    /// Replaces three separately-timed loops (accessibility-retry, IM watchdog,
+    /// hotkey-enabled observer) that used to race against each other when, for
+    /// example, the watchdog tore down the tap while the enabled observer was
+    /// trying to install it the same second.
+    private func startPermissionAndStateLoop(state: AppState) {
+        permissionPollTimer?.invalidate()
+        permissionPollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self, weak state] _ in
+            MainActor.assumeIsolated {
+                guard let self, let state else { return }
+                self.reconcileTapWithPermissionsAndEnabled(state: state)
+            }
+        }
+        // React instantly to user-driven hotkeyEnabled toggles instead of
+        // waiting up to 1s for the next poll tick.
+        observeHotkeyEnabledChanges(state: state)
+    }
 
-                // Revocation detection: if the tap was installed but a required
-                // permission has been revoked, the chord no longer works. Surface
-                // an actionable error and tear down the tap so a future re-grant
-                // can re-install it via startAccessibilityRetry.
-                if let installed = self?.hotkeyMonitor?.isTapInstalled, installed {
-                    if ax != .granted || im != .granted {
-                        state.status = .error("Accessibility or Input Monitoring permission was revoked. Re-grant it in System Settings → Privacy & Security; voxline will recover automatically.")
-                        self?.hotkeyMonitor?.stop()
-                        if let monitor = self?.hotkeyMonitor {
-                            self?.startAccessibilityRetry(state: state, monitor: monitor)
-                        }
-                    }
-                }
+    private func reconcileTapWithPermissionsAndEnabled(state: AppState) {
+        let perms = PermissionsService()
+        let ax = perms.accessibilityStatus
+        let im = perms.inputMonitoringStatus
+        let mic = perms.microphoneStatus
+        state.debugAccessibilityStatus = String(describing: ax)
+        state.debugInputMonitoringStatus = String(describing: im)
+        state.debugMicrophoneStatus = String(describing: mic)
+
+        guard let monitor = hotkeyMonitor else { return }
+        let permissionsOK = (ax == .granted && im == .granted)
+        let shouldBeInstalled = state.hotkeyEnabled && permissionsOK
+        let isInstalled = monitor.isTapInstalled
+
+        if shouldBeInstalled && !isInstalled {
+            do {
+                try monitor.start()
+                if case .error = state.status { state.status = .idle }
+            } catch {
+                // tapCreate can lag behind AXIsProcessTrusted; retry next tick.
+            }
+        } else if !shouldBeInstalled && isInstalled {
+            monitor.stop()
+            // Distinguish user-initiated pause from involuntary revocation —
+            // only the latter deserves an error banner.
+            if state.hotkeyEnabled && !permissionsOK {
+                state.status = .error("Accessibility or Input Monitoring permission was revoked. Re-grant it in System Settings → Privacy & Security; voxline will recover automatically.")
             }
         }
     }
 
-    private func startAccessibilityRetry(state: AppState, monitor: HotkeyMonitor) {
-        accessibilityRetryTimer?.invalidate()
-        accessibilityRetryTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self, weak state] _ in
+    /// Re-arms `withObservationTracking` after each change so we keep getting
+    /// callbacks. Calls reconcile immediately on change rather than waiting
+    /// for the next poll tick.
+    private func observeHotkeyEnabledChanges(state: AppState) {
+        withObservationTracking {
+            _ = state.hotkeyEnabled
+        } onChange: { [weak self, weak state] in
             Task { @MainActor in
                 guard let self, let state else { return }
-                // Cheap check first to avoid spamming tapCreate while the
-                // user hasn't actioned the dialog yet.
-                guard PermissionsService().accessibilityStatus == .granted else { return }
-                do {
-                    try monitor.start()
-                    self.hotkeyMonitor = monitor
-                    self.accessibilityRetryTimer?.invalidate()
-                    self.accessibilityRetryTimer = nil
-                    if case .error = state.status {
-                        state.status = .idle
-                    }
-                } catch {
-                    // AXIsProcessTrusted said yes but tapCreate still failed.
-                    // Try again next tick — the system can lag a little after
-                    // the toggle flip.
-                }
-            }
-        }
-    }
-
-    private func observeHotkeyEnabled(state: AppState) {
-        // Poll once per second — toggling is rare and a notifier would
-        // require a rewrite of AppState into Combine.
-        hotkeyEnabledObserver?.invalidate()
-        hotkeyEnabledObserver = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self, weak state] _ in
-            Task { @MainActor in
-                guard let self, let state else { return }
-                let enabled = state.hotkeyEnabled
-                let installed = self.hotkeyMonitor?.isTapInstalled ?? false
-                if enabled && !installed {
-                    try? self.hotkeyMonitor?.start()
-                } else if !enabled && installed {
-                    self.hotkeyMonitor?.stop()
-                }
+                self.reconcileTapWithPermissionsAndEnabled(state: state)
+                self.observeHotkeyEnabledChanges(state: state)
             }
         }
     }
@@ -394,9 +384,7 @@ final class AppCoordinator {
     }
 
     deinit {
-        hotkeyEnabledObserver?.invalidate()
-        inputMonitoringWatchdog?.invalidate()
-        accessibilityRetryTimer?.invalidate()
+        permissionPollTimer?.invalidate()
         modelPrepTask?.cancel()
     }
 }
