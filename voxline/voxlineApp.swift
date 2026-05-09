@@ -40,6 +40,8 @@ final class AppCoordinator {
     private var pillWindow: RecordingPillWindow?
     private var pipeline: CapturePipeline?
     private var didStart = false
+    // Reserved for Plan 3 — will hold an Observation token once
+    // AppState.audioLevel drives the menu-bar icon animation.
     private var levelObservation: AnyObject?
 
     func startIfNeeded(state: AppState) {
@@ -63,6 +65,7 @@ final class AppCoordinator {
         monitor.onFinalizeRecording = { [weak self, weak state] in
             Task { @MainActor in
                 await self?.pipeline?.finalizeRecording()
+                self?.hotkeyMonitor?.recordingFinished()
                 if let state { self?.pillWindow?.updateVisibility(state: state) }
             }
         }

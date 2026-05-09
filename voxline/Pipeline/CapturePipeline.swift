@@ -25,6 +25,8 @@ final class CapturePipeline {
             try capture.start()
         } catch {
             state.status = .error("Audio capture failed: \(error.localizedDescription)")
+            state.recordingStartedAt = nil
+            state.audioLevel = 0
             return
         }
         state.recordingStartedAt = Date()
