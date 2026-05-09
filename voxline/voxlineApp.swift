@@ -72,13 +72,50 @@ final class AppCoordinator {
     private var didStart = false
     private var accessibilityRetryTimer: Timer?
     private var inputMonitoringWatchdog: Timer?
+    private var firstRunWindow: FirstRunWindowController?
 
     func startIfNeeded(state: AppState) {
         guard !didStart else { return }
         didStart = true
 
         let settings = AppSettings()
+        if !settings.hasCompletedFirstRun {
+            startWizardThenApp(state: state, settings: settings)
+        } else {
+            startApp(state: state, settings: settings)
+        }
+    }
 
+    private func startWizardThenApp(state: AppState, settings: AppSettings) {
+        buildServices(state: state, settings: settings)
+        guard let transcriber = self.transcriber else { return }
+
+        let wizard = FirstRunWindowController()
+        self.firstRunWindow = wizard
+        wizard.show(
+            state: state,
+            settings: settings,
+            model: settings.whisperModel,
+            chord: settings.hotkeyChord
+        ) { [weak self] in
+            guard let self else { return }
+            self.firstRunWindow = nil
+            self.installHotkey(state: state, settings: settings)
+        }
+
+        // Eagerly start the model download so by the time the user reaches the
+        // download step, progress is already advancing.
+        prepareIfNeeded(state: state, transcriber: transcriber)
+    }
+
+    private func startApp(state: AppState, settings: AppSettings) {
+        buildServices(state: state, settings: settings)
+        guard let transcriber = self.transcriber else { return }
+        installHotkey(state: state, settings: settings)
+        prepareIfNeeded(state: state, transcriber: transcriber)
+    }
+
+    private func buildServices(state: AppState, settings: AppSettings) {
         let capture = AudioCaptureService()
         self.capture = capture
         let transcriber = TranscriptionService()
@@ -122,7 +159,9 @@ final class AppCoordinator {
         let pill = RecordingPillWindow()
         pillWindow = pill
         pill.show(state: state)
+    }
 
+    private func installHotkey(state: AppState, settings: AppSettings) {
         let monitor = HotkeyMonitor()
         monitor.chord = settings.hotkeyChord
         monitor.onStartRecording = { [weak self, weak state] in
@@ -197,7 +236,6 @@ final class AppCoordinator {
             startAccessibilityRetry(state: state, monitor: monitor)
         }
 
-        prepareIfNeeded(state: state, transcriber: transcriber)
         observeHotkeyEnabled(state: state)
     }
 
