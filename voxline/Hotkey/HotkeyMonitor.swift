@@ -68,18 +68,13 @@ final class HotkeyMonitor {
         // The tap callback delivers release events directly; max-duration
         // and app-deactivation observers cover stuck states.
 
-        // App deactivation guard.
-        deactivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didDeactivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard
-                let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                app.bundleIdentifier == Bundle.main.bundleIdentifier
-            else { return }
-            Task { @MainActor [weak self] in self?.feed(.appDeactivated) }
-        }
+        // App-deactivation observer was removed. It was supposed to catch
+        // "voxline lost focus mid-recording so finalize" but for a menu-bar
+        // hold-to-talk app voxline is almost never foreground in normal use.
+        // In practice the observer fires ~0.2s into every recording —
+        // probably from the pill-window or audio-engine start shuffling
+        // window/focus state — and aborts the recording. Max-duration is a
+        // sufficient stuck-state safety net.
     }
 
     func stop() {
