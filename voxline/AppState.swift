@@ -76,6 +76,11 @@ final class AppState {
     /// of the most recent recording. ~16,000 = 1 second of audio.
     var debugLastSampleCount: Int = 0
 
+    /// How many AVAudioEngine tap-callbacks fired during the most recent
+    /// recording. If chord was held 5s but this is 1, the engine stalled.
+    /// If it's high but samples are low, the converter is dropping data.
+    var debugLastTapCallbackCount: Int = 0
+
     /// Why finalize ran on the most recent chord cycle. Set by HotkeyMonitor
     /// the moment finalize is triggered, so a too-short recording explains
     /// itself: chord-release vs app-deactivated vs tap-disabled vs max-duration.

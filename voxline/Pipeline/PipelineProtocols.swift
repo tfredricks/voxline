@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 protocol AudioCapturing: AnyObject {
     var onLevel: ((Float) -> Void)? { get set }
+    var onTapCallback: ((Int) -> Void)? { get set }
     func start() throws
     func stop()
     func takeSamples() -> [Float]

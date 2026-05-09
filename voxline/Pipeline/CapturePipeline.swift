@@ -40,6 +40,11 @@ final class CapturePipeline {
                 }
             }
         }
+        capture.onTapCallback = { [weak self] _ in
+            Task { @MainActor in
+                self?.state.debugLastTapCallbackCount += 1
+            }
+        }
     }
 
     /// Begin a new recording. Caller must ensure we're not already recording.
@@ -56,6 +61,7 @@ final class CapturePipeline {
         state.recordingStartedAt = Date()
         state.audioLevel = 0
         state.debugLastPeakLevel = 0
+        state.debugLastTapCallbackCount = 0
         state.status = .recording
     }
 

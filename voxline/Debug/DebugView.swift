@@ -70,6 +70,7 @@ struct DebugView: View {
                     ? "0 (no audio captured yet)"
                     : "\(state.debugLastSampleCount) (~\(String(format: "%.1f", Double(state.debugLastSampleCount) / 16_000.0))s)")
             row("Peak level:", String(format: "%.3f", state.debugLastPeakLevel))
+            row("Tap callbacks:", "\(state.debugLastTapCallbackCount)")
             row("Finalize reason:", state.debugLastFinalizeReason)
             Text("Heard (raw transcript from WhisperKit)")
                 .font(.caption).foregroundStyle(.secondary)

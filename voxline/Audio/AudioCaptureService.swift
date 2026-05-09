@@ -13,6 +13,12 @@ final class AudioCaptureService {
     /// most recently captured chunk. Used by the recording pill's waveform.
     var onLevel: ((Float) -> Void)?
 
+    /// Optional debug observer — fires once per AVAudioEngine tap callback
+    /// with the buffer's frame count. Lets the Debug window distinguish
+    /// "engine stalled after one buffer" from "many buffers but converter
+    /// is dropping samples".
+    var onTapCallback: ((Int) -> Void)?
+
     private let engine = AVAudioEngine()
     private var converter: AVAudioConverter?
     private var samples: [Float] = []
@@ -25,22 +31,27 @@ final class AudioCaptureService {
     /// input). The system mic indicator (orange dot) also stays lit forever
     /// when the engine is always running, which is its own problem.
     func start() throws {
-        let input = engine.inputNode
-
-        // If a previous cycle left the engine running, stop and reset it so
-        // we get a clean prepare/start. This is the documented pattern for
-        // input-only AVAudioEngine setups.
+        // Lifecycle per press: stop -> removeTap -> reconfigure -> installTap
+        // -> start. Engine instance is reused but fully stopped between
+        // recordings (the always-running pattern stalls input on Sequoia/26.x
+        // and keeps the system mic indicator lit).
         if engine.isRunning {
             engine.stop()
         }
-        engine.reset()
+        let input = engine.inputNode
+        input.removeTap(onBus: 0)
 
-        let hardwareFormat = input.outputFormat(forBus: 0)
-        guard hardwareFormat.sampleRate > 0 else {
+        // CRITICAL: use inputFormat(forBus: 0), NOT outputFormat. On macOS
+        // 26.x, outputFormat goes stale on input nodes and AVAudioEngine
+        // delivers exactly one tap buffer then stalls. This was voxline's
+        // "0.1s of audio per chord" bug. Reference: GhostPepper does the
+        // same thing — comment in their code explicitly calls this out.
+        let hwFormat = input.inputFormat(forBus: 0)
+        guard hwFormat.sampleRate > 0, hwFormat.channelCount > 0 else {
             throw AudioCaptureError.noInputDevice
         }
 
-        // Whisper input format.
+        // Whisper target format (16 kHz mono Float32).
         guard let target = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: AudioFormat.whisperSampleRate,
@@ -49,26 +60,27 @@ final class AudioCaptureService {
         ) else {
             throw AudioCaptureError.targetFormatUnavailable
         }
-        guard let conv = AVAudioConverter(from: hardwareFormat, to: target) else {
+        guard let conv = AVAudioConverter(from: hwFormat, to: target) else {
             throw AudioCaptureError.cannotConvertFormat
         }
         converter = conv
 
         samples.removeAll(keepingCapacity: true)
 
-        // Defensive: clear any leftover tap from a prior recording before installing
-        // ours. removeTap is a no-op when no tap is present.
-        input.removeTap(onBus: 0)
+        // ~20 ms buffer at the hardware sample rate (e.g. 960 frames at 48 kHz).
+        // Short buffers keep the stop-time tail flush cheap.
+        let bufferDuration = 0.02
+        let bufferSize = max(1, AVAudioFrameCount(hwFormat.sampleRate * bufferDuration))
 
-        // Capture locally before tap closure to avoid main-actor isolation issues.
         let convLocal = conv
         let targetFmt = target
-        input.installTap(onBus: 0, bufferSize: 4096, format: hardwareFormat) { [weak self] buffer, _ in
+        input.installTap(onBus: 0, bufferSize: bufferSize, format: hwFormat) { [weak self] buffer, _ in
             guard let self else { return }
+            let frames = Int(buffer.frameLength)
+            Task { @MainActor [weak self] in self?.onTapCallback?(frames) }
             self.handleInputNonisolated(buffer: buffer, converter: convLocal, target: targetFmt)
         }
 
-        engine.prepare()
         do {
             try engine.start()
         } catch {

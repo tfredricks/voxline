@@ -7,6 +7,7 @@ import Foundation
 
     final class FakeCapture: AudioCapturing {
         var onLevel: ((Float) -> Void)?
+        var onTapCallback: ((Int) -> Void)?
         var startCallCount = 0
         var stopCallCount = 0
         var pendingSamples: [Float] = [0.1, 0.2, 0.3]
