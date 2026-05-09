@@ -25,7 +25,6 @@ final class HotkeyStateMachine {
         case flagsChanged(leftCtrlDown: Bool, leftOptDown: Bool)
         case maxDurationElapsed
         case tapDisabled
-        case appDeactivated
         case recordingFinished
     }
 
@@ -52,8 +51,7 @@ final class HotkeyStateMachine {
             return [.finalizeRecording]
 
         case (.recording, .maxDurationElapsed),
-             (.recording, .tapDisabled),
-             (.recording, .appDeactivated):
+             (.recording, .tapDisabled):
             state = .finalizing
             return [.finalizeRecording]
 

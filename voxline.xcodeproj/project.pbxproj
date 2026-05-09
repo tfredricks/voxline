@@ -26,7 +26,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		C100000000000000000000A1 /* Exceptions for "voxline" folder in "voxline" target */ = {
+		C100000000000000000000A1 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -36,16 +36,7 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A100000000000000000000A4 /* voxline */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				C100000000000000000000A1 /* Exceptions for "voxline" folder in "voxline" target */,
-			);
-			explicitFileTypes = {};
-			explicitFolders = ();
-			path = voxline;
-			sourceTree = "<group>";
-		};
+		A100000000000000000000A4 /* voxline */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (C100000000000000000000A1 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = voxline; sourceTree = "<group>"; };
 		B100000000000000000000A1 /* voxlineTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = voxlineTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -164,12 +155,12 @@
 			);
 			mainGroup = A100000000000000000000A2;
 			minimizedProjectReferenceProxies = 1;
-			productRefGroup = A100000000000000000000A3 /* Products */;
-			projectDirPath = "";
-			projectRoot = "";
 			packageReferences = (
 				D100000000000000000000A1 /* XCRemoteSwiftPackageReference "WhisperKit" */,
 			);
+			productRefGroup = A100000000000000000000A3 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
 			targets = (
 				A100000000000000000000A5 /* voxline */,
 				B100000000000000000000A2 /* voxlineTests */,
@@ -352,6 +343,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"voxline/Preview Content\"";
+				DEVELOPMENT_TEAM = 2B5FBFV6CF;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -378,6 +370,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"voxline/Preview Content\"";
+				DEVELOPMENT_TEAM = 2B5FBFV6CF;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -468,8 +461,8 @@
 			repositoryURL = "https://github.com/argmaxinc/WhisperKit";
 			requirement = {
 				kind = versionRange;
-				minimumVersion = 0.10.0;
 				maximumVersion = 2.0.0;
+				minimumVersion = 0.10.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

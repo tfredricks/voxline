@@ -24,28 +24,17 @@ final class AudioCaptureService {
     private var samples: [Float] = []
 
     /// Begin capture. Throws if the input device is unavailable or sample-rate
-    /// negotiation fails. Stops and restarts the engine on each cycle — the
-    /// previous "keep engine running between captures" optimization caused the
-    /// engine to stall after delivering ~1 buffer (the engine has no output
-    /// node, so without a fresh prepare()/start() it doesn't reliably pump
-    /// input). The system mic indicator (orange dot) also stays lit forever
-    /// when the engine is always running, which is its own problem.
+    /// negotiation fails.
     func start() throws {
-        // Lifecycle per press: stop -> removeTap -> reconfigure -> installTap
-        // -> start. Engine instance is reused but fully stopped between
-        // recordings (the always-running pattern stalls input on Sequoia/26.x
-        // and keeps the system mic indicator lit).
         if engine.isRunning {
             engine.stop()
         }
         let input = engine.inputNode
         input.removeTap(onBus: 0)
 
-        // CRITICAL: use inputFormat(forBus: 0), NOT outputFormat. On macOS
-        // 26.x, outputFormat goes stale on input nodes and AVAudioEngine
-        // delivers exactly one tap buffer then stalls. This was voxline's
-        // "0.1s of audio per chord" bug. Reference: GhostPepper does the
-        // same thing — comment in their code explicitly calls this out.
+        // Use inputFormat(forBus:), not outputFormat. On macOS 26.x,
+        // outputFormat on input nodes goes stale and the tap delivers one
+        // buffer then stalls.
         let hwFormat = input.inputFormat(forBus: 0)
         guard hwFormat.sampleRate > 0, hwFormat.channelCount > 0 else {
             throw AudioCaptureError.noInputDevice
@@ -68,9 +57,7 @@ final class AudioCaptureService {
         samples.removeAll(keepingCapacity: true)
 
         // ~20 ms buffer at the hardware sample rate (e.g. 960 frames at 48 kHz).
-        // Short buffers keep the stop-time tail flush cheap.
-        let bufferDuration = 0.02
-        let bufferSize = max(1, AVAudioFrameCount(hwFormat.sampleRate * bufferDuration))
+        let bufferSize = max(1, AVAudioFrameCount(hwFormat.sampleRate * 0.02))
 
         let convLocal = conv
         let targetFmt = target
@@ -90,7 +77,7 @@ final class AudioCaptureService {
     }
 
     /// Stop capture. Removes the tap and stops the engine so the system mic
-    /// indicator turns off and CoreAudio releases the input device.
+    /// indicator turns off.
     func stop() {
         engine.inputNode.removeTap(onBus: 0)
         if engine.isRunning {
@@ -125,13 +112,10 @@ final class AudioCaptureService {
         var consumed = false
         let status = converter.convert(to: outBuffer, error: &error) { _, statusOut in
             if consumed {
-                // CRITICAL: must be .noDataNow, NOT .endOfStream. Using
-                // .endOfStream permanently terminates the converter's
-                // stream — every subsequent tap callback's convert() call
-                // would silently fail, leaving us with exactly one buffer
-                // worth of samples (~100ms) regardless of how long the user
-                // held the chord. This was voxline's "0.1s of audio per
-                // recording" bug.
+                // Must be .noDataNow, never .endOfStream. .endOfStream
+                // permanently terminates the converter's stream and every
+                // subsequent convert() call (i.e. every later tap buffer)
+                // silently fails.
                 statusOut.pointee = .noDataNow
                 return nil
             }

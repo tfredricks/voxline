@@ -87,14 +87,6 @@ import Foundation
         #expect(outputs.isEmpty)
     }
 
-    @Test func appDeactivated_finalizesIfRecording() {
-        let m = machine()
-        _ = m.handle(chord(true, true))
-        let outputs = m.handle(.appDeactivated)
-        #expect(m.state == .finalizing)
-        #expect(outputs == [.finalizeRecording])
-    }
-
     @Test func tapDisabled_finalizesIfRecording() {
         let m = machine()
         _ = m.handle(chord(true, true))
@@ -139,13 +131,6 @@ import Foundation
     @Test func tapDisabled_isNoOpIfNotRecording() {
         let m = machine()
         let outputs = m.handle(.tapDisabled)
-        #expect(m.state == .idle)
-        #expect(outputs.isEmpty)
-    }
-
-    @Test func appDeactivated_isNoOpIfNotRecording() {
-        let m = machine()
-        let outputs = m.handle(.appDeactivated)
         #expect(m.state == .idle)
         #expect(outputs.isEmpty)
     }
