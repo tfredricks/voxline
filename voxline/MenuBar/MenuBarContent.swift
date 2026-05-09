@@ -1,20 +1,9 @@
 import SwiftUI
 
-/// Maps AppStatus → SF Symbol name for the menu bar icon.
-enum MenuBarIcon {
-    static func symbolName(for status: AppStatus) -> String {
-        switch status {
-        case .idle:        return "mic"
-        case .recording:   return "mic.fill"
-        case .thinking:    return "ellipsis.circle"
-        case .error:       return "mic.slash"
-        }
-    }
-}
-
 struct MenuBarContent: View {
     @Bindable var state: AppState
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         if case .error(let message) = state.status {
@@ -22,6 +11,20 @@ struct MenuBarContent: View {
                 .foregroundStyle(.red)
             Divider()
         }
+
+        if case .downloadingModel(let p) = state.status {
+            Text("Downloading model — \(Int(p * 100))%")
+                .foregroundStyle(.secondary)
+            Divider()
+        }
+
+        // PLAN 2 ONLY — REMOVED IN PLAN 3 ALONG WITH DebugTranscriptWindow.
+        Button("Show Transcripts (debug)…") {
+            openWindow(id: "debug-transcripts")
+            NSApp.activate()
+        }
+
+        Divider()
 
         Button("Settings…") {
             openSettings()

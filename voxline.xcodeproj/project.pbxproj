@@ -6,6 +6,10 @@
 	objectVersion = 71;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D100000000000000000000A3 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = D100000000000000000000A2 /* WhisperKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		B100000000000000000000A8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -50,6 +54,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D100000000000000000000A3 /* WhisperKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -101,6 +106,7 @@
 			);
 			name = voxline;
 			packageProductDependencies = (
+				D100000000000000000000A2 /* WhisperKit */,
 			);
 			productName = voxline;
 			productReference = A100000000000000000000A6 /* voxline.app */;
@@ -161,6 +167,9 @@
 			productRefGroup = A100000000000000000000A3 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
+			packageReferences = (
+				D100000000000000000000A1 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+			);
 			targets = (
 				A100000000000000000000A5 /* voxline */,
 				B100000000000000000000A2 /* voxlineTests */,
@@ -452,6 +461,26 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D100000000000000000000A1 /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit";
+			requirement = {
+				kind = versionRange;
+				minimumVersion = 0.10.0;
+				maximumVersion = 2.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D100000000000000000000A2 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D100000000000000000000A1 /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A100000000000000000000A1 /* Project object */;
 }
