@@ -4,7 +4,7 @@ import Foundation
 import IOKit.hidsystem
 
 /// Codable value type for the hold-to-talk chord.
-/// Pure data; flag-bit matching uses CGEventFlags via `Modifier.deviceMask`.
+/// Pure data; flag-bit matching uses CGEventFlags via `Modifier.deviceMaskBit`.
 struct HotkeyChord: Codable, Equatable {
 
     enum Modifier: String, Codable, CaseIterable {
@@ -53,7 +53,11 @@ struct HotkeyChord: Codable, Equatable {
 
     var displayName: String { "\(modifierA.displayName) + \(modifierB.displayName)" }
 
-    /// Returns true when both modifier device-bits are present in `flags.rawValue`.
-    /// Caller derives the two booleans from the live CGEventFlags before calling.
-    func matches(modAFlag: Bool, modBFlag: Bool) -> Bool { modAFlag && modBFlag }
+    /// Returns true when both of this chord's modifier device-bits are set in `flags`.
+    /// CGEvent.flags exposes per-device modifier bits (NX_DEVICE*KEYMASK) so this
+    /// check distinguishes left vs right modifiers, unlike .maskControl etc.
+    func matches(flags: CGEventFlags) -> Bool {
+        let raw = flags.rawValue
+        return (raw & modifierA.deviceMaskBit) != 0 && (raw & modifierB.deviceMaskBit) != 0
+    }
 }
