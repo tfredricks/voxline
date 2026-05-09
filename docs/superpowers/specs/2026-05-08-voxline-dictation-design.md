@@ -123,6 +123,7 @@ Stored as JSON at the URL returned by `FileManager.default.url(for: .application
 
 - Status icon: idle (mic) / recording (filled mic) / thinking (spinner) / error (mic with badge)
 - Click → menu: `Toggle voxline`, `Settings…`, `Quit`
+  - **Note:** `Toggle voxline` (enable/disable hotkey listener) is deferred until Plan 2 wires the hotkey state machine. Plan 1's menu ships with `Settings…` and `Quit voxline` only — adding a toggle without something to toggle would be misleading UI.
 
 ### 6.2 Floating recording pill
 

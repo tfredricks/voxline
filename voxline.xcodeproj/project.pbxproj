@@ -21,8 +21,27 @@
 		B100000000000000000000A3 /* voxlineTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = voxlineTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C100000000000000000000A1 /* Exceptions for "voxline" folder in "voxline" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A100000000000000000000A5 /* voxline */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A100000000000000000000A4 /* voxline */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = voxline; sourceTree = "<group>"; };
+		A100000000000000000000A4 /* voxline */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C100000000000000000000A1 /* Exceptions for "voxline" folder in "voxline" target */,
+			);
+			explicitFileTypes = {};
+			explicitFolders = ();
+			path = voxline;
+			sourceTree = "<group>";
+		};
 		B100000000000000000000A1 /* voxlineTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = voxlineTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
