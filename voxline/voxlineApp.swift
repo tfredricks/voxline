@@ -25,7 +25,8 @@ struct voxlineApp: App {
 
         Settings {
             SettingsView(
-                generalVM: GeneralSettingsViewModel(applier: delegate.coordinator)
+                generalVM: GeneralSettingsViewModel(applier: delegate.coordinator),
+                modesVM: ModesSettingsViewModel(applier: delegate.coordinator)
             )
             .environment(delegate.appState)
         }
