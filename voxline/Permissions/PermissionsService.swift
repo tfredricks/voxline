@@ -1,6 +1,7 @@
 import AVFoundation
 import ApplicationServices
 import Foundation
+import IOKit.hid
 
 enum PermissionStatus: Equatable {
     case granted
@@ -25,6 +26,26 @@ struct PermissionsService {
     var accessibilityStatus: PermissionStatus {
         // No prompting variant — just read current state.
         AXIsProcessTrusted() ? .granted : .denied
+    }
+
+    /// Input Monitoring is a separate TCC category from Accessibility. A
+    /// CGEventTap created without it will only fire while voxline itself is
+    /// the frontmost app, which makes hold-to-talk useless. Required to
+    /// observe modifier-flag changes from any other app.
+    var inputMonitoringStatus: PermissionStatus {
+        let result = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent)
+        if result == kIOHIDAccessTypeGranted { return .granted }
+        if result == kIOHIDAccessTypeDenied  { return .denied }
+        return .notDetermined
+    }
+
+    /// Triggers the system Input Monitoring prompt the first time it's called.
+    /// On subsequent calls (after the user has actioned the dialog) it just
+    /// returns the current state. The TCC prompt is asynchronous in the sense
+    /// that the user has to action it; this returns the state at call time.
+    @discardableResult
+    func requestInputMonitoring() -> PermissionStatus {
+        return IOHIDRequestAccess(kIOHIDRequestTypeListenEvent) ? .granted : .denied
     }
 
     /// Triggers the system mic-access prompt if status is .notDetermined.

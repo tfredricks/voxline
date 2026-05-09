@@ -52,4 +52,13 @@ final class AppState {
     /// at each step ("idle" → "transcribing" → "llm" → "paste" → "idle").
     /// If finalize hangs, this is the last phase it reached.
     var debugPipelinePhase: String = "idle"
+
+    /// Live permission states polled by the debug-screen watchdog.
+    var debugMicrophoneStatus: String = "?"
+    var debugAccessibilityStatus: String = "?"
+    var debugInputMonitoringStatus: String = "?"
+
+    /// Last log line emitted by the debug screen's manual test buttons.
+    /// Empty string when nothing has been run yet.
+    var debugLastTestResult: String = ""
 }

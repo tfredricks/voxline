@@ -9,7 +9,15 @@ struct voxlineApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarContent(state: delegate.appState)
+            MenuBarContent(
+                state: delegate.appState,
+                openDebugWindow: {
+                    delegate.debugWindow.show(
+                        state: delegate.appState,
+                        coordinator: delegate.coordinator
+                    )
+                }
+            )
         } label: {
             MenuBarLabel(state: delegate.appState)
         }
@@ -35,6 +43,7 @@ private struct MenuBarLabel: View {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
     let coordinator = AppCoordinator()
+    let debugWindow = DebugWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         coordinator.startIfNeeded(state: appState)
@@ -43,13 +52,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 @MainActor
 final class AppCoordinator {
-    private var hotkeyMonitor: HotkeyMonitor?
+    // Exposed (not private) so the Debug screen can drive end-to-end test
+    // buttons (e.g. "test paste", "test LLM", "force unwedge"). Not part of
+    // the app's public surface — internal-only.
+    var hotkeyMonitor: HotkeyMonitor?
+    var pipeline: CapturePipeline?
+    var transcriber: TranscriptionService?
+    var llm: LLMService?
+    var modes: ModeRouter?
+    var injector: ClipboardInjector?
+    var frontmost: FrontmostApp?
+
     private var pillWindow: RecordingPillWindow?
     private var downloadWindow: ModelDownloadWindow?
-    private var pipeline: CapturePipeline?
-    private var transcriber: TranscriptionService?
     private var didStart = false
     private var accessibilityRetryTimer: Timer?
+    private var inputMonitoringWatchdog: Timer?
 
     func startIfNeeded(state: AppState) {
         guard !didStart else { return }
@@ -74,10 +92,14 @@ final class AppCoordinator {
 
         // LLM
         let llm = LLMService(settings: AppSettings(), keychain: Keychain())
+        self.llm = llm
+        self.modes = router
 
         // Output
         let injector = ClipboardInjector()
         let frontmost = FrontmostApp()
+        self.injector = injector
+        self.frontmost = frontmost
 
         let pipeline = CapturePipeline(
             state: state,
@@ -113,19 +135,43 @@ final class AppCoordinator {
                 state.debugTapInstalled = installed
             }
         }
+        // Input Monitoring is a separate TCC category from Accessibility.
+        // Without it, a CGEventTap only fires while voxline itself is the
+        // frontmost app — which made hold-to-talk look like it "only works
+        // once". Trigger the prompt here so the user can grant it at first
+        // launch alongside Accessibility.
+        _ = PermissionsService().requestInputMonitoring()
+
         do {
             try monitor.start()
             hotkeyMonitor = monitor
+            startInputMonitoringWatchdog(state: state)
         } catch {
             // Accessibility wasn't granted yet. Macos doesn't deliver a
             // permission-changed notification to the running process, so
             // poll until it's granted and then install the tap. The user
             // does NOT need to restart the app.
-            state.status = .error("Hotkey monitoring requires Accessibility permission. Grant it in System Settings → Privacy & Security → Accessibility — voxline will pick it up automatically.")
+            state.status = .error("Hotkey monitoring requires Accessibility AND Input Monitoring permission. Grant both in System Settings → Privacy & Security — voxline will pick them up automatically.")
             startAccessibilityRetry(state: state, monitor: monitor)
         }
 
         prepareIfNeeded(state: state, transcriber: transcriber)
+    }
+
+    /// Once the tap is installed, watch for the user toggling Input Monitoring
+    /// in System Settings (or revoking it). This is the permission that makes
+    /// the chord work outside voxline itself; without it the tap exists but is
+    /// silent unless voxline is foreground.
+    private func startInputMonitoringWatchdog(state: AppState) {
+        inputMonitoringWatchdog?.invalidate()
+        inputMonitoringWatchdog = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak state] _ in
+            Task { @MainActor in
+                guard let state else { return }
+                state.debugInputMonitoringStatus = String(describing: PermissionsService().inputMonitoringStatus)
+                state.debugAccessibilityStatus   = String(describing: PermissionsService().accessibilityStatus)
+                state.debugMicrophoneStatus      = String(describing: PermissionsService().microphoneStatus)
+            }
+        }
     }
 
     private func startAccessibilityRetry(state: AppState, monitor: HotkeyMonitor) {
