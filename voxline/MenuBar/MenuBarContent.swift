@@ -23,6 +23,11 @@ struct MenuBarContent: View {
             Divider()
         }
 
+        Button(state.hotkeyEnabled ? "Pause voxline" : "Resume voxline") {
+            state.hotkeyEnabled.toggle()
+        }
+        Divider()
+
         Button("Settings…") {
             openSettings()
             NSApp.activate()

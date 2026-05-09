@@ -198,6 +198,7 @@ final class AppCoordinator {
         }
 
         prepareIfNeeded(state: state, transcriber: transcriber)
+        observeHotkeyEnabled(state: state)
     }
 
     /// Once the tap is installed, watch for the user toggling Input Monitoring
@@ -236,6 +237,23 @@ final class AppCoordinator {
                     // AXIsProcessTrusted said yes but tapCreate still failed.
                     // Try again next tick — the system can lag a little after
                     // the toggle flip.
+                }
+            }
+        }
+    }
+
+    private func observeHotkeyEnabled(state: AppState) {
+        // Poll once per second — toggling is rare and a notifier would
+        // require a rewrite of AppState into Combine.
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self, weak state] _ in
+            Task { @MainActor in
+                guard let self, let state else { return }
+                let enabled = state.hotkeyEnabled
+                let installed = self.hotkeyMonitor?.isTapInstalled ?? false
+                if enabled && !installed {
+                    try? self.hotkeyMonitor?.start()
+                } else if !enabled && installed {
+                    self.hotkeyMonitor?.stop()
                 }
             }
         }
