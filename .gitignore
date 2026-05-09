@@ -5,3 +5,14 @@ DerivedData/
 build/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
+
+# Sandbox spike build artifacts — regenerate with run.sh
+spikes/EventTapSandboxSpike/spike
+spikes/EventTapSandboxSpike/_CodeSignature/
+
+# Swift Package Manager build artifacts
+.build/
+.swiftpm/
+
+# WhisperKit downloaded model cache (per-machine)
+Models/
