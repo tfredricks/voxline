@@ -22,6 +22,8 @@ struct DebugView: View {
                 Divider()
                 pipelineSection
                 Divider()
+                transcriptsSection
+                Divider()
                 modesSection
                 Divider()
                 testButtonsSection
@@ -31,6 +33,29 @@ struct DebugView: View {
             .padding(20)
             .frame(minWidth: 520, alignment: .leading)
         }
+    }
+
+    private var transcriptsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("Last chord cycle")
+            Text("Heard (raw transcript from WhisperKit)")
+                .font(.caption).foregroundStyle(.secondary)
+            transcriptBox(state.lastTranscript ?? "(no transcript yet)")
+            Text("Would paste (LLM-cleaned)")
+                .font(.caption).foregroundStyle(.secondary)
+            transcriptBox(state.lastCleanedText ?? "(no cleaned text yet)")
+        }
+    }
+
+    @ViewBuilder
+    private func transcriptBox(_ text: String) -> some View {
+        Text(text)
+            .font(.system(.body, design: .monospaced))
+            .textSelection(.enabled)
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .textBackgroundColor))
+            .cornerRadius(6)
     }
 
     // MARK: - Sections
@@ -95,18 +120,6 @@ struct DebugView: View {
                 row("Recording started:", started.formatted(date: .omitted, time: .standard))
             }
             row("Audio level:", String(format: "%.3f", state.audioLevel))
-            if let last = state.lastTranscript, !last.isEmpty {
-                Text("Last raw transcript:")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(last.prefix(400).description)
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .cornerRadius(6)
-            }
         }
     }
 

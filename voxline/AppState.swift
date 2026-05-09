@@ -34,6 +34,12 @@ final class AppState {
     /// version, not this string.
     var lastTranscript: String?
 
+    /// Most recently produced LLM-cleaned text — i.e. exactly what was (or
+    /// would have been) pasted into the focused field. Populated by
+    /// CapturePipeline after the LLM step completes and before the paste
+    /// step runs, so it is visible in the Debug window even when paste fails.
+    var lastCleanedText: String?
+
     /// Wall-clock time the current recording began, or nil while idle.
     /// Used for the pill's elapsed-time display and for the max-duration fail-safe.
     var recordingStartedAt: Date?

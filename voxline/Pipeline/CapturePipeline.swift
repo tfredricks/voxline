@@ -99,6 +99,7 @@ final class CapturePipeline {
         } catch {
             return setError("LLM cleanup failed: \(error.localizedDescription)")
         }
+        state.lastCleanedText = cleaned
 
         // 4. Paste.
         state.debugPipelinePhase = "pasting"
