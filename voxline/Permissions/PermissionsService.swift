@@ -16,7 +16,9 @@ struct PermissionsService {
         case .denied:        return .denied
         case .restricted:    return .denied
         case .notDetermined: return .notDetermined
-        @unknown default:    return .notDetermined
+        // Fail-closed: treat unknown future cases as denied so the first-run
+        // wizard surfaces a "not granted" state rather than re-prompting in a loop.
+        @unknown default:    return .denied
         }
     }
 
