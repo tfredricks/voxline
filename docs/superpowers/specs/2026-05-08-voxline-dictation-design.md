@@ -215,7 +215,7 @@ These are sketch-only; the implementation plan will expand them.
 
 - **Whisper cold-start latency** on first invocation per session may be 1–3 s; acceptable for v1, optional warm-up if it's too jarring.
 - **Clipboard restore timing** — 300 ms is heuristic. If the target app pastes asynchronously (some Electron apps), restoration may race. May need to bump or add per-app overrides.
-- **CGEventTap from sandboxed app** — keyboard event taps work from a sandboxed app with Accessibility granted, but this needs verification on Xcode 26 / macOS 26 specifically. If it doesn't, the fallback is to drop the sandbox; the implementation plan should validate this on day one.
+- **CGEventTap from sandboxed app** — **VERIFIED PASS on macOS 26.4 (25E246) / Xcode 26.4.1, 2026-05-08** via `spikes/EventTapSandboxSpike/`. With `com.apple.security.app-sandbox` entitlement and Accessibility granted in System Settings, `CGEvent.tapCreate(.cgSessionEventTap, .listenOnly, ...)` returns a working tap and `flagsChanged` callbacks fire as expected. Sandbox stays enabled for v1. Note: sandboxed CLI binaries require a `CFBundleIdentifier` embedded via `__TEXT __info_plist` linker section to avoid SIGTRAP in `_libsecinit_appsandbox` — full apps with a normal Info.plist don't have this issue.
 - **WhisperKit Apple Silicon requirement** is a hard constraint; design accepts this.
 
 ## 12. Changelog
