@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import voxline
 
 @Suite struct AppStateTests {
@@ -18,5 +19,17 @@ import Testing
         #expect(state.status == .error("mic unavailable"))
         state.status = .idle
         #expect(state.status == .idle)
+    }
+
+    @Test func newStateHasZeroAudioLevel() {
+        #expect(AppState().audioLevel == 0)
+    }
+
+    @Test func newStateHasNoTranscript() {
+        #expect(AppState().lastTranscript == nil)
+    }
+
+    @Test func newStateHasNoRecordingStartedAt() {
+        #expect(AppState().recordingStartedAt == nil)
     }
 }

@@ -1,17 +1,5 @@
 import SwiftUI
 
-/// Maps AppStatus → SF Symbol name for the menu bar icon.
-enum MenuBarIcon {
-    static func symbolName(for status: AppStatus) -> String {
-        switch status {
-        case .idle:        return "mic"
-        case .recording:   return "mic.fill"
-        case .thinking:    return "ellipsis.circle"
-        case .error:       return "mic.slash"
-        }
-    }
-}
-
 struct MenuBarContent: View {
     @Bindable var state: AppState
     @Environment(\.openSettings) private var openSettings
