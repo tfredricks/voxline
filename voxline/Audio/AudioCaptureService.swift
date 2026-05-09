@@ -29,6 +29,11 @@ final class AudioCaptureService {
     private var converter: AVAudioConverter?
     private var samples: [Float] = []
 
+    /// Bumped on every start() and stop(). Tap-callback Tasks that arrive on
+    /// MainActor after a stop+takeSamples cycle see a stale epoch and discard
+    /// themselves, so they can't prefix the next recording with leftover audio.
+    private var currentEpoch: UInt64 = 0
+
     /// Begin capture. Throws if the input device is unavailable or sample-rate
     /// negotiation fails.
     func start() throws {
@@ -78,6 +83,8 @@ final class AudioCaptureService {
         converter = conv
 
         samples.removeAll(keepingCapacity: true)
+        currentEpoch &+= 1
+        let epoch = currentEpoch
 
         // ~20 ms buffer at the hardware sample rate (e.g. 960 frames at 48 kHz).
         let bufferSize = max(1, AVAudioFrameCount(hwFormat.sampleRate * 0.02))
@@ -87,8 +94,11 @@ final class AudioCaptureService {
         input.installTap(onBus: 0, bufferSize: bufferSize, format: hwFormat) { [weak self] buffer, _ in
             guard let self else { return }
             let frames = Int(buffer.frameLength)
-            Task { @MainActor [weak self] in self?.onTapCallback?(frames) }
-            self.handleInputNonisolated(buffer: buffer, converter: convLocal, target: targetFmt)
+            Task { @MainActor [weak self] in
+                guard let self, self.currentEpoch == epoch else { return }
+                self.onTapCallback?(frames)
+            }
+            self.handleInputNonisolated(buffer: buffer, converter: convLocal, target: targetFmt, epoch: epoch)
         }
 
         do {
@@ -106,6 +116,10 @@ final class AudioCaptureService {
         if engine.isRunning {
             engine.stop()
         }
+        // Invalidate any tap-callback Tasks that have not yet hopped to
+        // MainActor — they would otherwise append into the buffer the next
+        // recording is about to use.
+        currentEpoch &+= 1
     }
 
     /// Drain and return the converted samples buffered so far. Subsequent calls return [].
@@ -119,7 +133,8 @@ final class AudioCaptureService {
     nonisolated private func handleInputNonisolated(
         buffer: AVAudioPCMBuffer,
         converter: AVAudioConverter,
-        target: AVAudioFormat
+        target: AVAudioFormat,
+        epoch: UInt64
     ) {
         // Allocate a scratch buffer big enough for any reasonable conversion result.
         // 16k * (hardware/target ratio) — pad generously.
@@ -155,7 +170,7 @@ final class AudioCaptureService {
         let chunk = Array(UnsafeBufferPointer(start: channel, count: count))
 
         Task { @MainActor [weak self] in
-            guard let self else { return }
+            guard let self, self.currentEpoch == epoch else { return }
             self.samples.append(contentsOf: chunk)
             let level = AudioFormat.peakLevel(samples: chunk)
             self.onLevel?(level)
