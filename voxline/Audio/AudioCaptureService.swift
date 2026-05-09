@@ -15,11 +15,11 @@ final class AudioCaptureService {
 
     private let engine = AVAudioEngine()
     private var converter: AVAudioConverter?
-    private var convertedFormat: AVAudioFormat?
     private var samples: [Float] = []
 
     /// Begin capture. Throws if the input device is unavailable or sample-rate negotiation fails.
     func start() throws {
+        guard !engine.isRunning else { return }
         let input = engine.inputNode
         let hardwareFormat = input.outputFormat(forBus: 0)
 
@@ -36,8 +36,6 @@ final class AudioCaptureService {
         ) else {
             throw AudioCaptureError.targetFormatUnavailable
         }
-        convertedFormat = target
-
         guard let conv = AVAudioConverter(from: hardwareFormat, to: target) else {
             throw AudioCaptureError.cannotConvertFormat
         }
@@ -53,7 +51,12 @@ final class AudioCaptureService {
             self.handleInputNonisolated(buffer: buffer, converter: convLocal, target: targetFmt)
         }
 
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            input.removeTap(onBus: 0)
+            throw error
+        }
     }
 
     /// Stop capture. Returns immediately; samples remain available via takeSamples().
