@@ -49,7 +49,17 @@ final class CapturePipeline {
 
     /// Begin a new recording. Caller must ensure we're not already recording.
     func startRecording() {
-        if state.status.blocksRecording { return }
+        // Reject re-entry while a recording or its post-recording pipeline
+        // (transcribe → LLM → paste) is still in flight. `.thinking` covers
+        // the entire await chain in finalizeRecording — `state.status` is set
+        // to `.thinking` synchronously before any await, so a second call
+        // landing on MainActor sees it.
+        switch state.status {
+        case .recording, .thinking, .downloadingModel, .preparingModel:
+            return
+        case .idle, .error:
+            break
+        }
         do {
             try capture.start()
         } catch {
@@ -68,7 +78,10 @@ final class CapturePipeline {
     /// Stop capture, transcribe, run LLM cleanup against the active mode's
     /// prompt, and paste the result into the focused field.
     func finalizeRecording() async {
-        if state.status.blocksRecording { return }
+        // Only valid entry state is `.recording`. A spurious finalize while
+        // we're already in `.thinking` (an earlier finalize is mid-flight) or
+        // any non-recording state would race with the in-flight pipeline.
+        guard case .recording = state.status else { return }
         capture.stop()
         let samples = capture.takeSamples()
         state.status = .thinking

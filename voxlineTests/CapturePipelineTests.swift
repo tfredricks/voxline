@@ -157,4 +157,41 @@ import Foundation
         pipe.startRecording()
         #expect(capture.startCallCount == 0)
     }
+
+    @Test func startRecording_skipsWhenAlreadyRecording() {
+        let (pipe, state, capture, _, _, _, _) = makePipeline()
+        state.status = .recording
+        pipe.startRecording()
+        #expect(capture.startCallCount == 0)
+    }
+
+    @Test func startRecording_skipsWhenThinking() {
+        // Reentrancy guard: a second chord (or stray Debug-button call) must
+        // not start a fresh recording while the prior pipeline is still
+        // awaiting transcribe/llm/paste.
+        let (pipe, state, capture, _, _, _, _) = makePipeline()
+        state.status = .thinking
+        pipe.startRecording()
+        #expect(capture.startCallCount == 0)
+    }
+
+    @Test func finalizeRecording_noopWhenNotRecording() async {
+        let (pipe, state, capture, transcriber, llm, _, _) = makePipeline()
+        state.status = .idle
+        await pipe.finalizeRecording()
+        #expect(capture.stopCallCount == 0)
+        #expect(transcriber.transcribeCallCount == 0)
+        #expect(llm.calls.isEmpty)
+    }
+
+    @Test func finalizeRecording_noopWhenAlreadyThinking() async {
+        // Ensure a second finalize call (e.g. from `tapDisabled` arriving after
+        // chord-release already triggered the first finalize) doesn't tear
+        // down a pipeline mid-flight.
+        let (pipe, state, capture, transcriber, _, _, _) = makePipeline()
+        state.status = .thinking
+        await pipe.finalizeRecording()
+        #expect(capture.stopCallCount == 0)
+        #expect(transcriber.transcribeCallCount == 0)
+    }
 }
