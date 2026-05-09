@@ -22,6 +22,11 @@ final class HotkeyMonitor {
     /// / max-duration). Lets the Debug window explain a too-short recording.
     var onDebugFinalizeReason: ((String) -> Void)?
 
+    /// Optional debug observer — fired for every flagsChanged event observed,
+    /// with a one-line summary. Used to diagnose phantom modifier releases
+    /// coming from keyboard remappers, Sticky Keys, Mission Control, etc.
+    var onDebugFlagEvent: ((String) -> Void)?
+
     /// Snapshot of state-machine state for diagnostics.
     var currentState: HotkeyStateMachine.State { machine.state }
     var isTapInstalled: Bool { eventTap != nil }
@@ -123,7 +128,12 @@ final class HotkeyMonitor {
             // CGEventFlags.maskControl / .maskAlternate.
             let leftCtrl = flags.contains(CGEventFlags(rawValue: UInt64(NX_DEVICELCTLKEYMASK)))
             let leftOpt  = flags.contains(CGEventFlags(rawValue: UInt64(NX_DEVICELALTKEYMASK)))
+            let anyCtrl  = flags.contains(.maskControl)
+            let anyOpt   = flags.contains(.maskAlternate)
+            let raw = String(flags.rawValue, radix: 16)
+            let line = "raw=0x\(raw) leftCtrl=\(leftCtrl) leftOpt=\(leftOpt) anyCtrl=\(anyCtrl) anyOpt=\(anyOpt)"
             Task { @MainActor in
+                monitor.onDebugFlagEvent?(line)
                 monitor.feed(.flagsChanged(leftCtrlDown: leftCtrl, leftOptDown: leftOpt))
             }
         case .tapDisabledByTimeout, .tapDisabledByUserInput:

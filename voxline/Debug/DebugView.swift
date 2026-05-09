@@ -24,6 +24,8 @@ struct DebugView: View {
                 Divider()
                 transcriptsSection
                 Divider()
+                flagEventsSection
+                Divider()
                 modesSection
                 Divider()
                 testButtonsSection
@@ -32,6 +34,31 @@ struct DebugView: View {
             }
             .padding(20)
             .frame(minWidth: 520, alignment: .leading)
+        }
+    }
+
+    private var flagEventsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            sectionHeader("Recent flagsChanged events (newest first)")
+            if state.debugRecentFlagEvents.isEmpty {
+                Text("(none yet — press a modifier to start logging)")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(state.debugRecentFlagEvents.enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(.system(.caption2, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .textBackgroundColor))
+                .cornerRadius(6)
+            }
+            Button("Clear log") { state.debugRecentFlagEvents.removeAll() }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
         }
     }
 

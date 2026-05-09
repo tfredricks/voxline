@@ -80,4 +80,10 @@ final class AppState {
     /// the moment finalize is triggered, so a too-short recording explains
     /// itself: chord-release vs app-deactivated vs tap-disabled vs max-duration.
     var debugLastFinalizeReason: String = "(none yet)"
+
+    /// Newest-first ring buffer of the last ~20 flagsChanged events seen by
+    /// the tap. Each entry: "[timestamp] raw=0xHEX leftCtrl=… leftOpt=… ctrl=… opt=…".
+    /// Used to diagnose phantom "release" events from keyboard remappers,
+    /// Sticky Keys, Mission Control bindings, etc.
+    var debugRecentFlagEvents: [String] = []
 }

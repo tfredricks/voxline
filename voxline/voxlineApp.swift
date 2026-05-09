@@ -140,6 +140,17 @@ final class AppCoordinator {
                 state?.debugLastFinalizeReason = reason
             }
         }
+        monitor.onDebugFlagEvent = { [weak state] line in
+            Task { @MainActor in
+                guard let state else { return }
+                let stamp = Date().formatted(date: .omitted, time: .standard)
+                let entry = "[\(stamp)] \(line)"
+                state.debugRecentFlagEvents.insert(entry, at: 0)
+                if state.debugRecentFlagEvents.count > 20 {
+                    state.debugRecentFlagEvents.removeLast(state.debugRecentFlagEvents.count - 20)
+                }
+            }
+        }
         // Input Monitoring is a separate TCC category from Accessibility.
         // Without it, a CGEventTap only fires while voxline itself is the
         // frontmost app — which made hold-to-talk look like it "only works
