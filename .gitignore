@@ -16,3 +16,6 @@ spikes/EventTapSandboxSpike/_CodeSignature/
 
 # WhisperKit downloaded model cache (per-machine)
 Models/
+
+# Git worktrees
+.worktrees/
