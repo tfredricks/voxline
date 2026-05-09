@@ -1,4 +1,6 @@
 import AVFoundation
+import AudioToolbox
+import CoreAudio
 import Foundation
 
 /// Captures audio from the system input device, resamples to Whisper's format
@@ -8,6 +10,10 @@ import Foundation
 /// after the consumer has drained them via takeSamples().
 @MainActor
 final class AudioCaptureService {
+
+    /// Optional CoreAudio UID for the preferred input device. nil = system default.
+    /// AppCoordinator applies this from AppSettings before each capture.
+    var preferredInputDeviceUID: String?
 
     /// Called periodically (~60 Hz) with the current peak level [0, 1] of the
     /// most recently captured chunk. Used by the recording pill's waveform.
@@ -31,6 +37,23 @@ final class AudioCaptureService {
         }
         let input = engine.inputNode
         input.removeTap(onBus: 0)
+
+        // Apply the preferred device, if set and currently present.
+        if let uid = preferredInputDeviceUID, let deviceID = AudioDeviceEnumerator.deviceID(forUID: uid) {
+            var mutableID = deviceID
+            let status = AudioUnitSetProperty(
+                engine.inputNode.audioUnit!,
+                kAudioOutputUnitProperty_CurrentDevice,
+                kAudioUnitScope_Global,
+                0,
+                &mutableID,
+                UInt32(MemoryLayout<AudioDeviceID>.size)
+            )
+            if status != noErr {
+                // Fall through to default device. Don't throw — a mic that was
+                // present at Settings-save time may have been unplugged since.
+            }
+        }
 
         // Use inputFormat(forBus:), not outputFormat. On macOS 26.x,
         // outputFormat on input nodes goes stale and the tap delivers one
