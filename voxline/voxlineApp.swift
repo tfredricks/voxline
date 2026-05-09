@@ -147,6 +147,13 @@ final class AppCoordinator {
         if perms.accessibilityStatus != .granted {
             perms.promptAccessibility()
         }
+        // AVAudioEngine.start is supposed to surface the mic prompt on first
+        // use but it's unreliable on sandboxed builds — silently records zeros
+        // when permission is notDetermined, which transcribes to empty string.
+        // Request explicitly at startup.
+        if perms.microphoneStatus == .notDetermined {
+            Task { _ = await perms.requestMicrophone() }
+        }
 
         do {
             try monitor.start()

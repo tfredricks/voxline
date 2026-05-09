@@ -32,7 +32,13 @@ final class CapturePipeline {
         self.injector = injector
 
         capture.onLevel = { [weak self] level in
-            Task { @MainActor in self?.state.audioLevel = level }
+            Task { @MainActor in
+                guard let self else { return }
+                self.state.audioLevel = level
+                if level > self.state.debugLastPeakLevel {
+                    self.state.debugLastPeakLevel = level
+                }
+            }
         }
     }
 
@@ -49,6 +55,7 @@ final class CapturePipeline {
         }
         state.recordingStartedAt = Date()
         state.audioLevel = 0
+        state.debugLastPeakLevel = 0
         state.status = .recording
     }
 
@@ -59,6 +66,7 @@ final class CapturePipeline {
         capture.stop()
         let samples = capture.takeSamples()
         state.status = .thinking
+        state.debugLastSampleCount = samples.count
         state.debugPipelinePhase = "stopped capture (\(samples.count) samples)"
 
         if samples.isEmpty {

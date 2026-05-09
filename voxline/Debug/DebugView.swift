@@ -38,13 +38,28 @@ struct DebugView: View {
     private var transcriptsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader("Last chord cycle")
+            row("Samples captured:",
+                state.debugLastSampleCount == 0
+                    ? "0 (no audio captured yet)"
+                    : "\(state.debugLastSampleCount) (~\(String(format: "%.1f", Double(state.debugLastSampleCount) / 16_000.0))s)")
+            row("Peak level:", String(format: "%.3f", state.debugLastPeakLevel))
             Text("Heard (raw transcript from WhisperKit)")
                 .font(.caption).foregroundStyle(.secondary)
-            transcriptBox(state.lastTranscript ?? "(no transcript yet)")
+            transcriptBox(heardText)
             Text("Would paste (LLM-cleaned)")
                 .font(.caption).foregroundStyle(.secondary)
-            transcriptBox(state.lastCleanedText ?? "(no cleaned text yet)")
+            transcriptBox(cleanedText)
         }
+    }
+
+    private var heardText: String {
+        guard let t = state.lastTranscript else { return "(no recording yet)" }
+        return t.isEmpty ? "(empty — WhisperKit returned no text)" : t
+    }
+
+    private var cleanedText: String {
+        guard let t = state.lastCleanedText else { return "(no cleaned text yet)" }
+        return t.isEmpty ? "(empty)" : t
     }
 
     @ViewBuilder

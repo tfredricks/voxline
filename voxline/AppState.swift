@@ -67,4 +67,12 @@ final class AppState {
     /// Last log line emitted by the debug screen's manual test buttons.
     /// Empty string when nothing has been run yet.
     var debugLastTestResult: String = ""
+
+    /// Peak audio level observed during the most recent recording. Stays
+    /// at 0 if the mic was muted/denied or the input device produced silence.
+    var debugLastPeakLevel: Float = 0
+
+    /// Number of 16 kHz mono Float32 samples handed to WhisperKit at the end
+    /// of the most recent recording. ~16,000 = 1 second of audio.
+    var debugLastSampleCount: Int = 0
 }
