@@ -3,7 +3,7 @@ import SwiftUI
 struct APIKeysSettingsView: View {
     var body: some View {
         Form {
-            Text("Anthropic and OpenAI API keys live here. (Plan 3)")
+            Text("Anthropic and OpenAI API keys live here. (Plan 4)")
                 .foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
