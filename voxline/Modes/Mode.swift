@@ -1,15 +1,28 @@
+// voxline/Modes/Mode.swift
 import Foundation
 
-/// Per-app prompt configuration. The active mode is selected by bundle ID;
-/// `*` is the wildcard fallback when no specific match exists.
-struct Mode: Codable, Equatable {
+struct Mode: Codable, Equatable, Identifiable {
     static let wildcardBundleID = "*"
 
-    let bundleID: String
-    let displayName: String
-    let prompt: String
-    /// Optional per-mode override of the LLM model id. When nil, AppSettings.llmModel is used.
-    let model: String?
-    /// Optional per-mode override of the sampling temperature.
-    let temperature: Double?
+    /// Stable ID for SwiftUI ForEach. Bundle ID is stable enough as long as
+    /// the user doesn't have two modes with the same bundle ID — the editor
+    /// enforces uniqueness on save.
+    var id: String { bundleID }
+
+    var bundleID: String
+    var displayName: String
+    var prompt: String
+    var model: String?
+    var temperature: Double?
+
+    /// Convenience initializer for "Add new mode" with sensible defaults.
+    static func newDraft(bundleID: String = "", displayName: String = "") -> Mode {
+        Mode(
+            bundleID: bundleID,
+            displayName: displayName,
+            prompt: "Strip fillers. Punctuate. Preserve the speaker's voice.",
+            model: nil,
+            temperature: nil
+        )
+    }
 }

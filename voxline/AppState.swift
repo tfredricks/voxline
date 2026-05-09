@@ -24,6 +24,7 @@ enum AppStatus: Equatable {
 @Observable
 final class AppState {
     var status: AppStatus = .idle
+    var hotkeyEnabled: Bool = true
 
     /// Live mic input level while recording, in [0, 1]. Used by the
     /// recording-pill waveform. Updated from the audio thread.

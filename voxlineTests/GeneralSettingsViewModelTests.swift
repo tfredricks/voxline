@@ -1,0 +1,56 @@
+import Testing
+import Foundation
+@testable import voxline
+
+@Suite @MainActor struct GeneralSettingsViewModelTests {
+
+    private func defaults() -> UserDefaults {
+        let n = "voxline-test-\(UUID().uuidString)"
+        return UserDefaults(suiteName: n)!
+    }
+
+    @Test func loads_current_values_on_init() {
+        var settings = AppSettings(defaults: defaults())
+        let chord = HotkeyChord(modifierA: .leftCommand, modifierB: .leftShift)
+        settings.hotkeyChord = chord
+        settings.audioInputDeviceUID = "MyMic"
+        settings.whisperModel = .smallEn
+
+        let vm = GeneralSettingsViewModel(settings: settings, applier: NoopApplier())
+        #expect(vm.chord == chord)
+        #expect(vm.audioInputDeviceUID == "MyMic")
+        #expect(vm.whisperModel == .smallEn)
+    }
+
+    @Test func save_persists_and_calls_applier() throws {
+        let d = defaults()
+        let settings = AppSettings(defaults: d)
+        let applier = RecordingApplier()
+        let vm = GeneralSettingsViewModel(settings: settings, applier: applier)
+
+        let chord = HotkeyChord(modifierA: .rightCommand, modifierB: .rightShift)
+        vm.chord = chord
+        vm.audioInputDeviceUID = "NewMic"
+        vm.whisperModel = .smallEn
+        try vm.save()
+
+        let reread = AppSettings(defaults: d)
+        #expect(reread.hotkeyChord == chord)
+        #expect(reread.audioInputDeviceUID == "NewMic")
+        #expect(reread.whisperModel == .smallEn)
+
+        #expect(applier.applied?.chord == chord)
+        #expect(applier.applied?.audioInputDeviceUID == "NewMic")
+        #expect(applier.applied?.whisperModel == .smallEn)
+    }
+}
+
+private struct NoopApplier: GeneralSettingsApplier {
+    func apply(_ snapshot: GeneralSettingsSnapshot) {}
+}
+
+@MainActor
+private final class RecordingApplier: GeneralSettingsApplier {
+    var applied: GeneralSettingsSnapshot?
+    func apply(_ snapshot: GeneralSettingsSnapshot) { applied = snapshot }
+}

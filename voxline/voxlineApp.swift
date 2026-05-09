@@ -24,8 +24,11 @@ struct voxlineApp: App {
         .menuBarExtraStyle(.menu)
 
         Settings {
-            SettingsView()
-                .environment(delegate.appState)
+            SettingsView(
+                generalVM: GeneralSettingsViewModel(applier: delegate.coordinator),
+                modesVM: ModesSettingsViewModel(applier: delegate.coordinator)
+            )
+            .environment(delegate.appState)
         }
         // Plan 2's debug Window scene removed in Plan 3 — paste replaces the
         // verification UI.
@@ -62,18 +65,59 @@ final class AppCoordinator {
     var modes: ModeRouter?
     var injector: ClipboardInjector?
     var frontmost: FrontmostApp?
+    var capture: AudioCaptureService?
 
     private var pillWindow: RecordingPillWindow?
     private var downloadWindow: ModelDownloadWindow?
     private var didStart = false
     private var accessibilityRetryTimer: Timer?
     private var inputMonitoringWatchdog: Timer?
+    private var firstRunWindow: FirstRunWindowController?
 
     func startIfNeeded(state: AppState) {
         guard !didStart else { return }
         didStart = true
 
+        let settings = AppSettings()
+        if !settings.hasCompletedFirstRun {
+            startWizardThenApp(state: state, settings: settings)
+        } else {
+            startApp(state: state, settings: settings)
+        }
+    }
+
+    private func startWizardThenApp(state: AppState, settings: AppSettings) {
+        buildServices(state: state, settings: settings)
+        guard let transcriber = self.transcriber else { return }
+
+        let wizard = FirstRunWindowController()
+        self.firstRunWindow = wizard
+        wizard.show(
+            state: state,
+            settings: settings,
+            model: settings.whisperModel,
+            chord: settings.hotkeyChord
+        ) { [weak self] in
+            guard let self else { return }
+            self.firstRunWindow = nil
+            self.installHotkey(state: state, settings: settings)
+        }
+
+        // Eagerly start the model download so by the time the user reaches the
+        // download step, progress is already advancing.
+        prepareIfNeeded(state: state, transcriber: transcriber)
+    }
+
+    private func startApp(state: AppState, settings: AppSettings) {
+        buildServices(state: state, settings: settings)
+        guard let transcriber = self.transcriber else { return }
+        installHotkey(state: state, settings: settings)
+        prepareIfNeeded(state: state, transcriber: transcriber)
+    }
+
+    private func buildServices(state: AppState, settings: AppSettings) {
         let capture = AudioCaptureService()
+        self.capture = capture
         let transcriber = TranscriptionService()
         self.transcriber = transcriber
 
@@ -91,7 +135,7 @@ final class AppCoordinator {
         let router = ModeRouter(modes: modes)
 
         // LLM
-        let llm = LLMService(settings: AppSettings(), keychain: Keychain())
+        let llm = LLMService(settings: settings, keychain: Keychain())
         self.llm = llm
         self.modes = router
 
@@ -115,8 +159,11 @@ final class AppCoordinator {
         let pill = RecordingPillWindow()
         pillWindow = pill
         pill.show(state: state)
+    }
 
+    private func installHotkey(state: AppState, settings: AppSettings) {
         let monitor = HotkeyMonitor()
+        monitor.chord = settings.hotkeyChord
         monitor.onStartRecording = { [weak self, weak state] in
             self?.pipeline?.startRecording()
             if let state { self?.pillWindow?.updateVisibility(state: state) }
@@ -189,7 +236,7 @@ final class AppCoordinator {
             startAccessibilityRetry(state: state, monitor: monitor)
         }
 
-        prepareIfNeeded(state: state, transcriber: transcriber)
+        observeHotkeyEnabled(state: state)
     }
 
     /// Once the tap is installed, watch for the user toggling Input Monitoring
@@ -233,6 +280,23 @@ final class AppCoordinator {
         }
     }
 
+    private func observeHotkeyEnabled(state: AppState) {
+        // Poll once per second — toggling is rare and a notifier would
+        // require a rewrite of AppState into Combine.
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self, weak state] _ in
+            Task { @MainActor in
+                guard let self, let state else { return }
+                let enabled = state.hotkeyEnabled
+                let installed = self.hotkeyMonitor?.isTapInstalled ?? false
+                if enabled && !installed {
+                    try? self.hotkeyMonitor?.start()
+                } else if !enabled && installed {
+                    self.hotkeyMonitor?.stop()
+                }
+            }
+        }
+    }
+
     private func prepareIfNeeded(state: AppState, transcriber: TranscriptionService) {
         let needsDownload = !TranscriptionService.isModelCached(transcriber.model)
         state.status = needsDownload ? .downloadingModel(progress: 0) : .preparingModel
@@ -264,6 +328,42 @@ final class AppCoordinator {
                 state.status = .error("Model setup failed: \(error.localizedDescription). Quit and relaunch voxline to retry.")
                 downloadWindow?.close()
                 downloadWindow = nil
+            }
+        }
+    }
+}
+
+extension AppCoordinator: ModesApplier {
+    func apply(modes: [Mode]) {
+        // ModeRouter is a value type stored on the coordinator; rebuild it.
+        self.modes = ModeRouter(modes: modes)
+        // CapturePipeline holds its own reference to ModeRouter; update it too.
+        if let router = self.modes {
+            pipeline?.modes = router
+        }
+    }
+}
+
+extension AppCoordinator: GeneralSettingsApplier {
+    func apply(_ snapshot: GeneralSettingsSnapshot) {
+        hotkeyMonitor?.update(chord: snapshot.chord)
+
+        // AudioCaptureService applies preferredInputDeviceUID at next start();
+        // CapturePipeline restarts the engine on every chord, so the new device
+        // takes effect on the next dictation.
+        capture?.preferredInputDeviceUID = snapshot.audioInputDeviceUID
+
+        // Switching Whisper model: invalidate the loaded pipeline; the next
+        // transcribe re-loads from the (possibly cached) new variant. Trigger
+        // a background prepare/prewarm so the user doesn't pay it on next dictation.
+        if transcriber?.model != snapshot.whisperModel {
+            transcriber?.model = snapshot.whisperModel
+            Task { @MainActor [weak self] in
+                guard let self, let t = self.transcriber else { return }
+                if !TranscriptionService.isModelCached(snapshot.whisperModel) {
+                    try? await t.prepareModel { _ in }
+                }
+                try? await t.prewarm()
             }
         }
     }

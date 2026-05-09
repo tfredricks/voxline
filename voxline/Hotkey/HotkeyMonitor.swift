@@ -34,6 +34,10 @@ final class HotkeyMonitor {
     /// Maximum recording duration (spec §4.1 fail-safe). Configurable.
     var maxRecordingDuration: TimeInterval = 60.0
 
+    /// Active chord. Read by the tap callback to test the right device-mask bits.
+    /// Defaults to .default; AppCoordinator overrides from AppSettings on launch.
+    var chord: HotkeyChord = .default
+
     private let machine = HotkeyStateMachine()
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -75,6 +79,11 @@ final class HotkeyMonitor {
         maxDurationTimer = nil
     }
 
+    /// Update the active chord at runtime. No tap rebuild required.
+    func update(chord: HotkeyChord) {
+        self.chord = chord
+    }
+
     /// External signal that transcription has finished and we can return to idle.
     func recordingFinished() {
         feed(.recordingFinished)
@@ -98,19 +107,17 @@ final class HotkeyMonitor {
         switch type {
         case .flagsChanged:
             let flags = event.flags
-            // CGEvent.flags exposes per-device modifier bits
-            // (NX_DEVICELCTLKEYMASK / NX_DEVICELALTKEYMASK) that distinguish
-            // left vs right modifiers, unlike the coalesced
-            // CGEventFlags.maskControl / .maskAlternate.
-            let leftCtrl = flags.contains(CGEventFlags(rawValue: UInt64(NX_DEVICELCTLKEYMASK)))
-            let leftOpt  = flags.contains(CGEventFlags(rawValue: UInt64(NX_DEVICELALTKEYMASK)))
-            let anyCtrl  = flags.contains(.maskControl)
-            let anyOpt   = flags.contains(.maskAlternate)
+            let chord = monitor.chord
+            let modA = flags.contains(CGEventFlags(rawValue: chord.modifierA.deviceMaskBit))
+            let modB = flags.contains(CGEventFlags(rawValue: chord.modifierB.deviceMaskBit))
+            // Coalesced bits kept for the debug log line, useful for diagnosing rollover.
+            let anyCtrl = flags.contains(.maskControl)
+            let anyOpt  = flags.contains(.maskAlternate)
             let raw = String(flags.rawValue, radix: 16)
-            let line = "raw=0x\(raw) leftCtrl=\(leftCtrl) leftOpt=\(leftOpt) anyCtrl=\(anyCtrl) anyOpt=\(anyOpt)"
+            let line = "raw=0x\(raw) modA=\(modA) modB=\(modB) anyCtrl=\(anyCtrl) anyOpt=\(anyOpt)"
             Task { @MainActor in
                 monitor.onDebugFlagEvent?(line)
-                monitor.feed(.flagsChanged(leftCtrlDown: leftCtrl, leftOptDown: leftOpt))
+                monitor.feed(.flagsChanged(modAFlag: modA, modBFlag: modB))
             }
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             // Re-enable the tap and signal a defensive finalize.
@@ -149,8 +156,8 @@ final class HotkeyMonitor {
 
     private func reasonLabel(for input: HotkeyStateMachine.Input) -> String {
         switch input {
-        case .flagsChanged(let ctrl, let opt):
-            return "chord-release (ctrl=\(ctrl), opt=\(opt))"
+        case .flagsChanged(let a, let b):
+            return "chord-release (modA=\(a), modB=\(b))"
         case .maxDurationElapsed: return "max-duration"
         case .tapDisabled:        return "tap-disabled"
         case .recordingFinished:  return "recording-finished"

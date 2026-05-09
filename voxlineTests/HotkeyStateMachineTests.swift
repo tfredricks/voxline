@@ -12,13 +12,13 @@ import Foundation
 
     /// Convenience: fire flagsChanged with the named modifiers held.
     private func leftCtrl(_ down: Bool) -> HotkeyStateMachine.Input {
-        .flagsChanged(leftCtrlDown: down, leftOptDown: false)
+        .flagsChanged(modAFlag: down, modBFlag: false)
     }
     private func leftOpt(_ down: Bool) -> HotkeyStateMachine.Input {
-        .flagsChanged(leftCtrlDown: false, leftOptDown: down)
+        .flagsChanged(modAFlag: false, modBFlag: down)
     }
     private func chord(_ ctrl: Bool, _ opt: Bool) -> HotkeyStateMachine.Input {
-        .flagsChanged(leftCtrlDown: ctrl, leftOptDown: opt)
+        .flagsChanged(modAFlag: ctrl, modBFlag: opt)
     }
 
     // MARK: - Initial state
