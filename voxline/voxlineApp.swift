@@ -49,6 +49,7 @@ final class AppCoordinator {
     private var pipeline: CapturePipeline?
     private var transcriber: TranscriptionService?
     private var didStart = false
+    private var accessibilityRetryTimer: Timer?
 
     func startIfNeeded(state: AppState) {
         guard !didStart else { return }
@@ -109,10 +110,40 @@ final class AppCoordinator {
             try monitor.start()
             hotkeyMonitor = monitor
         } catch {
-            state.status = .error("Hotkey monitoring requires Accessibility permission. Grant it in System Settings → Privacy & Security → Accessibility, then restart voxline.")
+            // Accessibility wasn't granted yet. Macos doesn't deliver a
+            // permission-changed notification to the running process, so
+            // poll until it's granted and then install the tap. The user
+            // does NOT need to restart the app.
+            state.status = .error("Hotkey monitoring requires Accessibility permission. Grant it in System Settings → Privacy & Security → Accessibility — voxline will pick it up automatically.")
+            startAccessibilityRetry(state: state, monitor: monitor)
         }
 
         prepareIfNeeded(state: state, transcriber: transcriber)
+    }
+
+    private func startAccessibilityRetry(state: AppState, monitor: HotkeyMonitor) {
+        accessibilityRetryTimer?.invalidate()
+        accessibilityRetryTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self, weak state] _ in
+            Task { @MainActor in
+                guard let self, let state else { return }
+                // Cheap check first to avoid spamming tapCreate while the
+                // user hasn't actioned the dialog yet.
+                guard PermissionsService().accessibilityStatus == .granted else { return }
+                do {
+                    try monitor.start()
+                    self.hotkeyMonitor = monitor
+                    self.accessibilityRetryTimer?.invalidate()
+                    self.accessibilityRetryTimer = nil
+                    if case .error = state.status {
+                        state.status = .idle
+                    }
+                } catch {
+                    // AXIsProcessTrusted said yes but tapCreate still failed.
+                    // Try again next tick — the system can lag a little after
+                    // the toggle flip.
+                }
+            }
+        }
     }
 
     private func prepareIfNeeded(state: AppState, transcriber: TranscriptionService) {
