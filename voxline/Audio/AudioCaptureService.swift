@@ -17,14 +17,25 @@ final class AudioCaptureService {
     private var converter: AVAudioConverter?
     private var samples: [Float] = []
 
-    /// Begin capture. Throws if the input device is unavailable or sample-rate negotiation fails.
-    /// The audio engine stays running between captures — repeated start/stop of the engine
-    /// itself produced -10877 errors after the first cycle in real-hardware use, so we only
-    /// install/remove the tap on each recording and keep the graph live.
+    /// Begin capture. Throws if the input device is unavailable or sample-rate
+    /// negotiation fails. Stops and restarts the engine on each cycle — the
+    /// previous "keep engine running between captures" optimization caused the
+    /// engine to stall after delivering ~1 buffer (the engine has no output
+    /// node, so without a fresh prepare()/start() it doesn't reliably pump
+    /// input). The system mic indicator (orange dot) also stays lit forever
+    /// when the engine is always running, which is its own problem.
     func start() throws {
         let input = engine.inputNode
-        let hardwareFormat = input.outputFormat(forBus: 0)
 
+        // If a previous cycle left the engine running, stop and reset it so
+        // we get a clean prepare/start. This is the documented pattern for
+        // input-only AVAudioEngine setups.
+        if engine.isRunning {
+            engine.stop()
+        }
+        engine.reset()
+
+        let hardwareFormat = input.outputFormat(forBus: 0)
         guard hardwareFormat.sampleRate > 0 else {
             throw AudioCaptureError.noInputDevice
         }
@@ -57,22 +68,22 @@ final class AudioCaptureService {
             self.handleInputNonisolated(buffer: buffer, converter: convLocal, target: targetFmt)
         }
 
-        if !engine.isRunning {
-            do {
-                try engine.start()
-            } catch {
-                input.removeTap(onBus: 0)
-                throw error
-            }
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            input.removeTap(onBus: 0)
+            throw error
         }
     }
 
-    /// Stop capture. Removes the tap so no further buffers arrive; leaves the
-    /// engine itself running so the next start() doesn't pay engine-restart cost
-    /// or hit the -10877 / format-renegotiation issues that affect repeated
-    /// engine.start() calls in real-hardware use.
+    /// Stop capture. Removes the tap and stops the engine so the system mic
+    /// indicator turns off and CoreAudio releases the input device.
     func stop() {
         engine.inputNode.removeTap(onBus: 0)
+        if engine.isRunning {
+            engine.stop()
+        }
     }
 
     /// Drain and return the converted samples buffered so far. Subsequent calls return [].
