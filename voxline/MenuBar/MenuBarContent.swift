@@ -31,17 +31,7 @@ struct MenuBarContent: View {
 
         Divider()
 
-        Menu("Debug") {
-            Text("Status: \(statusLabel)")
-            Text("Hotkey state: \(state.debugHotkeyState)")
-            Text("Tap installed: \(state.debugTapInstalled ? "yes" : "no")")
-            Text("Pipeline phase: \(state.debugPipelinePhase)")
-            Text("Mic: \(state.debugMicrophoneStatus)")
-            Text("Accessibility: \(state.debugAccessibilityStatus)")
-            Text("Input Monitoring: \(state.debugInputMonitoringStatus)")
-            Divider()
-            Button("Open Debug Window…") { openDebugWindow() }
-        }
+        Button("Debug…") { openDebugWindow() }
 
         Divider()
 
@@ -49,16 +39,5 @@ struct MenuBarContent: View {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q")
-    }
-
-    private var statusLabel: String {
-        switch state.status {
-        case .idle: return "idle"
-        case .recording: return "recording"
-        case .thinking: return "thinking"
-        case .preparingModel: return "preparingModel"
-        case .downloadingModel(let p): return "downloadingModel(\(Int(p * 100))%)"
-        case .error(let msg): return "error: \(msg.prefix(80))"
-        }
     }
 }
