@@ -29,8 +29,9 @@ final class AppState {
     /// recording-pill waveform. Updated from the audio thread.
     var audioLevel: Float = 0
 
-    /// Most recently produced transcript. Plan 2 displays this in the
-    /// debug window; Plan 3 will paste it instead.
+    /// Most recently produced raw (pre-cleanup) transcript. Set by
+    /// CapturePipeline as a debug aid — the pasted text is the LLM-cleaned
+    /// version, not this string.
     var lastTranscript: String?
 
     /// Wall-clock time the current recording began, or nil while idle.

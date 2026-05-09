@@ -1,3 +1,4 @@
+// voxline/voxlineApp.swift  (replace contents)
 import AppKit
 import SwiftUI
 
@@ -18,17 +19,11 @@ struct voxlineApp: App {
             SettingsView()
                 .environment(delegate.appState)
         }
-
-        // PLAN 2 ONLY — Window scene removed in Plan 3 once paste replaces
-        // the debug verification UI.
-        Window("voxline — Transcripts (debug)", id: "debug-transcripts") {
-            DebugTranscriptWindow(state: delegate.appState)
-        }
-        .defaultSize(width: 520, height: 360)
+        // Plan 2's debug Window scene removed in Plan 3 — paste replaces the
+        // verification UI.
     }
 }
 
-/// Menu-bar icon view. `@Bindable` makes it re-render as AppState.status changes.
 private struct MenuBarLabel: View {
     @Bindable var state: AppState
     var body: some View {
@@ -36,10 +31,6 @@ private struct MenuBarLabel: View {
     }
 }
 
-/// Owns the AppState + AppCoordinator and triggers coordinator startup at
-/// app launch via applicationDidFinishLaunching. Using NSApplicationDelegate
-/// rather than `.task` on the MenuBarExtra label, which is unreliable in
-/// macOS for menu-bar-only apps.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
@@ -50,9 +41,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Owns the long-lived runtime objects (HotkeyMonitor, AudioCapture,
-/// TranscriptionService, CapturePipeline, RecordingPillWindow,
-/// ModelDownloadWindow) and starts them at app launch.
 @MainActor
 final class AppCoordinator {
     private var hotkeyMonitor: HotkeyMonitor?
@@ -61,9 +49,6 @@ final class AppCoordinator {
     private var pipeline: CapturePipeline?
     private var transcriber: TranscriptionService?
     private var didStart = false
-    // Reserved for Plan 3 — will hold an Observation token once
-    // AppState.audioLevel drives the menu-bar icon animation.
-    private var levelObservation: AnyObject?
 
     func startIfNeeded(state: AppState) {
         guard !didStart else { return }
@@ -72,7 +57,36 @@ final class AppCoordinator {
         let capture = AudioCaptureService()
         let transcriber = TranscriptionService()
         self.transcriber = transcriber
-        let pipeline = CapturePipeline(state: state, capture: capture, transcriber: transcriber)
+
+        // Modes
+        let modes: [Mode]
+        do {
+            let store = try ModeStore()
+            modes = try store.load()
+        } catch {
+            // Fall back to shipped defaults if disk I/O fails — the app should
+            // still work; the user just won't have a writable modes.json this
+            // session. (Plan 4's Modes editor will surface the disk error.)
+            modes = ModeStore.shippedDefaults
+        }
+        let router = ModeRouter(modes: modes)
+
+        // LLM
+        let llm = LLMService(settings: AppSettings(), keychain: Keychain())
+
+        // Output
+        let injector = ClipboardInjector()
+        let frontmost = FrontmostApp()
+
+        let pipeline = CapturePipeline(
+            state: state,
+            capture: capture,
+            transcriber: transcriber,
+            llm: llm,
+            modes: router,
+            frontmost: frontmost,
+            injector: injector
+        )
         self.pipeline = pipeline
 
         let pill = RecordingPillWindow()
@@ -101,17 +115,8 @@ final class AppCoordinator {
         prepareIfNeeded(state: state, transcriber: transcriber)
     }
 
-    /// Ensure the speech-recognition model is downloaded AND loaded into the
-    /// Apple Neural Engine before the chord starts working. The setup window
-    /// stays on screen for both phases (download + ANE compile) so the user
-    /// always sees progress before being allowed to record. First-run after
-    /// install: several minutes total. Subsequent launches: a few seconds
-    /// (ANE bundle cache makes prewarm fast).
     private func prepareIfNeeded(state: AppState, transcriber: TranscriptionService) {
         let needsDownload = !TranscriptionService.isModelCached(transcriber.model)
-
-        // Always show the window so the chord doesn't appear silently broken
-        // while ANE compiles. Status starts in the right phase for the view.
         state.status = needsDownload ? .downloadingModel(progress: 0) : .preparingModel
         let window = ModelDownloadWindow()
         downloadWindow = window
