@@ -135,6 +135,11 @@ final class AppCoordinator {
                 state.debugTapInstalled = installed
             }
         }
+        monitor.onDebugFinalizeReason = { [weak state] reason in
+            Task { @MainActor in
+                state?.debugLastFinalizeReason = reason
+            }
+        }
         // Input Monitoring is a separate TCC category from Accessibility.
         // Without it, a CGEventTap only fires while voxline itself is the
         // frontmost app — which made hold-to-talk look like it "only works

@@ -75,4 +75,9 @@ final class AppState {
     /// Number of 16 kHz mono Float32 samples handed to WhisperKit at the end
     /// of the most recent recording. ~16,000 = 1 second of audio.
     var debugLastSampleCount: Int = 0
+
+    /// Why finalize ran on the most recent chord cycle. Set by HotkeyMonitor
+    /// the moment finalize is triggered, so a too-short recording explains
+    /// itself: chord-release vs app-deactivated vs tap-disabled vs max-duration.
+    var debugLastFinalizeReason: String = "(none yet)"
 }

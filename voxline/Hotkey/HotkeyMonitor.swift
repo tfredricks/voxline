@@ -17,6 +17,11 @@ final class HotkeyMonitor {
     /// tap-installation status changes. Used by the menu-bar debug section.
     var onDebugStateChanged: ((HotkeyStateMachine.State, Bool) -> Void)?
 
+    /// Optional debug observer — fired with a label describing what triggered
+    /// the most recent finalize (chord-release / app-deactivated / tap-disabled
+    /// / max-duration). Lets the Debug window explain a too-short recording.
+    var onDebugFinalizeReason: ((String) -> Void)?
+
     /// Snapshot of state-machine state for diagnostics.
     var currentState: HotkeyStateMachine.State { machine.state }
     var isTapInstalled: Bool { eventTap != nil }
@@ -155,6 +160,7 @@ final class HotkeyMonitor {
     // MARK: - Routing inputs through the machine
 
     private func feed(_ input: HotkeyStateMachine.Input) {
+        let stateBefore = machine.state
         let outputs = machine.handle(input)
         for output in outputs {
             switch output {
@@ -163,10 +169,24 @@ final class HotkeyMonitor {
                 onStartRecording?()
             case .finalizeRecording:
                 cancelMaxDurationTimer()
+                if stateBefore == .recording {
+                    onDebugFinalizeReason?(reasonLabel(for: input))
+                }
                 onFinalizeRecording?()
             }
         }
         onDebugStateChanged?(machine.state, eventTap != nil)
+    }
+
+    private func reasonLabel(for input: HotkeyStateMachine.Input) -> String {
+        switch input {
+        case .flagsChanged(let ctrl, let opt):
+            return "chord-release (ctrl=\(ctrl), opt=\(opt))"
+        case .maxDurationElapsed: return "max-duration"
+        case .tapDisabled:        return "tap-disabled"
+        case .appDeactivated:     return "app-deactivated"
+        case .recordingFinished:  return "recording-finished"
+        }
     }
 
     private func scheduleMaxDurationTimer() {
