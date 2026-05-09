@@ -25,6 +25,7 @@ struct ChordRecorderView: View {
                 Button("Record chord…") { start() }
             }
         }
+        .onDisappear { stop() }
     }
 
     private func start() {
