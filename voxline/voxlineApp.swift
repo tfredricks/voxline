@@ -276,6 +276,17 @@ final class AppCoordinator {
     }
 }
 
+extension AppCoordinator: ModesApplier {
+    func apply(modes: [Mode]) {
+        // ModeRouter is a value type stored on the coordinator; rebuild it.
+        self.modes = ModeRouter(modes: modes)
+        // CapturePipeline holds its own reference to ModeRouter; update it too.
+        if let router = self.modes {
+            pipeline?.modes = router
+        }
+    }
+}
+
 extension AppCoordinator: GeneralSettingsApplier {
     func apply(_ snapshot: GeneralSettingsSnapshot) {
         hotkeyMonitor?.update(chord: snapshot.chord)

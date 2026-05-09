@@ -10,7 +10,7 @@ final class CapturePipeline {
     private let capture: AudioCapturing
     private let transcriber: Transcribing
     private let llm: LLMServing
-    private let modes: ModeResolving
+    var modes: ModeResolving
     private let frontmost: FrontmostAppProviding
     private let injector: ClipboardInjecting
 
