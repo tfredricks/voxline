@@ -61,10 +61,12 @@ final class HotkeyMonitor {
         CGEvent.tapEnable(tap: tap, enable: true)
         onDebugStateChanged?(machine.state, true)
 
-        // Periodic reconciliation: catches missed flagsChanged events.
-        reconciliationTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.reconcileFlagsState() }
-        }
+        // Reconciliation timer was removed — its flagsState polling produced
+        // false-negative releases on real hardware (CGEventSource.flagsState
+        // doesn't expose the per-device modifier bits the rest of the code
+        // relies on, and even the combined-mask version proved unreliable).
+        // The tap callback delivers release events directly; max-duration
+        // and app-deactivation observers cover stuck states.
 
         // App deactivation guard.
         deactivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
