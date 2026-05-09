@@ -73,6 +73,7 @@ final class AppCoordinator {
     private var didStart = false
     private var accessibilityRetryTimer: Timer?
     private var inputMonitoringWatchdog: Timer?
+    private var hotkeyEnabledObserver: Timer?
     private var firstRunWindow: FirstRunWindowController?
 
     func startIfNeeded(state: AppState) {
@@ -311,7 +312,8 @@ final class AppCoordinator {
     private func observeHotkeyEnabled(state: AppState) {
         // Poll once per second — toggling is rare and a notifier would
         // require a rewrite of AppState into Combine.
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self, weak state] _ in
+        hotkeyEnabledObserver?.invalidate()
+        hotkeyEnabledObserver = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self, weak state] _ in
             Task { @MainActor in
                 guard let self, let state else { return }
                 let enabled = state.hotkeyEnabled
@@ -389,6 +391,13 @@ final class AppCoordinator {
             }
             self?.modelPrepTask = nil
         }
+    }
+
+    deinit {
+        hotkeyEnabledObserver?.invalidate()
+        inputMonitoringWatchdog?.invalidate()
+        accessibilityRetryTimer?.invalidate()
+        modelPrepTask?.cancel()
     }
 }
 
