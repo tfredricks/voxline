@@ -53,6 +53,34 @@ import Foundation
         #expect(state.recordingStartedAt == nil)
     }
 
+    @Test func startRecording_skipsWhenDownloadingModel() throws {
+        let state = AppState()
+        state.status = .downloadingModel(progress: 0.3)
+        let capture = FakeCapture()
+        let transcriber = FakeTranscriber()
+        let pipeline = CapturePipeline(state: state, capture: capture, transcriber: transcriber)
+
+        pipeline.startRecording()
+
+        #expect(capture.startCallCount == 0)
+        #expect(state.status == .downloadingModel(progress: 0.3))
+        #expect(state.recordingStartedAt == nil)
+    }
+
+    @Test func finalizeRecording_skipsWhenDownloadingModel() async {
+        let state = AppState()
+        state.status = .downloadingModel(progress: 0.3)
+        let capture = FakeCapture()
+        let transcriber = FakeTranscriber()
+        let pipeline = CapturePipeline(state: state, capture: capture, transcriber: transcriber)
+
+        await pipeline.finalizeRecording()
+
+        #expect(capture.stopCallCount == 0)
+        #expect(transcriber.transcribeCallCount == 0)
+        #expect(state.status == .downloadingModel(progress: 0.3))
+    }
+
     @Test func transcriptionFailure_setsErrorState() async throws {
         struct StubError: Error {}
 

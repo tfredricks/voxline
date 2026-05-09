@@ -12,6 +12,12 @@ struct MenuBarContent: View {
             Divider()
         }
 
+        if case .downloadingModel(let p) = state.status {
+            Text("Downloading model — \(Int(p * 100))%")
+                .foregroundStyle(.secondary)
+            Divider()
+        }
+
         // PLAN 2 ONLY — REMOVED IN PLAN 3 ALONG WITH DebugTranscriptWindow.
         Button("Show Transcripts (debug)…") {
             openWindow(id: "debug-transcripts")

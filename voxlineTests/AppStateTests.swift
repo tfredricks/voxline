@@ -32,4 +32,14 @@ import Foundation
     @Test func newStateHasNoRecordingStartedAt() {
         #expect(AppState().recordingStartedAt == nil)
     }
+
+    @Test func canSetDownloadingModelStatus() {
+        let state = AppState()
+        state.status = .downloadingModel(progress: 0.42)
+        #expect(state.status == .downloadingModel(progress: 0.42))
+    }
+
+    @Test func downloadingModelDistinctByProgress() {
+        #expect(AppStatus.downloadingModel(progress: 0.1) != AppStatus.downloadingModel(progress: 0.2))
+    }
 }

@@ -18,4 +18,9 @@ import Testing
     @Test func iconForError() {
         #expect(MenuBarIcon.symbolName(for: .error("anything")) == "mic.slash")
     }
+
+    @Test func iconForDownloadingModel() {
+        #expect(MenuBarIcon.symbolName(for: .downloadingModel(progress: 0.0)) == "arrow.down.circle")
+        #expect(MenuBarIcon.symbolName(for: .downloadingModel(progress: 0.5)) == "arrow.down.circle")
+    }
 }

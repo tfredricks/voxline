@@ -5,6 +5,8 @@ enum AppStatus: Equatable {
     case idle
     case recording
     case thinking
+    /// First-run model fetch in progress. `progress` is in [0, 1].
+    case downloadingModel(progress: Double)
     case error(String)
 }
 

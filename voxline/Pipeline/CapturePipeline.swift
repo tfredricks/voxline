@@ -21,6 +21,7 @@ final class CapturePipeline {
 
     /// Begin a new recording. Caller must ensure we're not already recording.
     func startRecording() {
+        if case .downloadingModel = state.status { return }
         do {
             try capture.start()
         } catch {
@@ -36,6 +37,7 @@ final class CapturePipeline {
 
     /// Stop capture, transcribe what was captured, write transcript to state.
     func finalizeRecording() async {
+        if case .downloadingModel = state.status { return }
         capture.stop()
         let samples = capture.takeSamples()
         state.status = .thinking
