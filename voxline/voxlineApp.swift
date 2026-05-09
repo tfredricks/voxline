@@ -254,12 +254,30 @@ final class AppCoordinator {
     /// silent unless voxline is foreground.
     private func startInputMonitoringWatchdog(state: AppState) {
         inputMonitoringWatchdog?.invalidate()
-        inputMonitoringWatchdog = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak state] _ in
+        inputMonitoringWatchdog = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak state, weak self] _ in
             Task { @MainActor in
                 guard let state else { return }
-                state.debugInputMonitoringStatus = String(describing: PermissionsService().inputMonitoringStatus)
-                state.debugAccessibilityStatus   = String(describing: PermissionsService().accessibilityStatus)
-                state.debugMicrophoneStatus      = String(describing: PermissionsService().microphoneStatus)
+                let perms = PermissionsService()
+                let ax = perms.accessibilityStatus
+                let im = perms.inputMonitoringStatus
+                let mic = perms.microphoneStatus
+                state.debugAccessibilityStatus = String(describing: ax)
+                state.debugInputMonitoringStatus = String(describing: im)
+                state.debugMicrophoneStatus = String(describing: mic)
+
+                // Revocation detection: if the tap was installed but a required
+                // permission has been revoked, the chord no longer works. Surface
+                // an actionable error and tear down the tap so a future re-grant
+                // can re-install it via startAccessibilityRetry.
+                if let installed = self?.hotkeyMonitor?.isTapInstalled, installed {
+                    if ax != .granted || im != .granted {
+                        state.status = .error("Accessibility or Input Monitoring permission was revoked. Re-grant it in System Settings → Privacy & Security; voxline will recover automatically.")
+                        self?.hotkeyMonitor?.stop()
+                        if let monitor = self?.hotkeyMonitor {
+                            self?.startAccessibilityRetry(state: state, monitor: monitor)
+                        }
+                    }
+                }
             }
         }
     }
