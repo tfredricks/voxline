@@ -125,7 +125,14 @@ final class AudioCaptureService {
         var consumed = false
         let status = converter.convert(to: outBuffer, error: &error) { _, statusOut in
             if consumed {
-                statusOut.pointee = .endOfStream
+                // CRITICAL: must be .noDataNow, NOT .endOfStream. Using
+                // .endOfStream permanently terminates the converter's
+                // stream — every subsequent tap callback's convert() call
+                // would silently fail, leaving us with exactly one buffer
+                // worth of samples (~100ms) regardless of how long the user
+                // held the chord. This was voxline's "0.1s of audio per
+                // recording" bug.
+                statusOut.pointee = .noDataNow
                 return nil
             }
             consumed = true
