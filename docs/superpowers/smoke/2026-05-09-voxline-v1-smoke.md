@@ -53,8 +53,14 @@ In each target app, hold **Left Ctrl + Left Option**, dictate, release. Cleaned 
 
 ### API Keys tab
 
-- [ ] **Test connection** with a valid key → ✓ Connected.
-- [ ] Replace key with garbage → Test → ✗ "API key was rejected by the provider." (or similar). Restore the real key.
+> Note: clicking **Test connection** calls `save()` first, so whatever is in
+> the form fields is persisted to the keychain *before* the test request fires.
+> After testing with a garbage key, you must paste your real key back in and
+> click Test (or Save) again to restore a working configuration.
+
+- [ ] **Test connection** with a valid key → ✓ Connected. (Real key is now saved.)
+- [ ] Replace key with garbage → Test → ✗ "API key was rejected by the provider." (or similar). Garbage is now in the keychain.
+- [ ] Paste the real key back → Test → ✓ Connected. Real key is restored.
 
 ### Modes tab
 
