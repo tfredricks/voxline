@@ -26,9 +26,38 @@ struct MenuBarContent: View {
 
         Divider()
 
+        Menu("Debug") {
+            Text("Status: \(statusLabel)")
+            Text("Hotkey state: \(state.debugHotkeyState)")
+            Text("Tap installed: \(state.debugTapInstalled ? "yes" : "no")")
+            Text("Pipeline phase: \(state.debugPipelinePhase)")
+            if let started = state.recordingStartedAt {
+                Text("Recording started: \(started.formatted(date: .omitted, time: .standard))")
+            }
+            if let last = state.lastTranscript, !last.isEmpty {
+                Divider()
+                Text("Last transcript:")
+                Text(last.prefix(200).description)
+                    .foregroundStyle(.secondary)
+            }
+        }
+
+        Divider()
+
         Button("Quit voxline") {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q")
+    }
+
+    private var statusLabel: String {
+        switch state.status {
+        case .idle: return "idle"
+        case .recording: return "recording"
+        case .thinking: return "thinking"
+        case .preparingModel: return "preparingModel"
+        case .downloadingModel(let p): return "downloadingModel(\(Int(p * 100))%)"
+        case .error(let msg): return "error: \(msg.prefix(80))"
+        }
     }
 }

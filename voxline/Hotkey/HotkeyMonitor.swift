@@ -13,6 +13,14 @@ final class HotkeyMonitor {
     var onStartRecording: (() -> Void)?
     var onFinalizeRecording: (() -> Void)?
 
+    /// Optional debug observer — fired whenever the state machine state or
+    /// tap-installation status changes. Used by the menu-bar debug section.
+    var onDebugStateChanged: ((HotkeyStateMachine.State, Bool) -> Void)?
+
+    /// Snapshot of state-machine state for diagnostics.
+    var currentState: HotkeyStateMachine.State { machine.state }
+    var isTapInstalled: Bool { eventTap != nil }
+
     /// Maximum recording duration (spec §4.1 fail-safe). Configurable.
     var maxRecordingDuration: TimeInterval = 60.0
 
@@ -46,6 +54,7 @@ final class HotkeyMonitor {
         eventTap = tap
         runLoopSource = source
         CGEvent.tapEnable(tap: tap, enable: true)
+        onDebugStateChanged?(machine.state, true)
 
         // Periodic reconciliation: catches missed flagsChanged events.
         reconciliationTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
@@ -157,6 +166,7 @@ final class HotkeyMonitor {
                 onFinalizeRecording?()
             }
         }
+        onDebugStateChanged?(machine.state, eventTap != nil)
     }
 
     private func scheduleMaxDurationTimer() {

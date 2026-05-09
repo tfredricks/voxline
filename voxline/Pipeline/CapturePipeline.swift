@@ -59,6 +59,7 @@ final class CapturePipeline {
         capture.stop()
         let samples = capture.takeSamples()
         state.status = .thinking
+        state.debugPipelinePhase = "stopped capture (\(samples.count) samples)"
 
         if samples.isEmpty {
             resetIdle()
@@ -66,6 +67,7 @@ final class CapturePipeline {
         }
 
         // 1. Transcribe locally.
+        state.debugPipelinePhase = "transcribing"
         let transcript: String
         do {
             transcript = try await transcriber.transcribe(samples: samples)
@@ -86,6 +88,7 @@ final class CapturePipeline {
         guard let mode = modes.mode(for: bundleID) else {
             return setError("No mode for app '\(bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes.")
         }
+        state.debugPipelinePhase = "llm (\(mode.displayName))"
 
         // 3. LLM cleanup.
         let cleaned: String
@@ -98,6 +101,7 @@ final class CapturePipeline {
         }
 
         // 4. Paste.
+        state.debugPipelinePhase = "pasting"
         do {
             try await injector.inject(cleaned)
         } catch {
@@ -111,11 +115,13 @@ final class CapturePipeline {
         state.recordingStartedAt = nil
         state.audioLevel = 0
         state.status = .idle
+        state.debugPipelinePhase = "idle"
     }
 
     private func setError(_ message: String) {
         state.status = .error(message)
         state.recordingStartedAt = nil
         state.audioLevel = 0
+        state.debugPipelinePhase = "error"
     }
 }

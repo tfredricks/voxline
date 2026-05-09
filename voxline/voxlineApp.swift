@@ -106,6 +106,13 @@ final class AppCoordinator {
                 if let state { self?.pillWindow?.updateVisibility(state: state) }
             }
         }
+        monitor.onDebugStateChanged = { [weak state] s, installed in
+            Task { @MainActor in
+                guard let state else { return }
+                state.debugHotkeyState = String(describing: s)
+                state.debugTapInstalled = installed
+            }
+        }
         do {
             try monitor.start()
             hotkeyMonitor = monitor

@@ -37,4 +37,19 @@ final class AppState {
     /// Wall-clock time the current recording began, or nil while idle.
     /// Used for the pill's elapsed-time display and for the max-duration fail-safe.
     var recordingStartedAt: Date?
+
+    // MARK: - Debug diagnostics (rendered in the menu-bar Debug section)
+
+    /// Current `HotkeyStateMachine.State`, stringified. Updated by HotkeyMonitor
+    /// after every state transition, so a stuck state (e.g. `.recording` or
+    /// `.finalizing` while the user isn't holding the chord) is immediately visible.
+    var debugHotkeyState: String = "idle"
+
+    /// Whether the CGEventTap is currently installed and active.
+    var debugTapInstalled: Bool = false
+
+    /// Most recent pipeline phase. Set by CapturePipeline.finalizeRecording
+    /// at each step ("idle" → "transcribing" → "llm" → "paste" → "idle").
+    /// If finalize hangs, this is the last phase it reached.
+    var debugPipelinePhase: String = "idle"
 }
