@@ -22,7 +22,7 @@ final class HotkeyStateMachine {
     }
 
     enum Input: Equatable {
-        case flagsChanged(leftCtrlDown: Bool, leftOptDown: Bool)
+        case flagsChanged(modAFlag: Bool, modBFlag: Bool)
         case maxDurationElapsed
         case tapDisabled
         case recordingFinished
@@ -41,12 +41,12 @@ final class HotkeyStateMachine {
         switch (state, input) {
 
         // From idle / armed, modifier flag changes drive entry into recording.
-        case (.idle, .flagsChanged(let ctrl, let opt)),
-             (.armed, .flagsChanged(let ctrl, let opt)):
-            return reactToFlags(ctrl: ctrl, opt: opt)
+        case (.idle, .flagsChanged(let modA, let modB)),
+             (.armed, .flagsChanged(let modA, let modB)):
+            return reactToFlags(modA: modA, modB: modB)
 
         // While recording, ANY input that signals "stop" finalizes.
-        case (.recording, .flagsChanged(let ctrl, let opt)) where !(ctrl && opt):
+        case (.recording, .flagsChanged(let modA, let modB)) where !(modA && modB):
             state = .finalizing
             return [.finalizeRecording]
 
@@ -66,8 +66,8 @@ final class HotkeyStateMachine {
         }
     }
 
-    private func reactToFlags(ctrl: Bool, opt: Bool) -> [Output] {
-        switch (ctrl, opt) {
+    private func reactToFlags(modA: Bool, modB: Bool) -> [Output] {
+        switch (modA, modB) {
         case (true, true):
             state = .recording
             return [.startRecording]

@@ -117,6 +117,7 @@ final class AppCoordinator {
         pill.show(state: state)
 
         let monitor = HotkeyMonitor()
+        monitor.chord = AppSettings().hotkeyChord
         monitor.onStartRecording = { [weak self, weak state] in
             self?.pipeline?.startRecording()
             if let state { self?.pillWindow?.updateVisibility(state: state) }
