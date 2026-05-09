@@ -15,11 +15,7 @@ import Testing
         state.status = .thinking
         #expect(state.status == .thinking)
         state.status = .error("mic unavailable")
-        if case .error(let msg) = state.status {
-            #expect(msg == "mic unavailable")
-        } else {
-            Issue.record("expected .error case, got \(state.status)")
-        }
+        #expect(state.status == .error("mic unavailable"))
         state.status = .idle
         #expect(state.status == .idle)
     }
