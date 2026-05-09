@@ -75,6 +75,13 @@ final class CapturePipeline {
         state.debugLastSampleCount = samples.count
         state.debugPipelinePhase = "stopped capture (\(samples.count) samples)"
 
+        // Silent-capture detector: tap fired (samples non-empty) but no audio
+        // signal reached the converter (peak stayed at 0). Almost always means
+        // Microphone permission is denied or a muted device was selected.
+        if !samples.isEmpty && state.debugLastPeakLevel == 0 {
+            return setError("No audio captured. Check that Microphone permission is granted and the input device isn't muted.")
+        }
+
         if samples.isEmpty {
             resetIdle()
             return
@@ -86,7 +93,7 @@ final class CapturePipeline {
         do {
             transcript = try await transcriber.transcribe(samples: samples)
         } catch {
-            return setError("Transcription failed: \(error.localizedDescription)")
+            return setError("Transcription failed. Try again or pick a different model in Settings → General.")
         }
         state.lastTranscript = transcript
 
@@ -120,7 +127,7 @@ final class CapturePipeline {
         do {
             try await injector.inject(cleaned)
         } catch {
-            return setError("Paste failed: \(error.localizedDescription)")
+            return setError("Paste failed. The pasteboard may be locked by another app.")
         }
 
         resetIdle()

@@ -69,9 +69,11 @@ final class AppCoordinator {
 
     private var pillWindow: RecordingPillWindow?
     private var downloadWindow: ModelDownloadWindow?
+    private var modelPrepTask: Task<Void, Never>?
     private var didStart = false
     private var accessibilityRetryTimer: Timer?
     private var inputMonitoringWatchdog: Timer?
+    private var hotkeyEnabledObserver: Timer?
     private var firstRunWindow: FirstRunWindowController?
 
     func startIfNeeded(state: AppState) {
@@ -96,12 +98,21 @@ final class AppCoordinator {
             state: state,
             settings: settings,
             model: settings.whisperModel,
-            chord: settings.hotkeyChord
-        ) { [weak self] in
-            guard let self else { return }
-            self.firstRunWindow = nil
-            self.installHotkey(state: state, settings: settings)
-        }
+            chord: settings.hotkeyChord,
+            onRetryDownload: { [weak self, weak state] in
+                guard let self, let state else { return }
+                // Reset the error before retrying so the download progress UI shows again.
+                state.status = TranscriptionService.isModelCached(settings.whisperModel)
+                    ? .preparingModel
+                    : .downloadingModel(progress: 0)
+                self.prepareIfNeeded(state: state, transcriber: transcriber)
+            },
+            onComplete: { [weak self] in
+                guard let self else { return }
+                self.firstRunWindow = nil
+                self.installHotkey(state: state, settings: settings)
+            }
+        )
 
         // Eagerly start the model download so by the time the user reaches the
         // download step, progress is already advancing.
@@ -245,12 +256,30 @@ final class AppCoordinator {
     /// silent unless voxline is foreground.
     private func startInputMonitoringWatchdog(state: AppState) {
         inputMonitoringWatchdog?.invalidate()
-        inputMonitoringWatchdog = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak state] _ in
+        inputMonitoringWatchdog = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak state, weak self] _ in
             Task { @MainActor in
                 guard let state else { return }
-                state.debugInputMonitoringStatus = String(describing: PermissionsService().inputMonitoringStatus)
-                state.debugAccessibilityStatus   = String(describing: PermissionsService().accessibilityStatus)
-                state.debugMicrophoneStatus      = String(describing: PermissionsService().microphoneStatus)
+                let perms = PermissionsService()
+                let ax = perms.accessibilityStatus
+                let im = perms.inputMonitoringStatus
+                let mic = perms.microphoneStatus
+                state.debugAccessibilityStatus = String(describing: ax)
+                state.debugInputMonitoringStatus = String(describing: im)
+                state.debugMicrophoneStatus = String(describing: mic)
+
+                // Revocation detection: if the tap was installed but a required
+                // permission has been revoked, the chord no longer works. Surface
+                // an actionable error and tear down the tap so a future re-grant
+                // can re-install it via startAccessibilityRetry.
+                if let installed = self?.hotkeyMonitor?.isTapInstalled, installed {
+                    if ax != .granted || im != .granted {
+                        state.status = .error("Accessibility or Input Monitoring permission was revoked. Re-grant it in System Settings → Privacy & Security; voxline will recover automatically.")
+                        self?.hotkeyMonitor?.stop()
+                        if let monitor = self?.hotkeyMonitor {
+                            self?.startAccessibilityRetry(state: state, monitor: monitor)
+                        }
+                    }
+                }
             }
         }
     }
@@ -283,7 +312,8 @@ final class AppCoordinator {
     private func observeHotkeyEnabled(state: AppState) {
         // Poll once per second — toggling is rare and a notifier would
         // require a rewrite of AppState into Combine.
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self, weak state] _ in
+        hotkeyEnabledObserver?.invalidate()
+        hotkeyEnabledObserver = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self, weak state] _ in
             Task { @MainActor in
                 guard let self, let state else { return }
                 let enabled = state.hotkeyEnabled
@@ -303,33 +333,71 @@ final class AppCoordinator {
         let window = ModelDownloadWindow()
         downloadWindow = window
         window.show(state: state)
+        runModelPrepTask(state: state, transcriber: transcriber, managesDownloadWindow: true)
+    }
 
-        Task { @MainActor in
+    /// Single-flight prepare + prewarm. Cancels any in-flight task before
+    /// starting a new one so a settings-driven model swap during launch download
+    /// doesn't race against the launch-path prepareIfNeeded.
+    ///
+    /// - Parameters:
+    ///   - state: `AppState` to update with progress/idle/error status, or `nil`
+    ///     for the settings-swap path which performs a silent background swap.
+    ///   - transcriber: The `TranscriptionService` to prepare.
+    ///   - managesDownloadWindow: When `true`, closes `downloadWindow` on
+    ///     completion or failure (launch path). When `false`, the download window
+    ///     is not touched (settings-swap path).
+    private func runModelPrepTask(
+        state: AppState?,
+        transcriber: TranscriptionService,
+        managesDownloadWindow: Bool
+    ) {
+        modelPrepTask?.cancel()
+        modelPrepTask = Task { @MainActor [weak self, weak state, weak transcriber] in
+            guard let transcriber else { return }
             do {
-                if needsDownload {
+                if !TranscriptionService.isModelCached(transcriber.model) {
                     try await transcriber.prepareModel { progress in
                         Task { @MainActor in
-                            if case .downloadingModel = state.status {
+                            if let state, case .downloadingModel = state.status {
                                 state.status = .downloadingModel(progress: progress)
                             }
                         }
                     }
-                    if case .downloadingModel = state.status {
+                    if let state, case .downloadingModel = state.status {
                         state.status = .preparingModel
                     }
                 }
                 try await transcriber.prewarm()
-                if case .preparingModel = state.status {
+                if let state, case .preparingModel = state.status {
                     state.status = .idle
                 }
-                downloadWindow?.close()
-                downloadWindow = nil
+                if managesDownloadWindow {
+                    self?.downloadWindow?.close()
+                    self?.downloadWindow = nil
+                }
+            } catch is CancellationError {
+                // A newer prep task superseded this one. Don't surface as a
+                // user-facing error.
+                return
             } catch {
-                state.status = .error("Model setup failed: \(error.localizedDescription). Quit and relaunch voxline to retry.")
-                downloadWindow?.close()
-                downloadWindow = nil
+                if let state {
+                    state.status = .error("Model setup failed: \(error.localizedDescription). Try Retry or relaunch voxline.")
+                }
+                if managesDownloadWindow {
+                    self?.downloadWindow?.close()
+                    self?.downloadWindow = nil
+                }
             }
+            self?.modelPrepTask = nil
         }
+    }
+
+    deinit {
+        hotkeyEnabledObserver?.invalidate()
+        inputMonitoringWatchdog?.invalidate()
+        accessibilityRetryTimer?.invalidate()
+        modelPrepTask?.cancel()
     }
 }
 
@@ -355,16 +423,16 @@ extension AppCoordinator: GeneralSettingsApplier {
 
         // Switching Whisper model: invalidate the loaded pipeline; the next
         // transcribe re-loads from the (possibly cached) new variant. Trigger
-        // a background prepare/prewarm so the user doesn't pay it on next dictation.
-        if transcriber?.model != snapshot.whisperModel {
-            transcriber?.model = snapshot.whisperModel
-            Task { @MainActor [weak self] in
-                guard let self, let t = self.transcriber else { return }
-                if !TranscriptionService.isModelCached(snapshot.whisperModel) {
-                    try? await t.prepareModel { _ in }
-                }
-                try? await t.prewarm()
-            }
+        // a single-flight background prepare/prewarm so the user doesn't pay
+        // it on next dictation. Shares modelPrepTask with the launch path so
+        // mid-download swaps cancel cleanly.
+        if let transcriber, transcriber.model != snapshot.whisperModel {
+            transcriber.model = snapshot.whisperModel
+            // Settings-driven swap: no download window — the launch flow already
+            // dismissed it, and re-showing it during normal app use is jarring.
+            // The user gets a quiet background swap; failure is visible via the
+            // menu-bar status indicator.
+            runModelPrepTask(state: nil, transcriber: transcriber, managesDownloadWindow: false)
         }
     }
 }

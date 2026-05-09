@@ -48,6 +48,14 @@ import Foundation
         }
     }
 
+    /// Start recording then finalize, simulating the production `onLevel`
+    /// callback firing so the silent-capture detector doesn't fire.
+    private func startAndFinalize(_ pipe: CapturePipeline, state: AppState) async {
+        pipe.startRecording()
+        state.debugLastPeakLevel = 0.5
+        await pipe.finalizeRecording()
+    }
+
     private func makePipeline(
         frontmostBundleID: String? = "com.tinyspeck.slackmacgap",
         modes: [Mode] = [
@@ -81,8 +89,7 @@ import Foundation
         let (pipe, state, _, transcriber, llm, _, injector) = makePipeline()
         transcriber.nextResult = .success("uh hello there")
         llm.nextResult = .success("Hello there.")
-        pipe.startRecording()
-        await pipe.finalizeRecording()
+        await startAndFinalize(pipe, state: state)
 
         #expect(transcriber.transcribeCallCount == 1)
         #expect(llm.calls.count == 1)
@@ -94,9 +101,8 @@ import Foundation
     }
 
     @Test func unknown_bundleID_falls_back_to_wildcard_mode() async throws {
-        let (pipe, _, _, _, llm, _, _) = makePipeline(frontmostBundleID: "com.unknown.app")
-        pipe.startRecording()
-        await pipe.finalizeRecording()
+        let (pipe, state, _, _, llm, _, _) = makePipeline(frontmostBundleID: "com.unknown.app")
+        await startAndFinalize(pipe, state: state)
         #expect(llm.calls[0].mode.bundleID == "*")
     }
 
@@ -104,8 +110,7 @@ import Foundation
         struct StubError: Error {}
         let (pipe, state, _, transcriber, llm, _, injector) = makePipeline()
         transcriber.nextResult = .failure(StubError())
-        pipe.startRecording()
-        await pipe.finalizeRecording()
+        await startAndFinalize(pipe, state: state)
         if case .error = state.status { } else { Issue.record("expected .error") }
         #expect(llm.calls.isEmpty)
         #expect(injector.injected.isEmpty)
@@ -114,8 +119,7 @@ import Foundation
     @Test func empty_transcript_skips_llm_and_paste() async throws {
         let (pipe, state, _, transcriber, llm, _, injector) = makePipeline()
         transcriber.nextResult = .success("")
-        pipe.startRecording()
-        await pipe.finalizeRecording()
+        await startAndFinalize(pipe, state: state)
         #expect(llm.calls.isEmpty)
         #expect(injector.injected.isEmpty)
         #expect(state.status == .idle)
@@ -124,8 +128,7 @@ import Foundation
     @Test func llm_missingAPIKey_surfacesActionableErrorMessage() async throws {
         let (pipe, state, _, _, llm, _, _) = makePipeline()
         llm.nextResult = .failure(LLMError.missingAPIKey)
-        pipe.startRecording()
-        await pipe.finalizeRecording()
+        await startAndFinalize(pipe, state: state)
         if case .error(let msg) = state.status {
             #expect(msg.contains("Settings"))
         } else {
@@ -137,8 +140,7 @@ import Foundation
         struct StubError: Error {}
         let (pipe, state, _, _, _, _, injector) = makePipeline()
         injector.nextError = StubError()
-        pipe.startRecording()
-        await pipe.finalizeRecording()
+        await startAndFinalize(pipe, state: state)
         if case .error = state.status { } else { Issue.record("expected .error") }
     }
 

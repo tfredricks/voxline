@@ -6,6 +6,7 @@ struct WizardRootView: View {
     @Bindable var state: AppState
     let model: WhisperModel
     let chord: HotkeyChord
+    let onRetryDownload: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,7 +33,7 @@ struct WizardRootView: View {
         case .welcome: WizardWelcomeView()
         case .permissions: WizardPermissionsView()
         case .apiKey: WizardAPIKeyView(vm: vm.apiKeyVM)
-        case .modelDownload: WizardModelDownloadView(state: state, model: model)
+        case .modelDownload: WizardModelDownloadView(state: state, model: model, onRetry: onRetryDownload)
         case .done: WizardDoneView(chord: chord)
         }
     }
