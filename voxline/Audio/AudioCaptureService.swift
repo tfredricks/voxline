@@ -18,8 +18,10 @@ final class AudioCaptureService {
     private var samples: [Float] = []
 
     /// Begin capture. Throws if the input device is unavailable or sample-rate negotiation fails.
+    /// The audio engine stays running between captures — repeated start/stop of the engine
+    /// itself produced -10877 errors after the first cycle in real-hardware use, so we only
+    /// install/remove the tap on each recording and keep the graph live.
     func start() throws {
-        guard !engine.isRunning else { return }
         let input = engine.inputNode
         let hardwareFormat = input.outputFormat(forBus: 0)
 
@@ -43,6 +45,10 @@ final class AudioCaptureService {
 
         samples.removeAll(keepingCapacity: true)
 
+        // Defensive: clear any leftover tap from a prior recording before installing
+        // ours. removeTap is a no-op when no tap is present.
+        input.removeTap(onBus: 0)
+
         // Capture locally before tap closure to avoid main-actor isolation issues.
         let convLocal = conv
         let targetFmt = target
@@ -51,18 +57,22 @@ final class AudioCaptureService {
             self.handleInputNonisolated(buffer: buffer, converter: convLocal, target: targetFmt)
         }
 
-        do {
-            try engine.start()
-        } catch {
-            input.removeTap(onBus: 0)
-            throw error
+        if !engine.isRunning {
+            do {
+                try engine.start()
+            } catch {
+                input.removeTap(onBus: 0)
+                throw error
+            }
         }
     }
 
-    /// Stop capture. Returns immediately; samples remain available via takeSamples().
+    /// Stop capture. Removes the tap so no further buffers arrive; leaves the
+    /// engine itself running so the next start() doesn't pay engine-restart cost
+    /// or hit the -10877 / format-renegotiation issues that affect repeated
+    /// engine.start() calls in real-hardware use.
     func stop() {
         engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
     }
 
     /// Drain and return the converted samples buffered so far. Subsequent calls return [].
