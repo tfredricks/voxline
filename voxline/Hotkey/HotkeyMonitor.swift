@@ -104,27 +104,31 @@ final class HotkeyMonitor {
         guard let refcon else { return Unmanaged.passUnretained(event) }
         let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
 
+        // The runloop source is registered with CFRunLoopGetMain(), so this
+        // callback is already on the main thread. Process inline via
+        // MainActor.assumeIsolated rather than hopping through Task { @MainActor }
+        // — unstructured Tasks don't preserve submission order, and modifier
+        // events from the same hardware source must remain ordered.
         switch type {
         case .flagsChanged:
             let flags = event.flags
-            let chord = monitor.chord
-            let modA = flags.contains(CGEventFlags(rawValue: chord.modifierA.deviceMaskBit))
-            let modB = flags.contains(CGEventFlags(rawValue: chord.modifierB.deviceMaskBit))
-            // Coalesced bits kept for the debug log line, useful for diagnosing rollover.
-            let anyCtrl = flags.contains(.maskControl)
-            let anyOpt  = flags.contains(.maskAlternate)
-            let raw = String(flags.rawValue, radix: 16)
-            let line = "raw=0x\(raw) modA=\(modA) modB=\(modB) anyCtrl=\(anyCtrl) anyOpt=\(anyOpt)"
-            Task { @MainActor in
+            MainActor.assumeIsolated {
+                let chord = monitor.chord
+                let modA = flags.contains(CGEventFlags(rawValue: chord.modifierA.deviceMaskBit))
+                let modB = flags.contains(CGEventFlags(rawValue: chord.modifierB.deviceMaskBit))
+                // Coalesced bits kept for the debug log line, useful for diagnosing rollover.
+                let anyCtrl = flags.contains(.maskControl)
+                let anyOpt  = flags.contains(.maskAlternate)
+                let raw = String(flags.rawValue, radix: 16)
+                let line = "raw=0x\(raw) modA=\(modA) modB=\(modB) anyCtrl=\(anyCtrl) anyOpt=\(anyOpt)"
                 monitor.onDebugFlagEvent?(line)
                 monitor.feed(.flagsChanged(modAFlag: modA, modBFlag: modB))
             }
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            // Re-enable the tap and signal a defensive finalize.
-            if let tap = monitor.eventTap {
-                CGEvent.tapEnable(tap: tap, enable: true)
-            }
-            Task { @MainActor in
+            MainActor.assumeIsolated {
+                if let tap = monitor.eventTap {
+                    CGEvent.tapEnable(tap: tap, enable: true)
+                }
                 monitor.feed(.tapDisabled)
             }
         default:
@@ -167,7 +171,13 @@ final class HotkeyMonitor {
     private func scheduleMaxDurationTimer() {
         maxDurationTimer?.invalidate()
         maxDurationTimer = Timer.scheduledTimer(withTimeInterval: maxRecordingDuration, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.feed(.maxDurationElapsed) }
+            // Timer was scheduled from a @MainActor context, so its callback
+            // fires on the main runloop. Stay synchronous to keep the
+            // .maxDurationElapsed signal ordered with subsequent flagsChanged
+            // events from the tap.
+            MainActor.assumeIsolated {
+                self?.feed(.maxDurationElapsed)
+            }
         }
     }
 
