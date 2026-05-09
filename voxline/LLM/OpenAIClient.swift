@@ -21,6 +21,7 @@ struct OpenAIClient: LLMClient {
 
         var body: [String: Any] = [
             "model": request.model,
+            "max_tokens": request.maxOutputTokens,
             "messages": [
                 ["role": "system", "content": request.systemPrompt],
                 ["role": "user", "content": request.userPrompt]

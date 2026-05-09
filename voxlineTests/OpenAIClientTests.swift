@@ -54,6 +54,7 @@ import Foundation
 
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         #expect(body["model"] as? String == "gpt-4o-mini")
+        #expect(body["max_tokens"] as? Int == 1024)
         #expect(body["temperature"] as? Double == 0.2)
         let messages = body["messages"] as! [[String: Any]]
         #expect(messages.count == 2)
