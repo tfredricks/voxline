@@ -86,6 +86,15 @@ final class HotkeyMonitor {
     /// External signal that transcription has finished and we can return to idle.
     func recordingFinished() {
         feed(.recordingFinished)
+        // The synthetic Cmd+V posted by the paste flow can fire
+        // kCGEventTapDisabledByUserInput against our own session tap. The
+        // tap-disabled callback already calls tapEnable, but on some macOS
+        // builds the tap stays unresponsive until it's re-enabled again
+        // *after* the synthetic-event burst settles. Force-re-enable here so
+        // the next chord press is reliably observed.
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: true)
+        }
     }
 
     // MARK: - Tap callback
