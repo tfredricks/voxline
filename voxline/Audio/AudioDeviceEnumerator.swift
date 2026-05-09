@@ -90,27 +90,33 @@ enum AudioDeviceEnumerator {
 
     /// Look up the AudioDeviceID for a UID stored in AppSettings.
     /// Returns nil if the device is no longer present (e.g., USB mic unplugged).
+    ///
+    /// CoreAudio's kAudioHardwarePropertyDeviceForUID requires mInputData to be a
+    /// pointer to a CFStringRef, not a raw UTF-8 buffer. The nested
+    /// withUnsafeMutablePointer calls ensure both pointers remain valid for the
+    /// duration of the C call.
     static func deviceID(forUID uid: String) -> AudioDeviceID? {
         var deviceID: AudioDeviceID = 0
+        var cfUID = uid as CFString
         var addr = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDeviceForUID,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        var size = UInt32(MemoryLayout<AudioValueTranslation>.size)
-        let status: OSStatus = withUnsafeMutablePointer(to: &deviceID) { deviceIDPtr in
-            (uid as NSString).utf8String.map { utf8Ptr in
+        let status: OSStatus = withUnsafeMutablePointer(to: &cfUID) { uidPtr in
+            withUnsafeMutablePointer(to: &deviceID) { devPtr in
                 var translation = AudioValueTranslation(
-                    mInputData: UnsafeMutableRawPointer(mutating: utf8Ptr),
-                    mInputDataSize: UInt32(uid.utf8.count + 1),
-                    mOutputData: deviceIDPtr,
+                    mInputData: UnsafeMutableRawPointer(uidPtr),
+                    mInputDataSize: UInt32(MemoryLayout<CFString>.size),
+                    mOutputData: UnsafeMutableRawPointer(devPtr),
                     mOutputDataSize: UInt32(MemoryLayout<AudioDeviceID>.size)
                 )
+                var size = UInt32(MemoryLayout<AudioValueTranslation>.size)
                 return AudioObjectGetPropertyData(
                     AudioObjectID(kAudioObjectSystemObject),
                     &addr, 0, nil, &size, &translation
                 )
-            } ?? OSStatus(kAudioHardwareUnspecifiedError)
+            }
         }
         return status == noErr && deviceID != 0 ? deviceID : nil
     }

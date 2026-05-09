@@ -18,4 +18,11 @@ import Foundation
         let defaults = devices.filter(\.isDefault)
         #expect(defaults.count <= 1) // Zero is acceptable on a headless box without a default mic.
     }
+
+    @Test func deviceID_for_uid_resolves_a_real_device() {
+        let devices = AudioDeviceEnumerator.inputDevices()
+        guard let first = devices.first else { return }  // headless host: skip
+        let id = AudioDeviceEnumerator.deviceID(forUID: first.uid)
+        #expect(id != nil)
+    }
 }
