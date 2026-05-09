@@ -140,7 +140,13 @@ final class AppCoordinator {
         // frontmost app — which made hold-to-talk look like it "only works
         // once". Trigger the prompt here so the user can grant it at first
         // launch alongside Accessibility.
-        _ = PermissionsService().requestInputMonitoring()
+        let perms = PermissionsService()
+        _ = perms.requestInputMonitoring()
+        // CGEvent.tapCreate sometimes-but-not-reliably surfaces the AX prompt.
+        // Force it explicitly so first-run users see both dialogs.
+        if perms.accessibilityStatus != .granted {
+            perms.promptAccessibility()
+        }
 
         do {
             try monitor.start()

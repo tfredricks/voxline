@@ -52,6 +52,10 @@ struct DebugView: View {
                     _ = PermissionsService().requestInputMonitoring()
                     state.debugLastTestResult = "Triggered Input Monitoring prompt"
                 }
+                Button("Re-prompt Accessibility") {
+                    PermissionsService().promptAccessibility()
+                    state.debugLastTestResult = "Triggered Accessibility prompt"
+                }
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
