@@ -1,9 +1,11 @@
 import SwiftUI
 
 struct SettingsView: View {
+    let generalVM: GeneralSettingsViewModel
+
     var body: some View {
         TabView {
-            GeneralSettingsView()
+            GeneralSettingsView(vm: generalVM)
                 .tabItem { Label("General", systemImage: "gear") }
 
             APIKeysSettingsView()
@@ -13,8 +15,4 @@ struct SettingsView: View {
                 .tabItem { Label("Modes", systemImage: "rectangle.3.group") }
         }
     }
-}
-
-#Preview {
-    SettingsView()
 }

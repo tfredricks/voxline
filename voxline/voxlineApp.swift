@@ -24,8 +24,10 @@ struct voxlineApp: App {
         .menuBarExtraStyle(.menu)
 
         Settings {
-            SettingsView()
-                .environment(delegate.appState)
+            SettingsView(
+                generalVM: GeneralSettingsViewModel(applier: delegate.coordinator)
+            )
+            .environment(delegate.appState)
         }
         // Plan 2's debug Window scene removed in Plan 3 — paste replaces the
         // verification UI.
@@ -62,6 +64,7 @@ final class AppCoordinator {
     var modes: ModeRouter?
     var injector: ClipboardInjector?
     var frontmost: FrontmostApp?
+    var capture: AudioCaptureService?
 
     private var pillWindow: RecordingPillWindow?
     private var downloadWindow: ModelDownloadWindow?
@@ -73,7 +76,10 @@ final class AppCoordinator {
         guard !didStart else { return }
         didStart = true
 
+        let settings = AppSettings()
+
         let capture = AudioCaptureService()
+        self.capture = capture
         let transcriber = TranscriptionService()
         self.transcriber = transcriber
 
@@ -91,7 +97,7 @@ final class AppCoordinator {
         let router = ModeRouter(modes: modes)
 
         // LLM
-        let llm = LLMService(settings: AppSettings(), keychain: Keychain())
+        let llm = LLMService(settings: settings, keychain: Keychain())
         self.llm = llm
         self.modes = router
 
@@ -117,7 +123,7 @@ final class AppCoordinator {
         pill.show(state: state)
 
         let monitor = HotkeyMonitor()
-        monitor.chord = AppSettings().hotkeyChord
+        monitor.chord = settings.hotkeyChord
         monitor.onStartRecording = { [weak self, weak state] in
             self?.pipeline?.startRecording()
             if let state { self?.pillWindow?.updateVisibility(state: state) }
@@ -265,6 +271,31 @@ final class AppCoordinator {
                 state.status = .error("Model setup failed: \(error.localizedDescription). Quit and relaunch voxline to retry.")
                 downloadWindow?.close()
                 downloadWindow = nil
+            }
+        }
+    }
+}
+
+extension AppCoordinator: GeneralSettingsApplier {
+    func apply(_ snapshot: GeneralSettingsSnapshot) {
+        hotkeyMonitor?.update(chord: snapshot.chord)
+
+        // AudioCaptureService applies preferredInputDeviceUID at next start();
+        // CapturePipeline restarts the engine on every chord, so the new device
+        // takes effect on the next dictation.
+        capture?.preferredInputDeviceUID = snapshot.audioInputDeviceUID
+
+        // Switching Whisper model: invalidate the loaded pipeline; the next
+        // transcribe re-loads from the (possibly cached) new variant. Trigger
+        // a background prepare/prewarm so the user doesn't pay it on next dictation.
+        if transcriber?.model != snapshot.whisperModel {
+            transcriber?.model = snapshot.whisperModel
+            Task { @MainActor [weak self] in
+                guard let self, let t = self.transcriber else { return }
+                if !TranscriptionService.isModelCached(snapshot.whisperModel) {
+                    try? await t.prepareModel { _ in }
+                }
+                try? await t.prewarm()
             }
         }
     }
