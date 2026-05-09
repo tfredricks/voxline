@@ -7,6 +7,10 @@ struct AppSettings {
     enum Key {
         static let provider = "voxline.llm.provider"
         static let model = "voxline.llm.model"
+        static let hotkeyChord = "voxline.hotkey.chord"
+        static let audioInputDeviceUID = "voxline.audio.inputDeviceUID"
+        static let whisperModel = "voxline.whisper.model"
+        static let hasCompletedFirstRun = "voxline.firstRun.completed"
     }
 
     let defaults: UserDefaults
@@ -38,5 +42,46 @@ struct AppSettings {
     var llmModel: String {
         get { defaults.string(forKey: Key.model) ?? llmProvider.defaultModel }
         set { defaults.set(newValue, forKey: Key.model) }
+    }
+
+    var hotkeyChord: HotkeyChord {
+        get {
+            guard
+                let data = defaults.data(forKey: Key.hotkeyChord),
+                let chord = try? JSONDecoder().decode(HotkeyChord.self, from: data)
+            else { return .default }
+            return chord
+        }
+        set {
+            let data = try? JSONEncoder().encode(newValue)
+            defaults.set(data, forKey: Key.hotkeyChord)
+        }
+    }
+
+    var audioInputDeviceUID: String? {
+        get { defaults.string(forKey: Key.audioInputDeviceUID) }
+        set {
+            if let newValue {
+                defaults.set(newValue, forKey: Key.audioInputDeviceUID)
+            } else {
+                defaults.removeObject(forKey: Key.audioInputDeviceUID)
+            }
+        }
+    }
+
+    var whisperModel: WhisperModel {
+        get {
+            guard
+                let raw = defaults.string(forKey: Key.whisperModel),
+                let m = WhisperModel(rawValue: raw)
+            else { return .default }
+            return m
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.whisperModel) }
+    }
+
+    var hasCompletedFirstRun: Bool {
+        get { defaults.bool(forKey: Key.hasCompletedFirstRun) }
+        set { defaults.set(newValue, forKey: Key.hasCompletedFirstRun) }
     }
 }

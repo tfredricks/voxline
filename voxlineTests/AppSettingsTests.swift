@@ -43,4 +43,51 @@ import Foundation
         // Changing provider clears the model override (spec default returns).
         #expect(s.llmModel == "gpt-4o-mini")
     }
+
+    @Test func unset_hotkey_chord_returns_default() {
+        let d = UserDefaults(suiteName: "voxline-test-\(UUID().uuidString)")!
+        #expect(AppSettings(defaults: d).hotkeyChord == .default)
+    }
+
+    @Test func hotkey_chord_round_trips() {
+        let d = UserDefaults(suiteName: "voxline-test-\(UUID().uuidString)")!
+        var s = AppSettings(defaults: d)
+        let chord = HotkeyChord(modifierA: .leftCommand, modifierB: .leftShift)
+        s.hotkeyChord = chord
+        #expect(AppSettings(defaults: d).hotkeyChord == chord)
+    }
+
+    @Test func unset_audio_input_device_uid_is_nil() {
+        let d = UserDefaults(suiteName: "voxline-test-\(UUID().uuidString)")!
+        #expect(AppSettings(defaults: d).audioInputDeviceUID == nil)
+    }
+
+    @Test func audio_input_device_uid_round_trips() {
+        let d = UserDefaults(suiteName: "voxline-test-\(UUID().uuidString)")!
+        var s = AppSettings(defaults: d)
+        s.audioInputDeviceUID = "BuiltInMicrophoneDevice"
+        #expect(AppSettings(defaults: d).audioInputDeviceUID == "BuiltInMicrophoneDevice")
+        s.audioInputDeviceUID = nil
+        #expect(AppSettings(defaults: d).audioInputDeviceUID == nil)
+    }
+
+    @Test func unset_whisper_model_returns_default() {
+        let d = UserDefaults(suiteName: "voxline-test-\(UUID().uuidString)")!
+        #expect(AppSettings(defaults: d).whisperModel == .default)
+    }
+
+    @Test func whisper_model_round_trips() {
+        let d = UserDefaults(suiteName: "voxline-test-\(UUID().uuidString)")!
+        var s = AppSettings(defaults: d)
+        s.whisperModel = .smallEn
+        #expect(AppSettings(defaults: d).whisperModel == .smallEn)
+    }
+
+    @Test func first_run_flag_defaults_false_and_round_trips() {
+        let d = UserDefaults(suiteName: "voxline-test-\(UUID().uuidString)")!
+        #expect(AppSettings(defaults: d).hasCompletedFirstRun == false)
+        var s = AppSettings(defaults: d)
+        s.hasCompletedFirstRun = true
+        #expect(AppSettings(defaults: d).hasCompletedFirstRun == true)
+    }
 }
