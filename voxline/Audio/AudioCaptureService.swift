@@ -38,21 +38,21 @@ final class AudioCaptureService {
         let input = engine.inputNode
         input.removeTap(onBus: 0)
 
-        // Apply the preferred device, if set and currently present.
-        if let uid = preferredInputDeviceUID, let deviceID = AudioDeviceEnumerator.deviceID(forUID: uid) {
+        // Apply the preferred device. If the UID no longer resolves (mic unplugged
+        // since Settings save) or AudioUnitSetProperty fails, fall through to the
+        // system default — don't throw.
+        if let uid = preferredInputDeviceUID,
+           let deviceID = AudioDeviceEnumerator.deviceID(forUID: uid),
+           let au = engine.inputNode.audioUnit {
             var mutableID = deviceID
-            let status = AudioUnitSetProperty(
-                engine.inputNode.audioUnit!,
+            _ = AudioUnitSetProperty(
+                au,
                 kAudioOutputUnitProperty_CurrentDevice,
                 kAudioUnitScope_Global,
                 0,
                 &mutableID,
                 UInt32(MemoryLayout<AudioDeviceID>.size)
             )
-            if status != noErr {
-                // Fall through to default device. Don't throw — a mic that was
-                // present at Settings-save time may have been unplugged since.
-            }
         }
 
         // Use inputFormat(forBus:), not outputFormat. On macOS 26.x,
