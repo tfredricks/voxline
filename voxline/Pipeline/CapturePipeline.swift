@@ -75,6 +75,13 @@ final class CapturePipeline {
         state.debugLastSampleCount = samples.count
         state.debugPipelinePhase = "stopped capture (\(samples.count) samples)"
 
+        // Silent-capture detector: tap fired (samples non-empty) but no audio
+        // signal reached the converter (peak stayed at 0). Almost always means
+        // Microphone permission is denied or a muted device was selected.
+        if !samples.isEmpty && state.debugLastPeakLevel == 0 {
+            return setError("No audio captured. Check that Microphone permission is granted and the input device isn't muted.")
+        }
+
         if samples.isEmpty {
             resetIdle()
             return

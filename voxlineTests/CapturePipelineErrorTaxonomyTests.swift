@@ -26,8 +26,9 @@ import Foundation
         return (p, state, capture)
     }
 
-    private func runOnce(_ p: CapturePipeline) async {
+    private func runOnce(_ p: CapturePipeline, _ state: AppState) async {
         p.startRecording()
+        state.debugLastPeakLevel = 0.5  // simulate the production onLevel callback firing
         await p.finalizeRecording()
     }
 
@@ -35,7 +36,7 @@ import Foundation
 
     @Test func missing_api_key_surfaces_actionable_error() async {
         let (p, state, _) = pipeline(cleanup: { _, _ in throw LLMError.missingAPIKey })
-        await runOnce(p)
+        await runOnce(p, state)
         guard case .error(let msg) = state.status else {
             Issue.record("Expected .error status, got \(state.status)"); return
         }
@@ -44,7 +45,7 @@ import Foundation
 
     @Test func invalid_api_key_says_so() async {
         let (p, state, _) = pipeline(cleanup: { _, _ in throw LLMError.invalidAPIKey })
-        await runOnce(p)
+        await runOnce(p, state)
         guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("rejected"))
     }
@@ -52,7 +53,7 @@ import Foundation
     @Test func network_error_includes_network_word() async {
         struct NetErr: Error {}
         let (p, state, _) = pipeline(cleanup: { _, _ in throw LLMError.network(NetErr()) })
-        await runOnce(p)
+        await runOnce(p, state)
         guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("network"))
     }
@@ -60,7 +61,7 @@ import Foundation
     @Test func transcription_failure_surfaces_actionable_message() async {
         struct TranscribeFail: Error {}
         let (p, state, _) = pipeline(transcribe: { _ in throw TranscribeFail() })
-        await runOnce(p)
+        await runOnce(p, state)
         guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("transcription"))
     }
@@ -68,16 +69,40 @@ import Foundation
     @Test func paste_failure_surfaces_actionable_message() async {
         struct PasteFail: Error {}
         let (p, state, _) = pipeline(inject: { _ in throw PasteFail() })
-        await runOnce(p)
+        await runOnce(p, state)
         guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("paste"))
     }
 
     @Test func error_path_clears_recording_state() async {
         let (p, state, _) = pipeline(cleanup: { _, _ in throw LLMError.missingAPIKey })
-        await runOnce(p)
+        await runOnce(p, state)
         #expect(state.recordingStartedAt == nil)
         #expect(state.audioLevel == 0)
+    }
+
+    @Test func samples_with_zero_peak_surface_microphone_error() async {
+        let state = AppState()
+        let capture = FakeCapture()
+        capture.canned = [Float](repeating: 0.0, count: 16_000) // 1 second of pure silence
+        let p = CapturePipeline(
+            state: state,
+            capture: capture,
+            transcriber: FakeTranscriber(handler: { _ in "" }),
+            llm: FakeLLM(handler: { t, _ in t }),
+            modes: ModeRouter(modes: [Mode(bundleID: "*", displayName: "D", prompt: "p", model: nil, temperature: nil)]),
+            frontmost: FakeFrontmost(),
+            injector: FakeInjector(handler: { _ in })
+        )
+        p.startRecording()
+        // Do NOT set debugLastPeakLevel — simulating a silent mic where the
+        // onLevel callback never gets a non-zero value.
+        state.debugLastPeakLevel = 0
+        await p.finalizeRecording()
+        guard case .error(let msg) = state.status else {
+            Issue.record("Expected .error, got \(state.status)"); return
+        }
+        #expect(msg.lowercased().contains("microphone"))
     }
 }
 
