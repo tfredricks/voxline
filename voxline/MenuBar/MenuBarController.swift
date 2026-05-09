@@ -27,7 +27,7 @@ struct MenuBarContent: View {
             openSettings()
             // openSettings doesn't activate the app on its own; ensure the
             // settings window comes to the front.
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
         }
         .keyboardShortcut(",")
 
