@@ -57,7 +57,7 @@ import Foundation
     @Test func releasingEitherModifier_finalizesRecording() {
         let m = machine()
         _ = m.handle(chord(true, true))
-        let outputs = m.handle(leftCtrl(true))  // Opt released
+        let outputs = m.handle(leftCtrl(true))  // ctrl still held, opt released → chord broken
         #expect(m.state == .finalizing)
         #expect(outputs == [.finalizeRecording])
     }
@@ -65,7 +65,7 @@ import Foundation
     @Test func releasingOtherModifier_finalizesRecording() {
         let m = machine()
         _ = m.handle(chord(true, true))
-        let outputs = m.handle(leftOpt(true))  // Ctrl released
+        let outputs = m.handle(leftOpt(true))  // opt still held, ctrl released → chord broken
         #expect(m.state == .finalizing)
         #expect(outputs == [.finalizeRecording])
     }
@@ -133,6 +133,36 @@ import Foundation
         _ = m.handle(leftCtrl(true))  // -> finalizing
         let outputs = m.handle(chord(true, true))
         #expect(m.state == .finalizing)
+        #expect(outputs.isEmpty)
+    }
+
+    @Test func tapDisabled_isNoOpIfNotRecording() {
+        let m = machine()
+        let outputs = m.handle(.tapDisabled)
+        #expect(m.state == .idle)
+        #expect(outputs.isEmpty)
+    }
+
+    @Test func appDeactivated_isNoOpIfNotRecording() {
+        let m = machine()
+        let outputs = m.handle(.appDeactivated)
+        #expect(m.state == .idle)
+        #expect(outputs.isEmpty)
+    }
+
+    @Test func recordingFinished_isNoOpIfNotFinalizing() {
+        let m = machine()
+        let outputs = m.handle(.recordingFinished)
+        #expect(m.state == .idle)
+        #expect(outputs.isEmpty)
+    }
+
+    @Test func chordStillHeldDuringRecording_isNoOp() {
+        let m = machine()
+        _ = m.handle(chord(true, true))
+        // Re-asserting the same chord state should not produce a second startRecording.
+        let outputs = m.handle(chord(true, true))
+        #expect(m.state == .recording)
         #expect(outputs.isEmpty)
     }
 }
