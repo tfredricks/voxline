@@ -12,6 +12,7 @@ final class FirstRunWindowController {
         settings: AppSettings,
         model: WhisperModel,
         chord: HotkeyChord,
+        onRetryDownload: @escaping () -> Void,
         onComplete: @escaping () -> Void
     ) {
         if let window {
@@ -22,7 +23,7 @@ final class FirstRunWindowController {
             self?.close()
             onComplete()
         }
-        let root = WizardRootView(vm: vm, state: state, model: model, chord: chord)
+        let root = WizardRootView(vm: vm, state: state, model: model, chord: chord, onRetryDownload: onRetryDownload)
         let host = NSHostingView(rootView: root)
 
         // Hide close + minimize so the user can't dismiss without completing.

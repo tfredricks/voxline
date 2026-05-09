@@ -4,6 +4,7 @@ import SwiftUI
 struct WizardModelDownloadView: View {
     @Bindable var state: AppState
     let model: WhisperModel
+    let onRetry: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -11,8 +12,18 @@ struct WizardModelDownloadView: View {
             Text("\(model.displayName) — about \(model.approxSizeMB) MB. Runs entirely on your Mac; audio never leaves the device.")
                 .foregroundStyle(.secondary)
 
-            ModelDownloadView(state: state)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if case .error(let message) = state.status {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(message, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.callout)
+                    Button("Retry") { onRetry() }
+                        .keyboardShortcut(.defaultAction)
+                }
+            } else {
+                ModelDownloadView(state: state)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(40)
         .frame(maxWidth: .infinity, alignment: .leading)

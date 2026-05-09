@@ -96,12 +96,21 @@ final class AppCoordinator {
             state: state,
             settings: settings,
             model: settings.whisperModel,
-            chord: settings.hotkeyChord
-        ) { [weak self] in
-            guard let self else { return }
-            self.firstRunWindow = nil
-            self.installHotkey(state: state, settings: settings)
-        }
+            chord: settings.hotkeyChord,
+            onRetryDownload: { [weak self, weak state] in
+                guard let self, let state else { return }
+                // Reset the error before retrying so the download progress UI shows again.
+                state.status = TranscriptionService.isModelCached(settings.whisperModel)
+                    ? .preparingModel
+                    : .downloadingModel(progress: 0)
+                self.prepareIfNeeded(state: state, transcriber: transcriber)
+            },
+            onComplete: { [weak self] in
+                guard let self else { return }
+                self.firstRunWindow = nil
+                self.installHotkey(state: state, settings: settings)
+            }
+        )
 
         // Eagerly start the model download so by the time the user reaches the
         // download step, progress is already advancing.
