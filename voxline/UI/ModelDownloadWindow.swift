@@ -44,22 +44,43 @@ struct ModelDownloadView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Downloading speech recognition model")
+            Text(headline)
                 .font(.headline)
-            Text("This is a one-time download (~1.5 GB) used to transcribe your voice. voxline can stay open while it completes.")
+            Text(detail)
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            ProgressView(value: progress, total: 1.0) {
-                EmptyView()
-            } currentValueLabel: {
-                Text("\(Int(progress * 100))%")
-                    .monospacedDigit()
+            if isPreparing {
+                ProgressView()
+                    .progressViewStyle(.linear)
+            } else {
+                ProgressView(value: progress, total: 1.0) {
+                    EmptyView()
+                } currentValueLabel: {
+                    Text("\(Int(progress * 100))%")
+                        .monospacedDigit()
+                }
+                .progressViewStyle(.linear)
             }
-            .progressViewStyle(.linear)
         }
         .padding(20)
         .frame(width: 380)
+    }
+
+    private var isPreparing: Bool {
+        if case .preparingModel = state.status { return true }
+        return false
+    }
+
+    private var headline: String {
+        isPreparing ? "Preparing model…" : "Downloading speech recognition model"
+    }
+
+    private var detail: String {
+        if isPreparing {
+            return "Compiling for Apple Neural Engine. This can take up to a minute on first launch — subsequent launches are fast."
+        }
+        return "One-time download (~1.5 GB) used to transcribe your voice. voxline can stay open while it completes."
     }
 
     private var progress: Double {

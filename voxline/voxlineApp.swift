@@ -1,44 +1,52 @@
+import AppKit
 import SwiftUI
 
 @main
 struct voxlineApp: App {
 
-    @State private var appState = AppState()
-    @State private var coordinator = AppCoordinator()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarContent(state: appState)
+            MenuBarContent(state: delegate.appState)
         } label: {
-            MenuBarLabel(state: appState, coordinator: coordinator)
+            MenuBarLabel(state: delegate.appState)
         }
         .menuBarExtraStyle(.menu)
 
         Settings {
             SettingsView()
-                .environment(appState)
+                .environment(delegate.appState)
         }
 
         // PLAN 2 ONLY — Window scene removed in Plan 3 once paste replaces
         // the debug verification UI.
         Window("voxline — Transcripts (debug)", id: "debug-transcripts") {
-            DebugTranscriptWindow(state: appState)
+            DebugTranscriptWindow(state: delegate.appState)
         }
         .defaultSize(width: 520, height: 360)
     }
 }
 
-/// Renders the menu-bar icon and triggers coordinator startup on first appear.
-/// `.task` here fires when the menu-bar item is installed at app launch.
+/// Menu-bar icon view. `@Bindable` makes it re-render as AppState.status changes.
 private struct MenuBarLabel: View {
     @Bindable var state: AppState
-    let coordinator: AppCoordinator
-
     var body: some View {
         Image(systemName: MenuBarIcon.symbolName(for: state.status))
-            .task {
-                coordinator.startIfNeeded(state: state)
-            }
+    }
+}
+
+/// Owns the AppState + AppCoordinator and triggers coordinator startup at
+/// app launch via applicationDidFinishLaunching. Using NSApplicationDelegate
+/// rather than `.task` on the MenuBarExtra label, which is unreliable in
+/// macOS for menu-bar-only apps.
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    let appState = AppState()
+    let coordinator = AppCoordinator()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        coordinator.startIfNeeded(state: appState)
     }
 }
 
@@ -90,36 +98,54 @@ final class AppCoordinator {
             state.status = .error("Hotkey monitoring requires Accessibility permission. Grant it in System Settings → Privacy & Security → Accessibility, then restart voxline.")
         }
 
-        if !TranscriptionService.isModelCached(transcriber.model) {
-            beginModelDownload(state: state, transcriber: transcriber)
-        }
+        prepareIfNeeded(state: state, transcriber: transcriber)
     }
 
-    private func beginModelDownload(state: AppState, transcriber: TranscriptionService) {
-        state.status = .downloadingModel(progress: 0)
-        let window = ModelDownloadWindow()
-        downloadWindow = window
-        window.show(state: state)
+    /// Ensure the speech-recognition model is downloaded AND loaded into the
+    /// Apple Neural Engine before the user can record. The first launch after
+    /// install does both; later launches just re-prewarm (fast — ANE bundle
+    /// cache makes subsequent loads ~seconds, not minutes).
+    private func prepareIfNeeded(state: AppState, transcriber: TranscriptionService) {
+        let needsDownload = !TranscriptionService.isModelCached(transcriber.model)
+
+        if needsDownload {
+            state.status = .downloadingModel(progress: 0)
+            let window = ModelDownloadWindow()
+            downloadWindow = window
+            window.show(state: state)
+        } else {
+            // Cached: prewarm silently in the background. No window — but the
+            // chord is gated via state.status.blocksRecording, and the
+            // menu-bar icon switches to gearshape.circle so the user has a
+            // hint if they try to record before prewarm completes.
+            state.status = .preparingModel
+        }
 
         Task { @MainActor in
             do {
-                try await transcriber.prepareModel { progress in
-                    Task { @MainActor in
-                        // Only push progress updates while we're still in the
-                        // downloading state, to avoid clobbering a later .error
-                        // or .idle set by a different code path.
-                        if case .downloadingModel = state.status {
-                            state.status = .downloadingModel(progress: progress)
+                if needsDownload {
+                    try await transcriber.prepareModel { progress in
+                        Task { @MainActor in
+                            // Only push progress updates while still in the
+                            // downloading state, to avoid clobbering a later
+                            // .error set by a different code path.
+                            if case .downloadingModel = state.status {
+                                state.status = .downloadingModel(progress: progress)
+                            }
                         }
                     }
+                    if case .downloadingModel = state.status {
+                        state.status = .preparingModel
+                    }
                 }
-                if case .downloadingModel = state.status {
+                try await transcriber.prewarm()
+                if case .preparingModel = state.status {
                     state.status = .idle
                 }
                 downloadWindow?.close()
                 downloadWindow = nil
             } catch {
-                state.status = .error("Model download failed: \(error.localizedDescription). Quit and relaunch voxline to retry.")
+                state.status = .error("Model setup failed: \(error.localizedDescription). Quit and relaunch voxline to retry.")
                 downloadWindow?.close()
                 downloadWindow = nil
             }

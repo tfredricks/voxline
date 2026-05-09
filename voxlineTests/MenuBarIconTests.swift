@@ -23,4 +23,8 @@ import Testing
         #expect(MenuBarIcon.symbolName(for: .downloadingModel(progress: 0.0)) == "arrow.down.circle")
         #expect(MenuBarIcon.symbolName(for: .downloadingModel(progress: 0.5)) == "arrow.down.circle")
     }
+
+    @Test func iconForPreparingModel() {
+        #expect(MenuBarIcon.symbolName(for: .preparingModel) == "gearshape.circle")
+    }
 }

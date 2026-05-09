@@ -42,4 +42,19 @@ import Foundation
     @Test func downloadingModelDistinctByProgress() {
         #expect(AppStatus.downloadingModel(progress: 0.1) != AppStatus.downloadingModel(progress: 0.2))
     }
+
+    @Test func canSetPreparingModelStatus() {
+        let state = AppState()
+        state.status = .preparingModel
+        #expect(state.status == .preparingModel)
+    }
+
+    @Test func blocksRecordingDuringDownloadAndPrepare() {
+        #expect(AppStatus.downloadingModel(progress: 0.5).blocksRecording)
+        #expect(AppStatus.preparingModel.blocksRecording)
+        #expect(!AppStatus.idle.blocksRecording)
+        #expect(!AppStatus.recording.blocksRecording)
+        #expect(!AppStatus.thinking.blocksRecording)
+        #expect(!AppStatus.error("oops").blocksRecording)
+    }
 }

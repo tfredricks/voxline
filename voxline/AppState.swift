@@ -7,7 +7,18 @@ enum AppStatus: Equatable {
     case thinking
     /// First-run model fetch in progress. `progress` is in [0, 1].
     case downloadingModel(progress: Double)
+    /// Model files are on disk but Core ML / Apple Neural Engine is still
+    /// compiling them. The first run after download can take 30s-2min.
+    case preparingModel
     case error(String)
+
+    /// Recording is blocked until the model is fully ready.
+    var blocksRecording: Bool {
+        switch self {
+        case .downloadingModel, .preparingModel: return true
+        default: return false
+        }
+    }
 }
 
 @Observable

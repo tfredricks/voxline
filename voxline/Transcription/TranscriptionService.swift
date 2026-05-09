@@ -45,6 +45,12 @@ final class TranscriptionService {
         modelFolder = url
     }
 
+    /// Force-load the model into Core ML / Apple Neural Engine so the first
+    /// transcribe() call doesn't pay the multi-second compile cost. Idempotent.
+    func prewarm() async throws {
+        _ = try await loadIfNeeded()
+    }
+
     /// Transcribe a Float32 PCM buffer at AudioFormat.whisperSampleRate.
     func transcribe(samples: [Float]) async throws -> String {
         let kit = try await loadIfNeeded()

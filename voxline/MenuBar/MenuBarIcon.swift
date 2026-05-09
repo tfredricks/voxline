@@ -8,6 +8,7 @@ enum MenuBarIcon {
         case .recording:        return "mic.fill"
         case .thinking:         return "ellipsis.circle"
         case .downloadingModel: return "arrow.down.circle"
+        case .preparingModel:   return "gearshape.circle"
         case .error:            return "mic.slash"
         }
     }
