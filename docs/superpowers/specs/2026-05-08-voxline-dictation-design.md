@@ -1,6 +1,7 @@
 # voxline — Design Spec
 
 **Date:** 2026-05-08
+**Version:** v0.2
 **Status:** Draft, pending review
 **Platform:** macOS 14+ (Apple Silicon)
 **Template:** SwiftUI App, no storage
@@ -43,11 +44,26 @@ Single SwiftUI macOS app, three subsystems:
 
 ### 4.1 Hotkey + Audio Capture
 
-- Global hotkey monitoring via `CGEventTap` listening for `flagsChanged` events
-- State machine: idle → armed (one modifier down) → recording (both down) → finalizing (any released)
-- Mic capture via `AVAudioEngine` at 16 kHz mono PCM (Whisper's native input)
-- Audio held in memory only, discarded after transcription
-- Requires Accessibility + Microphone permissions on first launch (TCC prompts)
+**Hotkey monitoring:**
+
+- Global hotkey via `CGEventTap` listening for `flagsChanged` events
+- State machine: `idle` → `armed` (one chord modifier down) → `recording` (both down) → `finalizing` (any released)
+
+**State-machine fail-safes** (any one of these forces a transition out of `recording`):
+
+1. **Max recording duration** — hard cap, default 60 s, configurable in Settings. Beyond this we finalize regardless of key state.
+2. **Tap re-enable handler** — listen for `kCGEventTapDisabledByTimeout` and `kCGEventTapDisabledByUserInput`; re-enable the tap with `CGEvent.tapEnable(tap:enable:)` and finalize the in-flight recording defensively.
+3. **Periodic flagsState reconciliation** — while in `recording`, a 250 ms timer polls `CGEventSource.flagsState(.combinedSessionState)`. If the chord is no longer held, we finalize even if no `flagsChanged` event was delivered.
+4. **App-deactivation guard** — observe `NSWorkspace.didDeactivateApplicationNotification` for our own app and finalize if focus moves while recording.
+
+**Mic capture pipeline** (two stages — capture in hardware format, then resample):
+
+1. **Capture stage** — install a tap on `AVAudioEngine.inputNode` using `inputNode.outputFormat(forBus: 0)` (the hardware-native format, typically 48 kHz float32 mono on built-in mics, may be stereo on external interfaces). Do not specify a fabricated format — that throws at runtime.
+2. **Convert stage** — `AVAudioConverter` from the captured format to WhisperKit's input format: 16 kHz mono Int16 (or Float32, whichever the WhisperKit version expects). Conversion runs incrementally on the audio thread so the buffer handed to WhisperKit is already in the right format.
+
+Audio is held in memory only, discarded immediately after transcription completes (success or failure).
+
+Permissions: Accessibility + Microphone, requested at first launch (TCC prompts).
 
 ### 4.2 Local Transcription
 
@@ -66,10 +82,11 @@ Single SwiftUI macOS app, three subsystems:
   - Default models: Anthropic `claude-haiku-4-5`, OpenAI `gpt-4o-mini`
   - Non-streaming for v1 (we paste atomically)
 - Output injection (clipboard-paste pattern, same as Wispr):
-  1. Save current `NSPasteboard.general` contents (string + types)
-  2. Write cleaned text to pasteboard
-  3. Post synthetic `Cmd+V` via `CGEvent`
-  4. After 300 ms, restore prior pasteboard contents
+  1. **Snapshot pasteboard** — iterate `NSPasteboard.general.pasteboardItems`; for each item, capture every data-bearing type (`item.types` → `item.data(forType:)`). See §7 for what is and isn't preserved.
+  2. **Write cleaned text** — clear pasteboard, write cleaned text as `.string`.
+  3. **Wait for chord release** — before posting `Cmd+V`, poll `CGEventSource.flagsState(.combinedSessionState)`. If Left Ctrl or Left Option is still physically held, wait (up to 1 s) for the user's fingers to come off; if the timeout elapses, post a synthetic `flagsChanged` clearing those modifiers. This prevents the synthesized `Cmd+V` from being interpreted as `Ctrl+Cmd+V` or `Option+Cmd+V` by apps that read global modifier state rather than event flags.
+  4. **Post synthetic Cmd+V** — `CGEvent` with flags set explicitly to *only* `kCGEventFlagMaskCommand`.
+  5. **Restore pasteboard** — after 300 ms, clear and re-write the snapshotted items × types.
 
 ## 5. Configuration
 
@@ -85,7 +102,7 @@ struct Mode: Codable {
 }
 ```
 
-Stored as JSON at `~/Library/Application Support/voxline/modes.json`.
+Stored as JSON at the URL returned by `FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)` joined with `voxline/modes.json`. Under App Sandbox this resolves to `~/Library/Containers/com.voxline.voxline/Data/Library/Application Support/voxline/modes.json`; the literal `~/Library/Application Support/voxline` path is **not** writable from a sandboxed process. All file I/O must go through the FileManager API, never a hard-coded path.
 
 ### 5.2 Shipped defaults
 
@@ -137,10 +154,26 @@ A modal walks new users through:
 
 - **Audio:** in-memory only, never written to disk
 - **API keys:** macOS Keychain (`Security.framework`, generic password)
-- **Modes config:** plaintext JSON in Application Support
+- **Modes config:** plaintext JSON under containerized Application Support (see §5.1)
 - **Transcripts:** not logged in v1
 - **Network:** only the LLM provider receives the transcript text; audio never leaves the device
 - **Telemetry:** none
+
+### 7.1 Clipboard preservation (design decision)
+
+voxline temporarily takes over the system pasteboard to inject text. Restoration scope is explicitly bounded:
+
+**Preserved:**
+- All `pasteboardItems` (multi-item clipboards)
+- All concrete data-bearing types per item (strings, RTF, HTML, image data, file URLs as data, custom UTI types)
+
+**Not preserved:**
+- **Promised types** (`NSPasteboardWriting` lazy promises) — the source app provides data on request and is no longer reachable once we clear the pasteboard. Eagerly resolving promises before snapshotting would force expensive work on the source app (e.g., Finder file copies) for every dictation, which we judge worse than losing the promise.
+- **Owner-based pasteboards** where the source app retains ownership and serves data dynamically.
+
+**Refuse-to-clobber:** if `pasteboardItems` is `nil` or contains promised types we can't resolve cheaply, voxline aborts the paste and surfaces an error rather than silently destroying the user's clipboard.
+
+This is a tradeoff every clipboard-driven dictation app makes; we document it explicitly so the test suite has a clear contract and so future work (opt-in eager promise resolution? targeted preservation for known apps?) has a defined starting point.
 
 ## 8. Permissions & Entitlements
 
@@ -153,7 +186,7 @@ A modal walks new users through:
 ### 9.1 Unit tests
 
 - `ModeRouter`: bundle-ID matching, wildcard fallback, missing-mode handling
-- `ClipboardInjector`: save/restore round-trip with mixed pasteboard types
+- `ClipboardInjector`: full multi-item × multi-type round-trip preservation per §7.1 (string + RTF + HTML + file-URL data + custom UTI in the same snapshot must all survive); refuse-to-clobber path when promised types are present; modifier-release gate before paste posts (simulated chord-still-held scenario must defer the synthesized `Cmd+V`)
 - `HotkeyStateMachine`: chord detection, partial-release transitions, edge cases (modifier rollover)
 - `LLMClient`: request shape per provider, error mapping
 
@@ -181,7 +214,11 @@ These are sketch-only; the implementation plan will expand them.
 ## 11. Open Questions / Risks
 
 - **Whisper cold-start latency** on first invocation per session may be 1–3 s; acceptable for v1, optional warm-up if it's too jarring.
-- **CGEventTap reliability under load** — known to occasionally drop events on macOS; mitigation is to also subscribe to `NSEvent.addGlobalMonitorForEvents` as a backup signal.
 - **Clipboard restore timing** — 300 ms is heuristic. If the target app pastes asynchronously (some Electron apps), restoration may race. May need to bump or add per-app overrides.
-- **App Sandbox + Accessibility** — sandboxed apps cannot use AX APIs in some flows. CGEventTap from a sandboxed app *does* work for keyboard events with the right entitlements, but this needs verification on Xcode 26 / macOS 26.
+- **CGEventTap from sandboxed app** — keyboard event taps work from a sandboxed app with Accessibility granted, but this needs verification on Xcode 26 / macOS 26 specifically. If it doesn't, the fallback is to drop the sandbox; the implementation plan should validate this on day one.
 - **WhisperKit Apple Silicon requirement** is a hard constraint; design accepts this.
+
+## 12. Changelog
+
+- **v0.2 (2026-05-08)** — Code-review pass: corrected mic capture format (hardware tap + AVAudioConverter), hardened paste keystroke against modifier leak (chord-release gate before synthetic `Cmd+V`), added state-machine fail-safes (max duration, tap re-enable, flagsState reconciliation, app-deactivation guard), documented clipboard preservation as an explicit design decision (§7.1), fixed sandbox-aware path reference for modes.json.
+- **v0.1 (2026-05-08)** — Initial draft.
