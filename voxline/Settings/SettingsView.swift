@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
 
+    @Environment(AppState.self) private var appState
     @State private var generalVM: GeneralSettingsViewModel
     @State private var apiKeysVM: APIKeysSettingsViewModel
     @State private var levelMonitor = MicLevelMonitor()
@@ -81,13 +82,25 @@ struct SettingsView: View {
         }
         .onAppear {
             levelMonitor.preferredInputDeviceUID = generalVM.audioInputDeviceUID
-            try? levelMonitor.start()
+            startMonitorIfAllowed()
         }
         .onDisappear { levelMonitor.stop() }
         .onChange(of: generalVM.audioInputDeviceUID) { _, newValue in
             levelMonitor.stop()
             levelMonitor.preferredInputDeviceUID = newValue
-            try? levelMonitor.start()
+            startMonitorIfAllowed()
         }
+        .onChange(of: appState.status) { _, newStatus in
+            if newStatus == .recording {
+                levelMonitor.stop()
+            } else {
+                startMonitorIfAllowed()
+            }
+        }
+    }
+
+    private func startMonitorIfAllowed() {
+        guard appState.status != .recording else { return }
+        try? levelMonitor.start()
     }
 }
