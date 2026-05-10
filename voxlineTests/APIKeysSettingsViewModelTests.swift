@@ -4,12 +4,6 @@ import Foundation
 
 @Suite @MainActor struct APIKeysSettingsViewModelTests {
 
-    private func defaultsSuite() -> UserDefaults {
-        let n = "voxline-test-\(UUID().uuidString)"
-        let d = UserDefaults(suiteName: n)!
-        d.removePersistentDomain(forName: n)
-        return d
-    }
     private func keychain() -> Keychain {
         Keychain(service: "com.voxline.voxline.test.\(UUID().uuidString)")
     }

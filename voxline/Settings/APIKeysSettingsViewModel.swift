@@ -49,13 +49,13 @@ final class APIKeysSettingsViewModel {
         persist(value: openaiKey, account: Keychain.Account.openai)
     }
 
-    /// Issue a tiny no-op LLM call to verify the saved key for `provider`.
-    /// Does NOT persist; commitX is the caller's responsibility (typically
-    /// already done via save-on-blur before the user clicks Test).
+    /// Issue a tiny no-op LLM call to verify the current in-memory key for
+    /// `provider`. Reads the live field value directly so an unsaved edit is
+    /// tested immediately, without requiring a prior commit.
     func testConnection(_ provider: LLMProvider) async {
         testing = provider
         defer { testing = nil }
-        let key = (try? keychain.string(forKey: account(for: provider))) ?? ""
+        let key = trimmed(liveKey(for: provider))
         guard !key.isEmpty else {
             testResult = .failed(provider, "No API key set.")
             return
@@ -76,12 +76,11 @@ final class APIKeysSettingsViewModel {
         }
     }
 
-    /// True when the field's current value (trimmed) matches what's
-    /// persisted in keychain. Used to drive the "Saved"/"Unsaved" pill.
-    func isPersisted(_ provider: LLMProvider) -> Bool {
-        let saved = (try? keychain.string(forKey: account(for: provider))) ?? ""
-        let live = trimmed(provider == .anthropic ? anthropicKey : openaiKey)
-        return saved == live
+    private func liveKey(for provider: LLMProvider) -> String {
+        switch provider {
+        case .anthropic: return anthropicKey
+        case .openai:    return openaiKey
+        }
     }
 
     private func onKeyChanged(_ provider: LLMProvider) {
@@ -100,13 +99,6 @@ final class APIKeysSettingsViewModel {
             }
         } catch {
             lastError = "Save failed: \(error.localizedDescription)"
-        }
-    }
-
-    private func account(for provider: LLMProvider) -> String {
-        switch provider {
-        case .anthropic: return Keychain.Account.anthropic
-        case .openai:    return Keychain.Account.openai
         }
     }
 
