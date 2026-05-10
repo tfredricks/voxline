@@ -1,5 +1,6 @@
 // voxline/Settings/SettingsView.swift
 import SwiftUI
+import AppKit
 
 struct SettingsView: View {
 
@@ -26,6 +27,25 @@ struct SettingsView: View {
                 }
 
                 Form {
+                    Section("Startup") {
+                        Toggle("Launch voxline at login", isOn: $generalVM.launchAtLogin)
+                        if generalVM.loginItemStatus == .requiresApproval {
+                            Button {
+                                if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            } label: {
+                                Label(
+                                    "Approval required — open Login Items in System Settings",
+                                    systemImage: "exclamationmark.triangle.fill"
+                                )
+                                .font(.callout)
+                                .foregroundStyle(.orange)
+                            }
+                            .buttonStyle(.link)
+                        }
+                    }
+
                     Section("Hotkey") {
                         ChordRecorderView(chord: $generalVM.chord)
                     }
@@ -80,6 +100,7 @@ struct SettingsView: View {
             }
             .frame(minWidth: 440, idealWidth: 460, maxWidth: 520, minHeight: 460, idealHeight: 540)
         }
+        .task { generalVM.refreshLoginItemStatus() }
         .onAppear {
             levelMonitor.preferredInputDeviceUID = generalVM.audioInputDeviceUID
             startMonitorIfAllowed()
