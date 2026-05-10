@@ -2,7 +2,10 @@ import SwiftUI
 
 struct APIKeysSettingsView: View {
 
+    private enum Field: Hashable { case anthropic, openai }
+
     @State private var vm: APIKeysSettingsViewModel
+    @FocusState private var focused: Field?
 
     init(vm: APIKeysSettingsViewModel) {
         _vm = State(wrappedValue: vm)
@@ -13,19 +16,14 @@ struct APIKeysSettingsView: View {
             Section("Anthropic") {
                 SecureField("API key", text: $vm.anthropicKey)
                     .textContentType(.password)
+                    .focused($focused, equals: .anthropic)
+                    .onSubmit { vm.commitAnthropic() }
             }
             Section("OpenAI") {
                 SecureField("API key", text: $vm.openaiKey)
                     .textContentType(.password)
-            }
-
-            HStack {
-                Spacer()
-                Button("Save") {
-                    vm.commitAnthropic()
-                    vm.commitOpenAI()
-                }
-                .keyboardShortcut(.defaultAction)
+                    .focused($focused, equals: .openai)
+                    .onSubmit { vm.commitOpenAI() }
             }
 
             HStack {
@@ -44,6 +42,22 @@ struct APIKeysSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(minWidth: 480, idealWidth: 540, minHeight: 320, idealHeight: 380)
+        .onChange(of: focused) { previous, _ in
+            // Field just lost focus — persist its current value.
+            switch previous {
+            case .anthropic: vm.commitAnthropic()
+            case .openai:    vm.commitOpenAI()
+            case .none:      break
+            }
+        }
+        .onDisappear {
+            // Settings window closing while a field is still focused: commit.
+            switch focused {
+            case .anthropic: vm.commitAnthropic()
+            case .openai:    vm.commitOpenAI()
+            case .none:      break
+            }
+        }
     }
 
     @ViewBuilder
