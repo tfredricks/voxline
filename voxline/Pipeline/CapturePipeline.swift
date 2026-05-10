@@ -148,9 +148,13 @@ final class CapturePipeline {
         // 4. Paste.
         state.debugPipelinePhase = "pasting"
         do {
-            try await injector.inject(cleaned)
+            let outcome = try await injector.inject(cleaned)
+            state.debugLastInsertionResult = outcome.description
+        } catch let e as TextInsertionError {
+            let category: AppErrorCategory = (e == .accessibilityNotGranted) ? .permissions : .pipeline
+            return setError(e.errorDescription ?? "Text insertion failed.", category: category)
         } catch {
-            return setError("Paste failed. The pasteboard may be locked by another app.")
+            return setError("Text insertion failed: \(error.localizedDescription)")
         }
 
         resetIdle()

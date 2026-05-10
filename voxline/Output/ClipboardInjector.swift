@@ -1,5 +1,7 @@
 // voxline/Output/ClipboardInjector.swift
 import AppKit
+import ApplicationServices
+import Carbon.HIToolbox
 import CoreGraphics
 
 /// Polled by ClipboardInjector to gate the synthetic Cmd+V on the user
@@ -16,6 +18,118 @@ protocol ModifierGate: Sendable {
 /// Posts synthetic key events. Wraps CGEvent.post in production; faked in tests.
 protocol KeyEventPosting: Sendable {
     func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags)
+}
+
+/// Resolves the physical key currently producing "v" in the active keyboard
+/// layout. Tests fake this so we do not bake US-ANSI assumptions into the
+/// injector behavior.
+protocol PasteKeyResolving: Sendable {
+    func pasteVirtualKeyCode() -> CGKeyCode
+}
+
+/// Last-resort insertion path for apps that accept synthetic Unicode input
+/// but reject paste / AX value updates.
+protocol TextTyping: Sendable {
+    func typeText(_ text: String) throws
+}
+
+/// Pasteboard snapshot capture seam. Production wraps `PasteboardSnapshot.capture`;
+/// tests fake it to drive the snapshot-throws → AX/typing fallback chain.
+protocol PasteboardSnapshotting: Sendable {
+    func capture(from pasteboard: NSPasteboard) throws -> PasteboardSnapshot
+}
+
+struct DefaultPasteboardSnapshotter: PasteboardSnapshotting {
+    func capture(from pasteboard: NSPasteboard) throws -> PasteboardSnapshot {
+        try PasteboardSnapshot.capture(from: pasteboard)
+    }
+}
+
+/// Wraps `AXIsProcessTrusted()` so `inject()` can short-circuit with a
+/// permissions-tagged error when Accessibility is revoked, rather than
+/// running all three strategies and reporting three meaningless AX failures.
+protocol AccessibilityTrustChecking: Sendable {
+    func isAccessibilityTrusted() -> Bool
+}
+
+struct SystemAccessibilityTrust: AccessibilityTrustChecking {
+    func isAccessibilityTrusted() -> Bool { AXIsProcessTrusted() }
+}
+
+struct FocusedTextSnapshot: Equatable, Sendable {
+    let value: String
+}
+
+enum FocusedTextCheck: Equatable, Sendable {
+    case confirmedChanged
+    case unchanged
+    case unavailable
+}
+
+/// Small AX wrapper used for paste verification and direct value insertion.
+/// This intentionally exposes only string-like focused controls; rich editors
+/// and custom views may report `.unavailable`, in which case the injector keeps
+/// the old "best effort paste" behavior rather than risking a double insert.
+protocol FocusedTextSystem: Sendable {
+    func snapshot() -> FocusedTextSnapshot?
+    func checkInsertion(before: FocusedTextSnapshot?, insertedText: String) -> FocusedTextCheck
+    func insertText(_ text: String) throws
+    /// True when the focused element is a secure text field (password input).
+    /// `inject()` short-circuits in this case so dictated text never lands in
+    /// a password store via paste, AX value-set, or synthetic typing.
+    func focusedFieldIsSecure() -> Bool
+}
+
+enum TextInsertionStrategy: String, Equatable, Sendable {
+    case clipboardPaste = "clipboard paste"
+    case accessibility = "accessibility"
+    case directTyping = "direct typing"
+}
+
+enum TextInsertionVerification: String, Equatable, Sendable {
+    case confirmed = "confirmed"
+    case unverified = "unverified"
+}
+
+struct TextInsertionOutcome: Equatable, Sendable, CustomStringConvertible {
+    let strategy: TextInsertionStrategy
+    let verification: TextInsertionVerification
+
+    var description: String {
+        "\(strategy.rawValue), \(verification.rawValue)"
+    }
+}
+
+enum TextInsertionError: Error, LocalizedError, Equatable {
+    case accessibilityNotGranted
+    case clipboardSnapshotUnavailable(String)
+    case accessibilityUnavailable(String)
+    case accessibilityRejected
+    case directTypingUnavailable(String)
+    case directTypingRejected
+    case secureFieldUnsupported
+    case allStrategiesFailed([String])
+
+    var errorDescription: String? {
+        switch self {
+        case .accessibilityNotGranted:
+            return "voxline needs Accessibility permission to insert text. Grant access in System Settings → Privacy & Security → Accessibility."
+        case .clipboardSnapshotUnavailable(let reason):
+            return "Could not safely use the clipboard paste path: \(reason)."
+        case .accessibilityUnavailable(let reason):
+            return "Accessibility insertion is unavailable: \(reason)."
+        case .accessibilityRejected:
+            return "The focused field did not appear to accept Accessibility insertion."
+        case .directTypingUnavailable(let reason):
+            return "Direct typing is unavailable: \(reason)."
+        case .directTypingRejected:
+            return "The focused field did not appear to accept direct typing."
+        case .secureFieldUnsupported:
+            return "The focused field is a secure text field. voxline will not insert dictated text into password inputs."
+        case .allStrategiesFailed(let failures):
+            return "Text insertion failed. Tried clipboard paste, Accessibility insertion, and direct typing. \(failures.joined(separator: " "))"
+        }
+    }
 }
 
 struct CGEventModifierGate: ModifierGate {
@@ -49,12 +163,191 @@ struct CGEventKeyPoster: KeyEventPosting {
     }
 }
 
+struct CurrentKeyboardLayoutPasteKeyResolver: PasteKeyResolving {
+    private static let fallbackUSAnsiV: CGKeyCode = 9
+
+    func pasteVirtualKeyCode() -> CGKeyCode {
+        keyCode(forLowercaseCharacter: "v") ?? Self.fallbackUSAnsiV
+    }
+
+    private func keyCode(forLowercaseCharacter target: String) -> CGKeyCode? {
+        guard
+            let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+            let layoutDataPointer = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+        else {
+            return nil
+        }
+
+        let layoutData = Unmanaged<CFData>.fromOpaque(layoutDataPointer).takeUnretainedValue()
+        guard let bytes = CFDataGetBytePtr(layoutData) else { return nil }
+        let keyboardLayout = UnsafeRawPointer(bytes).assumingMemoryBound(to: UCKeyboardLayout.self)
+        let keyboardType = UInt32(LMGetKbdType())
+
+        for keyCode in UInt16(0)..<UInt16(128) {
+            var deadKeyState: UInt32 = 0
+            var actualLength = 0
+            var chars = [UniChar](repeating: 0, count: 8)
+            let status = chars.withUnsafeMutableBufferPointer { buffer in
+                UCKeyTranslate(
+                    keyboardLayout,
+                    keyCode,
+                    UInt16(kUCKeyActionDisplay),
+                    0,
+                    keyboardType,
+                    OptionBits(kUCKeyTranslateNoDeadKeysBit),
+                    &deadKeyState,
+                    buffer.count,
+                    &actualLength,
+                    buffer.baseAddress
+                )
+            }
+
+            guard status == noErr, actualLength > 0 else { continue }
+            let produced = String(utf16CodeUnits: chars, count: actualLength).lowercased()
+            if produced == target {
+                return CGKeyCode(keyCode)
+            }
+        }
+
+        return nil
+    }
+}
+
+struct CGEventTextTyper: TextTyping {
+    func typeText(_ text: String) throws {
+        guard !text.isEmpty else { return }
+        let src = CGEventSource(stateID: .combinedSessionState)
+        let units = Array(text.utf16)
+        let chunkSize = 20
+
+        var index = units.startIndex
+        while index < units.endIndex {
+            let end = units.index(index, offsetBy: chunkSize, limitedBy: units.endIndex) ?? units.endIndex
+            var chunk = Array(units[index..<end])
+
+            let down = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: true)
+            let up = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false)
+            guard let down, let up else {
+                throw TextInsertionError.directTypingUnavailable("Could not create synthetic key events.")
+            }
+            chunk.withUnsafeMutableBufferPointer { buffer in
+                down.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: buffer.baseAddress)
+            }
+            down.post(tap: .cghidEventTap)
+            up.post(tap: .cghidEventTap)
+            index = end
+        }
+    }
+}
+
+struct AXFocusedTextSystem: FocusedTextSystem {
+    func snapshot() -> FocusedTextSnapshot? {
+        guard
+            let element = focusedElement(),
+            let value = stringValue(of: element)
+        else {
+            return nil
+        }
+        return FocusedTextSnapshot(value: value)
+    }
+
+    func checkInsertion(before: FocusedTextSnapshot?, insertedText: String) -> FocusedTextCheck {
+        guard let before else { return .unavailable }
+        guard let after = snapshot() else { return .unavailable }
+        if after.value == before.value { return .unchanged }
+        return .confirmedChanged
+    }
+
+    func focusedFieldIsSecure() -> Bool {
+        guard let element = focusedElement() else { return false }
+        var value: CFTypeRef?
+        let status = AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &value)
+        guard status == .success, let subrole = value as? String else { return false }
+        return subrole == (kAXSecureTextFieldSubrole as String)
+    }
+
+    func insertText(_ text: String) throws {
+        guard let element = focusedElement() else {
+            throw TextInsertionError.accessibilityUnavailable("No focused editable element was exposed by macOS.")
+        }
+
+        if isAttributeSettable(kAXSelectedTextAttribute, on: element) {
+            let status = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFTypeRef)
+            if status == .success { return }
+        }
+
+        guard isAttributeSettable(kAXValueAttribute, on: element) else {
+            throw TextInsertionError.accessibilityUnavailable("The focused element does not allow its value to be changed.")
+        }
+        guard let value = stringValue(of: element) else {
+            throw TextInsertionError.accessibilityUnavailable("The focused element does not expose a string value.")
+        }
+
+        let nsValue = value as NSString
+        let selectedRange = selectedTextRange(of: element) ?? CFRange(location: nsValue.length, length: 0)
+        guard selectedRange.location >= 0,
+              selectedRange.length >= 0,
+              selectedRange.location <= nsValue.length,
+              selectedRange.location + selectedRange.length <= nsValue.length else {
+            throw TextInsertionError.accessibilityUnavailable("The focused element exposes an invalid selection range.")
+        }
+
+        let updated = nsValue.replacingCharacters(
+            in: NSRange(location: selectedRange.location, length: selectedRange.length),
+            with: text
+        )
+        let status = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, updated as CFTypeRef)
+        guard status == .success else {
+            throw TextInsertionError.accessibilityUnavailable("macOS rejected the value update with AX status \(status.rawValue).")
+        }
+
+        var insertionPoint = CFRange(location: selectedRange.location + (text as NSString).length, length: 0)
+        if let axRange = AXValueCreate(.cfRange, &insertionPoint) {
+            _ = AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, axRange)
+        }
+    }
+
+    private func focusedElement() -> AXUIElement? {
+        let system = AXUIElementCreateSystemWide()
+        var value: CFTypeRef?
+        let status = AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &value)
+        guard status == .success, let value, CFGetTypeID(value) == AXUIElementGetTypeID() else {
+            return nil
+        }
+        return (value as! AXUIElement)
+    }
+
+    private func stringValue(of element: AXUIElement) -> String? {
+        var value: CFTypeRef?
+        let status = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value)
+        guard status == .success else { return nil }
+        return value as? String
+    }
+
+    private func selectedTextRange(of element: AXUIElement) -> CFRange? {
+        var value: CFTypeRef?
+        let status = AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &value)
+        guard status == .success, let value, CFGetTypeID(value) == AXValueGetTypeID() else {
+            return nil
+        }
+        let axValue = (value as! AXValue)
+        guard AXValueGetType(axValue) == .cfRange else { return nil }
+        var range = CFRange()
+        guard AXValueGetValue(axValue, .cfRange, &range) else { return nil }
+        return range
+    }
+
+    private func isAttributeSettable(_ attribute: String, on element: AXUIElement) -> Bool {
+        var settable = DarwinBoolean(false)
+        let status = AXUIElementIsAttributeSettable(element, attribute as CFString, &settable)
+        return status == .success && settable.boolValue
+    }
+}
+
 @MainActor
 final class ClipboardInjector {
 
-    enum InjectError: Error {
-        case clipboardSnapshotFailed(Error)
-    }
+    typealias InjectError = TextInsertionError
 
     /// Virtual key code for "V" on macOS US ANSI layout.
     static let kVirtualKeyV: CGKeyCode = 9
@@ -71,52 +364,176 @@ final class ClipboardInjector {
     let pasteboard: NSPasteboard
     let modifierGate: ModifierGate
     let keyPoster: KeyEventPosting
+    let pasteKeyResolver: PasteKeyResolving
+    let focusedTextSystem: FocusedTextSystem
+    let textTyper: TextTyping
+    let snapshotter: PasteboardSnapshotting
+    let accessibilityTrust: AccessibilityTrustChecking
     let chordReleaseTimeout: Duration
     let chordPollInterval: Duration
     let restoreDelay: Duration
+    let verificationDelay: Duration
 
     init(
         pasteboard: NSPasteboard = .general,
         modifierGate: ModifierGate = CGEventModifierGate(),
         keyPoster: KeyEventPosting = CGEventKeyPoster(),
+        pasteKeyResolver: PasteKeyResolving = CurrentKeyboardLayoutPasteKeyResolver(),
+        focusedTextSystem: FocusedTextSystem = AXFocusedTextSystem(),
+        textTyper: TextTyping = CGEventTextTyper(),
+        snapshotter: PasteboardSnapshotting = DefaultPasteboardSnapshotter(),
+        accessibilityTrust: AccessibilityTrustChecking = SystemAccessibilityTrust(),
         chordReleaseTimeout: Duration = .seconds(1),
         chordPollInterval: Duration = .milliseconds(15),
-        restoreDelay: Duration = .milliseconds(300)
+        restoreDelay: Duration = .milliseconds(300),
+        verificationDelay: Duration = .milliseconds(150)
     ) {
         self.pasteboard = pasteboard
         self.modifierGate = modifierGate
         self.keyPoster = keyPoster
+        self.pasteKeyResolver = pasteKeyResolver
+        self.focusedTextSystem = focusedTextSystem
+        self.textTyper = textTyper
+        self.snapshotter = snapshotter
+        self.accessibilityTrust = accessibilityTrust
         self.chordReleaseTimeout = chordReleaseTimeout
         self.chordPollInterval = chordPollInterval
         self.restoreDelay = restoreDelay
+        self.verificationDelay = verificationDelay
     }
 
-    /// Snapshot → write text → wait-for-release → Cmd+V → restore.
-    /// Throws `PasteboardSnapshot.SnapshotError.refuseToClobber` if we can't
-    /// safely capture the prior pasteboard contents.
-    func inject(_ text: String) async throws {
-        // 1. Snapshot. Throws on refuse-to-clobber; we propagate.
-        let snapshot = try PasteboardSnapshot.capture(from: pasteboard)
+    /// Insert text into the focused field using progressively broader
+    /// strategies:
+    /// 1. Clipboard snapshot → write text → wait-for-release → Cmd+V → restore.
+    /// 2. Accessibility focused-value insertion.
+    /// 3. Synthetic Unicode typing.
+    ///
+    /// Fallbacks only run when a strategy fails *before* it can insert (snapshot
+    /// refuse-to-clobber, AX rejects, etc.). A successfully-posted Cmd+V is
+    /// treated as `.unverified` even when AX claims the focused value did not
+    /// change — many opaque editors (Electron, WKWebView, custom NSTextView)
+    /// expose a stale value through AX, and re-running AX/typing on top of a
+    /// successful paste would double-insert.
+    ///
+    /// Secure (password) fields short-circuit before any strategy: dictated
+    /// text must never reach a password store via paste, AX value-set, or
+    /// synthetic typing.
+    @discardableResult
+    func inject(_ text: String) async throws -> TextInsertionOutcome {
+        // Without Accessibility, every strategy degrades into something
+        // user-hostile: paste posts Cmd+V via cghidEventTap (silently
+        // no-ops), AX queries return nil, synthetic typing produces no
+        // events. Bail with a sticky permissions error instead.
+        guard accessibilityTrust.isAccessibilityTrusted() else {
+            throw TextInsertionError.accessibilityNotGranted
+        }
 
-        // 2. Write cleaned text along with hint types so well-behaved
-        // clipboard managers don't archive it into history.
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        pasteboard.setData(Data(), forType: Self.autoGeneratedType)
-        pasteboard.setData(Data(), forType: Self.concealedType)
+        if focusedTextSystem.focusedFieldIsSecure() {
+            throw TextInsertionError.secureFieldUnsupported
+        }
 
-        // 3. Wait for the user's chord to release before posting Cmd+V.
+        var failures: [String] = []
+
+        do {
+            return try await injectViaClipboardPaste(text)
+        } catch {
+            failures.append(error.localizedDescription)
+        }
+
+        do {
+            return try injectViaAccessibility(text)
+        } catch {
+            failures.append(error.localizedDescription)
+        }
+
+        do {
+            return try await injectViaDirectTyping(text)
+        } catch {
+            failures.append(error.localizedDescription)
+        }
+
+        throw TextInsertionError.allStrategiesFailed(failures)
+    }
+
+    private func injectViaClipboardPaste(_ text: String) async throws -> TextInsertionOutcome {
+        let before = focusedTextSystem.snapshot()
+
+        // 1. Snapshot. Throws on refuse-to-clobber; we propagate without
+        // having touched the pasteboard.
+        let snapshot: PasteboardSnapshot
+        do {
+            snapshot = try snapshotter.capture(from: pasteboard)
+        } catch let e as PasteboardSnapshot.SnapshotError {
+            throw TextInsertionError.clipboardSnapshotUnavailable(e.reason)
+        } catch {
+            throw TextInsertionError.clipboardSnapshotUnavailable(error.localizedDescription)
+        }
+
+        // From this point on, the cleaned text (potentially a password / 2FA
+        // code spoken aloud) sits on NSPasteboard.general. Every exit path
+        // — including thrown cancellation from waitForChordRelease and from
+        // the post-paste Task.sleep — MUST restore the snapshot.
+        do {
+            // 2. Write cleaned text along with hint types so well-behaved
+            // clipboard managers don't archive it into history.
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            pasteboard.setData(Data(), forType: Self.autoGeneratedType)
+            pasteboard.setData(Data(), forType: Self.concealedType)
+
+            // 3. Wait for the user's chord to release before posting Cmd+V.
+            try await waitForChordRelease()
+
+            // 4. Post Cmd+V with ONLY the Command flag (per spec §4.3 step 4).
+            keyPoster.postKey(pasteKeyResolver.pasteVirtualKeyCode(), flags: [.maskCommand])
+
+            // 5. Let the target app consume the paste, then verify.
+            try await Task.sleep(for: restoreDelay)
+            let check = focusedTextSystem.checkInsertion(before: before, insertedText: text)
+            snapshot.restore(to: pasteboard)
+
+            switch check {
+            case .confirmedChanged:
+                return TextInsertionOutcome(strategy: .clipboardPaste, verification: .confirmed)
+            case .unavailable, .unchanged:
+                // .unchanged here means "AX disagrees that anything changed."
+                // That's not proof of failure — many editors expose stale
+                // values via AX. Treat as unverified so we don't double-insert
+                // on top of a paste that may well have succeeded.
+                return TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
+            }
+        } catch {
+            snapshot.restore(to: pasteboard)
+            throw error
+        }
+    }
+
+    private func injectViaAccessibility(_ text: String) throws -> TextInsertionOutcome {
+        let before = focusedTextSystem.snapshot()
+        try focusedTextSystem.insertText(text)
+        switch focusedTextSystem.checkInsertion(before: before, insertedText: text) {
+        case .confirmedChanged:
+            return TextInsertionOutcome(strategy: .accessibility, verification: .confirmed)
+        case .unavailable:
+            return TextInsertionOutcome(strategy: .accessibility, verification: .unverified)
+        case .unchanged:
+            throw TextInsertionError.accessibilityRejected
+        }
+    }
+
+    private func injectViaDirectTyping(_ text: String) async throws -> TextInsertionOutcome {
+        let before = focusedTextSystem.snapshot()
         try await waitForChordRelease()
-
-        // 4. Post Cmd+V with ONLY the Command flag (per spec §4.3 step 4).
-        keyPoster.postKey(Self.kVirtualKeyV, flags: [.maskCommand])
-
-        // 5. Restore after a short delay so the target app has time to consume the paste.
-        // Propagate cancellation rather than swallowing it: a future caller
-        // that decides to abort an in-flight paste needs us to stop here
-        // instead of completing the restore against a possibly-stale snapshot.
-        try await Task.sleep(for: restoreDelay)
-        snapshot.restore(to: pasteboard)
+        try textTyper.typeText(text)
+        try await Task.sleep(for: verificationDelay)
+        switch focusedTextSystem.checkInsertion(before: before, insertedText: text) {
+        case .confirmedChanged:
+            return TextInsertionOutcome(strategy: .directTyping, verification: .confirmed)
+        case .unavailable:
+            return TextInsertionOutcome(strategy: .directTyping, verification: .unverified)
+        case .unchanged:
+            throw TextInsertionError.directTypingRejected
+        }
     }
 
     private func waitForChordRelease() async throws {

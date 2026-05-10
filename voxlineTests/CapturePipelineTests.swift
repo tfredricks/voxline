@@ -42,9 +42,10 @@ import Foundation
     final class FakeInjector: ClipboardInjecting {
         var injected: [String] = []
         var nextError: Error?
-        func inject(_ text: String) async throws {
+        func inject(_ text: String) async throws -> TextInsertionOutcome {
             if let nextError { throw nextError }
             injected.append(text)
+            return TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
         }
     }
 

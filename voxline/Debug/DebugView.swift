@@ -160,6 +160,7 @@ struct DebugView: View {
             sectionHeader("Pipeline")
             row("Status:", statusLabel)
             row("Phase:", state.debugPipelinePhase)
+            row("Last insertion:", state.debugLastInsertionResult)
             if let started = state.recordingStartedAt {
                 row("Recording started:", started.formatted(date: .omitted, time: .standard))
             }
@@ -222,8 +223,9 @@ struct DebugView: View {
         }
         let stamp = "voxline test paste @ \(Date().formatted(date: .omitted, time: .standard))"
         do {
-            try await injector.inject(stamp)
-            state.debugLastTestResult = "Paste completed: \(stamp)"
+            let outcome = try await injector.inject(stamp)
+            state.debugLastInsertionResult = outcome.description
+            state.debugLastTestResult = "Paste completed (\(outcome.description)): \(stamp)"
         } catch {
             state.debugLastTestResult = "Paste failed: \(error.localizedDescription)"
         }

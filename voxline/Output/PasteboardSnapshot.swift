@@ -12,6 +12,12 @@ struct PasteboardSnapshot: Equatable {
 
     enum SnapshotError: Error, Equatable {
         case refuseToClobber(reason: String)
+
+        var reason: String {
+            switch self {
+            case .refuseToClobber(let reason): return reason
+            }
+        }
     }
 
     let items: [ItemSnapshot]

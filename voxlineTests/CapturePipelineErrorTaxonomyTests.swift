@@ -9,7 +9,9 @@ import Foundation
     private func pipeline(
         transcribe: @escaping ([Float]) async throws -> String = { _ in "hello" },
         cleanup: @escaping (String, Mode) async throws -> String = { t, _ in t },
-        inject: @escaping (String) async throws -> Void = { _ in }
+        inject: @escaping (String) async throws -> TextInsertionOutcome = { _ in
+            TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
+        }
     ) -> (CapturePipeline, AppState, FakeCapture) {
         let state = AppState()
         let capture = FakeCapture()
@@ -67,12 +69,23 @@ import Foundation
         #expect(msg.lowercased().contains("transcription"))
     }
 
-    @Test func paste_failure_surfaces_actionable_message() async {
+    @Test func text_insertion_failure_surfaces_actionable_message() async {
         struct PasteFail: Error {}
         let (p, state, _) = pipeline(inject: { _ in throw PasteFail() })
         await runOnce(p, state)
         guard case .error(_, let msg) = state.status else { Issue.record("expected error"); return }
-        #expect(msg.lowercased().contains("paste"))
+        #expect(msg.lowercased().contains("text insertion"))
+    }
+
+    @Test func revoked_accessibility_during_paste_is_sticky_permissions_error() async {
+        let (p, state, _) = pipeline(inject: { _ in throw TextInsertionError.accessibilityNotGranted })
+        await runOnce(p, state)
+        guard case .error(let category, let msg) = state.status else {
+            Issue.record("Expected .error status, got \(state.status)"); return
+        }
+        // Must be .permissions so the AppCoordinator reconcile loop preserves it.
+        #expect(category == .permissions)
+        #expect(msg.lowercased().contains("accessibility"))
     }
 
     @Test func error_path_clears_recording_state() async {
@@ -93,7 +106,7 @@ import Foundation
             llm: FakeLLM(handler: { t, _ in t }),
             modes: ModeRouter(modes: [Mode(bundleID: "*", displayName: "D", prompt: "p", model: nil, temperature: nil)]),
             frontmost: FakeFrontmost(),
-            injector: FakeInjector(handler: { _ in })
+            injector: FakeInjector(handler: { _ in TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified) })
         )
         p.startRecording()
         // Do NOT set debugLastPeakLevel — simulating a silent mic where the
@@ -143,7 +156,7 @@ private struct FakeFrontmost: FrontmostAppProviding {
 
 @MainActor
 private final class FakeInjector: ClipboardInjecting {
-    let handler: (String) async throws -> Void
-    init(handler: @escaping (String) async throws -> Void) { self.handler = handler }
-    func inject(_ text: String) async throws { try await handler(text) }
+    let handler: (String) async throws -> TextInsertionOutcome
+    init(handler: @escaping (String) async throws -> TextInsertionOutcome) { self.handler = handler }
+    func inject(_ text: String) async throws -> TextInsertionOutcome { try await handler(text) }
 }

@@ -80,6 +80,10 @@ final class AppState {
     /// If finalize hangs, this is the last phase it reached.
     var debugPipelinePhase: String = "idle"
 
+    /// Last insertion strategy used by ClipboardInjector, including whether
+    /// AX could confirm that the focused field changed.
+    var debugLastInsertionResult: String = "(none yet)"
+
     /// Live permission states polled by the debug-screen watchdog.
     var debugMicrophoneStatus: String = "?"
     var debugAccessibilityStatus: String = "?"

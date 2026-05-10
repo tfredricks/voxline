@@ -29,7 +29,8 @@ protocol LLMServing: Sendable {
 
 @MainActor
 protocol ClipboardInjecting: AnyObject {
-    func inject(_ text: String) async throws
+    @discardableResult
+    func inject(_ text: String) async throws -> TextInsertionOutcome
 }
 
 protocol FrontmostAppProviding: Sendable {
