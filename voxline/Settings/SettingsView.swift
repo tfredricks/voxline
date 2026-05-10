@@ -37,11 +37,10 @@ struct SettingsView: View {
                                 Text(row.label).tag(row.uid)
                             }
                         }
-                        HStack(spacing: 8) {
+                        HStack(spacing: 6) {
                             Text("Live level")
                                 .foregroundStyle(.secondary)
                                 .font(.callout)
-                                .frame(width: 80, alignment: .leading)
                             MicLevelMeter(monitor: levelMonitor)
                         }
                     }
@@ -77,8 +76,9 @@ struct SettingsView: View {
                     }
                 }
                 .formStyle(.grouped)
+                .scrollContentBackground(.hidden)
             }
-            .frame(minWidth: 540, idealWidth: 600, minHeight: 480, idealHeight: 560)
+            .frame(minWidth: 440, idealWidth: 460, maxWidth: 520, minHeight: 460, idealHeight: 540)
         }
         .onAppear {
             levelMonitor.preferredInputDeviceUID = generalVM.audioInputDeviceUID
