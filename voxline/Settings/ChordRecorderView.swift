@@ -9,20 +9,28 @@ struct ChordRecorderView: View {
     @Binding var chord: HotkeyChord
 
     @State private var isRecording = false
-    @State private var monitor: Any?
+    @State private var flagsMonitor: Any?
+    @State private var keyMonitor: Any?
     @State private var firstModifier: HotkeyChord.Modifier?
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text(chord.displayName)
-                .monospaced()
-                .frame(minWidth: 200, alignment: .leading)
-            if isRecording {
-                Text(firstModifier == nil ? "Press first modifier…" : "Now press second modifier…")
-                    .foregroundStyle(.secondary)
-                Button("Cancel") { stop() }
-            } else {
-                Button("Record chord…") { start() }
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                Text(chord.displayName)
+                    .monospaced()
+                    .fixedSize()
+                if isRecording {
+                    Text(firstModifier == nil ? "Press first modifier… (Esc to cancel)" : "Now press second modifier… (Esc to cancel)")
+                        .foregroundStyle(.secondary)
+                    Button("Cancel") { stop() }
+                } else {
+                    Button("Record chord…") { start() }
+                }
+            }
+            if let warning = chord.conflictWarning {
+                Text(warning)
+                    .foregroundStyle(.orange)
+                    .font(.callout)
             }
         }
         .onDisappear { stop() }
@@ -31,22 +39,31 @@ struct ChordRecorderView: View {
     private func start() {
         firstModifier = nil
         isRecording = true
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             handle(event)
+            return event
+        }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Esc cancels recording; consume the event so it doesn't propagate.
+            if event.keyCode == UInt16(kVK_Escape) {
+                stop()
+                return nil
+            }
             return event
         }
     }
 
     private func stop() {
-        if let m = monitor { NSEvent.removeMonitor(m) }
-        monitor = nil
+        if let m = flagsMonitor { NSEvent.removeMonitor(m) }
+        if let m = keyMonitor   { NSEvent.removeMonitor(m) }
+        flagsMonitor = nil
+        keyMonitor = nil
         firstModifier = nil
         isRecording = false
     }
 
     private func handle(_ event: NSEvent) {
         guard let pressed = modifier(from: event), event.type == .flagsChanged else { return }
-        // Edge: only react on key-DOWN (modifier mask non-zero for that bit)
         let bit = pressed.deviceMaskBit
         let raw = UInt64(event.cgEvent?.flags.rawValue ?? 0)
         let isDown = (raw & bit) != 0
@@ -62,8 +79,6 @@ struct ChordRecorderView: View {
     }
 
     private func modifier(from event: NSEvent) -> HotkeyChord.Modifier? {
-        // event.keyCode for flagsChanged identifies which physical modifier key.
-        // Carbon kVK_* constants:
         switch Int(event.keyCode) {
         case kVK_Control:      return .leftControl
         case kVK_RightControl: return .rightControl

@@ -53,5 +53,17 @@ struct HotkeyChord: Codable, Equatable {
 
     var displayName: String { "\(modifierA.displayName) + \(modifierB.displayName)" }
 
+    /// Soft warning for chord combinations known to conflict with system
+    /// accessibility features. Returns nil when no conflict is known.
+    var conflictWarning: String? {
+        let a = modifierA, b = modifierB
+        let isControl: (Modifier) -> Bool = { $0 == .leftControl || $0 == .rightControl }
+        let isOption:  (Modifier) -> Bool = { $0 == .leftOption  || $0 == .rightOption }
+        let isCtrlOpt = (isControl(a) && isOption(b)) || (isOption(a) && isControl(b))
+        if isCtrlOpt {
+            return "This chord matches the VoiceOver modifier (Ctrl+Option). If VoiceOver is on, hold-to-talk may conflict."
+        }
+        return nil
+    }
 
 }

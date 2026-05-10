@@ -24,4 +24,20 @@ import Foundation
         #expect(decoded == original)
     }
 
+    @Test func voiceover_chord_warning_fires_for_ctrl_option_combos() {
+        let lcLo = HotkeyChord(modifierA: .leftControl, modifierB: .leftOption)
+        let loLc = HotkeyChord(modifierA: .leftOption,  modifierB: .leftControl)
+        let rcRo = HotkeyChord(modifierA: .rightControl, modifierB: .rightOption)
+        let mixed = HotkeyChord(modifierA: .leftControl, modifierB: .rightOption)
+        #expect(lcLo.conflictWarning != nil)
+        #expect(loLc.conflictWarning != nil)
+        #expect(rcRo.conflictWarning != nil)
+        #expect(mixed.conflictWarning != nil)
+    }
+
+    @Test func no_warning_for_unrelated_chords() {
+        let chord = HotkeyChord(modifierA: .leftCommand, modifierB: .leftShift)
+        #expect(chord.conflictWarning == nil)
+    }
+
 }
