@@ -96,6 +96,27 @@ import Foundation
         vm.refreshDevices()
         #expect(vm.devices == [AudioDevice(uid: "MicNew", name: "New Mic", isDefault: true)])
     }
+
+    @Test func reset_restores_spec_defaults_and_calls_applier_once() {
+        var settings = AppSettings(defaults: defaults())
+        settings.hotkeyChord = HotkeyChord(modifierA: .rightCommand, modifierB: .rightShift)
+        settings.audioInputDeviceUID = "MicX"
+        settings.whisperModel = .smallEn
+        settings.playHotkeySounds = false
+
+        let applier = RecordingApplier()
+        let vm = GeneralSettingsViewModel(settings: settings, applier: applier)
+        vm.resetToDefaults()
+
+        #expect(vm.chord == .default)
+        #expect(vm.audioInputDeviceUID == nil)
+        #expect(vm.whisperModel == .default)
+        #expect(vm.playHotkeySounds == true)
+        #expect(applier.applied?.chord == .default)
+        #expect(applier.applied?.whisperModel == .default)
+        #expect(applier.applied?.playHotkeySounds == true)
+        #expect(applier.applied?.audioInputDeviceUID == nil)
+    }
 }
 
 private struct NoopApplier: GeneralSettingsApplier {

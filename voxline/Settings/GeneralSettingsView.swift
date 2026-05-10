@@ -23,7 +23,7 @@ struct GeneralSettingsView: View {
                 }
             }
 
-            Section("Speech recognition model") {
+            Section("Speech recognition") {
                 Picker("Model", selection: $vm.whisperModel) {
                     ForEach(WhisperModel.allCases, id: \.self) { m in
                         Text(m.displayName).tag(m)
@@ -34,11 +34,16 @@ struct GeneralSettingsView: View {
                     .font(.callout)
             }
 
-            Section("Sounds") {
+            Section("Feedback") {
                 Toggle("Play sound on record start/stop", isOn: $vm.playHotkeySounds)
+            }
+
+            HStack {
+                Spacer()
+                Button("Reset to Defaults") { vm.resetToDefaults() }
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 420)
+        .frame(minWidth: 480, idealWidth: 540, minHeight: 380, idealHeight: 460)
     }
 }

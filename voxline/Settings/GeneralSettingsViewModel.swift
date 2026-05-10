@@ -16,7 +16,6 @@ final class GeneralSettingsViewModel {
     var whisperModel: WhisperModel { didSet { if loaded { commit() } } }
     var playHotkeySounds: Bool { didSet { if loaded { commit() } } }
 
-    var lastError: String?
     private(set) var devices: [AudioDevice] = []
 
     private var settings: AppSettings
@@ -58,6 +57,19 @@ final class GeneralSettingsViewModel {
 
     func refreshDevices() {
         devices = deviceEnumerator()
+    }
+
+    /// Restore Spec defaults: hotkey to Left Ctrl + Left Option, system-default
+    /// mic, large-v3-turbo, sounds on. Performs one batched commit so the
+    /// applier sees a single coherent snapshot rather than four partial ones.
+    func resetToDefaults() {
+        loaded = false
+        chord = .default
+        audioInputDeviceUID = nil
+        whisperModel = .default
+        playHotkeySounds = true
+        loaded = true
+        commit()
     }
 
     private func commit() {
