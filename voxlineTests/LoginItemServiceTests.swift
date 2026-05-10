@@ -52,6 +52,9 @@ import ServiceManagement
     }
 }
 
+/// Shared with GeneralSettingsViewModelTests via module-internal visibility.
+/// Don't mark `private` or move into the @Suite struct — Task 4's tests
+/// reference it directly.
 @MainActor
 final class StubLoginBackend: LoginItemBackend {
     var status: SMAppService.Status

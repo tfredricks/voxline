@@ -34,23 +34,41 @@ final class GeneralSettingsViewModel {
     private let loginItemService: LoginItemService
     private var loaded = false
 
+    /// Convenience init that constructs the default `LoginItemService` at call
+    /// time. A `LoginItemService = LoginItemService()` default argument doesn't
+    /// compile here because `LoginItemService` is `@MainActor`-isolated and
+    /// default-argument expressions are evaluated outside the function's
+    /// isolation context. The convenience init's body runs under the type's
+    /// `@MainActor` and can construct it freely.
+    convenience init(
+        settings: AppSettings = AppSettings(),
+        applier: GeneralSettingsApplier,
+        deviceEnumerator: @escaping () -> [AudioDevice] = AudioDeviceEnumerator.inputDevices
+    ) {
+        self.init(
+            settings: settings,
+            applier: applier,
+            deviceEnumerator: deviceEnumerator,
+            loginItemService: LoginItemService()
+        )
+    }
+
     init(
         settings: AppSettings = AppSettings(),
         applier: GeneralSettingsApplier,
         deviceEnumerator: @escaping () -> [AudioDevice] = AudioDeviceEnumerator.inputDevices,
-        loginItemService: LoginItemService? = nil
+        loginItemService: LoginItemService
     ) {
         self.settings = settings
         self.applier = applier
         self.deviceEnumerator = deviceEnumerator
-        let resolvedLoginItemService = loginItemService ?? LoginItemService()
-        self.loginItemService = resolvedLoginItemService
+        self.loginItemService = loginItemService
         self.chord = settings.hotkeyChord
         self.audioInputDeviceUID = settings.audioInputDeviceUID
         self.whisperModel = settings.whisperModel
         self.playHotkeySounds = settings.playHotkeySounds
         self.provider = settings.llmProvider
-        let initialStatus = resolvedLoginItemService.status
+        let initialStatus = loginItemService.status
         self.loginItemStatus = initialStatus
         self.launchAtLogin = (initialStatus == .enabled)
         self.devices = deviceEnumerator()
@@ -80,10 +98,13 @@ final class GeneralSettingsViewModel {
     /// Called after every toggle and on Settings-window-becomes-key, so external
     /// approval/revocation in System Settings → Login Items reflects back.
     func refreshLoginItemStatus() {
-        let s = loginItemService.status
-        loginItemStatus = s
-        let actual = (s == .enabled)
+        let status = loginItemService.status
+        loginItemStatus = status
+        let actual = (status == .enabled)
         if launchAtLogin != actual {
+            // Same trick as resetToDefaults: temporarily disable the didSet
+            // → applyLaunchAtLogin chain so reconciling to backend truth
+            // doesn't recursively call setEnabled.
             loaded = false
             launchAtLogin = actual
             loaded = true
