@@ -16,6 +16,12 @@ struct voxlineApp: App {
                         state: delegate.appState,
                         coordinator: delegate.coordinator
                     )
+                },
+                openAboutWindow: {
+                    delegate.showAboutWindow()
+                },
+                tagSettingsWindow: {
+                    delegate.tagSettingsWindowSoon()
                 }
             )
         } label: {
@@ -47,9 +53,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
     let coordinator = AppCoordinator()
     let debugWindow = DebugWindowController()
+    let aboutWindow = AboutWindowController()
+    let windowVisibility = WindowVisibilityCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         coordinator.startIfNeeded(state: appState)
+    }
+
+    func showAboutWindow() {
+        let env = SupportEnvironment.current(
+            whisperModel: coordinator.transcriber?.model.displayName ?? "(unknown)",
+            micDevice: nil
+        )
+        aboutWindow.show(env: env)
+    }
+
+    func tagSettingsWindowSoon() {
+        windowVisibility.tagSettingsWindowAfterOpen()
     }
 }
 
