@@ -16,12 +16,14 @@ import Foundation
         settings.audioInputDeviceUID = "MyMic"
         settings.whisperModel = .smallEn
         settings.playHotkeySounds = false
+        settings.llmProvider = .openai
 
         let vm = GeneralSettingsViewModel(settings: settings, applier: NoopApplier())
         #expect(vm.chord == chord)
         #expect(vm.audioInputDeviceUID == "MyMic")
         #expect(vm.whisperModel == .smallEn)
         #expect(vm.playHotkeySounds == false)
+        #expect(vm.provider == .openai)
     }
 
     @Test func mutations_persist_and_call_applier_immediately() {
@@ -46,6 +48,8 @@ import Foundation
         vm.playHotkeySounds = false
         #expect(applier.applied?.playHotkeySounds == false)
         #expect(AppSettings(defaults: d).playHotkeySounds == false)
+
+        #expect(applier.applied?.provider == .anthropic)
     }
 
     @Test func init_does_not_call_applier() {
@@ -103,6 +107,7 @@ import Foundation
         settings.audioInputDeviceUID = "MicX"
         settings.whisperModel = .smallEn
         settings.playHotkeySounds = false
+        settings.llmProvider = .openai
 
         let applier = RecordingApplier()
         let vm = GeneralSettingsViewModel(settings: settings, applier: applier)
@@ -116,6 +121,8 @@ import Foundation
         #expect(applier.applied?.whisperModel == .default)
         #expect(applier.applied?.playHotkeySounds == true)
         #expect(applier.applied?.audioInputDeviceUID == nil)
+        #expect(vm.provider == .anthropic)
+        #expect(applier.applied?.provider == .anthropic)
     }
 
     @Test func provider_change_persists_and_calls_applier() {

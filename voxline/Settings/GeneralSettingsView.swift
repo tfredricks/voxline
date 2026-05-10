@@ -34,7 +34,7 @@ struct GeneralSettingsView: View {
                     .font(.callout)
             }
 
-            Section("Cleanup model") {
+            Section("Cleanup") {
                 Picker("Provider", selection: $vm.provider) {
                     ForEach(LLMProvider.allCases, id: \.self) { p in
                         Text(p.displayName).tag(p)
