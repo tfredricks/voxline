@@ -25,7 +25,16 @@ final class WizardViewModel {
     var canAdvance: Bool { currentStep.next != nil }
     var canGoBack: Bool { currentStep.previous != nil }
 
+    /// Persist whatever's typed in the API-key step. Called on every advance
+    /// and on completion so the user can navigate forward/back without losing
+    /// keys, and the wizard exits with keys actually written to keychain.
+    func commitKeys() {
+        apiKeyVM.commitAnthropic()
+        apiKeyVM.commitOpenAI()
+    }
+
     func advance() {
+        commitKeys()
         if let next = currentStep.next { currentStep = next }
     }
 
@@ -34,6 +43,7 @@ final class WizardViewModel {
     }
 
     func complete() {
+        commitKeys()
         var s = settings
         s.hasCompletedFirstRun = true
         settings = s

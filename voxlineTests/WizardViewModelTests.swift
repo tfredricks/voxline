@@ -47,4 +47,22 @@ import Foundation
         #expect(didCallback == true)
         #expect(AppSettings(defaults: d).hasCompletedFirstRun == true)
     }
+
+    @Test func complete_persists_keys_to_keychain() throws {
+        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
+        defer { try? kc.deleteAll() }
+        let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: kc)
+        vm.apiKeyVM.anthropicKey = "sk-ant-test"
+        vm.complete()
+        #expect(try kc.string(forKey: Keychain.Account.anthropic) == "sk-ant-test")
+    }
+
+    @Test func advance_persists_keys_to_keychain() throws {
+        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
+        defer { try? kc.deleteAll() }
+        let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: kc)
+        vm.apiKeyVM.openaiKey = "sk-test"
+        vm.advance()
+        #expect(try kc.string(forKey: Keychain.Account.openai) == "sk-test")
+    }
 }

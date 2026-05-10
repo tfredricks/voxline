@@ -22,6 +22,8 @@ final class APIKeysSettingsViewModel {
 
     private let keychain: Keychain
     private let clientFactory: LLMClientFactory
+    private var anthropicPersisted: String = ""
+    private var openaiPersisted: String = ""
 
     init(
         keychain: Keychain = Keychain(),
@@ -36,17 +38,21 @@ final class APIKeysSettingsViewModel {
         self.clientFactory = clientFactory
         self.anthropicKey = (try? keychain.string(forKey: Keychain.Account.anthropic)) ?? ""
         self.openaiKey    = (try? keychain.string(forKey: Keychain.Account.openai)) ?? ""
+        self.anthropicPersisted = self.anthropicKey
+        self.openaiPersisted    = self.openaiKey
     }
 
     /// Persist the Anthropic key. Whitespace is trimmed; an empty/whitespace
     /// value deletes the keychain entry.
     func commitAnthropic() {
         persist(value: anthropicKey, account: Keychain.Account.anthropic)
+        anthropicPersisted = trimmed(anthropicKey)
     }
 
     /// Persist the OpenAI key. Same rules as commitAnthropic.
     func commitOpenAI() {
         persist(value: openaiKey, account: Keychain.Account.openai)
+        openaiPersisted = trimmed(openaiKey)
     }
 
     /// Issue a tiny no-op LLM call to verify the current in-memory key for
@@ -76,19 +82,12 @@ final class APIKeysSettingsViewModel {
         }
     }
 
-    /// True when the field's current value (trimmed) matches what's persisted
-    /// in keychain. Used to drive the "Saved"/"Unsaved" pill.
+    /// True when the field's current value (trimmed) matches the last committed
+    /// value. Uses an in-memory cache — no keychain IO on every render.
     func isPersisted(_ provider: LLMProvider) -> Bool {
-        let saved = (try? keychain.string(forKey: account(for: provider))) ?? ""
         let live = trimmed(provider == .anthropic ? anthropicKey : openaiKey)
+        let saved = (provider == .anthropic) ? anthropicPersisted : openaiPersisted
         return saved == live
-    }
-
-    private func account(for provider: LLMProvider) -> String {
-        switch provider {
-        case .anthropic: return Keychain.Account.anthropic
-        case .openai:    return Keychain.Account.openai
-        }
     }
 
     private func liveKey(for provider: LLMProvider) -> String {

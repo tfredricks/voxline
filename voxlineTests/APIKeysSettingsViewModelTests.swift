@@ -128,6 +128,27 @@ import Foundation
         vm.anthropicKey = "different"
         #expect(vm.isPersisted(.anthropic) == false)
     }
+
+    @Test func isPersisted_uses_cached_value_not_keychain_read() throws {
+        let kc = keychain()
+        try kc.set("real-key", forKey: Keychain.Account.anthropic)
+        defer { try? kc.deleteAll() }
+
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        #expect(vm.isPersisted(.anthropic))   // seeded from keychain at init
+
+        // Mutate keychain externally — VM cache should not change.
+        try kc.set("changed-out-of-band", forKey: Keychain.Account.anthropic)
+        #expect(vm.isPersisted(.anthropic))   // still true; cache reflects in-memory pair
+
+        // Edit live — cache stale until commit.
+        vm.anthropicKey = "different"
+        #expect(!vm.isPersisted(.anthropic))
+
+        // Commit — cache refreshes from the live value.
+        vm.commitAnthropic()
+        #expect(vm.isPersisted(.anthropic))
+    }
 }
 
 private struct StubClient: LLMClient {

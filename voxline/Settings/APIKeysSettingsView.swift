@@ -105,8 +105,11 @@ struct APIKeysSettingsView: View {
                     .font(.callout)
                 Spacer()
                 let trimmedKey = key.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmedKey.isEmpty, !trimmedKey.hasPrefix(expectedPrefix) {
-                    Label("Expected prefix \(expectedPrefix)", systemImage: "exclamationmark.triangle.fill")
+                let prefixMismatch = !trimmedKey.isEmpty && !trimmedKey.hasPrefix(expectedPrefix)
+                let antInOpenAI = (provider == .openai) && trimmedKey.hasPrefix("sk-ant-")
+                if prefixMismatch || antInOpenAI {
+                    Label(antInOpenAI ? "This looks like an Anthropic key" : "Expected prefix \(expectedPrefix)",
+                          systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
                         .font(.callout)
                 }
