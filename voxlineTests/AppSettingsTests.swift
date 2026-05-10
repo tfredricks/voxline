@@ -30,7 +30,7 @@ import Foundation
         s.llmProvider = .anthropic
         #expect(s.llmModel == "claude-haiku-4-5")
         s.llmProvider = .openai
-        #expect(s.llmModel == "gpt-4o-mini")
+        #expect(s.llmModel == "gpt-4.1-mini")
     }
 
     @Test func explicit_model_override_persists_across_provider_switch() {
@@ -41,7 +41,7 @@ import Foundation
         #expect(s.llmModel == "claude-3-5-sonnet-latest")
         s.llmProvider = .openai
         // Changing provider clears the model override (spec default returns).
-        #expect(s.llmModel == "gpt-4o-mini")
+        #expect(s.llmModel == "gpt-4.1-mini")
     }
 
     @Test func unset_hotkey_chord_returns_default() {
