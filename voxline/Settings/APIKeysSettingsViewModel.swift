@@ -76,6 +76,21 @@ final class APIKeysSettingsViewModel {
         }
     }
 
+    /// True when the field's current value (trimmed) matches what's persisted
+    /// in keychain. Used to drive the "Saved"/"Unsaved" pill.
+    func isPersisted(_ provider: LLMProvider) -> Bool {
+        let saved = (try? keychain.string(forKey: account(for: provider))) ?? ""
+        let live = trimmed(provider == .anthropic ? anthropicKey : openaiKey)
+        return saved == live
+    }
+
+    private func account(for provider: LLMProvider) -> String {
+        switch provider {
+        case .anthropic: return Keychain.Account.anthropic
+        case .openai:    return Keychain.Account.openai
+        }
+    }
+
     private func liveKey(for provider: LLMProvider) -> String {
         switch provider {
         case .anthropic: return anthropicKey

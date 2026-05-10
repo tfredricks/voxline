@@ -5,6 +5,8 @@ struct APIKeysSettingsView: View {
     private enum Field: Hashable { case anthropic, openai }
 
     @State private var vm: APIKeysSettingsViewModel
+    @State private var anthropicRevealed = false
+    @State private var openaiRevealed = false
     @FocusState private var focused: Field?
 
     init(vm: APIKeysSettingsViewModel) {
@@ -13,18 +15,23 @@ struct APIKeysSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Anthropic") {
-                SecureField("API key", text: $vm.anthropicKey)
-                    .textContentType(.password)
-                    .focused($focused, equals: .anthropic)
-                    .onSubmit { vm.commitAnthropic() }
-            }
-            Section("OpenAI") {
-                SecureField("API key", text: $vm.openaiKey)
-                    .textContentType(.password)
-                    .focused($focused, equals: .openai)
-                    .onSubmit { vm.commitOpenAI() }
-            }
+            keySection(
+                title: "Anthropic",
+                provider: .anthropic,
+                key: $vm.anthropicKey,
+                revealed: $anthropicRevealed,
+                getKeyURL: URL(string: "https://console.anthropic.com/settings/keys")!,
+                expectedPrefix: "sk-ant-"
+            )
+
+            keySection(
+                title: "OpenAI",
+                provider: .openai,
+                key: $vm.openaiKey,
+                revealed: $openaiRevealed,
+                getKeyURL: URL(string: "https://platform.openai.com/api-keys")!,
+                expectedPrefix: "sk-"
+            )
 
             HStack {
                 Button("Test Anthropic") { Task { await vm.testConnection(.anthropic) } }
@@ -41,7 +48,7 @@ struct APIKeysSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 480, idealWidth: 540, minHeight: 320, idealHeight: 380)
+        .frame(minWidth: 480, idealWidth: 540, minHeight: 380, idealHeight: 460)
         .onChange(of: focused) { previous, _ in commit(previous) }
         .onDisappear { commit(focused) }
     }
@@ -51,6 +58,76 @@ struct APIKeysSettingsView: View {
         case .anthropic: vm.commitAnthropic()
         case .openai:    vm.commitOpenAI()
         case .none:      break
+        }
+    }
+
+    @ViewBuilder
+    private func keySection(
+        title: String,
+        provider: LLMProvider,
+        key: Binding<String>,
+        revealed: Binding<Bool>,
+        getKeyURL: URL,
+        expectedPrefix: String
+    ) -> some View {
+        let field: Field = (provider == .anthropic) ? .anthropic : .openai
+        Section(title) {
+            HStack {
+                Group {
+                    if revealed.wrappedValue {
+                        TextField("API key", text: key)
+                    } else {
+                        SecureField("API key", text: key)
+                    }
+                }
+                .textContentType(.password)
+                .focused($focused, equals: field)
+                .onSubmit {
+                    if provider == .anthropic { vm.commitAnthropic() } else { vm.commitOpenAI() }
+                }
+
+                Button {
+                    revealed.wrappedValue.toggle()
+                } label: {
+                    Image(systemName: revealed.wrappedValue ? "eye.slash" : "eye")
+                }
+                .buttonStyle(.borderless)
+                .help(revealed.wrappedValue ? "Hide key" : "Reveal key")
+
+                statusPill(for: provider, value: key.wrappedValue)
+            }
+
+            HStack(spacing: 8) {
+                Link("Get a key →", destination: getKeyURL)
+                    .font(.callout)
+                Spacer()
+                if !key.wrappedValue.isEmpty,
+                   !key.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix(expectedPrefix) {
+                    Label("Expected prefix \(expectedPrefix)", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func statusPill(for provider: LLMProvider, value: String) -> some View {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            EmptyView()
+        } else if vm.isPersisted(provider) {
+            Text("Saved")
+                .font(.caption)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(.green.opacity(0.2), in: Capsule())
+                .foregroundStyle(.green)
+        } else {
+            Text("Unsaved")
+                .font(.caption)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(.orange.opacity(0.2), in: Capsule())
+                .foregroundStyle(.orange)
         }
     }
 

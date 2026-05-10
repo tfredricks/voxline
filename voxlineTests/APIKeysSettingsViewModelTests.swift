@@ -110,6 +110,24 @@ import Foundation
             Issue.record("expected .failed(.anthropic, \"No API key set.\")")
         }
     }
+
+    @Test func isPersisted_true_when_trimmed_live_matches_keychain() throws {
+        let kc = keychain()
+        try kc.set("real-key", forKey: Keychain.Account.anthropic)
+        defer { try? kc.deleteAll() }
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        vm.anthropicKey = "  real-key\n"   // whitespace doesn't matter
+        #expect(vm.isPersisted(.anthropic) == true)
+    }
+
+    @Test func isPersisted_false_when_live_differs_from_keychain() throws {
+        let kc = keychain()
+        try kc.set("real-key", forKey: Keychain.Account.anthropic)
+        defer { try? kc.deleteAll() }
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        vm.anthropicKey = "different"
+        #expect(vm.isPersisted(.anthropic) == false)
+    }
 }
 
 private struct StubClient: LLMClient {
