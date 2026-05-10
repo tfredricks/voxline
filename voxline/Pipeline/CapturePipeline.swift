@@ -38,14 +38,9 @@ final class CapturePipeline {
             Task { @MainActor in
                 guard let self else { return }
                 self.state.audioLevel = level
-                if level > self.state.debugLastPeakLevel {
-                    self.state.debugLastPeakLevel = level
+                if level > self.state.lastPeakLevel {
+                    self.state.lastPeakLevel = level
                 }
-            }
-        }
-        capture.onTapCallback = { [weak self] _ in
-            Task { @MainActor in
-                self?.state.debugLastTapCallbackCount += 1
             }
         }
     }
@@ -77,8 +72,7 @@ final class CapturePipeline {
         }
         state.recordingStartedAt = Date()
         state.audioLevel = 0
-        state.debugLastPeakLevel = 0
-        state.debugLastTapCallbackCount = 0
+        state.lastPeakLevel = 0
         // Scrub the prior dictation's text so it doesn't linger in process
         // memory (and the Debug window) for the lifetime of the app. Spoken
         // content can include passwords / 2FA codes / private notes; not a
@@ -98,13 +92,12 @@ final class CapturePipeline {
         capture.stop()
         let samples = capture.takeSamples()
         state.status = .thinking
-        state.debugLastSampleCount = samples.count
-        state.debugPipelinePhase = "stopped capture (\(samples.count) samples)"
+        state.lastRecordingDuration = Double(samples.count) / 16_000.0
 
         // Silent-capture detector: tap fired (samples non-empty) but no audio
         // signal reached the converter (peak stayed at 0). Almost always means
         // Microphone permission is denied or a muted device was selected.
-        if !samples.isEmpty && state.debugLastPeakLevel == 0 {
+        if !samples.isEmpty && state.lastPeakLevel == 0 {
             return setError("No audio captured. Check that Microphone permission is granted and the input device isn't muted.")
         }
 
@@ -114,7 +107,6 @@ final class CapturePipeline {
         }
 
         // 1. Transcribe locally.
-        state.debugPipelinePhase = "transcribing"
         let transcript: String
         do {
             transcript = try await transcriber.transcribe(samples: samples)
@@ -136,7 +128,6 @@ final class CapturePipeline {
         guard let mode = modes.mode(for: bundleID, field: field) else {
             return setError("No mode for app '\(bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes.")
         }
-        state.debugPipelinePhase = "llm (\(mode.displayName))"
 
         // 3. LLM cleanup.
         let cleaned: String
@@ -150,7 +141,6 @@ final class CapturePipeline {
         state.lastCleanedText = cleaned
 
         // 4. Paste.
-        state.debugPipelinePhase = "pasting"
         do {
             let outcome = try await injector.inject(cleaned)
             state.debugLastInsertionResult = outcome.description
@@ -168,13 +158,11 @@ final class CapturePipeline {
         state.recordingStartedAt = nil
         state.audioLevel = 0
         state.status = .idle
-        state.debugPipelinePhase = "idle"
     }
 
     private func setError(_ message: String, category: AppErrorCategory = .pipeline) {
         state.status = .error(category: category, message: message)
         state.recordingStartedAt = nil
         state.audioLevel = 0
-        state.debugPipelinePhase = "error"
     }
 }

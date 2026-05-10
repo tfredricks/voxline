@@ -22,11 +22,6 @@ final class HotkeyMonitor {
     /// Lets the Debug window explain a too-short recording.
     var onDebugFinalizeReason: ((String) -> Void)?
 
-    /// Optional debug observer — fired for every flagsChanged event observed,
-    /// with a one-line summary. Used to diagnose phantom modifier releases
-    /// coming from keyboard remappers, Sticky Keys, Mission Control, etc.
-    var onDebugFlagEvent: ((String) -> Void)?
-
     /// Snapshot of state-machine state for diagnostics.
     var currentState: HotkeyStateMachine.State { machine.state }
     var isTapInstalled: Bool { eventTap != nil }
@@ -116,12 +111,6 @@ final class HotkeyMonitor {
                 let chord = monitor.chord
                 let modA = flags.contains(CGEventFlags(rawValue: chord.modifierA.deviceMaskBit))
                 let modB = flags.contains(CGEventFlags(rawValue: chord.modifierB.deviceMaskBit))
-                // Coalesced bits kept for the debug log line, useful for diagnosing rollover.
-                let anyCtrl = flags.contains(.maskControl)
-                let anyOpt  = flags.contains(.maskAlternate)
-                let raw = String(flags.rawValue, radix: 16)
-                let line = "raw=0x\(raw) modA=\(modA) modB=\(modB) anyCtrl=\(anyCtrl) anyOpt=\(anyOpt)"
-                monitor.onDebugFlagEvent?(line)
                 monitor.feed(.flagsChanged(modAFlag: modA, modBFlag: modB))
             }
         case .tapDisabledByTimeout, .tapDisabledByUserInput:

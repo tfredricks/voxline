@@ -65,7 +65,18 @@ final class AppState {
     /// Used for the pill's elapsed-time display and for the max-duration fail-safe.
     var recordingStartedAt: Date?
 
-    // MARK: - Debug diagnostics (rendered in the menu-bar Debug section)
+    /// Peak audio level observed during the most recent recording. Stays
+    /// at 0 if the mic was muted/denied or the input device produced silence.
+    /// Read by CapturePipeline's silent-capture detector (not debug-only) and
+    /// rendered in the Debug window's Last-attempt panel.
+    var lastPeakLevel: Float = 0
+
+    /// Duration of the most recent recording in seconds, derived from the
+    /// sample count delivered to WhisperKit (samples / 16_000). Nil until the
+    /// first recording finalizes.
+    var lastRecordingDuration: TimeInterval?
+
+    // MARK: - Debug diagnostics (rendered in the Debug window)
 
     /// Current `HotkeyStateMachine.State`, stringified. Updated by HotkeyMonitor
     /// after every state transition, so a stuck state (e.g. `.recording` or
@@ -74,11 +85,6 @@ final class AppState {
 
     /// Whether the CGEventTap is currently installed and active.
     var debugTapInstalled: Bool = false
-
-    /// Most recent pipeline phase. Set by CapturePipeline.finalizeRecording
-    /// at each step ("idle" → "transcribing" → "llm" → "paste" → "idle").
-    /// If finalize hangs, this is the last phase it reached.
-    var debugPipelinePhase: String = "idle"
 
     /// Last insertion strategy used by ClipboardInjector, including whether
     /// AX could confirm that the focused field changed.
@@ -93,27 +99,8 @@ final class AppState {
     /// Empty string when nothing has been run yet.
     var debugLastTestResult: String = ""
 
-    /// Peak audio level observed during the most recent recording. Stays
-    /// at 0 if the mic was muted/denied or the input device produced silence.
-    var debugLastPeakLevel: Float = 0
-
-    /// Number of 16 kHz mono Float32 samples handed to WhisperKit at the end
-    /// of the most recent recording. ~16,000 = 1 second of audio.
-    var debugLastSampleCount: Int = 0
-
-    /// How many AVAudioEngine tap-callbacks fired during the most recent
-    /// recording. If chord was held 5s but this is 1, the engine stalled.
-    /// If it's high but samples are low, the converter is dropping data.
-    var debugLastTapCallbackCount: Int = 0
-
     /// Why finalize ran on the most recent chord cycle. Set by HotkeyMonitor
     /// the moment finalize is triggered, so a too-short recording explains
     /// itself: chord-release vs app-deactivated vs tap-disabled vs max-duration.
     var debugLastFinalizeReason: String = "(none yet)"
-
-    /// Newest-first ring buffer of the last ~20 flagsChanged events seen by
-    /// the tap. Each entry: "[timestamp] raw=0xHEX leftCtrl=… leftOpt=… ctrl=… opt=…".
-    /// Used to diagnose phantom "release" events from keyboard remappers,
-    /// Sticky Keys, Mission Control bindings, etc.
-    var debugRecentFlagEvents: [String] = []
 }

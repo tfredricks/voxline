@@ -216,22 +216,6 @@ final class AppCoordinator {
                 state?.debugLastFinalizeReason = reason
             }
         }
-        monitor.onDebugFlagEvent = { [weak state] line in
-            Task { @MainActor in
-                guard let state else { return }
-                // Millisecond-precision timestamp so we can measure the
-                // actual duration of a chord hold.
-                let now = Date()
-                let secs = Int(now.timeIntervalSince1970) % 60
-                let ms = Int((now.timeIntervalSince1970 - floor(now.timeIntervalSince1970)) * 1000)
-                let stamp = String(format: "%02d.%03d", secs, ms)
-                let entry = "[\(stamp)s] \(line)"
-                state.debugRecentFlagEvents.insert(entry, at: 0)
-                if state.debugRecentFlagEvents.count > 20 {
-                    state.debugRecentFlagEvents.removeLast(state.debugRecentFlagEvents.count - 20)
-                }
-            }
-        }
         // Input Monitoring is a separate TCC category from Accessibility.
         // Without it, a CGEventTap only fires while voxline itself is the
         // frontmost app — which made hold-to-talk look like it "only works

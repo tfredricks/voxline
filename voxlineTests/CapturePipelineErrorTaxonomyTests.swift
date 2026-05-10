@@ -31,7 +31,7 @@ import Foundation
 
     private func runOnce(_ p: CapturePipeline, _ state: AppState) async {
         p.startRecording()
-        state.debugLastPeakLevel = 0.5  // simulate the production onLevel callback firing
+        state.lastPeakLevel = 0.5  // simulate the production onLevel callback firing
         await p.finalizeRecording()
     }
 
@@ -111,9 +111,9 @@ import Foundation
             injector: FakeInjector(handler: { _ in TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified) })
         )
         p.startRecording()
-        // Do NOT set debugLastPeakLevel — simulating a silent mic where the
+        // Do NOT set lastPeakLevel above 0 — simulating a silent mic where the
         // onLevel callback never gets a non-zero value.
-        state.debugLastPeakLevel = 0
+        state.lastPeakLevel = 0
         await p.finalizeRecording()
         guard case .error(_, let msg) = state.status else {
             Issue.record("Expected .error, got \(state.status)"); return

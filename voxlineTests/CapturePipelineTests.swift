@@ -58,7 +58,7 @@ import Foundation
     /// callback firing so the silent-capture detector doesn't fire.
     private func startAndFinalize(_ pipe: CapturePipeline, state: AppState) async {
         pipe.startRecording()
-        state.debugLastPeakLevel = 0.5
+        state.lastPeakLevel = 0.5
         await pipe.finalizeRecording()
     }
 
@@ -232,6 +232,32 @@ import Foundation
         pipe.startRecording()
         #expect(capture.startCallCount == 1)
         #expect(state.status == .recording)
+    }
+
+    @Test func finalizeRecording_setsLastRecordingDurationFromSampleCount() async {
+        // The Debug window's "Duration" row reads `lastRecordingDuration`.
+        // Three samples / 16 kHz ≈ 0.0001875s — assert the formula, not a literal.
+        let (pipe, state, _, _, _, _, _, _) = makePipeline()
+        await startAndFinalize(pipe, state: state)
+        guard let duration = state.lastRecordingDuration else {
+            Issue.record("expected non-nil lastRecordingDuration"); return
+        }
+        // FakeCapture.pendingSamples has 3 samples by default.
+        #expect(duration == 3.0 / 16_000.0)
+    }
+
+    @Test func finalizeRecording_setsDurationEvenOnSilentMicAbort() async {
+        // Silent-capture detector aborts the pipeline before transcribe, but
+        // we set duration before the detector runs — so a 0-duration zero-peak
+        // run still has a duration recorded for the panel to show.
+        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
+        capture.pendingSamples = [Float](repeating: 0, count: 16_000)
+        pipe.startRecording()
+        // Don't simulate onLevel — peak stays at 0, triggers silent-mic error.
+        state.lastPeakLevel = 0
+        await pipe.finalizeRecording()
+        if case .error = state.status { } else { Issue.record("expected silent-mic error") }
+        #expect(state.lastRecordingDuration == 1.0)
     }
 
     @Test func startRecording_afterPermissionsError_isSticky() {

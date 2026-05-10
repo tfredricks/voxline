@@ -1,10 +1,14 @@
 // voxline/Debug/DebugView.swift
 //
-// End-to-end diagnostic + manual-test screen. Opened from the menu bar
-// "Open Debug Window…" item. Shows live state of permissions, the hotkey
-// tap, the pipeline, and gives buttons to exercise each stage independently.
+// Triage tool for the developer + power users opening it during a bug report.
+// Three panels, top to bottom, organized by the question being asked:
+//   1. Last attempt          — "what just happened?"
+//   2. Inputs healthy?       — "can it record?"
+//   3. If it's wrong         — recovery + bisect
 //
-// Not shipped as user-facing functionality — this is a triage tool.
+// Not user-facing functionality. Audience is the developer plus a power user
+// who can read fields back over a bug report. Diagnostics that are not
+// human-readable do not belong here.
 
 import AppKit
 import SwiftUI
@@ -16,68 +20,43 @@ struct DebugView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                permissionsSection
+                lastAttemptSection
                 Divider()
-                hotkeySection
+                inputsSection
                 Divider()
-                pipelineSection
-                Divider()
-                transcriptsSection
-                Divider()
-                flagEventsSection
-                Divider()
-                modesSection
-                Divider()
-                testButtonsSection
-                Divider()
-                lastResultSection
+                troubleshootingSection
             }
             .padding(20)
             .frame(minWidth: 520, alignment: .leading)
         }
     }
 
-    private var flagEventsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionHeader("Recent flagsChanged events (newest first)")
-            if state.debugRecentFlagEvents.isEmpty {
-                Text("(none yet — press a modifier to start logging)")
-                    .font(.caption).foregroundStyle(.secondary)
-            } else {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(state.debugRecentFlagEvents.enumerated()), id: \.offset) { _, line in
-                        Text(line)
-                            .font(.system(.caption2, design: .monospaced))
-                            .textSelection(.enabled)
-                    }
-                }
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .textBackgroundColor))
-                .cornerRadius(6)
-            }
-            Button("Clear log") { state.debugRecentFlagEvents.removeAll() }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-        }
-    }
+    // MARK: - Panel 1: Last attempt
 
-    private var transcriptsSection: some View {
+    private var lastAttemptSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("Last chord cycle")
-            row("Samples captured:",
-                state.debugLastSampleCount == 0
-                    ? "0 (no audio captured yet)"
-                    : "\(state.debugLastSampleCount) (~\(String(format: "%.1f", Double(state.debugLastSampleCount) / 16_000.0))s)")
-            row("Peak level:", String(format: "%.3f", state.debugLastPeakLevel))
-            row("Tap callbacks:", "\(state.debugLastTapCallbackCount)")
-            row("Finalize reason:", state.debugLastFinalizeReason)
+            sectionHeader("Last attempt")
+            row("Status:", statusLabel)
+
             Text("Heard (raw transcript from WhisperKit)")
                 .font(.caption).foregroundStyle(.secondary)
             transcriptBox(heardText)
-            Text("Would paste (LLM-cleaned)")
+
+            Text("Cleaned (would paste — LLM output)")
                 .font(.caption).foregroundStyle(.secondary)
             transcriptBox(cleanedText)
+
+            row("Mode:", modeLine)
+            if let overrideLine = modeOverrideLine {
+                row("", overrideLine)
+            }
+            if let duration = state.lastRecordingDuration {
+                row("Duration:", String(format: "%.1fs · peak %.3f", duration, state.lastPeakLevel))
+            }
+            row("Insertion:", state.debugLastInsertionResult)
+            if showFinalizeReason {
+                row("Reason:", state.debugLastFinalizeReason)
+            }
         }
     }
 
@@ -91,53 +70,87 @@ struct DebugView: View {
         return t.isEmpty ? "(empty)" : t
     }
 
-    @ViewBuilder
-    private func transcriptBox(_ text: String) -> some View {
-        Text(text)
-            .font(.system(.body, design: .monospaced))
-            .textSelection(.enabled)
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .textBackgroundColor))
-            .cornerRadius(6)
+    /// "<displayName>  (<bundleID>)" or "(no match)" if no mode resolves.
+    private var modeLine: String {
+        let bundleID = coordinator.frontmost?.frontmostBundleID() ?? "(none)"
+        guard let mode = coordinator.modes?.mode(for: coordinator.frontmost?.frontmostBundleID()) else {
+            return "(no match) — frontmost \(bundleID)"
+        }
+        return "\(mode.displayName)  (\(bundleID))"
     }
 
-    // MARK: - Sections
+    /// "override: <model> @ <temp>" if either is set on the resolved mode.
+    private var modeOverrideLine: String? {
+        guard let mode = coordinator.modes?.mode(for: coordinator.frontmost?.frontmostBundleID()) else {
+            return nil
+        }
+        let model = mode.model
+        let temp = mode.temperature
+        if model == nil && temp == nil { return nil }
+        let modelPart = model ?? "(default)"
+        let tempPart = temp.map { String(format: "%.2f", $0) } ?? "(default)"
+        return "override: \(modelPart) @ \(tempPart)"
+    }
 
-    private var permissionsSection: some View {
+    /// Hide the reason row when it is the default ("(none yet)") or the
+    /// expected chord-release case — both are noise. Surface anything else
+    /// (max-duration / app-deactivated / tap-disabled) since those explain
+    /// a too-short recording.
+    private var showFinalizeReason: Bool {
+        let r = state.debugLastFinalizeReason
+        return !(r == "(none yet)" || r.lowercased().contains("chord-release"))
+    }
+
+    // MARK: - Panel 2: Inputs healthy?
+
+    private var inputsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            sectionHeader("Permissions")
-            row("Microphone:", state.debugMicrophoneStatus)
-            row("Accessibility:", state.debugAccessibilityStatus)
-            row("Input Monitoring:", state.debugInputMonitoringStatus)
-            HStack(spacing: 8) {
-                Button("Open Accessibility Settings") {
-                    openSystemSettings(pane: "Privacy_Accessibility")
-                }
-                Button("Open Input Monitoring Settings") {
-                    openSystemSettings(pane: "Privacy_ListenEvent")
-                }
-                Button("Re-prompt Input Monitoring") {
-                    _ = PermissionsService().requestInputMonitoring()
-                    state.debugLastTestResult = "Triggered Input Monitoring prompt"
-                }
-                Button("Re-prompt Accessibility") {
-                    PermissionsService().promptAccessibility()
-                    state.debugLastTestResult = "Triggered Accessibility prompt"
-                }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            sectionHeader("Inputs healthy?")
+            permissionRow("Microphone:", state.debugMicrophoneStatus, settingsPane: nil)
+            permissionRow("Accessibility:", state.debugAccessibilityStatus, settingsPane: "Privacy_Accessibility")
+            permissionRow("Input Monitoring:", state.debugInputMonitoringStatus, settingsPane: "Privacy_ListenEvent")
+            row("Hotkey state:", state.debugHotkeyState)
+            row("Tap installed:", state.debugTapInstalled ? "yes" : "no")
         }
     }
 
-    private var hotkeySection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionHeader("Hotkey")
-            row("State:", state.debugHotkeyState)
-            row("Tap installed:", state.debugTapInstalled ? "yes" : "no")
+    @ViewBuilder
+    private func permissionRow(_ label: String, _ value: String, settingsPane: String?) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label).foregroundStyle(.secondary).frame(width: 160, alignment: .leading)
+            Text(permissionMark(value) + " " + value)
+                .font(.system(.body, design: .monospaced))
+                .textSelection(.enabled)
+            if let pane = settingsPane, !isAuthorized(value) {
+                Button("Open Settings") { openSystemSettings(pane: pane) }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+            Spacer()
+        }
+    }
+
+    /// Permission strings from `PermissionsService` are free-form; treat any
+    /// status starting with "authorized"/"granted" as the healthy case. If the
+    /// match is wrong we lose the green check, not correctness.
+    private func isAuthorized(_ value: String) -> Bool {
+        let v = value.lowercased()
+        return v.hasPrefix("authorized") || v.hasPrefix("granted") || v.hasPrefix("ok")
+    }
+
+    private func permissionMark(_ value: String) -> String {
+        if isAuthorized(value) { return "✓" }
+        if value == "?" { return "·" }
+        return "✗"
+    }
+
+    // MARK: - Panel 3: If it's wrong
+
+    private var troubleshootingSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("If it's wrong")
             HStack(spacing: 8) {
-                Button("Force-finalize (unwedge)") {
+                Button("Force-finalize") {
                     coordinator.hotkeyMonitor?.recordingFinished()
                     state.debugLastTestResult = "Fed .recordingFinished to state machine"
                 }
@@ -152,58 +165,16 @@ struct DebugView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-        }
-    }
 
-    private var pipelineSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionHeader("Pipeline")
-            row("Status:", statusLabel)
-            row("Phase:", state.debugPipelinePhase)
-            row("Last insertion:", state.debugLastInsertionResult)
-            if let started = state.recordingStartedAt {
-                row("Recording started:", started.formatted(date: .omitted, time: .standard))
-            }
-            row("Audio level:", String(format: "%.3f", state.audioLevel))
-        }
-    }
-
-    private var modesSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionHeader("Routing")
-            let frontID = coordinator.frontmost?.frontmostBundleID() ?? "(none)"
-            row("Frontmost bundle:", frontID)
-            let resolved = coordinator.modes?.mode(for: coordinator.frontmost?.frontmostBundleID())
-            row("Resolved mode:", resolved.map { "\($0.displayName) [\($0.bundleID)]" } ?? "(no match)")
-            if let m = resolved {
-                row("Model override:", m.model ?? "(use default)")
-                row("Temperature:", m.temperature.map { String(format: "%.2f", $0) } ?? "(default)")
-            }
-        }
-    }
-
-    private var testButtonsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("End-to-end tests")
             HStack(spacing: 8) {
-                Button("Test paste 'voxline-test-\(Int(Date().timeIntervalSince1970) % 10000)'") {
-                    Task { await runTestPaste() }
-                }
-                Button("Test LLM ('hello world' cleanup)") {
-                    Task { await runTestLLM() }
-                }
-                Button("Test transcribe (silence)") {
-                    Task { await runTestTranscribe() }
-                }
+                Button("Test paste") { Task { await runTestPaste() } }
+                Button("Test LLM") { Task { await runTestLLM() } }
+                Button("Test transcribe") { Task { await runTestTranscribe() } }
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-        }
-    }
 
-    private var lastResultSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionHeader("Last test result")
+            Text("Last test result").font(.caption).foregroundStyle(.secondary)
             Text(state.debugLastTestResult.isEmpty ? "(none)" : state.debugLastTestResult)
                 .font(.system(.caption, design: .monospaced))
                 .textSelection(.enabled)
@@ -214,7 +185,7 @@ struct DebugView: View {
         }
     }
 
-    // MARK: - Actions
+    // MARK: - Test actions
 
     private func runTestPaste() async {
         guard let injector = coordinator.injector else {
@@ -304,6 +275,17 @@ struct DebugView: View {
             Text(value).font(.system(.body, design: .monospaced)).textSelection(.enabled)
             Spacer()
         }
+    }
+
+    @ViewBuilder
+    private func transcriptBox(_ text: String) -> some View {
+        Text(text)
+            .font(.system(.body, design: .monospaced))
+            .textSelection(.enabled)
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .textBackgroundColor))
+            .cornerRadius(6)
     }
 }
 
