@@ -1,0 +1,16 @@
+name: Bug report
+description: Something in voxline isn't working
+title: "Bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened?
+      description: Steps to reproduce, expected vs. actual behavior, and any environment info auto-filled below.
+      placeholder: |
+        1. Open voxline
+        2. ...
+        3. Expected: ... Actual: ...
+    validations:
+      required: true

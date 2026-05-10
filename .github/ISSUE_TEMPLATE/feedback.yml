@@ -1,0 +1,12 @@
+name: Feedback
+description: Suggestion, feature request, or general feedback
+title: "Feedback: "
+labels: ["feedback"]
+body:
+  - type: textarea
+    id: details
+    attributes:
+      label: What's on your mind?
+      description: Tell us what you'd like to see, or what's working / not working for you.
+    validations:
+      required: true
