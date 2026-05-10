@@ -37,21 +37,6 @@ struct GeneralSettingsView: View {
             Section("Sounds") {
                 Toggle("Play sound on record start/stop", isOn: $vm.playHotkeySounds)
             }
-
-            HStack {
-                Spacer()
-                Button("Save") {
-                    vm.save()
-                    vm.lastError = nil
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-
-            if let err = vm.lastError {
-                Text(err)
-                    .foregroundStyle(.red)
-                    .font(.callout)
-            }
         }
         .formStyle(.grouped)
         .frame(width: 520, height: 420)

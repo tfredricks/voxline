@@ -24,7 +24,7 @@ import Foundation
         #expect(vm.playHotkeySounds == false)
     }
 
-    @Test func save_persists_and_calls_applier() {
+    @Test func mutations_persist_and_call_applier_immediately() {
         let d = defaults()
         let settings = AppSettings(defaults: d)
         let applier = RecordingApplier()
@@ -32,21 +32,28 @@ import Foundation
 
         let chord = HotkeyChord(modifierA: .rightCommand, modifierB: .rightShift)
         vm.chord = chord
-        vm.audioInputDeviceUID = "NewMic"
-        vm.whisperModel = .smallEn
-        vm.playHotkeySounds = false
-        vm.save()
-
-        let reread = AppSettings(defaults: d)
-        #expect(reread.hotkeyChord == chord)
-        #expect(reread.audioInputDeviceUID == "NewMic")
-        #expect(reread.whisperModel == .smallEn)
-        #expect(reread.playHotkeySounds == false)
-
         #expect(applier.applied?.chord == chord)
+        #expect(AppSettings(defaults: d).hotkeyChord == chord)
+
+        vm.audioInputDeviceUID = "NewMic"
         #expect(applier.applied?.audioInputDeviceUID == "NewMic")
+        #expect(AppSettings(defaults: d).audioInputDeviceUID == "NewMic")
+
+        vm.whisperModel = .smallEn
         #expect(applier.applied?.whisperModel == .smallEn)
+        #expect(AppSettings(defaults: d).whisperModel == .smallEn)
+
+        vm.playHotkeySounds = false
         #expect(applier.applied?.playHotkeySounds == false)
+        #expect(AppSettings(defaults: d).playHotkeySounds == false)
+    }
+
+    @Test func init_does_not_call_applier() {
+        var settings = AppSettings(defaults: defaults())
+        settings.hotkeyChord = HotkeyChord(modifierA: .leftCommand, modifierB: .rightOption)
+        let applier = RecordingApplier()
+        _ = GeneralSettingsViewModel(settings: settings, applier: applier)
+        #expect(applier.applied == nil)
     }
 
     @Test func device_rows_includes_disconnected_marker_when_saved_uid_is_absent() {

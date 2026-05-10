@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 struct AudioDeviceRow: Identifiable, Equatable {
-    let uid: String?       // nil = system default
+    let uid: String?
     let label: String
     var id: String { uid ?? "__system_default__" }
 }
@@ -11,18 +11,19 @@ struct AudioDeviceRow: Identifiable, Equatable {
 @MainActor
 final class GeneralSettingsViewModel {
 
-    var chord: HotkeyChord
-    var audioInputDeviceUID: String?
-    var whisperModel: WhisperModel
-    var playHotkeySounds: Bool
-    var lastError: String?
+    var chord: HotkeyChord { didSet { if loaded { commit() } } }
+    var audioInputDeviceUID: String? { didSet { if loaded { commit() } } }
+    var whisperModel: WhisperModel { didSet { if loaded { commit() } } }
+    var playHotkeySounds: Bool { didSet { if loaded { commit() } } }
 
+    var lastError: String?
     private(set) var devices: [AudioDevice] = []
 
     private var settings: AppSettings
     private let applier: GeneralSettingsApplier
     private let deviceEnumerator: () -> [AudioDevice]
     private var deviceListener: AudioDeviceListener?
+    private var loaded = false
 
     init(
         settings: AppSettings = AppSettings(),
@@ -37,14 +38,12 @@ final class GeneralSettingsViewModel {
         self.whisperModel = settings.whisperModel
         self.playHotkeySounds = settings.playHotkeySounds
         self.devices = deviceEnumerator()
+        self.loaded = true
         self.deviceListener = AudioDeviceListener { [weak self] in
             MainActor.assumeIsolated { self?.refreshDevices() }
         }
     }
 
-    /// Picker rows including a synthetic "(disconnected)" entry when the
-    /// saved UID is not currently enumerable. Keeps the Picker selection
-    /// stable instead of going blank when a USB mic is unplugged.
     var deviceRows: [AudioDeviceRow] {
         var rows: [AudioDeviceRow] = [AudioDeviceRow(uid: nil, label: "System default")]
         for d in devices {
@@ -61,7 +60,7 @@ final class GeneralSettingsViewModel {
         devices = deviceEnumerator()
     }
 
-    func save() {
+    private func commit() {
         var s = settings
         s.hotkeyChord = chord
         s.audioInputDeviceUID = audioInputDeviceUID
