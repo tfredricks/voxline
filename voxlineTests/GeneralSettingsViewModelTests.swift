@@ -135,6 +135,87 @@ import Foundation
         #expect(applier.applied?.provider == .openai)
         #expect(AppSettings(defaults: d).llmProvider == .openai)
     }
+
+    @Test func launch_at_login_initialized_from_login_item_status() {
+        let backend = StubLoginBackend(status: .enabled)
+        let svc = LoginItemService(backend: backend)
+        let vm = GeneralSettingsViewModel(
+            settings: AppSettings(defaults: defaults()),
+            applier: NoopApplier(),
+            loginItemService: svc
+        )
+        #expect(vm.launchAtLogin == true)
+        #expect(vm.loginItemStatus == .enabled)
+    }
+
+    @Test func launch_at_login_disabled_when_not_registered() {
+        let backend = StubLoginBackend(status: .notRegistered)
+        let svc = LoginItemService(backend: backend)
+        let vm = GeneralSettingsViewModel(
+            settings: AppSettings(defaults: defaults()),
+            applier: NoopApplier(),
+            loginItemService: svc
+        )
+        #expect(vm.launchAtLogin == false)
+        #expect(vm.loginItemStatus == .disabled)
+    }
+
+    @Test func toggling_launch_at_login_to_true_calls_register() throws {
+        let backend = StubLoginBackend(status: .notRegistered)
+        let svc = LoginItemService(backend: backend)
+        let vm = GeneralSettingsViewModel(
+            settings: AppSettings(defaults: defaults()),
+            applier: NoopApplier(),
+            loginItemService: svc
+        )
+        vm.launchAtLogin = true
+        #expect(backend.registerCount == 1)
+        #expect(vm.loginItemStatus == .enabled)
+        #expect(vm.launchAtLogin == true)
+    }
+
+    @Test func toggling_launch_at_login_to_false_calls_unregister() throws {
+        let backend = StubLoginBackend(status: .enabled)
+        let svc = LoginItemService(backend: backend)
+        let vm = GeneralSettingsViewModel(
+            settings: AppSettings(defaults: defaults()),
+            applier: NoopApplier(),
+            loginItemService: svc
+        )
+        vm.launchAtLogin = false
+        #expect(backend.unregisterCount == 1)
+        #expect(vm.loginItemStatus == .disabled)
+        #expect(vm.launchAtLogin == false)
+    }
+
+    @Test func register_yielding_requires_approval_keeps_toggle_off() {
+        let backend = StubLoginBackend(status: .notRegistered)
+        backend.registerYields = .requiresApproval
+        let svc = LoginItemService(backend: backend)
+        let vm = GeneralSettingsViewModel(
+            settings: AppSettings(defaults: defaults()),
+            applier: NoopApplier(),
+            loginItemService: svc
+        )
+        vm.launchAtLogin = true
+        #expect(vm.loginItemStatus == .requiresApproval)
+        #expect(vm.launchAtLogin == false)
+    }
+
+    @Test func refresh_login_item_status_picks_up_external_approval() {
+        let backend = StubLoginBackend(status: .requiresApproval)
+        let svc = LoginItemService(backend: backend)
+        let vm = GeneralSettingsViewModel(
+            settings: AppSettings(defaults: defaults()),
+            applier: NoopApplier(),
+            loginItemService: svc
+        )
+        #expect(vm.launchAtLogin == false)
+        backend.status = .enabled
+        vm.refreshLoginItemStatus()
+        #expect(vm.loginItemStatus == .enabled)
+        #expect(vm.launchAtLogin == true)
+    }
 }
 
 private struct NoopApplier: GeneralSettingsApplier {
