@@ -48,6 +48,32 @@ import Foundation
         #expect(applier.applied?.whisperModel == .smallEn)
         #expect(applier.applied?.playHotkeySounds == false)
     }
+
+    @Test func device_rows_includes_disconnected_marker_when_saved_uid_is_absent() {
+        var settings = AppSettings(defaults: defaults())
+        settings.audioInputDeviceUID = "GhostMic"
+        let vm = GeneralSettingsViewModel(
+            settings: settings,
+            applier: NoopApplier(),
+            deviceEnumerator: { [] }   // no devices present
+        )
+        let rows = vm.deviceRows
+        #expect(rows.contains { $0.uid == "GhostMic" && $0.label.contains("disconnected") })
+    }
+
+    @Test func device_rows_omits_disconnected_marker_when_uid_is_present_in_device_list() {
+        var settings = AppSettings(defaults: defaults())
+        settings.audioInputDeviceUID = "MicA"
+        let stubDevices = [AudioDevice(uid: "MicA", name: "Mic A", isDefault: false)]
+        let vm = GeneralSettingsViewModel(
+            settings: settings,
+            applier: NoopApplier(),
+            deviceEnumerator: { stubDevices }
+        )
+        let rows = vm.deviceRows
+        #expect(rows.contains { $0.uid == "MicA" && !$0.label.contains("disconnected") })
+        #expect(rows.allSatisfy { !$0.label.contains("disconnected") || $0.uid != "MicA" })
+    }
 }
 
 private struct NoopApplier: GeneralSettingsApplier {

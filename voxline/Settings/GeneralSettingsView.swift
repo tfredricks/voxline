@@ -4,7 +4,6 @@ import SwiftUI
 struct GeneralSettingsView: View {
 
     @State private var vm: GeneralSettingsViewModel
-    @State private var devices: [AudioDevice] = []
 
     init(vm: GeneralSettingsViewModel) {
         _vm = State(wrappedValue: vm)
@@ -18,9 +17,8 @@ struct GeneralSettingsView: View {
 
             Section("Microphone") {
                 Picker("Input device", selection: $vm.audioInputDeviceUID) {
-                    Text("System default").tag(String?.none)
-                    ForEach(devices, id: \.uid) { device in
-                        Text(displayLabel(for: device)).tag(String?.some(device.uid))
+                    ForEach(vm.deviceRows) { row in
+                        Text(row.label).tag(row.uid)
                     }
                 }
             }
@@ -42,8 +40,11 @@ struct GeneralSettingsView: View {
 
             HStack {
                 Spacer()
-                Button("Save") { saveWithErrorBanner() }
-                    .keyboardShortcut(.defaultAction)
+                Button("Save") {
+                    vm.save()
+                    vm.lastError = nil
+                }
+                .keyboardShortcut(.defaultAction)
             }
 
             if let err = vm.lastError {
@@ -54,15 +55,5 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 520, height: 420)
-        .onAppear { devices = AudioDeviceEnumerator.inputDevices() }
-    }
-
-    private func displayLabel(for device: AudioDevice) -> String {
-        device.isDefault ? "\(device.name) (default)" : device.name
-    }
-
-    private func saveWithErrorBanner() {
-        vm.save()
-        vm.lastError = nil
     }
 }
