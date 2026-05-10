@@ -12,6 +12,7 @@ struct ChordRecorderView: View {
     @State private var flagsMonitor: Any?
     @State private var keyMonitor: Any?
     @State private var firstModifier: HotkeyChord.Modifier?
+    @State private var unsupportedHint: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -27,6 +28,11 @@ struct ChordRecorderView: View {
                     Button("Record chord…") { start() }
                 }
             }
+            if let hint = unsupportedHint {
+                Text(hint)
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+            }
             if let warning = chord.conflictWarning {
                 Text(warning)
                     .foregroundStyle(.orange)
@@ -38,6 +44,7 @@ struct ChordRecorderView: View {
 
     private func start() {
         firstModifier = nil
+        unsupportedHint = nil
         isRecording = true
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             handle(event)
@@ -59,22 +66,35 @@ struct ChordRecorderView: View {
         flagsMonitor = nil
         keyMonitor = nil
         firstModifier = nil
+        unsupportedHint = nil
         isRecording = false
     }
 
     private func handle(_ event: NSEvent) {
-        guard let pressed = modifier(from: event), event.type == .flagsChanged else { return }
-        let bit = pressed.deviceMaskBit
-        let raw = UInt64(event.cgEvent?.flags.rawValue ?? 0)
-        let isDown = (raw & bit) != 0
-        guard isDown else { return }
+        guard event.type == .flagsChanged else { return }
 
-        if let first = firstModifier {
-            guard pressed != first else { return }
-            chord = HotkeyChord(modifierA: first, modifierB: pressed)
-            stop()
-        } else {
-            firstModifier = pressed
+        if let pressed = modifier(from: event) {
+            let bit = pressed.deviceMaskBit
+            let raw = UInt64(event.cgEvent?.flags.rawValue ?? 0)
+            let isDown = (raw & bit) != 0
+            guard isDown else { return }
+
+            unsupportedHint = nil
+            if let first = firstModifier {
+                guard pressed != first else { return }
+                chord = HotkeyChord(modifierA: first, modifierB: pressed)
+                stop()
+            } else {
+                firstModifier = pressed
+            }
+            return
+        }
+
+        // The user pressed a key voxline doesn't support as a modifier. Name
+        // the common offenders (Fn / Caps Lock) so the user understands why
+        // nothing happened, instead of silently swallowing the event.
+        if let name = unsupportedKeyName(for: Int(event.keyCode)) {
+            unsupportedHint = "\(name) isn't supported — use Control, Option, Command, or Shift."
         }
     }
 
@@ -89,6 +109,14 @@ struct ChordRecorderView: View {
         case kVK_Shift:        return .leftShift
         case kVK_RightShift:   return .rightShift
         default: return nil
+        }
+    }
+
+    private func unsupportedKeyName(for keyCode: Int) -> String? {
+        switch keyCode {
+        case kVK_Function: return "Fn / Globe"
+        case kVK_CapsLock: return "Caps Lock"
+        default:           return nil
         }
     }
 }
