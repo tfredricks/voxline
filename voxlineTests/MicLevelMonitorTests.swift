@@ -13,7 +13,7 @@ import Foundation
     @Test @MainActor
     func stop_resets_level_to_zero() {
         let monitor = MicLevelMonitor()
-        monitor._setLevelForTesting(0.7)
+        monitor._publishLevelForTesting(0.7)
         #expect(monitor.level == 0.7)
         monitor.stop()
         #expect(monitor.level == 0)
@@ -27,6 +27,14 @@ import Foundation
         monitor._publishLevelForTesting(2.5)
         #expect(monitor.level == 1.0)
         monitor._publishLevelForTesting(-0.3)
+        #expect(monitor.level == 0)
+    }
+
+    @Test @MainActor
+    func double_stop_is_idempotent() {
+        let monitor = MicLevelMonitor()
+        monitor.stop()
+        monitor.stop()  // must not crash
         #expect(monitor.level == 0)
     }
 }

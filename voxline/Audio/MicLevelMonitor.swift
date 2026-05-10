@@ -1,6 +1,5 @@
 import AVFoundation
 import CoreAudio
-import Foundation
 import Observation
 
 /// Settings-only audio level tap. Publishes peak amplitude in [0, 1] while
@@ -44,6 +43,7 @@ final class MicLevelMonitor {
             throw AudioCaptureError.noInputDevice
         }
 
+        // ~50 ms buffer — slower meter updates than recording capture, easier on the eye.
         let bufferSize = max(1, AVAudioFrameCount(hwFormat.sampleRate * 0.05))
         input.installTap(onBus: 0, bufferSize: bufferSize, format: hwFormat) { [weak self] buffer, _ in
             guard let channelData = buffer.floatChannelData?[0] else { return }
@@ -55,15 +55,17 @@ final class MicLevelMonitor {
             }
         }
 
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            input.removeTap(onBus: 0)
+            throw error
+        }
         running = true
     }
 
     func stop() {
-        guard running else {
-            level = 0
-            return
-        }
+        // Unconditional removeTap makes stop() idempotent — safe to call when not running.
         engine.inputNode.removeTap(onBus: 0)
         if engine.isRunning { engine.stop() }
         running = false
@@ -76,6 +78,5 @@ final class MicLevelMonitor {
     }
 
     // Test hooks — internal access; do not call from production code.
-    func _setLevelForTesting(_ v: Float) { level = v }
     func _publishLevelForTesting(_ v: Float) { publishLevel(v) }
 }
