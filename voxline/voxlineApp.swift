@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let windowVisibility = WindowVisibilityCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        windowVisibility.start()
         coordinator.startIfNeeded(state: appState)
     }
 

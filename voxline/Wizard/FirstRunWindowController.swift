@@ -37,6 +37,7 @@ final class FirstRunWindowController {
         win.contentView = host
         win.center()
         win.isReleasedWhenClosed = false
+        win.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
 
         self.window = win
         win.makeKeyAndOrderFront(nil)

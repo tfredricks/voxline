@@ -308,6 +308,7 @@ final class DebugWindowController: NSObject {
         w.setContentSize(NSSize(width: 600, height: 700))
         w.isReleasedWhenClosed = false
         w.center()
+        w.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
         window = w
         w.makeKeyAndOrderFront(nil)
         NSApp.activate()
