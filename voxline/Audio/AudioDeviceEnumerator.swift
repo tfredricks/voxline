@@ -121,3 +121,37 @@ enum AudioDeviceEnumerator {
         return status == noErr && deviceID != 0 ? deviceID : nil
     }
 }
+
+/// Watches kAudioHardwarePropertyDevices and invokes `onChange` on the main
+/// queue when the device list changes (mic plug/unplug, Bluetooth connect,
+/// etc.). The listener block is detached automatically on deinit.
+final class AudioDeviceListener {
+
+    private var address = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDevices,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    private let block: AudioObjectPropertyListenerBlock
+
+    init(onChange: @escaping () -> Void) {
+        // Capture the handler before storing so the block we add is the same
+        // instance we later remove. CoreAudio matches listeners by block id.
+        self.block = { _, _ in DispatchQueue.main.async { onChange() } }
+        AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main,
+            block
+        )
+    }
+
+    deinit {
+        AudioObjectRemovePropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main,
+            block
+        )
+    }
+}

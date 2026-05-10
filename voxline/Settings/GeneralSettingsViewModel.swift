@@ -22,6 +22,7 @@ final class GeneralSettingsViewModel {
     private var settings: AppSettings
     private let applier: GeneralSettingsApplier
     private let deviceEnumerator: () -> [AudioDevice]
+    private var deviceListener: AudioDeviceListener?
 
     init(
         settings: AppSettings = AppSettings(),
@@ -36,6 +37,9 @@ final class GeneralSettingsViewModel {
         self.whisperModel = settings.whisperModel
         self.playHotkeySounds = settings.playHotkeySounds
         self.devices = deviceEnumerator()
+        self.deviceListener = AudioDeviceListener { [weak self] in
+            Task { @MainActor in self?.refreshDevices() }
+        }
     }
 
     /// Picker rows including a synthetic "(disconnected)" entry when the
