@@ -35,3 +35,17 @@ Result values:
 Feature #1 can be marked done when the normal editable-field targets above are
 `PASS`, `PASS-UNVERIFIED`, or documented `FALLBACK`, and any failures have an
 explicit limitation or follow-up issue.
+
+## Settings (single-page redesign — 2026-05-10)
+
+| State                              | Expected                                                                         |
+| ---------------------------------- | -------------------------------------------------------------------------------- |
+| Fully configured                   | Strip = green ● Ready; mic / model / provider chips show ✓                       |
+| No active provider key             | Strip = orange ● Setup needed; provider chip has no ✓                            |
+| Selected mic UID disconnected      | Strip = orange ● Setup needed; mic row shows "(disconnected) previously selected" |
+| Whisper model not cached           | Strip = orange; recognition picker shows "to download · N MB" (no ✓ on chip)     |
+| Switch provider with both keys     | Disclosure label updates to other provider; both keys retained                   |
+| Mic meter responds to speech       | Bar moves green→yellow→red as level rises                                        |
+| Window closed during meter         | System mic indicator clears (engine stopped)                                     |
+| Window closed during recording     | Meter stopped before recording started — no contention                           |
+| Status chip click → scroll         | Clicking model/provider chip scrolls form to that section                        |
