@@ -1,13 +1,5 @@
 import AppKit
 
-// MARK: - Missing AppKit extension
-
-extension NSWindow {
-    /// AppKit exposes this as a raw-string notification name but not as a typed
-    /// Swift extension. We define it here so callers can use the dot-syntax form.
-    static let didBecomeVisibleNotification = NSNotification.Name("NSWindowDidBecomeVisibleNotification")
-}
-
 // MARK: - Protocol
 
 @MainActor
@@ -59,8 +51,12 @@ final class WindowVisibilityCoordinator {
             insert(w)
         }
 
+        // didBecomeKeyNotification fires whenever a window becomes key — voxline's
+        // user-facing windows all open via makeKeyAndOrderFront, so this catches
+        // first-show. Re-keying an already-tracked window is a no-op thanks to
+        // the Set-based idempotency in insert().
         let visibleObserver = center.addObserver(
-            forName: NSWindow.didBecomeVisibleNotification,
+            forName: NSWindow.didBecomeKeyNotification,
             object: nil,
             queue: .main
         ) { [weak self] note in

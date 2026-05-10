@@ -11,7 +11,7 @@ import AppKit
         coord.start()
 
         let w = makeStubWindow(dockworthy: true)
-        center.post(name: NSWindow.didBecomeVisibleNotification, object: w)
+        center.post(name: NSWindow.didBecomeKeyNotification, object: w)
         #expect(setter.policies == [.regular])
         #expect(setter.activateCount == 1)
     }
@@ -23,7 +23,7 @@ import AppKit
         coord.start()
 
         let w = makeStubWindow(dockworthy: false)
-        center.post(name: NSWindow.didBecomeVisibleNotification, object: w)
+        center.post(name: NSWindow.didBecomeKeyNotification, object: w)
         #expect(setter.policies.isEmpty)
         #expect(setter.activateCount == 0)
     }
@@ -35,7 +35,7 @@ import AppKit
         coord.start()
 
         let w = makeStubWindow(dockworthy: true)
-        center.post(name: NSWindow.didBecomeVisibleNotification, object: w)
+        center.post(name: NSWindow.didBecomeKeyNotification, object: w)
         center.post(name: NSWindow.willCloseNotification, object: w)
         #expect(setter.policies == [.regular, .accessory])
     }
@@ -48,8 +48,8 @@ import AppKit
 
         let a = makeStubWindow(dockworthy: true)
         let b = makeStubWindow(dockworthy: true)
-        center.post(name: NSWindow.didBecomeVisibleNotification, object: a)
-        center.post(name: NSWindow.didBecomeVisibleNotification, object: b)
+        center.post(name: NSWindow.didBecomeKeyNotification, object: a)
+        center.post(name: NSWindow.didBecomeKeyNotification, object: b)
         center.post(name: NSWindow.willCloseNotification, object: a)
         #expect(setter.policies == [.regular])  // not yet back to accessory
         center.post(name: NSWindow.willCloseNotification, object: b)
@@ -63,8 +63,8 @@ import AppKit
         coord.start()
 
         let w = makeStubWindow(dockworthy: true)
-        center.post(name: NSWindow.didBecomeVisibleNotification, object: w)
-        center.post(name: NSWindow.didBecomeVisibleNotification, object: w)
+        center.post(name: NSWindow.didBecomeKeyNotification, object: w)
+        center.post(name: NSWindow.didBecomeKeyNotification, object: w)
         center.post(name: NSWindow.willCloseNotification, object: w)
         #expect(setter.policies == [.regular, .accessory])
     }
