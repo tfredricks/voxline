@@ -1,4 +1,4 @@
-1. [ ] **Works anywhere you type** — Dictate into any active text field: browser, email, docs, chat apps, notes, terminals, IDEs, and desktop apps.
+1. [x] **Works anywhere you type** — Dictate into any active text field: browser, email, docs, chat apps, notes, terminals, IDEs, and desktop apps.
 2. [x] **Fast push-to-talk capture** — Hold a hotkey, speak, release, and the text appears quickly with minimal friction.
 3. [x] **High-quality speech-to-text transcription** — Accurately converts spoken words into text with strong handling of accents, casual speech, pauses, and background noise.
 4. [x] **AI cleanup of natural speech** — Removes filler words, false starts, repeated phrases, awkward pauses, and rambling phrasing.

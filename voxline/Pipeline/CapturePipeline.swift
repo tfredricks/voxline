@@ -12,6 +12,7 @@ final class CapturePipeline {
     private let llm: LLMServing
     var modes: ModeResolving
     private let frontmost: FrontmostAppProviding
+    private let fieldInspector: FocusedFieldInspecting
     private let injector: ClipboardInjecting
 
     init(
@@ -21,6 +22,7 @@ final class CapturePipeline {
         llm: LLMServing,
         modes: ModeResolving,
         frontmost: FrontmostAppProviding,
+        fieldInspector: FocusedFieldInspecting,
         injector: ClipboardInjecting
     ) {
         self.state = state
@@ -29,6 +31,7 @@ final class CapturePipeline {
         self.llm = llm
         self.modes = modes
         self.frontmost = frontmost
+        self.fieldInspector = fieldInspector
         self.injector = injector
 
         capture.onLevel = { [weak self] level in
@@ -126,10 +129,11 @@ final class CapturePipeline {
             return
         }
 
-        // 2. Resolve the active mode by frontmost bundle ID. Falls back to
-        //    `*` wildcard when nothing matches.
+        // 2. Resolve the active mode by frontmost bundle ID + focused field
+        //    snapshot. Falls back to `*` wildcard when nothing matches.
         let bundleID = frontmost.frontmostBundleID()
-        guard let mode = modes.mode(for: bundleID) else {
+        let field = fieldInspector.inspect()
+        guard let mode = modes.mode(for: bundleID, field: field) else {
             return setError("No mode for app '\(bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes.")
         }
         state.debugPipelinePhase = "llm (\(mode.displayName))"

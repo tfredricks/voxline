@@ -165,6 +165,7 @@ final class AppCoordinator {
         // Output
         let injector = ClipboardInjector()
         let frontmost = FrontmostApp()
+        let fieldInspector = AXFocusedFieldInspector()
         self.injector = injector
         self.frontmost = frontmost
 
@@ -175,6 +176,7 @@ final class AppCoordinator {
             llm: llm,
             modes: router,
             frontmost: frontmost,
+            fieldInspector: fieldInspector,
             injector: injector
         )
         self.pipeline = pipeline

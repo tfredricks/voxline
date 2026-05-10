@@ -23,6 +23,7 @@ import Foundation
             llm: FakeLLM(handler: cleanup),
             modes: ModeRouter(modes: [Mode(bundleID: "*", displayName: "Default", prompt: "p", model: nil, temperature: nil)]),
             frontmost: FakeFrontmost(),
+            fieldInspector: FakeFieldInspector(),
             injector: FakeInjector(handler: inject)
         )
         return (p, state, capture)
@@ -106,6 +107,7 @@ import Foundation
             llm: FakeLLM(handler: { t, _ in t }),
             modes: ModeRouter(modes: [Mode(bundleID: "*", displayName: "D", prompt: "p", model: nil, temperature: nil)]),
             frontmost: FakeFrontmost(),
+            fieldInspector: FakeFieldInspector(),
             injector: FakeInjector(handler: { _ in TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified) })
         )
         p.startRecording()
@@ -152,6 +154,10 @@ private final class FakeLLM: LLMServing, @unchecked Sendable {
 
 private struct FakeFrontmost: FrontmostAppProviding {
     func frontmostBundleID() -> String? { "com.example.app" }
+}
+
+private struct FakeFieldInspector: FocusedFieldInspecting {
+    func inspect() -> FocusedField? { nil }
 }
 
 @MainActor

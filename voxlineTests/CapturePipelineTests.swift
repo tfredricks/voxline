@@ -39,6 +39,11 @@ import Foundation
         func frontmostBundleID() -> String? { bundleID }
     }
 
+    final class FakeFieldInspector: FocusedFieldInspecting, @unchecked Sendable {
+        var field: FocusedField?
+        func inspect() -> FocusedField? { field }
+    }
+
     final class FakeInjector: ClipboardInjecting {
         var injected: [String] = []
         var nextError: Error?
@@ -59,27 +64,30 @@ import Foundation
 
     private func makePipeline(
         frontmostBundleID: String? = "com.tinyspeck.slackmacgap",
+        focusedField: FocusedField? = nil,
         modes: [Mode] = [
             Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil),
             Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil)
         ]
-    ) -> (pipe: CapturePipeline, state: AppState, capture: FakeCapture, transcriber: FakeTranscriber, llm: FakeLLM, frontmost: FakeFrontmost, injector: FakeInjector) {
+    ) -> (pipe: CapturePipeline, state: AppState, capture: FakeCapture, transcriber: FakeTranscriber, llm: FakeLLM, frontmost: FakeFrontmost, inspector: FakeFieldInspector, injector: FakeInjector) {
         let state = AppState()
         let capture = FakeCapture()
         let transcriber = FakeTranscriber()
         let llm = FakeLLM()
         let front = FakeFrontmost(); front.bundleID = frontmostBundleID
+        let inspector = FakeFieldInspector(); inspector.field = focusedField
         let injector = FakeInjector()
         let router = ModeRouter(modes: modes)
         let pipe = CapturePipeline(
             state: state, capture: capture, transcriber: transcriber,
-            llm: llm, modes: router, frontmost: front, injector: injector
+            llm: llm, modes: router, frontmost: front,
+            fieldInspector: inspector, injector: injector
         )
-        return (pipe, state, capture, transcriber, llm, front, injector)
+        return (pipe, state, capture, transcriber, llm, front, inspector, injector)
     }
 
     @Test func startRecording_setsStateAndStartsCapture() {
-        let (pipe, state, capture, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
         pipe.startRecording()
         #expect(state.status == .recording)
         #expect(state.recordingStartedAt != nil)
@@ -87,7 +95,7 @@ import Foundation
     }
 
     @Test func finalizeRecording_routesViaModeAndCallsLLMAndPastes() async throws {
-        let (pipe, state, _, transcriber, llm, _, injector) = makePipeline()
+        let (pipe, state, _, transcriber, llm, _, _, injector) = makePipeline()
         transcriber.nextResult = .success("uh hello there")
         llm.nextResult = .success("Hello there.")
         await startAndFinalize(pipe, state: state)
@@ -102,14 +110,32 @@ import Foundation
     }
 
     @Test func unknown_bundleID_falls_back_to_wildcard_mode() async throws {
-        let (pipe, state, _, _, llm, _, _) = makePipeline(frontmostBundleID: "com.unknown.app")
+        let (pipe, state, _, _, llm, _, _, _) = makePipeline(frontmostBundleID: "com.unknown.app")
         await startAndFinalize(pipe, state: state)
         #expect(llm.calls[0].mode.bundleID == "*")
     }
 
+    @Test func focused_field_kind_picks_field_specific_mode() async throws {
+        // Slack + search-field should beat the catch-all Slack mode.
+        let modes: [Mode] = [
+            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack",
+                 prompt: "slack-prompt", model: nil, temperature: nil, fieldKind: nil),
+            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack search",
+                 prompt: "slack-search-prompt", model: nil, temperature: nil, fieldKind: .search),
+            Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt",
+                 model: nil, temperature: nil, fieldKind: nil)
+        ]
+        let (pipe, state, _, _, llm, _, _, _) = makePipeline(
+            focusedField: FocusedField(role: "AXTextField", subrole: "AXSearchField"),
+            modes: modes
+        )
+        await startAndFinalize(pipe, state: state)
+        #expect(llm.calls[0].mode.prompt == "slack-search-prompt")
+    }
+
     @Test func transcriptionFailure_setsErrorStateNoLLMNoPaste() async throws {
         struct StubError: Error {}
-        let (pipe, state, _, transcriber, llm, _, injector) = makePipeline()
+        let (pipe, state, _, transcriber, llm, _, _, injector) = makePipeline()
         transcriber.nextResult = .failure(StubError())
         await startAndFinalize(pipe, state: state)
         if case .error = state.status { } else { Issue.record("expected .error") }
@@ -118,7 +144,7 @@ import Foundation
     }
 
     @Test func empty_transcript_skips_llm_and_paste() async throws {
-        let (pipe, state, _, transcriber, llm, _, injector) = makePipeline()
+        let (pipe, state, _, transcriber, llm, _, _, injector) = makePipeline()
         transcriber.nextResult = .success("")
         await startAndFinalize(pipe, state: state)
         #expect(llm.calls.isEmpty)
@@ -127,7 +153,7 @@ import Foundation
     }
 
     @Test func llm_missingAPIKey_surfacesActionableErrorMessage() async throws {
-        let (pipe, state, _, _, llm, _, _) = makePipeline()
+        let (pipe, state, _, _, llm, _, _, _) = makePipeline()
         llm.nextResult = .failure(LLMError.missingAPIKey)
         await startAndFinalize(pipe, state: state)
         if case .error(let category, let msg) = state.status {
@@ -140,28 +166,28 @@ import Foundation
 
     @Test func paste_failure_setsErrorState() async throws {
         struct StubError: Error {}
-        let (pipe, state, _, _, _, _, injector) = makePipeline()
+        let (pipe, state, _, _, _, _, _, injector) = makePipeline()
         injector.nextError = StubError()
         await startAndFinalize(pipe, state: state)
         if case .error = state.status { } else { Issue.record("expected .error") }
     }
 
     @Test func startRecording_skipsWhenDownloadingModel() {
-        let (pipe, state, capture, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
         state.status = .downloadingModel(progress: 0.3)
         pipe.startRecording()
         #expect(capture.startCallCount == 0)
     }
 
     @Test func startRecording_skipsWhenPreparingModel() {
-        let (pipe, state, capture, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
         state.status = .preparingModel
         pipe.startRecording()
         #expect(capture.startCallCount == 0)
     }
 
     @Test func startRecording_skipsWhenAlreadyRecording() {
-        let (pipe, state, capture, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
         state.status = .recording
         pipe.startRecording()
         #expect(capture.startCallCount == 0)
@@ -171,14 +197,14 @@ import Foundation
         // Reentrancy guard: a second chord (or stray Debug-button call) must
         // not start a fresh recording while the prior pipeline is still
         // awaiting transcribe/llm/paste.
-        let (pipe, state, capture, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
         state.status = .thinking
         pipe.startRecording()
         #expect(capture.startCallCount == 0)
     }
 
     @Test func finalizeRecording_noopWhenNotRecording() async {
-        let (pipe, state, capture, transcriber, llm, _, _) = makePipeline()
+        let (pipe, state, capture, transcriber, llm, _, _, _) = makePipeline()
         state.status = .idle
         await pipe.finalizeRecording()
         #expect(capture.stopCallCount == 0)
@@ -190,7 +216,7 @@ import Foundation
         // Ensure a second finalize call (e.g. from `tapDisabled` arriving after
         // chord-release already triggered the first finalize) doesn't tear
         // down a pipeline mid-flight.
-        let (pipe, state, capture, transcriber, _, _, _) = makePipeline()
+        let (pipe, state, capture, transcriber, _, _, _, _) = makePipeline()
         state.status = .thinking
         await pipe.finalizeRecording()
         #expect(capture.stopCallCount == 0)
@@ -201,7 +227,7 @@ import Foundation
         // Pipeline errors (paste failed, transcription failed, etc.) are
         // user-recoverable by retrying. Pressing the chord again should
         // start a new recording.
-        let (pipe, state, capture, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
         state.status = .error(category: .pipeline, message: "Paste failed.")
         pipe.startRecording()
         #expect(capture.startCallCount == 1)
@@ -213,7 +239,7 @@ import Foundation
         // is uninstalled, the chord literally won't work until the user
         // re-grants permissions, and silently transitioning to .recording
         // would mask that.
-        let (pipe, state, capture, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
         let stickyMessage = "Accessibility revoked. Re-grant in System Settings."
         state.status = .error(category: .permissions, message: stickyMessage)
         pipe.startRecording()

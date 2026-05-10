@@ -37,7 +37,10 @@ final class ModeStore {
         try data.write(to: fileURL, options: .atomic)
     }
 
-    /// Defaults from spec §5.2.
+    /// Shipped defaults. The wildcard `*` mode must remain last so that
+    /// ModeRouter's bundle-exact matches are preferred. Existing users keep
+    /// their persisted modes file — new entries here only reach a clean
+    /// install.
     static let shippedDefaults: [Mode] = [
         Mode(
             bundleID: "com.tinyspeck.slackmacgap",
@@ -47,9 +50,58 @@ final class ModeStore {
             temperature: nil
         ),
         Mode(
+            bundleID: "Cisco-Systems.Spark",
+            displayName: "Webex",
+            prompt: "Concise, casual chat. Strip fillers. No greeting unless dictated.",
+            model: nil,
+            temperature: nil
+        ),
+        Mode(
             bundleID: "com.apple.mail",
             displayName: "Mail",
             prompt: "Format as a professional email body. Punctuate. Preserve meaning.",
+            model: nil,
+            temperature: nil
+        ),
+        Mode(
+            bundleID: "com.microsoft.Outlook",
+            displayName: "Outlook",
+            prompt: "Format as a professional email body. Punctuate. Preserve meaning.",
+            model: nil,
+            temperature: nil
+        ),
+        Mode(
+            bundleID: "com.microsoft.Word",
+            displayName: "Word",
+            prompt: "Format as polished prose. Punctuate. Capitalize sentences. Preserve meaning.",
+            model: nil,
+            temperature: nil
+        ),
+        Mode(
+            bundleID: "com.microsoft.Excel",
+            displayName: "Excel",
+            prompt: "Return concise cell content. Strip fillers. No trailing punctuation unless dictated.",
+            model: nil,
+            temperature: nil
+        ),
+        Mode(
+            bundleID: "com.microsoft.Powerpoint",
+            displayName: "PowerPoint",
+            prompt: "Format as concise slide text. Strip fillers. Keep it tight.",
+            model: nil,
+            temperature: nil
+        ),
+        Mode(
+            bundleID: "com.apple.Terminal",
+            displayName: "Terminal",
+            prompt: "Return as-is. Treat as shell input: no auto-punctuation, no capitalization changes, minimal cleanup.",
+            model: nil,
+            temperature: nil
+        ),
+        Mode(
+            bundleID: "com.microsoft.VSCode",
+            displayName: "VS Code",
+            prompt: "Return as-is, treat as code-adjacent text. Minimal cleanup.",
             model: nil,
             temperature: nil
         ),

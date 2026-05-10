@@ -45,4 +45,22 @@ import Foundation
         #expect(ids.contains("com.apple.mail"))
         #expect(ids.contains("com.todesktop.230313mzl4w4u92"))
     }
+
+    @Test func shipped_defaults_cover_terminal_webex_office_vscode() {
+        let ids = Set(ModeStore.shippedDefaults.map(\.bundleID))
+        #expect(ids.contains("com.apple.Terminal"))
+        #expect(ids.contains("Cisco-Systems.Spark"))
+        #expect(ids.contains("com.microsoft.Word"))
+        #expect(ids.contains("com.microsoft.Excel"))
+        #expect(ids.contains("com.microsoft.Powerpoint"))
+        #expect(ids.contains("com.microsoft.Outlook"))
+        #expect(ids.contains("com.microsoft.VSCode"))
+    }
+
+    @Test func wildcard_default_is_last_so_exact_matches_win() {
+        // ModeRouter scans from the front, so the `*` catch-all must sit at the
+        // end — otherwise a wildcard mode could be returned ahead of an exact
+        // bundle-ID match for any newly-added entry.
+        #expect(ModeStore.shippedDefaults.last?.bundleID == Mode.wildcardBundleID)
+    }
 }

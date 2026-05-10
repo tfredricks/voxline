@@ -17,10 +17,18 @@ protocol Transcribing: AnyObject {
 }
 
 protocol ModeResolving: Sendable {
-    /// Returns the active mode given a frontmost-app bundle ID.
-    /// Implemented by ModeRouter under the hood; the bundle-ID lookup is
-    /// the testable seam.
-    func mode(for bundleID: String?) -> Mode?
+    /// Returns the active mode given a frontmost-app bundle ID and an
+    /// optional focused-field snapshot. Implemented by ModeRouter under the
+    /// hood; the lookup is the testable seam.
+    func mode(for bundleID: String?, field: FocusedField?) -> Mode?
+}
+
+protocol FocusedFieldInspecting: Sendable {
+    /// Snapshot of the focused UI element at the moment of the call, or nil
+    /// if no element is exposed (no Accessibility permission, custom view
+    /// that doesn't publish role info, etc.). Callers fall back to bundle-
+    /// ID-only routing when this returns nil.
+    func inspect() -> FocusedField?
 }
 
 protocol LLMServing: Sendable {

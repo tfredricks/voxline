@@ -14,6 +14,9 @@ struct Mode: Codable, Equatable, Identifiable {
     var prompt: String
     var model: String?
     var temperature: Double?
+    /// nil = matches any focused field for this bundleID. A specific value
+    /// makes this mode win only when the AX inspector reports the same kind.
+    var fieldKind: FieldKind? = nil
 
     /// Convenience initializer for "Add new mode" with sensible defaults.
     static func newDraft(bundleID: String = "", displayName: String = "") -> Mode {
@@ -22,7 +25,8 @@ struct Mode: Codable, Equatable, Identifiable {
             displayName: displayName,
             prompt: "Strip fillers. Punctuate. Preserve the speaker's voice.",
             model: nil,
-            temperature: nil
+            temperature: nil,
+            fieldKind: nil
         )
     }
 }
