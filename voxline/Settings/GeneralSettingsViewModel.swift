@@ -17,7 +17,7 @@ final class GeneralSettingsViewModel {
     var playHotkeySounds: Bool
     var lastError: String?
 
-    var devices: [AudioDevice] = []
+    private(set) var devices: [AudioDevice] = []
 
     private var settings: AppSettings
     private let applier: GeneralSettingsApplier

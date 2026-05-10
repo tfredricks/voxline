@@ -74,6 +74,21 @@ import Foundation
         #expect(rows.contains { $0.uid == "MicA" && !$0.label.contains("disconnected") })
         #expect(rows.allSatisfy { !$0.label.contains("disconnected") || $0.uid != "MicA" })
     }
+
+    @Test func refresh_devices_picks_up_new_enumerator_output() {
+        var nextDevices: [AudioDevice] = []
+        let settings = AppSettings(defaults: defaults())
+        let vm = GeneralSettingsViewModel(
+            settings: settings,
+            applier: NoopApplier(),
+            deviceEnumerator: { nextDevices }
+        )
+        #expect(vm.devices.isEmpty)
+
+        nextDevices = [AudioDevice(uid: "MicNew", name: "New Mic", isDefault: true)]
+        vm.refreshDevices()
+        #expect(vm.devices == [AudioDevice(uid: "MicNew", name: "New Mic", isDefault: true)])
+    }
 }
 
 private struct NoopApplier: GeneralSettingsApplier {
