@@ -105,6 +105,39 @@ import Foundation
         #expect(body["temperature"] as? Double == 0.7)
     }
 
+    @Test func cleanup_prepends_transcription_preamble_to_mode_prompt() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"content":[{"type":"text","text":"c"}]}"#.data(using: .utf8)!,
+            status: 200
+        )
+        var settings = AppSettings(defaults: defaultsSuite())
+        settings.llmProvider = .anthropic
+        let kc = keychain()
+        try kc.set("k", forKey: Keychain.Account.anthropic)
+        defer { try? kc.deleteAll() }
+
+        let service = LLMService(settings: settings, keychain: kc, http: mock)
+        let mode = Mode(
+            bundleID: "*",
+            displayName: "d",
+            prompt: "Concise, casual. Strip fillers.",
+            model: nil,
+            temperature: nil
+        )
+        _ = try await service.cleanup(transcript: "what's the score?", mode: mode)
+
+        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
+        let system = try #require(body["system"] as? String)
+        #expect(system.contains(LLMService.transcriptionPreamble))
+        #expect(system.contains("Concise, casual. Strip fillers."))
+        // Preamble must come before the mode-specific style guidance so the
+        // model reads the role definition first.
+        let preambleRange = try #require(system.range(of: LLMService.transcriptionPreamble))
+        let modeRange = try #require(system.range(of: "Concise, casual. Strip fillers."))
+        #expect(preambleRange.lowerBound < modeRange.lowerBound)
+    }
+
     @Test func empty_transcript_short_circuits_to_empty_without_calling_http() async throws {
         let mock = MockHTTPClient()
         var settings = AppSettings(defaults: defaultsSuite())
