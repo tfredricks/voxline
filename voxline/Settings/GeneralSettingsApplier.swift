@@ -6,6 +6,7 @@ struct GeneralSettingsSnapshot: Equatable {
     let audioInputDeviceUID: String?
     let whisperModel: WhisperModel
     let playHotkeySounds: Bool
+    let provider: LLMProvider
 }
 
 /// Coordinator hook: receive a saved snapshot and apply it to running services.

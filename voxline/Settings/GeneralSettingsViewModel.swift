@@ -15,6 +15,7 @@ final class GeneralSettingsViewModel {
     var audioInputDeviceUID: String? { didSet { if loaded { commit() } } }
     var whisperModel: WhisperModel { didSet { if loaded { commit() } } }
     var playHotkeySounds: Bool { didSet { if loaded { commit() } } }
+    var provider: LLMProvider { didSet { if loaded { commit() } } }
 
     private(set) var devices: [AudioDevice] = []
 
@@ -36,6 +37,7 @@ final class GeneralSettingsViewModel {
         self.audioInputDeviceUID = settings.audioInputDeviceUID
         self.whisperModel = settings.whisperModel
         self.playHotkeySounds = settings.playHotkeySounds
+        self.provider = settings.llmProvider
         self.devices = deviceEnumerator()
         self.loaded = true
         self.deviceListener = AudioDeviceListener { [weak self] in
@@ -68,6 +70,7 @@ final class GeneralSettingsViewModel {
         audioInputDeviceUID = nil
         whisperModel = .default
         playHotkeySounds = true
+        provider = .anthropic
         loaded = true
         commit()
     }
@@ -78,12 +81,14 @@ final class GeneralSettingsViewModel {
         s.audioInputDeviceUID = audioInputDeviceUID
         s.whisperModel = whisperModel
         s.playHotkeySounds = playHotkeySounds
+        s.llmProvider = provider
         settings = s
         applier.apply(GeneralSettingsSnapshot(
             chord: chord,
             audioInputDeviceUID: audioInputDeviceUID,
             whisperModel: whisperModel,
-            playHotkeySounds: playHotkeySounds
+            playHotkeySounds: playHotkeySounds,
+            provider: provider
         ))
     }
 }

@@ -34,6 +34,15 @@ struct GeneralSettingsView: View {
                     .font(.callout)
             }
 
+            Section("Cleanup model") {
+                Picker("Provider", selection: $vm.provider) {
+                    ForEach(LLMProvider.allCases, id: \.self) { p in
+                        Text(p.displayName).tag(p)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Section("Feedback") {
                 Toggle("Play sound on record start/stop", isOn: $vm.playHotkeySounds)
             }

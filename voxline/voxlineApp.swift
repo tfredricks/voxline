@@ -415,6 +415,8 @@ final class AppCoordinator {
 
 extension AppCoordinator: GeneralSettingsApplier {
     func apply(_ snapshot: GeneralSettingsSnapshot) {
+        // snapshot.provider is consumed by LLMService at the next dictation;
+        // no per-snapshot action needed here.
         hotkeyMonitor?.update(chord: snapshot.chord)
 
         // AudioCaptureService applies preferredInputDeviceUID at next start();

@@ -117,6 +117,17 @@ import Foundation
         #expect(applier.applied?.playHotkeySounds == true)
         #expect(applier.applied?.audioInputDeviceUID == nil)
     }
+
+    @Test func provider_change_persists_and_calls_applier() {
+        let d = defaults()
+        let settings = AppSettings(defaults: d)
+        let applier = RecordingApplier()
+        let vm = GeneralSettingsViewModel(settings: settings, applier: applier)
+
+        vm.provider = .openai
+        #expect(applier.applied?.provider == .openai)
+        #expect(AppSettings(defaults: d).llmProvider == .openai)
+    }
 }
 
 private struct NoopApplier: GeneralSettingsApplier {
