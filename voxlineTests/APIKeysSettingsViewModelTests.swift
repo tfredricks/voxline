@@ -58,4 +58,67 @@ import Foundation
         vm.anthropicKey = "x"
         #expect(vm.lastError == nil)
     }
+
+    @Test func test_connection_success_sets_success_for_provider() async throws {
+        let kc = keychain()
+        try kc.set("k", forKey: Keychain.Account.anthropic)
+        defer { try? kc.deleteAll() }
+        let vm = APIKeysSettingsViewModel(
+            keychain: kc,
+            clientFactory: { _, _ in StubClient(mode: .ok) }
+        )
+        // testConnection now reads the live in-memory key (not keychain).
+        vm.anthropicKey = "k"
+        await vm.testConnection(.anthropic)
+        if case .success(let p) = vm.testResult { #expect(p == .anthropic) } else { Issue.record("expected .success(.anthropic), got \(vm.testResult)") }
+    }
+
+    @Test func test_connection_fail_sets_failed_for_provider_with_message() async throws {
+        let kc = keychain()
+        try kc.set("k", forKey: Keychain.Account.openai)
+        defer { try? kc.deleteAll() }
+        let vm = APIKeysSettingsViewModel(
+            keychain: kc,
+            clientFactory: { _, _ in StubClient(mode: .fail(.invalidAPIKey)) }
+        )
+        vm.openaiKey = "k"
+        await vm.testConnection(.openai)
+        if case .failed(let p, let msg) = vm.testResult {
+            #expect(p == .openai)
+            #expect(msg.contains("rejected") || msg.contains("API key"))
+        } else {
+            Issue.record("expected .failed(.openai, _), got \(vm.testResult)")
+        }
+    }
+
+    @Test func test_connection_no_key_sets_failed_without_calling_factory() async throws {
+        let kc = keychain()
+        defer { try? kc.deleteAll() }
+        final class CallCounter { var n = 0 }
+        let counter = CallCounter()
+        let vm = APIKeysSettingsViewModel(
+            keychain: kc,
+            clientFactory: { _, _ in counter.n += 1; return StubClient(mode: .ok) }
+        )
+        // Live key empty (default) → factory should never be called
+        await vm.testConnection(.anthropic)
+        #expect(counter.n == 0)
+        if case .failed(let p, let msg) = vm.testResult {
+            #expect(p == .anthropic)
+            #expect(msg == "No API key set.")
+        } else {
+            Issue.record("expected .failed(.anthropic, \"No API key set.\")")
+        }
+    }
+}
+
+private struct StubClient: LLMClient {
+    enum Mode { case ok, fail(LLMError) }
+    let mode: Mode
+    func cleanup(_ request: LLMRequest) async throws -> String {
+        switch mode {
+        case .ok: return "ok"
+        case .fail(let err): throw err
+        }
+    }
 }
