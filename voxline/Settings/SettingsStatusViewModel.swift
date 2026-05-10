@@ -29,10 +29,10 @@ final class SettingsStatusViewModel {
     var providerChipShowsCheck: Bool { providerKeySaved }
 
     var micChipText: String {
-        guard let row = general.deviceRows.first(where: { $0.uid == general.audioInputDeviceUID }) else {
-            return "System default mic"
-        }
-        return row.label
+        general.deviceRows
+            .first(where: { $0.uid == general.audioInputDeviceUID })?
+            .label
+            ?? "System default"
     }
 
     var modelChipText: String {
@@ -49,6 +49,8 @@ final class SettingsStatusViewModel {
         case .anthropic: live = keys.anthropicKey.trimmingCharacters(in: .whitespacesAndNewlines)
         case .openai:    live = keys.openaiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         }
+        // isPersisted returns true when both live and saved are empty (empty == empty),
+        // so the !live.isEmpty guard is needed to distinguish "key not set" from "key saved".
         return !live.isEmpty && keys.isPersisted(general.provider)
     }
 
@@ -57,6 +59,9 @@ final class SettingsStatusViewModel {
     }
 
     private var micPresent: Bool {
-        !general.devices.isEmpty || general.audioInputDeviceUID == nil
+        if let uid = general.audioInputDeviceUID {
+            return general.devices.contains(where: { $0.uid == uid })
+        }
+        return !general.devices.isEmpty
     }
 }

@@ -75,6 +75,34 @@ import Foundation
         defer { try? f.kc.deleteAll() }
         #expect(f.status.micChipText.contains("Studio Mic"))
     }
+
+    @Test func setup_needed_when_saved_mic_uid_is_disconnected() throws {
+        // Saved UID points to a device that isn't in the current device list.
+        let f = try makeFixtures(deviceUID: "ghost-uid")
+        defer { try? f.kc.deleteAll() }
+        #expect(f.status.isReady == false)
+    }
+
+    @Test func setup_needed_when_no_devices_and_no_uid() throws {
+        let kc = keychain()
+        try kc.set("sk-ant-good", forKey: Keychain.Account.anthropic)
+        defer { try? kc.deleteAll() }
+        var settings = AppSettings(defaults: defaults())
+        settings.audioInputDeviceUID = nil
+        settings.llmProvider = .anthropic
+        let general = GeneralSettingsViewModel(
+            settings: settings,
+            applier: NoopApplier(),
+            deviceEnumerator: { [] }   // no mics at all
+        )
+        let keys = APIKeysSettingsViewModel(keychain: kc)
+        let status = SettingsStatusViewModel(
+            general: general,
+            keys: keys,
+            isModelCached: { _ in true }
+        )
+        #expect(status.isReady == false)
+    }
 }
 
 private struct NoopApplier: GeneralSettingsApplier {
