@@ -19,7 +19,7 @@ final class WizardViewModel {
         keychain: Keychain = Keychain()
     ) {
         self.settings = settings
-        self.apiKeyVM = APIKeysSettingsViewModel(settings: settings, keychain: keychain)
+        self.apiKeyVM = APIKeysSettingsViewModel(keychain: keychain)
     }
 
     var canAdvance: Bool { currentStep.next != nil }

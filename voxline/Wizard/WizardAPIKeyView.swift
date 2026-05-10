@@ -3,79 +3,47 @@ import SwiftUI
 
 struct WizardAPIKeyView: View {
     @Bindable var vm: APIKeysSettingsViewModel
-    @State private var testResult: TestResult = .untested
-    @State private var testing = false
-
-    enum TestResult: Equatable { case untested, success, failed(String) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Choose a provider").font(.title.bold())
-            Text("voxline uses your own API key for the LLM cleanup step. Pick a provider and paste a key.")
+            Text("Set up API keys").font(.title.bold())
+            Text("voxline uses your own API key for the LLM cleanup step. Paste a key for the provider you want to use.")
                 .foregroundStyle(.secondary)
 
-            Picker("Provider", selection: $vm.provider) {
-                ForEach(LLMProvider.allCases, id: \.self) { p in
-                    Text(p.displayName).tag(p)
-                }
+            LabeledContent("Anthropic") {
+                SecureField("API key", text: $vm.anthropicKey).textContentType(.password)
             }
-            .pickerStyle(.segmented)
 
-            if vm.provider == .anthropic {
-                SecureField("Anthropic API key", text: $vm.anthropicKey).textContentType(.password)
-            } else {
-                SecureField("OpenAI API key", text: $vm.openaiKey).textContentType(.password)
+            LabeledContent("OpenAI") {
+                SecureField("API key", text: $vm.openaiKey).textContentType(.password)
             }
 
             HStack {
-                Button("Test connection") { Task { await runTest() } }
-                    .disabled(testing || activeKey.isEmpty)
-                if testing { ProgressView().controlSize(.small) }
+                Button("Test Anthropic") { Task { await vm.testConnection(.anthropic) } }
+                    .disabled(vm.testing != nil || vm.anthropicKey.isEmpty)
+                Button("Test OpenAI") { Task { await vm.testConnection(.openai) } }
+                    .disabled(vm.testing != nil || vm.openaiKey.isEmpty)
+                if vm.testing != nil { ProgressView().controlSize(.small) }
                 Spacer()
-                resultView
+                testResultView
+            }
+
+            if let err = vm.lastError {
+                Text(err).foregroundStyle(.red).font(.callout)
             }
         }
         .padding(40)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var activeKey: String {
-        vm.provider == .anthropic ? vm.anthropicKey : vm.openaiKey
-    }
-
     @ViewBuilder
-    private var resultView: some View {
-        switch testResult {
+    private var testResultView: some View {
+        switch vm.testResult {
         case .untested: EmptyView()
-        case .success: Label("Connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-        case .failed(let msg): Label(msg, systemImage: "xmark.circle.fill").foregroundStyle(.red).font(.callout)
-        }
-    }
-
-    private func runTest() async {
-        testing = true
-        defer { testing = false }
-        do {
-            try vm.save() // persists key first so client can read it
-            let request = LLMRequest(
-                model: vm.provider.defaultModel,
-                systemPrompt: "Return the word 'ok' and nothing else.",
-                userPrompt: "ping",
-                temperature: 0
-            )
-            let client: any LLMClient
-            switch vm.provider {
-            case .anthropic:
-                client = AnthropicClient(apiKey: vm.anthropicKey)
-            case .openai:
-                client = OpenAIClient(apiKey: vm.openaiKey)
-            }
-            _ = try await client.cleanup(request)
-            testResult = .success
-        } catch let err as LLMError {
-            testResult = .failed(err.errorDescription ?? "Failed")
-        } catch {
-            testResult = .failed(error.localizedDescription)
+        case .success(let p):
+            Label("\(p.displayName) connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+        case .failed(_, let msg):
+            Label(msg, systemImage: "xmark.circle.fill").foregroundStyle(.red).font(.callout)
         }
     }
 }

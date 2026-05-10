@@ -2,22 +2,18 @@ import SwiftUI
 
 struct APIKeysSettingsView: View {
 
-    @State private var vm = APIKeysSettingsViewModel()
+    @State private var vm: APIKeysSettingsViewModel
+
+    init(vm: APIKeysSettingsViewModel) {
+        _vm = State(wrappedValue: vm)
+    }
 
     var body: some View {
         Form {
-            Picker("Provider", selection: $vm.provider) {
-                ForEach(LLMProvider.allCases, id: \.self) { p in
-                    Text(p.displayName).tag(p)
-                }
-            }
-            .pickerStyle(.segmented)
-
             Section("Anthropic") {
                 SecureField("API key", text: $vm.anthropicKey)
                     .textContentType(.password)
             }
-
             Section("OpenAI") {
                 SecureField("API key", text: $vm.openaiKey)
                     .textContentType(.password)
@@ -25,51 +21,41 @@ struct APIKeysSettingsView: View {
 
             HStack {
                 Spacer()
-                Button("Save") { saveWithErrorBanner() }
-                    .keyboardShortcut(.defaultAction)
+                Button("Save") {
+                    vm.commitAnthropic()
+                    vm.commitOpenAI()
+                }
+                .keyboardShortcut(.defaultAction)
             }
 
             HStack {
-                Button("Test connection") { Task { await vm.testConnection() } }
-                    .disabled(vm.testing || activeKey.isEmpty)
-                if vm.testing { ProgressView().controlSize(.small) }
+                Button("Test Anthropic") { Task { await vm.testConnection(.anthropic) } }
+                    .disabled(vm.testing != nil || vm.anthropicKey.isEmpty)
+                Button("Test OpenAI") { Task { await vm.testConnection(.openai) } }
+                    .disabled(vm.testing != nil || vm.openaiKey.isEmpty)
+                if vm.testing != nil { ProgressView().controlSize(.small) }
                 Spacer()
                 testResultLabel
             }
 
             if let err = vm.lastError {
-                Text(err)
-                    .foregroundStyle(.red)
-                    .font(.callout)
+                Text(err).foregroundStyle(.red).font(.callout)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 360)
-    }
-
-    private var activeKey: String {
-        vm.provider == .anthropic ? vm.anthropicKey : vm.openaiKey
+        .frame(minWidth: 480, idealWidth: 540, minHeight: 320, idealHeight: 380)
     }
 
     @ViewBuilder
     private var testResultLabel: some View {
         switch vm.testResult {
         case .untested: EmptyView()
-        case .success: Label("Connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-        case .failed(let msg): Label(msg, systemImage: "xmark.circle.fill").foregroundStyle(.red).font(.callout)
+        case .success(let p):
+            Label("\(p.displayName) connected", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green).font(.callout)
+        case .failed(_, let msg):
+            Label(msg, systemImage: "xmark.circle.fill")
+                .foregroundStyle(.red).font(.callout)
         }
     }
-
-    private func saveWithErrorBanner() {
-        do {
-            try vm.save()
-            vm.lastError = nil
-        } catch {
-            vm.lastError = "Save failed: \(error.localizedDescription)"
-        }
-    }
-}
-
-#Preview {
-    APIKeysSettingsView()
 }

@@ -14,49 +14,54 @@ import Foundation
         Keychain(service: "com.voxline.voxline.test.\(UUID().uuidString)")
     }
 
-    @Test func loads_existing_keys_and_provider_on_init() throws {
-        let defaults = defaultsSuite()
-        var settings = AppSettings(defaults: defaults)
-        settings.llmProvider = .openai
-        let kc = keychain()
-        try kc.set("a-key", forKey: Keychain.Account.anthropic)
-        try kc.set("o-key", forKey: Keychain.Account.openai)
-        defer { try? kc.deleteAll() }
-
-        let vm = APIKeysSettingsViewModel(settings: settings, keychain: kc)
-        #expect(vm.provider == .openai)
-        #expect(vm.anthropicKey == "a-key")
-        #expect(vm.openaiKey == "o-key")
-    }
-
-    @Test func save_persists_provider_and_keys() throws {
-        let defaults = defaultsSuite()
-        let settings = AppSettings(defaults: defaults)
+    @Test func commit_anthropic_persists_only_anthropic_and_trims() throws {
         let kc = keychain()
         defer { try? kc.deleteAll() }
-
-        let vm = APIKeysSettingsViewModel(settings: settings, keychain: kc)
-        vm.provider = .openai
-        vm.anthropicKey = "new-a"
-        vm.openaiKey = "new-o"
-        try vm.save()
-
-        #expect(AppSettings(defaults: defaults).llmProvider == .openai)
-        #expect(try kc.string(forKey: Keychain.Account.anthropic) == "new-a")
-        #expect(try kc.string(forKey: Keychain.Account.openai) == "new-o")
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        vm.anthropicKey = "  sk-ant-123\n "
+        vm.openaiKey    = "should-not-write"
+        vm.commitAnthropic()
+        #expect(try kc.string(forKey: Keychain.Account.anthropic) == "sk-ant-123")
+        #expect(try kc.string(forKey: Keychain.Account.openai) == nil)
     }
 
-    @Test func save_with_empty_key_deletes_keychain_entry() throws {
-        let defaults = defaultsSuite()
-        let settings = AppSettings(defaults: defaults)
+    @Test func commit_openai_persists_only_openai_and_trims() throws {
+        let kc = keychain()
+        defer { try? kc.deleteAll() }
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        vm.openaiKey = "\tsk-openai-xyz \n"
+        vm.commitOpenAI()
+        #expect(try kc.string(forKey: Keychain.Account.openai) == "sk-openai-xyz")
+    }
+
+    @Test func empty_commit_deletes_keychain_entry() throws {
         let kc = keychain()
         try kc.set("preexisting", forKey: Keychain.Account.anthropic)
         defer { try? kc.deleteAll() }
-
-        let vm = APIKeysSettingsViewModel(settings: settings, keychain: kc)
-        vm.anthropicKey = ""   // Cleared by user
-        try vm.save()
-
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        vm.anthropicKey = "   "
+        vm.commitAnthropic()
         #expect(try kc.string(forKey: Keychain.Account.anthropic) == nil)
+    }
+
+    @Test func test_result_resets_when_relevant_key_changes() {
+        let vm = APIKeysSettingsViewModel(keychain: keychain())
+        vm.testResult = .success(.anthropic)
+        vm.anthropicKey = "new-key"
+        #expect(vm.testResult == .untested)
+    }
+
+    @Test func test_result_for_other_provider_persists_when_unrelated_key_changes() {
+        let vm = APIKeysSettingsViewModel(keychain: keychain())
+        vm.testResult = .success(.anthropic)
+        vm.openaiKey = "new-openai-key"
+        #expect(vm.testResult == .success(.anthropic))
+    }
+
+    @Test func last_error_clears_when_any_key_changes() {
+        let vm = APIKeysSettingsViewModel(keychain: keychain())
+        vm.lastError = "Save failed: keychain unavailable"
+        vm.anthropicKey = "x"
+        #expect(vm.lastError == nil)
     }
 }
