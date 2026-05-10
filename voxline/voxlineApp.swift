@@ -25,8 +25,7 @@ struct voxlineApp: App {
 
         Settings {
             SettingsView(
-                generalVM: GeneralSettingsViewModel(applier: delegate.coordinator),
-                modesVM: ModesSettingsViewModel(applier: delegate.coordinator)
+                generalVM: GeneralSettingsViewModel(applier: delegate.coordinator)
             )
             .environment(delegate.appState)
         }
@@ -410,17 +409,6 @@ final class AppCoordinator {
     deinit {
         permissionPollTimer?.invalidate()
         modelPrepTask?.cancel()
-    }
-}
-
-extension AppCoordinator: ModesApplier {
-    func apply(modes: [Mode]) {
-        // ModeRouter is a value type stored on the coordinator; rebuild it.
-        self.modes = ModeRouter(modes: modes)
-        // CapturePipeline holds its own reference to ModeRouter; update it too.
-        if let router = self.modes {
-            pipeline?.modes = router
-        }
     }
 }
 
