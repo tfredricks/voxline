@@ -16,7 +16,7 @@ import Testing
     }
 
     @Test func iconForError() {
-        #expect(MenuBarIcon.symbolName(for: .error("anything")) == "mic.slash")
+        #expect(MenuBarIcon.symbolName(for: .error(category: .pipeline, message: "anything")) == "mic.slash")
     }
 
     @Test func iconForDownloadingModel() {

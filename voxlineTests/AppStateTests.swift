@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import voxline
 
-@Suite struct AppStateTests {
+@Suite @MainActor struct AppStateTests {
 
     @Test func newStateStartsIdle() {
         let state = AppState()
@@ -15,8 +15,8 @@ import Foundation
         #expect(state.status == .recording)
         state.status = .thinking
         #expect(state.status == .thinking)
-        state.status = .error("mic unavailable")
-        #expect(state.status == .error("mic unavailable"))
+        state.status = .error(category: .pipeline, message: "mic unavailable")
+        #expect(state.status == .error(category: .pipeline, message: "mic unavailable"))
         state.status = .idle
         #expect(state.status == .idle)
     }
@@ -55,6 +55,8 @@ import Foundation
         #expect(!AppStatus.idle.blocksRecording)
         #expect(!AppStatus.recording.blocksRecording)
         #expect(!AppStatus.thinking.blocksRecording)
-        #expect(!AppStatus.error("oops").blocksRecording)
+        #expect(!AppStatus.error(category: .pipeline, message: "oops").blocksRecording)
+        #expect(!AppStatus.error(category: .permissions, message: "oops").blocksRecording)
+        #expect(!AppStatus.error(category: .modelPrep, message: "oops").blocksRecording)
     }
 }

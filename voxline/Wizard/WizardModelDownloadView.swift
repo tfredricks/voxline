@@ -12,7 +12,7 @@ struct WizardModelDownloadView: View {
             Text("\(model.displayName) — about \(model.approxSizeMB) MB. Runs entirely on your Mac; audio never leaves the device.")
                 .foregroundStyle(.secondary)
 
-            if case .error(let message) = state.status {
+            if case .error(_, let message) = state.status {
                 VStack(alignment: .leading, spacing: 8) {
                     Label(message, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)

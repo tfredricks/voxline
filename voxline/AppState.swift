@@ -1,6 +1,25 @@
 import Foundation
 import Observation
 
+/// Distinguishes who set the current error so consumers can decide whether
+/// to clear it. Without this tag, the AppCoordinator's reconcile loop
+/// clobbered transient pipeline errors when permissions came back, and a
+/// chord-press silently cleared a sticky permissions banner. Adding the
+/// category keeps each owner responsible for clearing only its own errors.
+enum AppErrorCategory: Equatable {
+    /// Hotkey accessibility / Input Monitoring revoked, or first-launch
+    /// permissions not yet granted. Sticky until permissions are restored.
+    /// Cleared by AppCoordinator's reconcile loop when the tap installs.
+    case permissions
+    /// Transient dictation failure (audio capture, transcription, LLM,
+    /// paste, mode-missing, silent-mic). Cleared by the next chord press
+    /// (the user retrying).
+    case pipeline
+    /// Whisper model download or prewarm failure. Cleared by the next
+    /// successful prep run.
+    case modelPrep
+}
+
 enum AppStatus: Equatable {
     case idle
     case recording
@@ -10,7 +29,7 @@ enum AppStatus: Equatable {
     /// Model files are on disk but Core ML / Apple Neural Engine is still
     /// compiling them. The first run after download can take 30s-2min.
     case preparingModel
-    case error(String)
+    case error(category: AppErrorCategory, message: String)
 
     /// Recording is blocked until the model is fully ready.
     var blocksRecording: Bool {
@@ -22,6 +41,7 @@ enum AppStatus: Equatable {
 }
 
 @Observable
+@MainActor
 final class AppState {
     var status: AppStatus = .idle
     var hotkeyEnabled: Bool = true

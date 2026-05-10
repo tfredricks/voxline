@@ -11,7 +11,7 @@ struct MenuBarContent: View {
     var openDebugWindow: () -> Void = {}
 
     var body: some View {
-        if case .error(let message) = state.status {
+        if case .error(_, let message) = state.status {
             Text(message)
                 .foregroundStyle(.red)
             Divider()
@@ -34,9 +34,15 @@ struct MenuBarContent: View {
         }
         .keyboardShortcut(",")
 
+        // Debug window exposes the most recent raw and cleaned dictation
+        // text in copyable form. Acceptable in development builds; in
+        // release it would let any screenshot/screen-recording leak the
+        // last dictation, which can include passwords or 2FA codes the
+        // user spoke aloud.
+        #if DEBUG
         Divider()
-
         Button("Debug…") { openDebugWindow() }
+        #endif
 
         Divider()
 

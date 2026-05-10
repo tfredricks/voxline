@@ -129,7 +129,8 @@ import Foundation
         let (pipe, state, _, _, llm, _, _) = makePipeline()
         llm.nextResult = .failure(LLMError.missingAPIKey)
         await startAndFinalize(pipe, state: state)
-        if case .error(let msg) = state.status {
+        if case .error(let category, let msg) = state.status {
+            #expect(category == .pipeline)
             #expect(msg.contains("Settings"))
         } else {
             Issue.record("expected .error")
@@ -193,5 +194,29 @@ import Foundation
         await pipe.finalizeRecording()
         #expect(capture.stopCallCount == 0)
         #expect(transcriber.transcribeCallCount == 0)
+    }
+
+    @Test func startRecording_afterPipelineError_proceeds() {
+        // Pipeline errors (paste failed, transcription failed, etc.) are
+        // user-recoverable by retrying. Pressing the chord again should
+        // start a new recording.
+        let (pipe, state, capture, _, _, _, _) = makePipeline()
+        state.status = .error(category: .pipeline, message: "Paste failed.")
+        pipe.startRecording()
+        #expect(capture.startCallCount == 1)
+        #expect(state.status == .recording)
+    }
+
+    @Test func startRecording_afterPermissionsError_isSticky() {
+        // Permissions errors must NOT be cleared by a chord press: the tap
+        // is uninstalled, the chord literally won't work until the user
+        // re-grants permissions, and silently transitioning to .recording
+        // would mask that.
+        let (pipe, state, capture, _, _, _, _) = makePipeline()
+        let stickyMessage = "Accessibility revoked. Re-grant in System Settings."
+        state.status = .error(category: .permissions, message: stickyMessage)
+        pipe.startRecording()
+        #expect(capture.startCallCount == 0)
+        #expect(state.status == .error(category: .permissions, message: stickyMessage))
     }
 }

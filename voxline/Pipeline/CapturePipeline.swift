@@ -54,8 +54,14 @@ final class CapturePipeline {
         // the entire await chain in finalizeRecording — `state.status` is set
         // to `.thinking` synchronously before any await, so a second call
         // landing on MainActor sees it.
+        //
+        // Permissions errors are sticky: clearing them on a chord-press
+        // would mask a real "tap is uninstalled" condition. Pipeline and
+        // modelPrep errors are clearable by the user retrying.
         switch state.status {
         case .recording, .thinking, .downloadingModel, .preparingModel:
+            return
+        case .error(.permissions, _):
             return
         case .idle, .error:
             break
@@ -63,15 +69,19 @@ final class CapturePipeline {
         do {
             try capture.start()
         } catch {
-            state.status = .error("Audio capture failed: \(error.localizedDescription)")
-            state.recordingStartedAt = nil
-            state.audioLevel = 0
+            setError("Audio capture failed: \(error.localizedDescription)")
             return
         }
         state.recordingStartedAt = Date()
         state.audioLevel = 0
         state.debugLastPeakLevel = 0
         state.debugLastTapCallbackCount = 0
+        // Scrub the prior dictation's text so it doesn't linger in process
+        // memory (and the Debug window) for the lifetime of the app. Spoken
+        // content can include passwords / 2FA codes / private notes; not a
+        // hard secret leak, but a defensible-by-default hygiene measure.
+        state.lastTranscript = nil
+        state.lastCleanedText = nil
         state.status = .recording
     }
 
@@ -153,8 +163,8 @@ final class CapturePipeline {
         state.debugPipelinePhase = "idle"
     }
 
-    private func setError(_ message: String) {
-        state.status = .error(message)
+    private func setError(_ message: String, category: AppErrorCategory = .pipeline) {
+        state.status = .error(category: category, message: message)
         state.recordingStartedAt = nil
         state.audioLevel = 0
         state.debugPipelinePhase = "error"

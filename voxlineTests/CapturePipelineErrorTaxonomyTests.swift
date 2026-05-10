@@ -37,16 +37,17 @@ import Foundation
     @Test func missing_api_key_surfaces_actionable_error() async {
         let (p, state, _) = pipeline(cleanup: { _, _ in throw LLMError.missingAPIKey })
         await runOnce(p, state)
-        guard case .error(let msg) = state.status else {
+        guard case .error(let category, let msg) = state.status else {
             Issue.record("Expected .error status, got \(state.status)"); return
         }
+        #expect(category == .pipeline)
         #expect(msg.contains("Settings → API Keys"))
     }
 
     @Test func invalid_api_key_says_so() async {
         let (p, state, _) = pipeline(cleanup: { _, _ in throw LLMError.invalidAPIKey })
         await runOnce(p, state)
-        guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
+        guard case .error(_, let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("rejected"))
     }
 
@@ -54,7 +55,7 @@ import Foundation
         struct NetErr: Error {}
         let (p, state, _) = pipeline(cleanup: { _, _ in throw LLMError.network(NetErr()) })
         await runOnce(p, state)
-        guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
+        guard case .error(_, let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("network"))
     }
 
@@ -62,7 +63,7 @@ import Foundation
         struct TranscribeFail: Error {}
         let (p, state, _) = pipeline(transcribe: { _ in throw TranscribeFail() })
         await runOnce(p, state)
-        guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
+        guard case .error(_, let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("transcription"))
     }
 
@@ -70,7 +71,7 @@ import Foundation
         struct PasteFail: Error {}
         let (p, state, _) = pipeline(inject: { _ in throw PasteFail() })
         await runOnce(p, state)
-        guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
+        guard case .error(_, let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("paste"))
     }
 
@@ -99,7 +100,7 @@ import Foundation
         // onLevel callback never gets a non-zero value.
         state.debugLastPeakLevel = 0
         await p.finalizeRecording()
-        guard case .error(let msg) = state.status else {
+        guard case .error(_, let msg) = state.status else {
             Issue.record("Expected .error, got \(state.status)"); return
         }
         #expect(msg.lowercased().contains("microphone"))

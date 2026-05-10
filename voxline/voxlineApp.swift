@@ -70,7 +70,16 @@ final class AppCoordinator {
     private var pillWindow: RecordingPillWindow?
     private var downloadWindow: ModelDownloadWindow?
     private var modelPrepTask: Task<Void, Never>?
+    /// Monotonic identity for the current modelPrepTask. The inner Task
+    /// captures this value at start; the tail clears `modelPrepTask` only
+    /// if its captured token still matches, preventing a late-completing
+    /// task from clobbering its successor's registration.
+    private var modelPrepTaskToken: UInt64 = 0
     private var didStart = false
+    /// Held weakly so a settings-driven model swap can route status updates
+    /// through the same `AppState` the launch path is using. The AppDelegate
+    /// keeps both this coordinator and the state alive for the app lifetime.
+    private weak var appState: AppState?
     /// Single 1s timer that reconciles `hotkeyEnabled` + permission state with
     /// the tap's installed/uninstalled status. Replaces the three separate
     /// timers (retry, revocation watchdog, enabled observer) that used to race
@@ -81,6 +90,7 @@ final class AppCoordinator {
     func startIfNeeded(state: AppState) {
         guard !didStart else { return }
         didStart = true
+        self.appState = state
 
         let settings = AppSettings()
         if !settings.hasCompletedFirstRun {
@@ -247,7 +257,7 @@ final class AppCoordinator {
             // running process, so the reconcile loop polls until AX/IM are
             // granted and then installs the tap. The user does NOT need to
             // restart the app.
-            state.status = .error("Hotkey monitoring requires Accessibility AND Input Monitoring permission. Grant both in System Settings → Privacy & Security — voxline will pick them up automatically.")
+            state.status = .error(category: .permissions, message: "Hotkey monitoring requires Accessibility AND Input Monitoring permission. Grant both in System Settings → Privacy & Security — voxline will pick them up automatically.")
         }
 
         startPermissionAndStateLoop(state: state)
@@ -288,7 +298,12 @@ final class AppCoordinator {
         if shouldBeInstalled && !isInstalled {
             do {
                 try monitor.start()
-                if case .error = state.status { state.status = .idle }
+                // Clear only the permissions banner that this loop owns.
+                // A pipeline or modelPrep error in flight is unrelated to
+                // tap installation and must not be silently dismissed.
+                if case .error(.permissions, _) = state.status {
+                    state.status = .idle
+                }
             } catch {
                 // tapCreate can lag behind AXIsProcessTrusted; retry next tick.
             }
@@ -297,7 +312,7 @@ final class AppCoordinator {
             // Distinguish user-initiated pause from involuntary revocation —
             // only the latter deserves an error banner.
             if state.hotkeyEnabled && !permissionsOK {
-                state.status = .error("Accessibility or Input Monitoring permission was revoked. Re-grant it in System Settings → Privacy & Security; voxline will recover automatically.")
+                state.status = .error(category: .permissions, message: "Accessibility or Input Monitoring permission was revoked. Re-grant it in System Settings → Privacy & Security; voxline will recover automatically.")
             }
         }
     }
@@ -343,6 +358,19 @@ final class AppCoordinator {
         managesDownloadWindow: Bool
     ) {
         modelPrepTask?.cancel()
+        modelPrepTaskToken &+= 1
+        let myToken = modelPrepTaskToken
+        // When the caller passes `state`, this task takes ownership of
+        // `state.status` for its duration. Reset it to match what's about
+        // to happen so a stale value (e.g. an inherited
+        // `.downloadingModel(progress: 0.37)` from a cancelled launch task
+        // after a settings-driven model swap) doesn't surface as a frozen
+        // progress bar at the old percentage.
+        if let state {
+            state.status = TranscriptionService.isModelCached(transcriber.model)
+                ? .preparingModel
+                : .downloadingModel(progress: 0)
+        }
         modelPrepTask = Task { @MainActor [weak self, weak state, weak transcriber] in
             guard let transcriber else { return }
             do {
@@ -372,14 +400,20 @@ final class AppCoordinator {
                 return
             } catch {
                 if let state {
-                    state.status = .error("Model setup failed: \(error.localizedDescription). Try Retry or relaunch voxline.")
+                    state.status = .error(category: .modelPrep, message: "Model setup failed: \(error.localizedDescription). Try Retry or relaunch voxline.")
                 }
                 if managesDownloadWindow {
                     self?.downloadWindow?.close()
                     self?.downloadWindow = nil
                 }
             }
-            self?.modelPrepTask = nil
+            // Only clear modelPrepTask if no newer task has replaced us.
+            // Without this guard, a late-finishing prior task would null
+            // out the successor's registration, leaving it unreachable
+            // for cancel().
+            if self?.modelPrepTaskToken == myToken {
+                self?.modelPrepTask = nil
+            }
         }
     }
 
@@ -416,11 +450,18 @@ extension AppCoordinator: GeneralSettingsApplier {
         // mid-download swaps cancel cleanly.
         if let transcriber, transcriber.model != snapshot.whisperModel {
             transcriber.model = snapshot.whisperModel
-            // Settings-driven swap: no download window — the launch flow already
-            // dismissed it, and re-showing it during normal app use is jarring.
-            // The user gets a quiet background swap; failure is visible via the
-            // menu-bar status indicator.
-            runModelPrepTask(state: nil, transcriber: transcriber, managesDownloadWindow: false)
+            // If the launch-path download is still on screen (window not yet
+            // dismissed), the new task must take over its state + window
+            // ownership. Otherwise the download window would be orphaned and
+            // state.status would freeze at the old model's progress
+            // percentage. After the launch flow has completed, do a quiet
+            // background swap with no UI.
+            let inheritsLaunchUI = (downloadWindow != nil)
+            runModelPrepTask(
+                state: inheritsLaunchUI ? appState : nil,
+                transcriber: transcriber,
+                managesDownloadWindow: inheritsLaunchUI
+            )
         }
     }
 }

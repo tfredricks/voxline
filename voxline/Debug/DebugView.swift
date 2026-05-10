@@ -146,7 +146,7 @@ struct DebugView: View {
                         try coordinator.hotkeyMonitor?.start()
                         state.debugLastTestResult = "Tap reinstalled"
                     } catch {
-                        state.debugLastTestResult = "Reinstall failed: \(error)"
+                        state.debugLastTestResult = "Reinstall failed: \(error.localizedDescription)"
                     }
                 }
             }
@@ -225,7 +225,7 @@ struct DebugView: View {
             try await injector.inject(stamp)
             state.debugLastTestResult = "Paste completed: \(stamp)"
         } catch {
-            state.debugLastTestResult = "Paste failed: \(error)"
+            state.debugLastTestResult = "Paste failed: \(error.localizedDescription)"
         }
     }
 
@@ -243,7 +243,11 @@ struct DebugView: View {
             let cleaned = try await llm.cleanup(transcript: "hello world", mode: mode)
             state.debugLastTestResult = "LLM ok (\(mode.displayName)) → \(cleaned)"
         } catch {
-            state.debugLastTestResult = "LLM failed (\(mode.displayName)): \(error)"
+            // Use localizedDescription rather than `\(error)`: the latter prints
+            // the LLMError case literal, which for .badStatus includes the
+            // response body — providers (Anthropic, OpenAI) echo the offending
+            // API key prefix in 401 bodies.
+            state.debugLastTestResult = "LLM failed (\(mode.displayName)): \(error.localizedDescription)"
         }
     }
 
@@ -262,7 +266,7 @@ struct DebugView: View {
             let dt = Date().timeIntervalSince(start)
             state.debugLastTestResult = "Transcribe ok in \(String(format: "%.2f", dt))s → '\(text)'"
         } catch {
-            state.debugLastTestResult = "Transcribe failed: \(error)"
+            state.debugLastTestResult = "Transcribe failed: \(error.localizedDescription)"
         }
     }
 
@@ -275,7 +279,7 @@ struct DebugView: View {
         case .thinking: return "thinking"
         case .preparingModel: return "preparingModel"
         case .downloadingModel(let p): return "downloadingModel(\(Int(p * 100))%)"
-        case .error(let msg): return "error: \(msg)"
+        case .error(let category, let msg): return "error[\(category)]: \(msg)"
         }
     }
 
