@@ -127,17 +127,16 @@ enum AudioDeviceEnumerator {
 /// etc.). The listener block is detached automatically on deinit.
 final class AudioDeviceListener {
 
-    private var address = AudioObjectPropertyAddress(
-        mSelector: kAudioHardwarePropertyDevices,
-        mScope: kAudioObjectPropertyScopeGlobal,
-        mElement: kAudioObjectPropertyElementMain
-    )
+    // Stored as `let` so the same block instance is passed to both Add and Remove — CoreAudio matches listeners by block identity.
     private let block: AudioObjectPropertyListenerBlock
 
     init(onChange: @escaping () -> Void) {
-        // Capture the handler before storing so the block we add is the same
-        // instance we later remove. CoreAudio matches listeners by block id.
-        self.block = { _, _ in DispatchQueue.main.async { onChange() } }
+        self.block = { _, _ in onChange() }
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
         AudioObjectAddPropertyListenerBlock(
             AudioObjectID(kAudioObjectSystemObject),
             &address,
@@ -147,6 +146,11 @@ final class AudioDeviceListener {
     }
 
     deinit {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
         AudioObjectRemovePropertyListenerBlock(
             AudioObjectID(kAudioObjectSystemObject),
             &address,

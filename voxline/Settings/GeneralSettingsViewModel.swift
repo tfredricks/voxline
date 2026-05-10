@@ -38,7 +38,7 @@ final class GeneralSettingsViewModel {
         self.playHotkeySounds = settings.playHotkeySounds
         self.devices = deviceEnumerator()
         self.deviceListener = AudioDeviceListener { [weak self] in
-            Task { @MainActor in self?.refreshDevices() }
+            MainActor.assumeIsolated { self?.refreshDevices() }
         }
     }
 

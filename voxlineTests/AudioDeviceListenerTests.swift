@@ -13,6 +13,6 @@ import Foundation
             let listener = AudioDeviceListener { fired += 1 }
             _ = listener   // silence "unused" — we want it alive in the scope
         }
-        #expect(fired >= 0)   // sanity: no crash
+        #expect(fired == 0)   // no spurious callback at install or teardown
     }
 }
