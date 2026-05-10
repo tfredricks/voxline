@@ -94,15 +94,18 @@ struct APIKeysSettingsView: View {
                 .buttonStyle(.borderless)
                 .help(revealed.wrappedValue ? "Hide key" : "Reveal key")
 
-                statusPill(for: provider, value: key.wrappedValue)
+                statusPill(
+                    saved: vm.isPersisted(provider),
+                    empty: key.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
             }
 
             HStack(spacing: 8) {
                 Link("Get a key →", destination: getKeyURL)
                     .font(.callout)
                 Spacer()
-                if !key.wrappedValue.isEmpty,
-                   !key.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix(expectedPrefix) {
+                let trimmedKey = key.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedKey.isEmpty, !trimmedKey.hasPrefix(expectedPrefix) {
                     Label("Expected prefix \(expectedPrefix)", systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
                         .font(.callout)
@@ -112,11 +115,10 @@ struct APIKeysSettingsView: View {
     }
 
     @ViewBuilder
-    private func statusPill(for provider: LLMProvider, value: String) -> some View {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
+    private func statusPill(saved: Bool, empty: Bool) -> some View {
+        if empty {
             EmptyView()
-        } else if vm.isPersisted(provider) {
+        } else if saved {
             Text("Saved")
                 .font(.caption)
                 .padding(.horizontal, 6).padding(.vertical, 2)
