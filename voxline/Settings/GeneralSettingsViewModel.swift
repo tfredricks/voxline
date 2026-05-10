@@ -8,6 +8,7 @@ final class GeneralSettingsViewModel {
     var chord: HotkeyChord
     var audioInputDeviceUID: String?
     var whisperModel: WhisperModel
+    var playHotkeySounds: Bool
     var lastError: String?
 
     private var settings: AppSettings
@@ -19,6 +20,7 @@ final class GeneralSettingsViewModel {
         self.chord = settings.hotkeyChord
         self.audioInputDeviceUID = settings.audioInputDeviceUID
         self.whisperModel = settings.whisperModel
+        self.playHotkeySounds = settings.playHotkeySounds
     }
 
     func save() throws {
@@ -26,11 +28,13 @@ final class GeneralSettingsViewModel {
         s.hotkeyChord = chord
         s.audioInputDeviceUID = audioInputDeviceUID
         s.whisperModel = whisperModel
+        s.playHotkeySounds = playHotkeySounds
         settings = s
         applier.apply(GeneralSettingsSnapshot(
             chord: chord,
             audioInputDeviceUID: audioInputDeviceUID,
-            whisperModel: whisperModel
+            whisperModel: whisperModel,
+            playHotkeySounds: playHotkeySounds
         ))
     }
 }

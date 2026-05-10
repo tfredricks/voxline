@@ -36,6 +36,10 @@ struct GeneralSettingsView: View {
                     .font(.callout)
             }
 
+            Section("Sounds") {
+                Toggle("Play sound on record start/stop", isOn: $vm.playHotkeySounds)
+            }
+
             HStack {
                 Spacer()
                 Button("Save") { saveWithErrorBanner() }

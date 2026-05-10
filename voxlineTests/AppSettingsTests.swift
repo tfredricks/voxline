@@ -90,4 +90,18 @@ import Foundation
         s.hasCompletedFirstRun = true
         #expect(AppSettings(defaults: d).hasCompletedFirstRun == true)
     }
+
+    @Test func play_hotkey_sounds_defaults_to_true_when_unset() {
+        let d = makeDefaults()
+        #expect(AppSettings(defaults: d).playHotkeySounds == true)
+    }
+
+    @Test func play_hotkey_sounds_round_trips_true_and_false() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.playHotkeySounds = false
+        #expect(AppSettings(defaults: d).playHotkeySounds == false)
+        s.playHotkeySounds = true
+        #expect(AppSettings(defaults: d).playHotkeySounds == true)
+    }
 }

@@ -11,6 +11,7 @@ struct AppSettings {
         static let audioInputDeviceUID = "voxline.audio.inputDeviceUID"
         static let whisperModel = "voxline.whisper.model"
         static let hasCompletedFirstRun = "voxline.firstRun.completed"
+        static let playHotkeySounds = "voxline.sounds.hotkey"
     }
 
     let defaults: UserDefaults
@@ -83,5 +84,15 @@ struct AppSettings {
     var hasCompletedFirstRun: Bool {
         get { defaults.bool(forKey: Key.hasCompletedFirstRun) }
         set { defaults.set(newValue, forKey: Key.hasCompletedFirstRun) }
+    }
+
+    /// Audible feedback on hotkey press/release. Defaults to true when unset
+    /// so existing users get sounds on next launch without an explicit migration.
+    var playHotkeySounds: Bool {
+        get {
+            guard defaults.object(forKey: Key.playHotkeySounds) != nil else { return true }
+            return defaults.bool(forKey: Key.playHotkeySounds)
+        }
+        set { defaults.set(newValue, forKey: Key.playHotkeySounds) }
     }
 }

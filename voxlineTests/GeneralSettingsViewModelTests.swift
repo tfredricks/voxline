@@ -15,11 +15,13 @@ import Foundation
         settings.hotkeyChord = chord
         settings.audioInputDeviceUID = "MyMic"
         settings.whisperModel = .smallEn
+        settings.playHotkeySounds = false
 
         let vm = GeneralSettingsViewModel(settings: settings, applier: NoopApplier())
         #expect(vm.chord == chord)
         #expect(vm.audioInputDeviceUID == "MyMic")
         #expect(vm.whisperModel == .smallEn)
+        #expect(vm.playHotkeySounds == false)
     }
 
     @Test func save_persists_and_calls_applier() throws {
@@ -32,16 +34,19 @@ import Foundation
         vm.chord = chord
         vm.audioInputDeviceUID = "NewMic"
         vm.whisperModel = .smallEn
+        vm.playHotkeySounds = false
         try vm.save()
 
         let reread = AppSettings(defaults: d)
         #expect(reread.hotkeyChord == chord)
         #expect(reread.audioInputDeviceUID == "NewMic")
         #expect(reread.whisperModel == .smallEn)
+        #expect(reread.playHotkeySounds == false)
 
         #expect(applier.applied?.chord == chord)
         #expect(applier.applied?.audioInputDeviceUID == "NewMic")
         #expect(applier.applied?.whisperModel == .smallEn)
+        #expect(applier.applied?.playHotkeySounds == false)
     }
 }
 

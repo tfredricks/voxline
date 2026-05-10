@@ -66,6 +66,7 @@ final class AppCoordinator {
     var injector: ClipboardInjector?
     var frontmost: FrontmostApp?
     var capture: AudioCaptureService?
+    var soundPlayer: HotkeySoundPlayer?
 
     private var pillWindow: RecordingPillWindow?
     private var downloadWindow: ModelDownloadWindow?
@@ -141,6 +142,7 @@ final class AppCoordinator {
     private func buildServices(state: AppState, settings: AppSettings) {
         let capture = AudioCaptureService()
         self.capture = capture
+        self.soundPlayer = HotkeySoundPlayer(settings: settings)
         let transcriber = TranscriptionService()
         self.transcriber = transcriber
 
@@ -190,10 +192,12 @@ final class AppCoordinator {
         let monitor = HotkeyMonitor()
         monitor.chord = settings.hotkeyChord
         monitor.onStartRecording = { [weak self, weak state] in
+            self?.soundPlayer?.playStart()
             self?.pipeline?.startRecording()
             if let state { self?.pillWindow?.updateVisibility(state: state) }
         }
         monitor.onFinalizeRecording = { [weak self, weak state] in
+            self?.soundPlayer?.playStop()
             Task { @MainActor in
                 await self?.pipeline?.finalizeRecording()
                 self?.hotkeyMonitor?.recordingFinished()
