@@ -42,21 +42,15 @@ struct APIKeysSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(minWidth: 480, idealWidth: 540, minHeight: 320, idealHeight: 380)
-        .onChange(of: focused) { previous, _ in
-            // Field just lost focus — persist its current value.
-            switch previous {
-            case .anthropic: vm.commitAnthropic()
-            case .openai:    vm.commitOpenAI()
-            case .none:      break
-            }
-        }
-        .onDisappear {
-            // Settings window closing while a field is still focused: commit.
-            switch focused {
-            case .anthropic: vm.commitAnthropic()
-            case .openai:    vm.commitOpenAI()
-            case .none:      break
-            }
+        .onChange(of: focused) { previous, _ in commit(previous) }
+        .onDisappear { commit(focused) }
+    }
+
+    private func commit(_ field: Field?) {
+        switch field {
+        case .anthropic: vm.commitAnthropic()
+        case .openai:    vm.commitOpenAI()
+        case .none:      break
         }
     }
 
