@@ -24,7 +24,7 @@ import Foundation
         #expect(vm.playHotkeySounds == false)
     }
 
-    @Test func save_persists_and_calls_applier() throws {
+    @Test func save_persists_and_calls_applier() {
         let d = defaults()
         let settings = AppSettings(defaults: d)
         let applier = RecordingApplier()
@@ -35,7 +35,7 @@ import Foundation
         vm.audioInputDeviceUID = "NewMic"
         vm.whisperModel = .smallEn
         vm.playHotkeySounds = false
-        try vm.save()
+        vm.save()
 
         let reread = AppSettings(defaults: d)
         #expect(reread.hotkeyChord == chord)

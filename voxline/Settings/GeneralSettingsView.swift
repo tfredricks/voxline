@@ -31,7 +31,7 @@ struct GeneralSettingsView: View {
                         Text(m.displayName).tag(m)
                     }
                 }
-                Text("Switching downloads the new model on next launch (~\(vm.whisperModel.approxSizeMB) MB).")
+                Text("Switching downloads the new model now (~\(vm.whisperModel.approxSizeMB) MB).")
                     .foregroundStyle(.secondary)
                     .font(.callout)
             }
@@ -62,11 +62,7 @@ struct GeneralSettingsView: View {
     }
 
     private func saveWithErrorBanner() {
-        do {
-            try vm.save()
-            vm.lastError = nil
-        } catch {
-            vm.lastError = "Save failed: \(error.localizedDescription)"
-        }
+        vm.save()
+        vm.lastError = nil
     }
 }

@@ -23,7 +23,7 @@ final class GeneralSettingsViewModel {
         self.playHotkeySounds = settings.playHotkeySounds
     }
 
-    func save() throws {
+    func save() {
         var s = settings
         s.hotkeyChord = chord
         s.audioInputDeviceUID = audioInputDeviceUID
