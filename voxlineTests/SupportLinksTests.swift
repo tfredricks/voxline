@@ -17,7 +17,10 @@ import Foundation
             micDevice: "MacBook Pro Microphone"
         )
         let url = SupportLinks.bugReportURL(env: env)
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            Issue.record("Failed to parse URL components from \(url)")
+            return
+        }
         #expect(components.host == "github.com")
         #expect(components.path == "/tfredricks/voxline/issues/new")
         let query = components.queryItems ?? []
