@@ -215,6 +215,11 @@ final class AppCoordinator {
         self.injector = injector
         self.frontmost = frontmost
 
+        let contextCapture = DefaultContextCaptureService(
+            frontmost: frontmost,
+            fieldInspector: fieldInspector
+        )
+
         let pipeline = CapturePipeline(
             state: state,
             capture: capture,
@@ -224,7 +229,8 @@ final class AppCoordinator {
             frontmost: frontmost,
             fieldInspector: fieldInspector,
             injector: injector,
-            historyStore: historyStore
+            historyStore: historyStore,
+            contextCapture: contextCapture
         )
         self.pipeline = pipeline
 
