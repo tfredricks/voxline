@@ -66,11 +66,14 @@ final class APIKeysSettingsViewModel {
             testResult = .failed(provider, "No API key set.")
             return
         }
+        // temperature stays nil: gpt-5 reasoning models reject any non-default
+        // temperature, and we want the Test path to exercise the same request
+        // shape as real cleanup (shipped modes use temperature: nil).
         let request = LLMRequest(
             model: provider.defaultModel,
             systemPrompt: "Return the word 'ok' and nothing else.",
             userPrompt: "ping",
-            temperature: 0
+            temperature: nil
         )
         do {
             _ = try await clientFactory(provider, key).cleanup(request)

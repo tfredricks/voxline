@@ -19,9 +19,12 @@ struct OpenAIClient: LLMClient {
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
 
+        // gpt-5 reasoning models reject `max_tokens` on chat completions and
+        // require `max_completion_tokens`. The newer field is also accepted by
+        // older models (gpt-4.1, gpt-4o, ...), so we always send it.
         var body: [String: Any] = [
             "model": request.model,
-            "max_tokens": request.maxOutputTokens,
+            "max_completion_tokens": request.maxOutputTokens,
             "messages": [
                 ["role": "system", "content": request.systemPrompt],
                 ["role": "user", "content": request.userPrompt]
