@@ -78,24 +78,23 @@ final class WindowVisibilityCoordinator {
         observers = [visibleObserver, closeObserver]
     }
 
-    /// SwiftUI's `Settings` scene constructs its own `NSWindow`, so we tag it
-    /// after `openSettings()` runs. We can't rely on `NSApp.keyWindow` because
-    /// `.accessory` apps don't always have a key window — instead, snapshot
-    /// `NSApp.windows` before opening and look for the newly-appeared titled
-    /// window after a short delay, retrying because SwiftUI's materialization
-    /// time varies on first vs. subsequent shows.
+    /// SwiftUI's `Settings` scene constructs its own `NSWindow` and may
+    /// pre-create it lazily-but-eagerly (definitely after the first open).
+    /// Snapshotting `NSApp.windows` doesn't work because the window may
+    /// already be in the list. `NSApp.keyWindow` also doesn't work when
+    /// the app is in `.accessory` policy. Match by title instead: SwiftUI
+    /// names the window "<AppName> Settings" or "Settings" on macOS 14+.
     func tagSettingsWindowAfterOpen() {
-        let priorWindowIDs = Set(NSApp.windows.map(ObjectIdentifier.init))
         Task { @MainActor [weak self] in
             for delayMs in [60, 120, 200, 400] {
                 try? await Task.sleep(for: .milliseconds(delayMs))
                 guard let self else { return }
                 let candidate = NSApp.windows.first { w in
-                    !priorWindowIDs.contains(ObjectIdentifier(w))
+                    w.identifier != WindowVisibilityCoordinator.dockworthyIdentifier
                         && w.styleMask.contains(.titled)
                         && !w.styleMask.contains(.borderless)
-                        && w.identifier != WindowVisibilityCoordinator.dockworthyIdentifier
                         && w.isVisible
+                        && (w.title == "Settings" || w.title.hasSuffix(" Settings"))
                 }
                 if let w = candidate {
                     w.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
