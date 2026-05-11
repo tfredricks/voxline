@@ -18,7 +18,12 @@ struct RecordingPillView: View {
                 Text("Transcribing…")
                     .font(.system(size: 11, weight: .medium, design: .rounded))
             default:
-                EmptyView()
+                if let toast = state.toastMessage {
+                    Text(toast)
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                } else {
+                    EmptyView()
+                }
             }
         }
         .padding(.horizontal, 12)

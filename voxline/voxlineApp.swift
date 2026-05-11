@@ -295,6 +295,7 @@ final class AppCoordinator {
             state.status = .error(category: .permissions, message: "Hotkey monitoring requires Accessibility AND Input Monitoring permission. Grant both in System Settings → Privacy & Security — Voxline will pick them up automatically.")
         }
 
+        observeToastChanges(state: state)
         startPermissionAndStateLoop(state: state)
     }
 
@@ -363,6 +364,22 @@ final class AppCoordinator {
                 guard let self, let state else { return }
                 self.reconcileTapWithPermissionsAndEnabled(state: state)
                 self.observeHotkeyEnabledChanges(state: state)
+            }
+        }
+    }
+
+    /// Re-runs `pillWindow.updateVisibility` whenever `state.toastMessage`
+    /// changes, so a history-row click that sets a "Copied" toast pops the
+    /// pill open (and clears it on the next change, which is the auto-nil
+    /// after 1.2s).
+    private func observeToastChanges(state: AppState) {
+        withObservationTracking {
+            _ = state.toastMessage
+        } onChange: { [weak self, weak state] in
+            Task { @MainActor in
+                guard let self, let state else { return }
+                self.pillWindow?.updateVisibility(state: state)
+                self.observeToastChanges(state: state)
             }
         }
     }

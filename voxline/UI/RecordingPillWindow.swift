@@ -40,13 +40,19 @@ final class RecordingPillWindow {
 
     func updateVisibility(state: AppState) {
         guard let panel else { return }
-        switch state.status {
-        case .recording, .thinking:
+        let recordingOrThinking: Bool = {
+            switch state.status {
+            case .recording, .thinking: return true
+            default: return false
+            }
+        }()
+        let hasToast = (state.toastMessage != nil)
+        if recordingOrThinking || hasToast {
             if !panel.isVisible {
                 repositionNearMouse(panel: panel)
                 panel.orderFrontRegardless()
             }
-        default:
+        } else {
             panel.orderOut(nil)
         }
     }
