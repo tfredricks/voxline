@@ -1,6 +1,19 @@
 import Foundation
 import WhisperKit
 
+/// Errors thrown by transcription prep paths that warrant a tailored
+/// user-facing message instead of the raw WhisperKit error.
+enum TranscriptionPrepError: LocalizedError {
+    case insufficientDiskSpace(model: WhisperModel, requiredMB: Int, availableMB: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .insufficientDiskSpace(let model, let required, let available):
+            return "Not enough disk space to download \(model.displayName). Need about \(required) MB free; only \(available) MB available. Free up space and try again."
+        }
+    }
+}
+
 /// Wraps WhisperKit. The active model can be pre-downloaded via prepareModel(),
 /// pre-loaded via prewarm(), or lazy-loaded on first transcribe() call.
 @MainActor
@@ -50,10 +63,39 @@ final class TranscriptionService {
         cachedModelFolder(for: model) != nil
     }
 
+    /// Headroom (MB) added to the raw model size when checking free space.
+    /// Covers transient staging/extraction during download.
+    private static let diskSpaceHeadroomMB = 500
+
+    /// Throws `TranscriptionPrepError.insufficientDiskSpace` if the volume
+    /// hosting the Hub cache can't fit the model plus a safety margin.
+    /// Silently passes when capacity can't be read — the download itself
+    /// will surface a clearer error if space truly runs out, and we don't
+    /// want a filesystem-API edge case to block users.
+    static func preflightDiskSpace(for model: WhisperModel) throws {
+        let requiredMB = model.approxSizeMB + diskSpaceHeadroomMB
+        let requiredBytes = Int64(requiredMB) * 1_048_576
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return
+        }
+        let values = try? docs.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        guard let available = values?.volumeAvailableCapacityForImportantUsage else {
+            return
+        }
+        if available < requiredBytes {
+            throw TranscriptionPrepError.insufficientDiskSpace(
+                model: model,
+                requiredMB: requiredMB,
+                availableMB: Int(available / 1_048_576)
+            )
+        }
+    }
+
     /// Download the model if not already cached, reporting progress in [0, 1].
     /// Idempotent: returns immediately if the model is already cached.
     func prepareModel(progressHandler: @escaping @Sendable (Double) -> Void) async throws {
         if Self.isModelCached(model) { return }
+        try Self.preflightDiskSpace(for: model)
         _ = try await WhisperKit.download(
             variant: model.whisperKitIdentifier,
             from: "argmaxinc/whisperkit-coreml"
