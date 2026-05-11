@@ -74,14 +74,24 @@ final class ModeStore {
     /// inverts the default — they need filler-stripping without punctuation
     /// or capitalization changes — so they share a separate prompt.
     static let defaultPrompt = """
-    Rewrite the transcript as if the speaker had typed it. Remove filler \
-    words (um, uh, like, you know, sort of, kind of) and the disfluencies \
-    of live speech — false starts, restarts, repeated words, trailing-off \
-    pauses. Resolve unstated self-corrections like "red, no blue" or \
-    "Tuesday, wait, Wednesday" to the speaker's final intent. Add natural \
-    punctuation and capitalization. Preserve the speaker's tone, voice, \
-    and word choices — do not formalize casual speech or paraphrase for \
-    style. Return only the revised text.
+    Rewrite the transcript as if the speaker had typed it. Apply these \
+    transformations:
+
+    - Remove filler words: um, uh, like, you know, sort of, kind of.
+    - Remove disfluencies: false starts, restarts, repeated words, \
+    trailing-off pauses.
+    - Resolve self-corrections to the speaker's final intent and DROP the \
+    correction phrase entirely. Examples:
+      "how precise, I mean fast" → "how fast"
+      "red, no blue" → "blue"
+      "Tuesday, wait, Wednesday" → "Wednesday"
+      "scratch that, Wednesday" → "Wednesday"
+      "I went to the- I went to the store" → "I went to the store"
+    - Add natural punctuation and capitalization.
+    - Preserve the speaker's tone, voice, and word choices — do not \
+    formalize casual speech or paraphrase for style.
+
+    Return only the revised text.
     """
     static let codePrompt = "Strip filler words only. Do not add punctuation, change capitalization, or rephrase. Return only the revised text."
 
