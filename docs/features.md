@@ -19,3 +19,4 @@
 17. [ ] **Prompt/template presets** — Lets users save reusable output formats like "client email," "meeting note," "GitHub issue," "daily journal," or "technical explanation."
 18. [x] **Configurable hotkeys and behavior** — Custom push-to-talk shortcut, microphone selection, and LLM cleanup provider/model selection.
 19. [x] **Visible status and feedback** — Shows when the app is listening, processing, inserting text, or waiting for correction.
+20. [ ] **Local LLM for cleanup tasks** - Install, manage, and use a local LLM for privacy first usage. The transcription and cleanup all happens on the local machine.
