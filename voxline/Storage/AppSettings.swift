@@ -95,4 +95,5 @@ struct AppSettings {
         }
         set { defaults.set(newValue, forKey: Key.playHotkeySounds) }
     }
+
 }

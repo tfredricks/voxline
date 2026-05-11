@@ -23,10 +23,11 @@ import Foundation
         #expect(FileManager.default.fileExists(atPath: store.fileURL.path))
     }
 
-    @Test func save_then_load_round_trip() throws {
+    @Test func save_then_load_round_trip_for_custom_mode() throws {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }
 
+        // Custom modes (unknown bundle IDs) pass through reconcile untouched.
         let custom = [
             Mode(bundleID: "com.apple.notes", displayName: "Notes", prompt: "casual", model: nil, temperature: nil)
         ]
@@ -62,5 +63,72 @@ import Foundation
         // end — otherwise a wildcard mode could be returned ahead of an exact
         // bundle-ID match for any newly-added entry.
         #expect(ModeStore.shippedDefaults.last?.bundleID == Mode.wildcardBundleID)
+    }
+
+    // MARK: - reconcileShippedPrompts
+
+    @Test func reconcile_overwrites_prompts_for_shipped_bundle_ids() {
+        // User's modes.json has stale prompts (old wording) but correct
+        // bundle IDs. Reconcile replaces them with the current shipped prompts
+        // regardless of what was there.
+        let stale = [
+            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack",
+                 prompt: "anything stale",
+                 model: nil, temperature: nil),
+            Mode(bundleID: "com.apple.Terminal", displayName: "Terminal",
+                 prompt: "also stale, even custom",
+                 model: nil, temperature: nil),
+            Mode(bundleID: Mode.wildcardBundleID, displayName: "Default",
+                 prompt: "stale wildcard",
+                 model: nil, temperature: nil),
+        ]
+        let reconciled = ModeStore.reconcileShippedPrompts(stale)
+
+        #expect(reconciled.first { $0.bundleID == "com.tinyspeck.slackmacgap" }?.prompt == ModeStore.defaultPrompt)
+        #expect(reconciled.first { $0.bundleID == "com.apple.Terminal" }?.prompt == ModeStore.codePrompt)
+        #expect(reconciled.first { $0.bundleID == Mode.wildcardBundleID }?.prompt == ModeStore.defaultPrompt)
+    }
+
+    @Test func reconcile_preserves_per_mode_overrides_for_shipped_apps() {
+        // Only the prompt is replaced. displayName, model, temperature stay
+        // exactly as the user had them.
+        let userTuned = [
+            Mode(bundleID: "com.apple.mail", displayName: "My Mail",
+                 prompt: "stale", model: "gpt-5-mini", temperature: 0.4),
+        ]
+        let reconciled = ModeStore.reconcileShippedPrompts(userTuned)
+        let mail = try! #require(reconciled.first)
+        #expect(mail.prompt == ModeStore.defaultPrompt)
+        #expect(mail.displayName == "My Mail")
+        #expect(mail.model == "gpt-5-mini")
+        #expect(mail.temperature == 0.4)
+    }
+
+    @Test func reconcile_leaves_unknown_bundle_ids_alone() {
+        let custom = [
+            Mode(bundleID: "com.example.MyApp", displayName: "MyApp",
+                 prompt: "anything goes", model: nil, temperature: nil),
+        ]
+        #expect(ModeStore.reconcileShippedPrompts(custom) == custom)
+    }
+
+    @Test func load_rewrites_disk_when_prompts_drift() throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // Seed with stale prompts.
+        let stale = [
+            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack",
+                 prompt: "old wording", model: nil, temperature: nil),
+        ]
+        try store.save(stale)
+
+        let loaded = try store.load()
+        #expect(loaded.first?.prompt == ModeStore.defaultPrompt)
+
+        // Reload from disk via a fresh store to prove the rewrite persisted.
+        let fresh = ModeStore(fileURL: store.fileURL)
+        let again = try fresh.load()
+        #expect(again.first?.prompt == ModeStore.defaultPrompt)
     }
 }
