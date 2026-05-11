@@ -75,6 +75,19 @@ Models download on first use via [WhisperKit](https://github.com/argmaxinc/Whisp
 
 Why cloud cleanup instead of a local model? Because the gap between a frontier LLM and what fits on a laptop is still enormous for prose quality. voxline's bet: trust on-device for the audio (which is sensitive), and let you pick best-in-class for the cleanup (which only sees a transcript). You decide which provider.
 
+## Requirements
+
+| | |
+|---|---|
+| **macOS** | 14 (Sonoma) or later |
+| **Mac** | Apple Silicon — M1, M2, M3, M4, or any variant. Intel Macs are **not** supported. |
+| **RAM** | 8 GB minimum, 16 GB recommended (the default `large-v3-turbo` model is happier with headroom) |
+| **Disk** | ~2 GB free for speech models (`large-v3-turbo` ~1.5 GB, `small.en` ~466 MB). Models cache inside the app container. |
+| **Network** | Required on first launch to download the Whisper model, and at runtime for AI cleanup. Pure transcription works offline once the model is cached. |
+| **Microphone** | Any input device macOS recognizes (built-in mic is fine). |
+
+Apple Silicon is non-negotiable: voxline runs Whisper on the Apple Neural Engine via WhisperKit, and there is no ANE on Intel Macs.
+
 ## Getting started
 
 voxline doesn't ship a signed release yet. Build from source:
