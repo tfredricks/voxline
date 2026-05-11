@@ -79,21 +79,29 @@ final class WindowVisibilityCoordinator {
     }
 
     /// SwiftUI's `Settings` scene constructs its own `NSWindow`, so we tag it
-    /// after `openSettings()` runs. Polled briefly because the window may not
-    /// yet be `keyWindow` at the moment the menu item handler runs.
+    /// after `openSettings()` runs. We can't rely on `NSApp.keyWindow` because
+    /// `.accessory` apps don't always have a key window — instead, snapshot
+    /// `NSApp.windows` before opening and look for the newly-appeared titled
+    /// window after a short delay, retrying because SwiftUI's materialization
+    /// time varies on first vs. subsequent shows.
     func tagSettingsWindowAfterOpen() {
+        let priorWindowIDs = Set(NSApp.windows.map(ObjectIdentifier.init))
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(80))
-            guard let self else { return }
-            // Find the most likely Settings window: a key/main, titled, non-borderless
-            // window that isn't already tagged dockworthy.
-            let candidate = NSApp.keyWindow ?? NSApp.mainWindow
-            if let w = candidate,
-               w.identifier != WindowVisibilityCoordinator.dockworthyIdentifier,
-               w.styleMask.contains(.titled),
-               !w.styleMask.contains(.borderless) {
-                w.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
-                if w.isVisible { self.insert(w) }
+            for delayMs in [60, 120, 200, 400] {
+                try? await Task.sleep(for: .milliseconds(delayMs))
+                guard let self else { return }
+                let candidate = NSApp.windows.first { w in
+                    !priorWindowIDs.contains(ObjectIdentifier(w))
+                        && w.styleMask.contains(.titled)
+                        && !w.styleMask.contains(.borderless)
+                        && w.identifier != WindowVisibilityCoordinator.dockworthyIdentifier
+                        && w.isVisible
+                }
+                if let w = candidate {
+                    w.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
+                    self.insert(w)
+                    return
+                }
             }
         }
     }
