@@ -81,40 +81,27 @@ final class WindowVisibilityCoordinator {
     /// SwiftUI's `Settings` scene constructs its own `NSWindow` and may
     /// pre-create it before our snapshot, so we can't rely on
     /// "newly appeared." `NSApp.keyWindow` also doesn't work when the app
-    /// is `.accessory`. Match permissively (any titled, non-borderless,
-    /// visible, untagged window) and rely on the fact that other voxline
-    /// windows are either pre-tagged dockworthy (About/Wizard/Debug) or
-    /// borderless (recording pill).
-    ///
-    /// Temporary diagnostic logging — remove once we've confirmed which
-    /// window matches in practice.
+    /// is `.accessory`. Match permissively (any titled, visible, untagged
+    /// window) and rely on the fact that other voxline windows are either
+    /// pre-tagged dockworthy (About/Wizard/Debug) or borderless
+    /// (recording pill).
     func tagSettingsWindowAfterOpen() {
         Task { @MainActor [weak self] in
             for delayMs in [60, 120, 200, 400, 800] {
                 try? await Task.sleep(for: .milliseconds(delayMs))
                 guard let self else { return }
 
-                print("[WVC] poll @\(delayMs)ms — \(NSApp.windows.count) windows in NSApp.windows:")
-                for w in NSApp.windows {
-                    let tag = w.identifier?.rawValue ?? "(none)"
-                    let className = String(describing: type(of: w))
-                    print("  - title=\"\(w.title)\" class=\(className) styleMask=\(w.styleMask.rawValue) visible=\(w.isVisible) tag=\(tag)")
-                }
-
                 let candidate = NSApp.windows.first { w in
                     w.identifier != WindowVisibilityCoordinator.dockworthyIdentifier
                         && w.styleMask.contains(.titled)
-                        && !w.styleMask.contains(.borderless)
                         && w.isVisible
                 }
                 if let w = candidate {
-                    print("[WVC] tagging \"\(w.title)\" — \(String(describing: type(of: w)))")
                     w.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
                     self.insert(w)
                     return
                 }
             }
-            print("[WVC] gave up — no titled non-borderless visible untagged window found")
         }
     }
 

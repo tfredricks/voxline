@@ -49,7 +49,7 @@ struct HotkeyChord: Codable, Equatable {
     let modifierA: Modifier
     let modifierB: Modifier
 
-    static let `default` = HotkeyChord(modifierA: .leftControl, modifierB: .leftOption)
+    static let `default` = HotkeyChord(modifierA: .rightCommand, modifierB: .rightOption)
 
     var displayName: String { "\(modifierA.displayName) + \(modifierB.displayName)" }
 
@@ -61,7 +61,7 @@ struct HotkeyChord: Codable, Equatable {
         let isOption:  (Modifier) -> Bool = { $0 == .leftOption  || $0 == .rightOption }
         let isCtrlOpt = (isControl(a) && isOption(b)) || (isOption(a) && isControl(b))
         if isCtrlOpt {
-            return "This chord matches the VoiceOver modifier (Ctrl+Option). If VoiceOver is on, hold-to-talk may conflict."
+            return "This hotkey matches the VoiceOver modifier (Ctrl+Option). If VoiceOver is on, hold-to-talk may conflict."
         }
         return nil
     }

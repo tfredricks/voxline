@@ -27,7 +27,7 @@ struct WizardPermissionsView: View {
 
             permissionRow(
                 title: "Accessibility",
-                detail: "To listen for the hold-to-talk chord and paste cleaned text.",
+                detail: "To listen for the hold-to-talk hotkey and paste cleaned text.",
                 status: ax,
                 grantLabel: "Open System Settings",
                 action: openAccessibilitySettings
@@ -35,7 +35,7 @@ struct WizardPermissionsView: View {
 
             permissionRow(
                 title: "Input Monitoring",
-                detail: "Required for the chord to work outside voxline itself.",
+                detail: "Required for the hotkey to work outside voxline itself.",
                 status: im,
                 grantLabel: "Grant",
                 action: { im = perms.requestInputMonitoring() }

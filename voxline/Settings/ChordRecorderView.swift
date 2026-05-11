@@ -25,7 +25,7 @@ struct ChordRecorderView: View {
                         .foregroundStyle(.secondary)
                     Button("Cancel") { stop() }
                 } else {
-                    Button("Record chord…") { start() }
+                    Button("Record hotkey…") { start() }
                 }
             }
             if let hint = unsupportedHint {
