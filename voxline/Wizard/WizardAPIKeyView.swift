@@ -7,7 +7,7 @@ struct WizardAPIKeyView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Set up API keys").font(.title.bold())
-            Text("voxline uses your own API key for the LLM cleanup step. Paste a key for the provider you want to use.")
+            Text("Voxline uses your own API key for the LLM cleanup step. Paste a key for the provider you want to use.")
                 .foregroundStyle(.secondary)
 
             LabeledContent("Anthropic") {

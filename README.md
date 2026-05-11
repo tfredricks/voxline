@@ -71,7 +71,7 @@ Models download on first use via [WhisperKit](https://github.com/argmaxinc/Whisp
 | Provider | Default model | Where to get a key |
 |---|---|---|
 | **Anthropic** | claude-haiku-4-5 | https://console.anthropic.com/settings/keys |
-| OpenAI | gpt-4.1-mini | https://platform.openai.com/api-keys |
+| OpenAI | gpt-4.1-nano | https://platform.openai.com/api-keys |
 
 Why cloud cleanup instead of a local model? Because the gap between a frontier LLM and what fits on a laptop is still enormous for prose quality. voxline's bet: trust on-device for the audio (which is sensitive), and let you pick best-in-class for the cleanup (which only sees a transcript). You decide which provider.
 

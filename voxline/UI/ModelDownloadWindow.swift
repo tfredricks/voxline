@@ -23,7 +23,7 @@ final class ModelDownloadWindow {
             backing: .buffered,
             defer: false
         )
-        win.title = "Preparing voxline"
+        win.title = "Preparing Voxline"
         win.contentView = host
         win.center()
         win.isReleasedWhenClosed = false
@@ -80,7 +80,7 @@ struct ModelDownloadView: View {
         if isPreparing {
             return "Compiling for Apple Neural Engine. This can take up to a minute on first launch — subsequent launches are fast."
         }
-        return "One-time download (~1.5 GB) used to transcribe your voice. voxline can stay open while it completes."
+        return "One-time download (~1.5 GB) used to transcribe your voice. Voxline can stay open while it completes."
     }
 
     private var progress: Double {

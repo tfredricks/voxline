@@ -44,7 +44,19 @@ final class WizardViewModel {
 
     func complete() {
         commitKeys()
+        // After a reset wipes the sandbox container, `llmProvider` defaults to
+        // .anthropic. If the user only filled in the OpenAI key (or vice
+        // versa), the menu bar would otherwise error with "No API key
+        // configured" because LLMService looks up the wrong provider's key.
+        // Snap the provider to match whichever single key was supplied.
+        let hasAnthropic = !apiKeyVM.anthropicKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasOpenAI    = !apiKeyVM.openaiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         var s = settings
+        if hasAnthropic && !hasOpenAI {
+            s.llmProvider = .anthropic
+        } else if hasOpenAI && !hasAnthropic {
+            s.llmProvider = .openai
+        }
         s.hasCompletedFirstRun = true
         settings = s
         onComplete?()

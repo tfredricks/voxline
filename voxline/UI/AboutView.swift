@@ -14,7 +14,7 @@ struct AboutView: View {
             }
 
             VStack(spacing: 2) {
-                Text("voxline")
+                Text("Voxline")
                     .font(.title)
                     .fontWeight(.semibold)
                 Text("Version \(env.appVersion) (\(env.buildNumber))")

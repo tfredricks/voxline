@@ -7,6 +7,7 @@ struct WizardRootView: View {
     let model: WhisperModel
     let chord: HotkeyChord
     let onRetryDownload: () -> Void
+    @State private var permissionsGranted = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,7 +32,7 @@ struct WizardRootView: View {
     private var content: some View {
         switch vm.currentStep {
         case .welcome: WizardWelcomeView()
-        case .permissions: WizardPermissionsView()
+        case .permissions: WizardPermissionsView(allGranted: $permissionsGranted)
         case .apiKey: WizardAPIKeyView(vm: vm.apiKeyVM)
         case .modelDownload: WizardModelDownloadView(state: state, model: model, onRetry: onRetryDownload)
         case .done: WizardDoneView(chord: chord)
@@ -48,9 +49,23 @@ struct WizardRootView: View {
             Button("Continue") { vm.advance() }
                 .keyboardShortcut(.defaultAction)
                 .disabled(state.status != .idle)
+        case .permissions:
+            Button("Continue") { vm.advance() }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!permissionsGranted)
+        case .apiKey:
+            Button("Continue") { vm.advance() }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!hasAnyAPIKey)
         default:
             Button("Continue") { vm.advance() }
                 .keyboardShortcut(.defaultAction)
         }
+    }
+
+    private var hasAnyAPIKey: Bool {
+        let ws = CharacterSet.whitespacesAndNewlines
+        return !vm.apiKeyVM.anthropicKey.trimmingCharacters(in: ws).isEmpty
+            || !vm.apiKeyVM.openaiKey.trimmingCharacters(in: ws).isEmpty
     }
 }

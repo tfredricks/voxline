@@ -23,7 +23,7 @@ struct MenuBarContent: View {
             Divider()
         }
 
-        Button(state.hotkeyEnabled ? "Pause voxline" : "Resume voxline") {
+        Button(state.hotkeyEnabled ? "Pause Voxline" : "Resume Voxline") {
             state.hotkeyEnabled.toggle()
         }
         Divider()
@@ -42,11 +42,11 @@ struct MenuBarContent: View {
 
         Divider()
 
-        Button("About voxline") { openAboutWindow() }
+        Button("About Voxline") { openAboutWindow() }
 
         Divider()
 
-        Button("Quit voxline") {
+        Button("Quit Voxline") {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q")

@@ -28,7 +28,7 @@ struct SettingsView: View {
 
                 Form {
                     Section("Startup") {
-                        Toggle("Launch voxline at login", isOn: $generalVM.launchAtLogin)
+                        Toggle("Launch Voxline at login", isOn: $generalVM.launchAtLogin)
                         if generalVM.loginItemStatus == .requiresApproval {
                             Button {
                                 if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {

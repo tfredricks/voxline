@@ -76,6 +76,15 @@ final class AppState {
     /// first recording finalizes.
     var lastRecordingDuration: TimeInterval?
 
+    /// Wall-clock seconds spent in the local WhisperKit transcribe call on
+    /// the most recent dictation. Nil until the first transcribe completes.
+    var lastTranscribeDuration: TimeInterval?
+
+    /// Wall-clock seconds spent in the LLM cleanup call on the most recent
+    /// dictation. Nil until the first cleanup completes (or skipped when the
+    /// transcript was empty).
+    var lastCleanupDuration: TimeInterval?
+
     // MARK: - Debug diagnostics (rendered in the Debug window)
 
     /// Current `HotkeyStateMachine.State`, stringified. Updated by HotkeyMonitor

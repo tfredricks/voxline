@@ -33,7 +33,7 @@ final class FirstRunWindowController {
             backing: .buffered,
             defer: false
         )
-        win.title = "Welcome to voxline"
+        win.title = "Welcome to Voxline"
         win.contentView = host
         win.center()
         win.isReleasedWhenClosed = false

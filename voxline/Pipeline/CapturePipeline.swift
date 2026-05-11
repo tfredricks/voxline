@@ -79,6 +79,8 @@ final class CapturePipeline {
         // hard secret leak, but a defensible-by-default hygiene measure.
         state.lastTranscript = nil
         state.lastCleanedText = nil
+        state.lastTranscribeDuration = nil
+        state.lastCleanupDuration = nil
         state.status = .recording
     }
 
@@ -108,11 +110,13 @@ final class CapturePipeline {
 
         // 1. Transcribe locally.
         let transcript: String
+        let transcribeStart = Date()
         do {
             transcript = try await transcriber.transcribe(samples: samples)
         } catch {
             return setError("Transcription failed. Try again or pick a different model in Settings → General.")
         }
+        state.lastTranscribeDuration = Date().timeIntervalSince(transcribeStart)
         state.lastTranscript = transcript
 
         if transcript.isEmpty {
@@ -131,6 +135,7 @@ final class CapturePipeline {
 
         // 3. LLM cleanup.
         let cleaned: String
+        let cleanupStart = Date()
         do {
             cleaned = try await llm.cleanup(transcript: transcript, mode: mode)
         } catch let e as LLMError {
@@ -138,6 +143,7 @@ final class CapturePipeline {
         } catch {
             return setError("LLM cleanup failed: \(error.localizedDescription)")
         }
+        state.lastCleanupDuration = Date().timeIntervalSince(cleanupStart)
         state.lastCleanedText = cleaned
 
         // 4. Paste.

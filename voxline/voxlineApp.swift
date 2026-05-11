@@ -7,6 +7,23 @@ struct voxlineApp: App {
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
+    init() {
+        // Dev/test entry point: scripts/reset-local-state.sh invokes the signed
+        // app binary with this flag so it can delete data-protection-keychain
+        // items the bare `security` CLI cannot reach (DPK items are gated by
+        // the app's keychain-access-groups entitlement). Runs before any UI
+        // appears and exits the process when done.
+        if CommandLine.arguments.contains("--reset-keys") {
+            let keychain = Keychain()
+            for account in [Keychain.Account.anthropic, Keychain.Account.openai] {
+                do { try keychain.delete(forKey: account) }
+                catch { fputs("voxline --reset-keys: failed to delete \(account): \(error)\n", stderr) }
+            }
+            fputs("voxline: cleared keychain entries (anthropic, openai)\n", stderr)
+            exit(0)
+        }
+    }
+
     var body: some Scene {
         MenuBarExtra {
             MenuBarContent(
@@ -268,7 +285,7 @@ final class AppCoordinator {
             // running process, so the reconcile loop polls until AX/IM are
             // granted and then installs the tap. The user does NOT need to
             // restart the app.
-            state.status = .error(category: .permissions, message: "Hotkey monitoring requires Accessibility AND Input Monitoring permission. Grant both in System Settings → Privacy & Security — voxline will pick them up automatically.")
+            state.status = .error(category: .permissions, message: "Hotkey monitoring requires Accessibility AND Input Monitoring permission. Grant both in System Settings → Privacy & Security — Voxline will pick them up automatically.")
         }
 
         startPermissionAndStateLoop(state: state)
@@ -323,7 +340,7 @@ final class AppCoordinator {
             // Distinguish user-initiated pause from involuntary revocation —
             // only the latter deserves an error banner.
             if state.hotkeyEnabled && !permissionsOK {
-                state.status = .error(category: .permissions, message: "Accessibility or Input Monitoring permission was revoked. Re-grant it in System Settings → Privacy & Security; voxline will recover automatically.")
+                state.status = .error(category: .permissions, message: "Accessibility or Input Monitoring permission was revoked. Re-grant it in System Settings → Privacy & Security; Voxline will recover automatically.")
             }
         }
     }
@@ -411,7 +428,7 @@ final class AppCoordinator {
                 return
             } catch {
                 if let state {
-                    state.status = .error(category: .modelPrep, message: "Model setup failed: \(error.localizedDescription). Try Retry or relaunch voxline.")
+                    state.status = .error(category: .modelPrep, message: "Model setup failed: \(error.localizedDescription). Try Retry or relaunch Voxline.")
                 }
                 if managesDownloadWindow {
                     self?.downloadWindow?.close()

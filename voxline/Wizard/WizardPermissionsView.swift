@@ -3,18 +3,17 @@ import AppKit
 import SwiftUI
 
 struct WizardPermissionsView: View {
+    @Binding var allGranted: Bool
     @State private var perms = PermissionsService()
     @State private var mic: PermissionStatus = .notDetermined
     @State private var ax: PermissionStatus = .notDetermined
     @State private var im: PermissionStatus = .notDetermined
     @State private var pollTimer: Timer?
 
-    var allGranted: Bool { mic == .granted && ax == .granted && im == .granted }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Grant permissions").font(.title.bold())
-            Text("voxline needs three macOS permissions. Grant each, then continue.")
+            Text("Voxline needs three macOS permissions. Grant each, then continue.")
                 .foregroundStyle(.secondary)
 
             permissionRow(
@@ -35,10 +34,10 @@ struct WizardPermissionsView: View {
 
             permissionRow(
                 title: "Input Monitoring",
-                detail: "Required for the hotkey to work outside voxline itself.",
+                detail: "Required for the hotkey to work outside Voxline itself.",
                 status: im,
-                grantLabel: "Grant",
-                action: { im = perms.requestInputMonitoring() }
+                grantLabel: "Open System Settings",
+                action: openInputMonitoringSettings
             )
         }
         .padding(40)
@@ -72,22 +71,30 @@ struct WizardPermissionsView: View {
     private func statusSymbol(_ s: PermissionStatus) -> String {
         switch s {
         case .granted: return "checkmark.circle.fill"
-        case .denied: return "xmark.circle.fill"
-        case .notDetermined: return "circle"
+        case .denied, .notDetermined: return "xmark.circle.fill"
         }
     }
 
     private func statusColor(_ s: PermissionStatus) -> Color {
         switch s {
         case .granted: return .green
-        case .denied: return .red
-        case .notDetermined: return .secondary
+        case .denied, .notDetermined: return .red
         }
     }
 
     private func openAccessibilitySettings() {
         perms.promptAccessibility()
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func openInputMonitoringSettings() {
+        // First call surfaces the TCC prompt; subsequent calls return silently,
+        // so always also deep-link into the pane in case the prompt was dismissed
+        // or the system has already recorded a decision for this binary.
+        im = perms.requestInputMonitoring()
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
             NSWorkspace.shared.open(url)
         }
     }
@@ -108,5 +115,6 @@ struct WizardPermissionsView: View {
         mic = perms.microphoneStatus
         ax = perms.accessibilityStatus
         im = perms.inputMonitoringStatus
+        allGranted = mic == .granted && ax == .granted && im == .granted
     }
 }

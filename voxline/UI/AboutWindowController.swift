@@ -18,7 +18,7 @@ final class AboutWindowController {
             backing: .buffered,
             defer: false
         )
-        win.title = "About voxline"
+        win.title = "About Voxline"
         win.contentView = host
         win.center()
         win.isReleasedWhenClosed = false

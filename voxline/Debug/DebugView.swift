@@ -53,6 +53,11 @@ struct DebugView: View {
             if let duration = state.lastRecordingDuration {
                 row("Duration:", String(format: "%.1fs · peak %.3f", duration, state.lastPeakLevel))
             }
+            if let t = state.lastTranscribeDuration, let c = state.lastCleanupDuration {
+                row("Timing:", String(format: "transcribe %.2fs · cleanup %.2fs", t, c))
+            } else if let t = state.lastTranscribeDuration {
+                row("Timing:", String(format: "transcribe %.2fs · cleanup —", t))
+            }
             row("Insertion:", state.debugLastInsertionResult)
             if showFinalizeReason {
                 row("Reason:", state.debugLastFinalizeReason)
