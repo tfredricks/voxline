@@ -73,7 +73,16 @@ final class ModeStore {
     /// per-app hints. Terminal/code editors are the one case that genuinely
     /// inverts the default — they need filler-stripping without punctuation
     /// or capitalization changes — so they share a separate prompt.
-    static let defaultPrompt = "Clean up the grammar and phrasing. Preserve the original meaning. Return only the revised text."
+    static let defaultPrompt = """
+    Rewrite the transcript as if the speaker had typed it. Remove filler \
+    words (um, uh, like, you know, sort of, kind of) and the disfluencies \
+    of live speech — false starts, restarts, repeated words, trailing-off \
+    pauses. Resolve unstated self-corrections like "red, no blue" or \
+    "Tuesday, wait, Wednesday" to the speaker's final intent. Add natural \
+    punctuation and capitalization. Preserve the speaker's tone, voice, \
+    and word choices — do not formalize casual speech or paraphrase for \
+    style. Return only the revised text.
+    """
     static let codePrompt = "Strip filler words only. Do not add punctuation, change capitalization, or rephrase. Return only the revised text."
 
     static let shippedDefaults: [Mode] = [
