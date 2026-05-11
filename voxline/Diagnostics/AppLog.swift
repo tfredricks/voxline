@@ -9,6 +9,7 @@ enum AppLog {
     static let whisper     = Logger(subsystem: subsystem, category: "whisper")
     static let llm         = Logger(subsystem: subsystem, category: "llm")
     static let paste       = Logger(subsystem: subsystem, category: "paste")
+    static let context     = Logger(subsystem: subsystem, category: "context")
     static let permissions = Logger(subsystem: subsystem, category: "permissions")
 
     static let pipelineSignposter = OSSignposter(subsystem: subsystem, category: "pipeline")
