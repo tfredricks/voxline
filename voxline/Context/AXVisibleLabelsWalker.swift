@@ -1,4 +1,5 @@
 import ApplicationServices
+import AppKit
 import Foundation
 
 /// Walks the focused window's AX subtree and returns visible label-like
@@ -78,18 +79,32 @@ struct DefaultAXVisibleLabelsWalker: AXVisibleLabelsWalking {
     }
 
     private func focusedWindow() -> AXUIElement? {
+        // Preferred path: system-wide focused element → its containing window.
         let system = AXUIElementCreateSystemWide()
         var focusedValue: CFTypeRef?
         let s = AXUIElementCopyAttributeValue(
             system, kAXFocusedUIElementAttribute as CFString, &focusedValue
         )
-        guard s == .success,
-              let focusedValue,
-              CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else { return nil }
-        let focused = focusedValue as! AXUIElement
+        if s == .success,
+           let focusedValue,
+           CFGetTypeID(focusedValue) == AXUIElementGetTypeID() {
+            let focused = focusedValue as! AXUIElement
+            var windowValue: CFTypeRef?
+            let ws = AXUIElementCopyAttributeValue(focused, kAXWindowAttribute as CFString, &windowValue)
+            if ws == .success,
+               let windowValue,
+               CFGetTypeID(windowValue) == AXUIElementGetTypeID() {
+                return (windowValue as! AXUIElement)
+            }
+        }
 
+        // Catalyst-app fallback: app's AX root → focused window. Some
+        // frameworks hide individual focused elements from system-wide
+        // queries but still expose the app-level focused window.
+        guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier else { return nil }
+        let app = AXUIElementCreateApplication(pid)
         var windowValue: CFTypeRef?
-        let ws = AXUIElementCopyAttributeValue(focused, kAXWindowAttribute as CFString, &windowValue)
+        let ws = AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute as CFString, &windowValue)
         guard ws == .success,
               let windowValue,
               CFGetTypeID(windowValue) == AXUIElementGetTypeID() else { return nil }

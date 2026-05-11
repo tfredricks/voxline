@@ -1,5 +1,6 @@
 import Foundation
 import ApplicationServices
+import AppKit
 
 /// Carries the value-bearing AX outputs that depend on the focused element:
 /// window title, the slice of the value before the cursor, the slice after,
@@ -46,25 +47,51 @@ struct DefaultAXContextProbe: AXContextProbing {
         let focusStatus = AXUIElementCopyAttributeValue(
             system, kAXFocusedUIElementAttribute as CFString, &focusedValue
         )
-        guard focusStatus == .success,
-              let focusedValue,
-              CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else {
-            return result
+        let focused: AXUIElement?
+        if focusStatus == .success,
+           let focusedValue,
+           CFGetTypeID(focusedValue) == AXUIElementGetTypeID() {
+            focused = (focusedValue as! AXUIElement)
+        } else {
+            focused = nil
         }
-        let focused = focusedValue as! AXUIElement
 
-        if deadline.isExpired { return result }
-        result.windowTitle = readWindowTitle(focused: focused)
+        if let focused {
+            if deadline.isExpired { return result }
+            result.windowTitle = readWindowTitle(focused: focused)
 
-        if deadline.isExpired { return result }
-        result.selectedText = clip(readString(focused, kAXSelectedTextAttribute), Self.selectedTextMax)
+            if deadline.isExpired { return result }
+            result.selectedText = clip(readString(focused, kAXSelectedTextAttribute), Self.selectedTextMax)
 
-        if deadline.isExpired { return result }
-        let (before, after) = readBeforeAfter(focused: focused)
-        result.textBeforeCursor = before
-        result.textAfterCursor = after
+            if deadline.isExpired { return result }
+            let (before, after) = readBeforeAfter(focused: focused)
+            result.textBeforeCursor = before
+            result.textAfterCursor = after
+        }
+
+        // Catalyst-app fallback: when the system-wide focused element is
+        // opaque or hidden (Outlook, Messages, Music, etc.), the app-level
+        // root often still exposes the focused window with a real title.
+        // Only fills in `windowTitle` — value/selection attributes don't
+        // propagate up to the window in any framework that hides them at
+        // the element level.
+        if result.windowTitle == nil, !deadline.isExpired,
+           let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier {
+            result.windowTitle = readAppFocusedWindowTitle(pid: pid)
+        }
 
         return result
+    }
+
+    private func readAppFocusedWindowTitle(pid: pid_t) -> String? {
+        let app = AXUIElementCreateApplication(pid)
+        var windowValue: CFTypeRef?
+        let s = AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute as CFString, &windowValue)
+        guard s == .success,
+              let windowValue,
+              CFGetTypeID(windowValue) == AXUIElementGetTypeID() else { return nil }
+        let win = windowValue as! AXUIElement
+        return clip(readString(win, kAXTitleAttribute), Self.windowTitleMax)
     }
 
     private func readWindowTitle(focused: AXUIElement) -> String? {
