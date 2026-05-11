@@ -86,9 +86,31 @@ import Foundation
             state: state, capture: capture, transcriber: transcriber,
             llm: llm, modes: router, frontmost: front,
             fieldInspector: inspector, injector: injector,
-            historyStore: history
+            historyStore: history, contextCapture: FakeContextCapture()
         )
         return (pipe, state, capture, transcriber, llm, front, inspector, injector, history)
+    }
+
+    private func makePipelineWithContext(
+        frontmostBundleID: String? = "com.tinyspeck.slackmacgap",
+        focusedField: FocusedField? = nil
+    ) -> (pipe: CapturePipeline, state: AppState, capture: FakeCapture, transcriber: FakeTranscriber, llm: FakeLLM, frontmost: FakeFrontmost, inspector: FakeFieldInspector, injector: FakeInjector, history: DictationHistoryStore, contextCapture: FakeContextCapture) {
+        let (_, state, capture, transcriber, llm, front, inspector, injector, history) = makePipeline(
+            frontmostBundleID: frontmostBundleID, focusedField: focusedField
+        )
+        // Re-build the pipeline with all the same deps, plus a FakeContextCapture.
+        let ctx = FakeContextCapture()
+        let router = ModeRouter(modes: [
+            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil),
+            Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil)
+        ])
+        let pipe = CapturePipeline(
+            state: state, capture: capture, transcriber: transcriber,
+            llm: llm, modes: router, frontmost: front,
+            fieldInspector: inspector, injector: injector,
+            historyStore: history, contextCapture: ctx
+        )
+        return (pipe, state, capture, transcriber, llm, front, inspector, injector, history, ctx)
     }
 
     @Test func startRecording_setsStateAndStartsCapture() {
@@ -318,5 +340,38 @@ import Foundation
         if case .error = state.status { } else { Issue.record("expected .error") }
         #expect(history.items.count == 1)
         #expect(history.items[0].cleanedText == "Hello there.")
+    }
+
+    @Test func finalize_passes_captured_context_to_llm() async {
+        let (pipe, state, _, _, llm, _, _, _, _, ctx) = makePipelineWithContext()
+        var captured = CapturedContext.empty
+        captured.appName = "Slack"
+        captured.bundleID = "com.tinyspeck.slackmacgap"
+        ctx.nextContext = captured
+
+        await startAndFinalize(pipe, state: state)
+
+        #expect(llm.calls.count == 1)
+        #expect(llm.calls.first?.context.appName == "Slack")
+        #expect(llm.calls.first?.context.bundleID == "com.tinyspeck.slackmacgap")
+        #expect(ctx.captureCallCount == 1)
+    }
+
+    @Test func finalize_with_empty_capture_passes_empty_context() async {
+        let (pipe, state, _, _, llm, _, _, _, _, ctx) = makePipelineWithContext()
+        ctx.nextContext = .empty
+
+        await startAndFinalize(pipe, state: state)
+
+        #expect(llm.calls.first?.context == CapturedContext.empty)
+    }
+}
+
+final class FakeContextCapture: ContextCapturing, @unchecked Sendable {
+    var nextContext = CapturedContext.empty
+    var captureCallCount = 0
+    func capture() async -> CapturedContext {
+        captureCallCount += 1
+        return nextContext
     }
 }

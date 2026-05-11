@@ -16,6 +16,8 @@ final class CapturePipeline {
     private let fieldInspector: FocusedFieldInspecting
     private let injector: ClipboardInjecting
     private let historyStore: DictationHistoryStore
+    private let contextCapture: ContextCapturing
+    private var contextTask: Task<CapturedContext, Never>?
 
     init(
         state: AppState,
@@ -26,7 +28,8 @@ final class CapturePipeline {
         frontmost: FrontmostAppProviding,
         fieldInspector: FocusedFieldInspecting,
         injector: ClipboardInjecting,
-        historyStore: DictationHistoryStore
+        historyStore: DictationHistoryStore,
+        contextCapture: ContextCapturing = DefaultContextCaptureService()
     ) {
         self.state = state
         self.capture = capture
@@ -37,6 +40,7 @@ final class CapturePipeline {
         self.fieldInspector = fieldInspector
         self.injector = injector
         self.historyStore = historyStore
+        self.contextCapture = contextCapture
 
         capture.onLevel = { [weak self] level in
             Task { @MainActor in
@@ -88,6 +92,10 @@ final class CapturePipeline {
         state.lastTranscribeDuration = nil
         state.lastCleanupDuration = nil
         state.status = .recording
+        let captor = contextCapture
+        contextTask = Task.detached(priority: .userInitiated) {
+            await captor.capture()
+        }
     }
 
     /// Stop capture, transcribe, run LLM cleanup against the active mode's
@@ -108,11 +116,13 @@ final class CapturePipeline {
         // Microphone permission is denied or a muted device was selected.
         if !samples.isEmpty && state.lastPeakLevel == 0 {
             AppLog.pipeline.error("silent capture: samples present but peak=0 (mic permission or muted device)")
+            contextTask?.cancel(); contextTask = nil
             return setError("No audio captured. Check that Microphone permission is granted and the input device isn't muted.")
         }
 
         if samples.isEmpty {
             AppLog.pipeline.debug("empty capture, idling out")
+            contextTask?.cancel(); contextTask = nil
             resetIdle()
             return
         }
@@ -132,6 +142,7 @@ final class CapturePipeline {
             signposter.endInterval("transcribe", transcribeInterval, "error")
             signposter.endInterval("session", sessionInterval, "error")
             AppLog.whisper.error("transcribe failed: \(error.localizedDescription, privacy: .public)")
+            contextTask?.cancel(); contextTask = nil
             return setError("Transcription failed. Try again or pick a different model in Settings → General.")
         }
         state.lastTranscribeDuration = Date().timeIntervalSince(transcribeStart)
@@ -141,6 +152,7 @@ final class CapturePipeline {
         if transcript.isEmpty {
             // Nothing to clean / paste — quietly idle out.
             signposter.endInterval("session", sessionInterval, "empty")
+            contextTask?.cancel(); contextTask = nil
             resetIdle()
             return
         }
@@ -152,16 +164,20 @@ final class CapturePipeline {
         guard let mode = modes.mode(for: bundleID, field: field) else {
             signposter.endInterval("session", sessionInterval, "no-mode")
             AppLog.pipeline.error("no mode for bundle=\(bundleID ?? "unknown", privacy: .public)")
+            contextTask?.cancel(); contextTask = nil
             return setError("No mode for app '\(bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes.")
         }
         AppLog.pipeline.debug("mode resolved: bundle=\(bundleID ?? "unknown", privacy: .public) mode=\(mode.displayName, privacy: .private)")
 
         // 3. LLM cleanup.
+        let context = await contextTask?.value ?? .empty
+        contextTask = nil
+        AppLog.context.debug("context: app=\(context.appName ?? "nil", privacy: .private) bundle=\(context.bundleID ?? "nil", privacy: .public) secure=\(context.isSecureField, privacy: .public) labels=\(context.visibleLabels.count, privacy: .public) durationMs=\(context.captureDurationMs, privacy: .public) notes=\(context.captureNotes.joined(separator: ","), privacy: .public)")
         let cleaned: String
         let cleanupInterval = signposter.beginInterval("llm", id: sessionID)
         let cleanupStart = Date()
         do {
-            cleaned = try await llm.cleanup(transcript: transcript, mode: mode, context: .empty)
+            cleaned = try await llm.cleanup(transcript: transcript, mode: mode, context: context)
             signposter.endInterval("llm", cleanupInterval)
         } catch let e as LLMError {
             signposter.endInterval("llm", cleanupInterval, "error")
