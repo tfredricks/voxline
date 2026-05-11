@@ -63,7 +63,7 @@ import Foundation
 
     @Test func persistence_handlesCorruptData() {
         let defaults = makeDefaults()
-        defaults.set(Data([0x00, 0x01, 0x02]), forKey: "voxline.history.dictations")
+        defaults.set(Data([0x00, 0x01, 0x02]), forKey: DictationHistoryStore.key)
         let store = DictationHistoryStore(defaults: defaults)
         #expect(store.items.isEmpty)
     }

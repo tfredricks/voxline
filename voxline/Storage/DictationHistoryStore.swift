@@ -23,7 +23,7 @@ struct DictationHistoryItem: Codable, Identifiable, Equatable {
 @MainActor
 final class DictationHistoryStore {
 
-    private static let key = "voxline.history.dictations"
+    static let key = "voxline.history.dictations"
     private static let maxItems = 10
 
     private(set) var items: [DictationHistoryItem] = []
@@ -38,8 +38,9 @@ final class DictationHistoryStore {
     /// Prepend a new entry. Whitespace-only text is ignored. Caps at 10 by
     /// dropping the oldest entries.
     func record(cleanedText: String) {
-        let trimmed = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        // Trim is a record-or-skip filter only; the stored text is the raw
+        // cleanedText so history matches what was pasted into the focused app.
+        guard !cleanedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let item = DictationHistoryItem(cleanedText: cleanedText)
         var next = [item] + items
         if next.count > Self.maxItems {
