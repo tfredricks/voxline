@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import ApplicationServices
 
 /// Captures the user's current dictation context at push-to-talk press time.
 /// Implementations run AX queries under a total time budget and must NEVER
@@ -22,6 +23,7 @@ struct DefaultContextCaptureService: ContextCapturing {
     let axProbe: AXContextProbing
     let labelsWalker: AXVisibleLabelsWalking
     let vocabulary: CustomVocabularyStore
+    let isAXTrusted: @Sendable () -> Bool
     let budgetMs: Int
 
     /// Production initializer: resolves `appName` from `NSWorkspace.frontmostApplication`
@@ -35,6 +37,7 @@ struct DefaultContextCaptureService: ContextCapturing {
         axProbe: AXContextProbing = DefaultAXContextProbe(),
         labelsWalker: AXVisibleLabelsWalking = DefaultAXVisibleLabelsWalker(),
         vocabulary: CustomVocabularyStore = CustomVocabularyStore(),
+        isAXTrusted: @escaping @Sendable () -> Bool = { AXIsProcessTrusted() },
         budgetMs: Int = 150
     ) {
         self.frontmost = frontmost
@@ -43,6 +46,7 @@ struct DefaultContextCaptureService: ContextCapturing {
         self.axProbe = axProbe
         self.labelsWalker = labelsWalker
         self.vocabulary = vocabulary
+        self.isAXTrusted = isAXTrusted
         self.budgetMs = budgetMs
     }
 
@@ -53,6 +57,15 @@ struct DefaultContextCaptureService: ContextCapturing {
         // Step 1: frontmost app (cheap; no AX).
         c.bundleID = frontmost.frontmostBundleID()
         c.appName = appNameProvider()
+
+        // Capture the AX-trust state up front so it lands in `captureNotes` —
+        // a downstream "the cleanup looked wrong" debug session needs to be
+        // able to distinguish "AX denied" from "AX granted but nothing
+        // focused", and the probes/walker can't disambiguate the two.
+        let axTrusted = isAXTrusted()
+        if !axTrusted {
+            c.captureNotes.append("ax-not-trusted")
+        }
 
         // Step 2: focused field role/subrole + secure-field gate.
         let field = fieldInspector.inspect()
@@ -67,7 +80,7 @@ struct DefaultContextCaptureService: ContextCapturing {
         // useful (it helps the LLM distinguish e.g. a login screen from an
         // in-app password change); the value/selection fields are suppressed
         // for secure fields so we don't ferry passwords into the prompt.
-        if !deadline.isExpired {
+        if axTrusted && !deadline.isExpired {
             let probe = axProbe.probe(deadline: deadline)
             c.windowTitle = probe.windowTitle
             if !c.isSecureField {
@@ -78,7 +91,7 @@ struct DefaultContextCaptureService: ContextCapturing {
         }
 
         // Step 4: visible-labels BFS — runs for both normal and secure fields.
-        if !deadline.isExpired {
+        if axTrusted && !deadline.isExpired {
             c.visibleLabels = labelsWalker.walk(deadline: deadline)
         }
 

@@ -1,4 +1,3 @@
-// voxline/Pipeline/CapturePipeline.swift  (replace contents)
 import Foundation
 import OSLog
 
@@ -29,7 +28,7 @@ final class CapturePipeline {
         fieldInspector: FocusedFieldInspecting,
         injector: ClipboardInjecting,
         historyStore: DictationHistoryStore,
-        contextCapture: ContextCapturing = DefaultContextCaptureService()
+        contextCapture: ContextCapturing
     ) {
         self.state = state
         self.capture = capture

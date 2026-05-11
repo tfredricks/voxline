@@ -1,4 +1,3 @@
-// voxline/Pipeline/PipelineProtocols.swift  (replace contents)
 import AppKit
 import Foundation
 

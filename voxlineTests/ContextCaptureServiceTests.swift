@@ -51,6 +51,7 @@ import Foundation
             axProbe: probe,
             labelsWalker: walker,
             vocabulary: vocab,
+            isAXTrusted: { true },
             budgetMs: 150
         )
 
@@ -87,6 +88,7 @@ import Foundation
             axProbe: probe,
             labelsWalker: walker,
             vocabulary: vocab,
+            isAXTrusted: { true },
             budgetMs: 150
         )
 
@@ -123,6 +125,7 @@ import Foundation
             axProbe: probe,
             labelsWalker: walker,
             vocabulary: vocab,
+            isAXTrusted: { true },
             budgetMs: 150
         )
 
@@ -151,11 +154,51 @@ import Foundation
             axProbe: probe,
             labelsWalker: walker,
             vocabulary: vocab,
+            isAXTrusted: { true },
             budgetMs: 150
         )
 
         let c = await svc.capture()
         #expect(c.captureDurationMs >= 0)
         #expect(c.captureDurationMs <= 200)
+    }
+
+    @Test func capture_records_ax_not_trusted_note_and_skips_probes_when_ax_denied() async {
+        let front = FakeFrontmost(); front.bundleID = "com.apple.Safari"
+        let inspector = FakeFieldInspector(); inspector.field = nil
+        // Probes/walker would still return data if asked — but the orchestrator
+        // should NOT ask them when AX is denied, so their results never land.
+        let probe = StubProbe(result: AXContextProbeResult(
+            windowTitle: "this would leak if probed",
+            textBeforeCursor: "and so would this",
+            textAfterCursor: nil,
+            selectedText: nil
+        ))
+        let walker = StubWalker(labels: ["leaky", "labels"])
+        let vocab = CustomVocabularyStore(defaults: suite())
+        vocab.save(["term"])
+
+        let svc = DefaultContextCaptureService(
+            frontmost: front,
+            appNameProvider: { "Safari" },
+            fieldInspector: inspector,
+            axProbe: probe,
+            labelsWalker: walker,
+            vocabulary: vocab,
+            isAXTrusted: { false },
+            budgetMs: 150
+        )
+
+        let c = await svc.capture()
+        // App identity + vocabulary still flow (no AX required).
+        #expect(c.appName == "Safari")
+        #expect(c.bundleID == "com.apple.Safari")
+        #expect(c.customVocabulary == ["term"])
+        // AX-dependent fields stayed unset; probe/walker results never read.
+        #expect(c.windowTitle == nil)
+        #expect(c.textBeforeCursor == nil)
+        #expect(c.visibleLabels == [])
+        // The diagnostic flag is set so the cleanup-debug log can show it.
+        #expect(c.captureNotes.contains("ax-not-trusted"))
     }
 }

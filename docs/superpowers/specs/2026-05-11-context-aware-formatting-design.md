@@ -98,7 +98,7 @@ Total budget: **150ms hard cap**. Capture order is cheapest-first so the most va
 
 1. Frontmost app (`NSWorkspace`) — bundle ID, localized name. ~1ms, no AX.
 2. AX focused element + role/subrole. ~5–20ms.
-3. **Secure-field gate:** if `kAXSecureTextFieldSubrole` or matching role hint, set `isSecureField=true`. Skip steps 4 and 6. Continue to 5.
+3. **Secure-field gate:** if `kAXSecureTextFieldSubrole` or matching role hint, set `isSecureField=true`. Step 4 still runs because window title is useful (distinguishes a login screen from an in-app password change) and macOS refuses to return the secure field's value anyway; the orchestrator simply drops `textBeforeCursor` / `textAfterCursor` / `selectedText` on the secure path.
 4. AX selected text + `kAXSelectedTextRangeAttribute`; resolve before/after slices via `kAXStringForRangeParameterizedAttribute`. ~10–80ms.
 5. Window title via the focused element's parent window. ~5–20ms.
 6. AX-tree BFS from the focused window for visible labels. Depth cap 6, count cap 20, per-call deadline check. ~20–100ms.

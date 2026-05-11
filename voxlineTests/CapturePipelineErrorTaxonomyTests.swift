@@ -28,7 +28,8 @@ import Foundation
             frontmost: FakeFrontmost(),
             fieldInspector: FakeFieldInspector(),
             injector: FakeInjector(handler: inject),
-            historyStore: DictationHistoryStore(defaults: defaults)
+            historyStore: DictationHistoryStore(defaults: defaults),
+            contextCapture: FakeContextCapture()
         )
         return (p, state, capture)
     }
@@ -116,7 +117,8 @@ import Foundation
             frontmost: FakeFrontmost(),
             fieldInspector: FakeFieldInspector(),
             injector: FakeInjector(handler: { _ in TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified) }),
-            historyStore: DictationHistoryStore(defaults: defaults)
+            historyStore: DictationHistoryStore(defaults: defaults),
+            contextCapture: FakeContextCapture()
         )
         p.startRecording()
         // Do NOT set lastPeakLevel above 0 — simulating a silent mic where the
