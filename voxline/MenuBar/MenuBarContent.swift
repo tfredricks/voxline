@@ -4,6 +4,7 @@ import SwiftUI
 
 struct MenuBarContent: View {
     @Bindable var state: AppState
+    @Bindable var historyStore: DictationHistoryStore
     @Environment(\.openSettings) private var openSettings
 
     var openDebugWindow: () -> Void = {}
@@ -26,6 +27,11 @@ struct MenuBarContent: View {
         Button(state.hotkeyEnabled ? "Pause Voxline" : "Resume Voxline") {
             state.hotkeyEnabled.toggle()
         }
+
+        Divider()
+
+        DictationHistoryMenu(store: historyStore, state: state)
+
         Divider()
 
         Button("Settings…") {

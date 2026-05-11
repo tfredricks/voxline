@@ -28,6 +28,7 @@ struct voxlineApp: App {
         MenuBarExtra {
             MenuBarContent(
                 state: delegate.appState,
+                historyStore: delegate.historyStore,
                 openDebugWindow: {
                     delegate.debugWindow.show(
                         state: delegate.appState,
@@ -68,6 +69,7 @@ private struct MenuBarLabel: View {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
+    let historyStore = DictationHistoryStore()
     let coordinator = AppCoordinator()
     let debugWindow = DebugWindowController()
     let aboutWindow = AboutWindowController()
@@ -75,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowVisibility.start()
-        coordinator.startIfNeeded(state: appState)
+        coordinator.startIfNeeded(state: appState, historyStore: historyStore)
     }
 
     func showAboutWindow() {
@@ -105,7 +107,6 @@ final class AppCoordinator {
     var frontmost: FrontmostApp?
     var capture: AudioCaptureService?
     var soundPlayer: HotkeySoundPlayer?
-    var historyStore: DictationHistoryStore?
 
     private var pillWindow: RecordingPillWindow?
     private var downloadWindow: ModelDownloadWindow?
@@ -127,21 +128,21 @@ final class AppCoordinator {
     private var permissionPollTimer: Timer?
     private var firstRunWindow: FirstRunWindowController?
 
-    func startIfNeeded(state: AppState) {
+    func startIfNeeded(state: AppState, historyStore: DictationHistoryStore) {
         guard !didStart else { return }
         didStart = true
         self.appState = state
 
         let settings = AppSettings()
         if !settings.hasCompletedFirstRun {
-            startWizardThenApp(state: state, settings: settings)
+            startWizardThenApp(state: state, settings: settings, historyStore: historyStore)
         } else {
-            startApp(state: state, settings: settings)
+            startApp(state: state, settings: settings, historyStore: historyStore)
         }
     }
 
-    private func startWizardThenApp(state: AppState, settings: AppSettings) {
-        buildServices(state: state, settings: settings)
+    private func startWizardThenApp(state: AppState, settings: AppSettings, historyStore: DictationHistoryStore) {
+        buildServices(state: state, settings: settings, historyStore: historyStore)
         guard let transcriber = self.transcriber else { return }
 
         let wizard = FirstRunWindowController()
@@ -171,14 +172,14 @@ final class AppCoordinator {
         prepareIfNeeded(state: state, transcriber: transcriber)
     }
 
-    private func startApp(state: AppState, settings: AppSettings) {
-        buildServices(state: state, settings: settings)
+    private func startApp(state: AppState, settings: AppSettings, historyStore: DictationHistoryStore) {
+        buildServices(state: state, settings: settings, historyStore: historyStore)
         guard let transcriber = self.transcriber else { return }
         installHotkey(state: state, settings: settings)
         prepareIfNeeded(state: state, transcriber: transcriber)
     }
 
-    private func buildServices(state: AppState, settings: AppSettings) {
+    private func buildServices(state: AppState, settings: AppSettings, historyStore: DictationHistoryStore) {
         let capture = AudioCaptureService()
         self.capture = capture
         self.soundPlayer = HotkeySoundPlayer(settings: settings)
@@ -213,9 +214,6 @@ final class AppCoordinator {
         let fieldInspector = AXFocusedFieldInspector()
         self.injector = injector
         self.frontmost = frontmost
-
-        let historyStore = DictationHistoryStore()
-        self.historyStore = historyStore
 
         let pipeline = CapturePipeline(
             state: state,
