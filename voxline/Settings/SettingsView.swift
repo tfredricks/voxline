@@ -85,6 +85,16 @@ struct SettingsView: View {
                     CleanupSection(general: generalVM, keys: apiKeysVM)
                         .id(SettingsAnchor.cleanup)
 
+                    Section("Custom vocabulary") {
+                        TextEditor(text: $generalVM.customVocabularyText)
+                            .font(.body)
+                            .frame(minHeight: 60)
+                        Text("Comma- or newline-separated. Helps the cleanup model spell names, acronyms, and product terms correctly.")
+                            .foregroundStyle(.secondary)
+                            .font(.callout)
+                    }
+                    .id(SettingsAnchor.customVocabulary)
+
                     Section("Feedback") {
                         Toggle("Play sound on record start/stop", isOn: $generalVM.playHotkeySounds)
                     }

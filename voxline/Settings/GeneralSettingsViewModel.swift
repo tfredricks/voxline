@@ -17,6 +17,14 @@ final class GeneralSettingsViewModel {
     var playHotkeySounds: Bool { didSet { if loaded { commit() } } }
     var provider: LLMProvider { didSet { if loaded { commit() } } }
 
+    var customVocabularyText: String {
+        didSet {
+            guard loaded, oldValue != customVocabularyText else { return }
+            let terms = CustomVocabularyStore.parse(customVocabularyText)
+            vocabulary.save(terms)
+        }
+    }
+
     var launchAtLogin: Bool {
         didSet {
             guard loaded, oldValue != launchAtLogin else { return }
@@ -32,14 +40,13 @@ final class GeneralSettingsViewModel {
     private let deviceEnumerator: () -> [AudioDevice]
     private var deviceListener: AudioDeviceListener?
     private let loginItemService: LoginItemService
+    private let vocabulary: CustomVocabularyStore
     private var loaded = false
 
-    /// Convenience init that constructs the default `LoginItemService` at call
-    /// time. A `LoginItemService = LoginItemService()` default argument doesn't
-    /// compile here because `LoginItemService` is `@MainActor`-isolated and
-    /// default-argument expressions are evaluated outside the function's
-    /// isolation context. The convenience init's body runs under the type's
-    /// `@MainActor` and can construct it freely.
+    /// Convenience init that constructs the default `LoginItemService` and
+    /// `CustomVocabularyStore` at call time. Default-argument expressions for
+    /// `@MainActor`-isolated types are evaluated outside the function's
+    /// isolation context, so we build them in the body instead.
     convenience init(
         settings: AppSettings = AppSettings(),
         applier: GeneralSettingsApplier,
@@ -49,7 +56,8 @@ final class GeneralSettingsViewModel {
             settings: settings,
             applier: applier,
             deviceEnumerator: deviceEnumerator,
-            loginItemService: LoginItemService()
+            loginItemService: LoginItemService(),
+            vocabulary: CustomVocabularyStore()
         )
     }
 
@@ -57,17 +65,20 @@ final class GeneralSettingsViewModel {
         settings: AppSettings = AppSettings(),
         applier: GeneralSettingsApplier,
         deviceEnumerator: @escaping () -> [AudioDevice] = AudioDeviceEnumerator.inputDevices,
-        loginItemService: LoginItemService
+        loginItemService: LoginItemService,
+        vocabulary: CustomVocabularyStore = CustomVocabularyStore()
     ) {
         self.settings = settings
         self.applier = applier
         self.deviceEnumerator = deviceEnumerator
         self.loginItemService = loginItemService
+        self.vocabulary = vocabulary
         self.chord = settings.hotkeyChord
         self.audioInputDeviceUID = settings.audioInputDeviceUID
         self.whisperModel = settings.whisperModel
         self.playHotkeySounds = settings.playHotkeySounds
         self.provider = settings.llmProvider
+        self.customVocabularyText = vocabulary.load().joined(separator: ", ")
         let initialStatus = loginItemService.status
         self.loginItemStatus = initialStatus
         self.launchAtLogin = (initialStatus == .enabled)
@@ -123,7 +134,9 @@ final class GeneralSettingsViewModel {
         whisperModel = .default
         playHotkeySounds = true
         provider = .anthropic
+        customVocabularyText = ""
         loaded = true
+        vocabulary.save([])
         commit()
     }
 

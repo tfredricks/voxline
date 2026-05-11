@@ -216,6 +216,34 @@ import Foundation
         #expect(vm.loginItemStatus == .enabled)
         #expect(vm.launchAtLogin == true)
     }
+
+    @Test func customVocabularyText_load_returns_persisted_terms_joined() {
+        let d = defaults()
+        let vocab = CustomVocabularyStore(defaults: d)
+        vocab.save(["Cursor", "LangGraph", "canonical_title"])
+        let vm = GeneralSettingsViewModel(
+            settings: AppSettings(defaults: d),
+            applier: NoopApplier(),
+            deviceEnumerator: { [] },
+            loginItemService: LoginItemService(),
+            vocabulary: vocab
+        )
+        #expect(vm.customVocabularyText == "Cursor, LangGraph, canonical_title")
+    }
+
+    @Test func customVocabularyText_setting_persists_through_store() {
+        let d = defaults()
+        let vocab = CustomVocabularyStore(defaults: d)
+        let vm = GeneralSettingsViewModel(
+            settings: AppSettings(defaults: d),
+            applier: NoopApplier(),
+            deviceEnumerator: { [] },
+            loginItemService: LoginItemService(),
+            vocabulary: vocab
+        )
+        vm.customVocabularyText = "Cursor,LangGraph\ncanonical_title"
+        #expect(vocab.load() == ["Cursor", "LangGraph", "canonical_title"])
+    }
 }
 
 private struct NoopApplier: GeneralSettingsApplier {
