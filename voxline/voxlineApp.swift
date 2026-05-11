@@ -105,6 +105,7 @@ final class AppCoordinator {
     var frontmost: FrontmostApp?
     var capture: AudioCaptureService?
     var soundPlayer: HotkeySoundPlayer?
+    var historyStore: DictationHistoryStore?
 
     private var pillWindow: RecordingPillWindow?
     private var downloadWindow: ModelDownloadWindow?
@@ -213,6 +214,9 @@ final class AppCoordinator {
         self.injector = injector
         self.frontmost = frontmost
 
+        let historyStore = DictationHistoryStore()
+        self.historyStore = historyStore
+
         let pipeline = CapturePipeline(
             state: state,
             capture: capture,
@@ -221,7 +225,8 @@ final class AppCoordinator {
             modes: router,
             frontmost: frontmost,
             fieldInspector: fieldInspector,
-            injector: injector
+            injector: injector,
+            historyStore: historyStore
         )
         self.pipeline = pipeline
 

@@ -16,6 +16,9 @@ import Foundation
         let state = AppState()
         let capture = FakeCapture()
         capture.canned = [Float](repeating: 0.5, count: 16_000)
+        let suiteName = "voxline-test-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
         let p = CapturePipeline(
             state: state,
             capture: capture,
@@ -24,7 +27,8 @@ import Foundation
             modes: ModeRouter(modes: [Mode(bundleID: "*", displayName: "Default", prompt: "p", model: nil, temperature: nil)]),
             frontmost: FakeFrontmost(),
             fieldInspector: FakeFieldInspector(),
-            injector: FakeInjector(handler: inject)
+            injector: FakeInjector(handler: inject),
+            historyStore: DictationHistoryStore(defaults: defaults)
         )
         return (p, state, capture)
     }
@@ -100,6 +104,9 @@ import Foundation
         let state = AppState()
         let capture = FakeCapture()
         capture.canned = [Float](repeating: 0.0, count: 16_000) // 1 second of pure silence
+        let suiteName = "voxline-test-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
         let p = CapturePipeline(
             state: state,
             capture: capture,
@@ -108,7 +115,8 @@ import Foundation
             modes: ModeRouter(modes: [Mode(bundleID: "*", displayName: "D", prompt: "p", model: nil, temperature: nil)]),
             frontmost: FakeFrontmost(),
             fieldInspector: FakeFieldInspector(),
-            injector: FakeInjector(handler: { _ in TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified) })
+            injector: FakeInjector(handler: { _ in TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified) }),
+            historyStore: DictationHistoryStore(defaults: defaults)
         )
         p.startRecording()
         // Do NOT set lastPeakLevel above 0 — simulating a silent mic where the

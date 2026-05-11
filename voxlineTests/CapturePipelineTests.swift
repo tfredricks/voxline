@@ -69,7 +69,7 @@ import Foundation
             Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil),
             Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil)
         ]
-    ) -> (pipe: CapturePipeline, state: AppState, capture: FakeCapture, transcriber: FakeTranscriber, llm: FakeLLM, frontmost: FakeFrontmost, inspector: FakeFieldInspector, injector: FakeInjector) {
+    ) -> (pipe: CapturePipeline, state: AppState, capture: FakeCapture, transcriber: FakeTranscriber, llm: FakeLLM, frontmost: FakeFrontmost, inspector: FakeFieldInspector, injector: FakeInjector, history: DictationHistoryStore) {
         let state = AppState()
         let capture = FakeCapture()
         let transcriber = FakeTranscriber()
@@ -78,16 +78,21 @@ import Foundation
         let inspector = FakeFieldInspector(); inspector.field = focusedField
         let injector = FakeInjector()
         let router = ModeRouter(modes: modes)
+        let suiteName = "voxline-test-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let history = DictationHistoryStore(defaults: defaults)
         let pipe = CapturePipeline(
             state: state, capture: capture, transcriber: transcriber,
             llm: llm, modes: router, frontmost: front,
-            fieldInspector: inspector, injector: injector
+            fieldInspector: inspector, injector: injector,
+            historyStore: history
         )
-        return (pipe, state, capture, transcriber, llm, front, inspector, injector)
+        return (pipe, state, capture, transcriber, llm, front, inspector, injector, history)
     }
 
     @Test func startRecording_setsStateAndStartsCapture() {
-        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
         pipe.startRecording()
         #expect(state.status == .recording)
         #expect(state.recordingStartedAt != nil)
@@ -95,7 +100,7 @@ import Foundation
     }
 
     @Test func finalizeRecording_routesViaModeAndCallsLLMAndPastes() async throws {
-        let (pipe, state, _, transcriber, llm, _, _, injector) = makePipeline()
+        let (pipe, state, _, transcriber, llm, _, _, injector, _) = makePipeline()
         transcriber.nextResult = .success("uh hello there")
         llm.nextResult = .success("Hello there.")
         await startAndFinalize(pipe, state: state)
@@ -110,7 +115,7 @@ import Foundation
     }
 
     @Test func unknown_bundleID_falls_back_to_wildcard_mode() async throws {
-        let (pipe, state, _, _, llm, _, _, _) = makePipeline(frontmostBundleID: "com.unknown.app")
+        let (pipe, state, _, _, llm, _, _, _, _) = makePipeline(frontmostBundleID: "com.unknown.app")
         await startAndFinalize(pipe, state: state)
         #expect(llm.calls[0].mode.bundleID == "*")
     }
@@ -125,7 +130,7 @@ import Foundation
             Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt",
                  model: nil, temperature: nil, fieldKind: nil)
         ]
-        let (pipe, state, _, _, llm, _, _, _) = makePipeline(
+        let (pipe, state, _, _, llm, _, _, _, _) = makePipeline(
             focusedField: FocusedField(role: "AXTextField", subrole: "AXSearchField"),
             modes: modes
         )
@@ -135,7 +140,7 @@ import Foundation
 
     @Test func transcriptionFailure_setsErrorStateNoLLMNoPaste() async throws {
         struct StubError: Error {}
-        let (pipe, state, _, transcriber, llm, _, _, injector) = makePipeline()
+        let (pipe, state, _, transcriber, llm, _, _, injector, _) = makePipeline()
         transcriber.nextResult = .failure(StubError())
         await startAndFinalize(pipe, state: state)
         if case .error = state.status { } else { Issue.record("expected .error") }
@@ -144,7 +149,7 @@ import Foundation
     }
 
     @Test func empty_transcript_skips_llm_and_paste() async throws {
-        let (pipe, state, _, transcriber, llm, _, _, injector) = makePipeline()
+        let (pipe, state, _, transcriber, llm, _, _, injector, _) = makePipeline()
         transcriber.nextResult = .success("")
         await startAndFinalize(pipe, state: state)
         #expect(llm.calls.isEmpty)
@@ -153,7 +158,7 @@ import Foundation
     }
 
     @Test func llm_missingAPIKey_surfacesActionableErrorMessage() async throws {
-        let (pipe, state, _, _, llm, _, _, _) = makePipeline()
+        let (pipe, state, _, _, llm, _, _, _, _) = makePipeline()
         llm.nextResult = .failure(LLMError.missingAPIKey)
         await startAndFinalize(pipe, state: state)
         if case .error(let category, let msg) = state.status {
@@ -166,28 +171,28 @@ import Foundation
 
     @Test func paste_failure_setsErrorState() async throws {
         struct StubError: Error {}
-        let (pipe, state, _, _, _, _, _, injector) = makePipeline()
+        let (pipe, state, _, _, _, _, _, injector, _) = makePipeline()
         injector.nextError = StubError()
         await startAndFinalize(pipe, state: state)
         if case .error = state.status { } else { Issue.record("expected .error") }
     }
 
     @Test func startRecording_skipsWhenDownloadingModel() {
-        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
         state.status = .downloadingModel(progress: 0.3)
         pipe.startRecording()
         #expect(capture.startCallCount == 0)
     }
 
     @Test func startRecording_skipsWhenPreparingModel() {
-        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
         state.status = .preparingModel
         pipe.startRecording()
         #expect(capture.startCallCount == 0)
     }
 
     @Test func startRecording_skipsWhenAlreadyRecording() {
-        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
         state.status = .recording
         pipe.startRecording()
         #expect(capture.startCallCount == 0)
@@ -197,14 +202,14 @@ import Foundation
         // Reentrancy guard: a second chord (or stray Debug-button call) must
         // not start a fresh recording while the prior pipeline is still
         // awaiting transcribe/llm/paste.
-        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
         state.status = .thinking
         pipe.startRecording()
         #expect(capture.startCallCount == 0)
     }
 
     @Test func finalizeRecording_noopWhenNotRecording() async {
-        let (pipe, state, capture, transcriber, llm, _, _, _) = makePipeline()
+        let (pipe, state, capture, transcriber, llm, _, _, _, _) = makePipeline()
         state.status = .idle
         await pipe.finalizeRecording()
         #expect(capture.stopCallCount == 0)
@@ -216,7 +221,7 @@ import Foundation
         // Ensure a second finalize call (e.g. from `tapDisabled` arriving after
         // chord-release already triggered the first finalize) doesn't tear
         // down a pipeline mid-flight.
-        let (pipe, state, capture, transcriber, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, transcriber, _, _, _, _, _) = makePipeline()
         state.status = .thinking
         await pipe.finalizeRecording()
         #expect(capture.stopCallCount == 0)
@@ -227,7 +232,7 @@ import Foundation
         // Pipeline errors (paste failed, transcription failed, etc.) are
         // user-recoverable by retrying. Pressing the chord again should
         // start a new recording.
-        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
         state.status = .error(category: .pipeline, message: "Paste failed.")
         pipe.startRecording()
         #expect(capture.startCallCount == 1)
@@ -237,7 +242,7 @@ import Foundation
     @Test func finalizeRecording_setsLastRecordingDurationFromSampleCount() async {
         // The Debug window's "Duration" row reads `lastRecordingDuration`.
         // Three samples / 16 kHz ≈ 0.0001875s — assert the formula, not a literal.
-        let (pipe, state, _, _, _, _, _, _) = makePipeline()
+        let (pipe, state, _, _, _, _, _, _, _) = makePipeline()
         await startAndFinalize(pipe, state: state)
         guard let duration = state.lastRecordingDuration else {
             Issue.record("expected non-nil lastRecordingDuration"); return
@@ -250,7 +255,7 @@ import Foundation
         // Silent-capture detector aborts the pipeline before transcribe, but
         // we set duration before the detector runs — so a 0-duration zero-peak
         // run still has a duration recorded for the panel to show.
-        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
         capture.pendingSamples = [Float](repeating: 0, count: 16_000)
         pipe.startRecording()
         // Don't simulate onLevel — peak stays at 0, triggers silent-mic error.
@@ -265,11 +270,35 @@ import Foundation
         // is uninstalled, the chord literally won't work until the user
         // re-grants permissions, and silently transitioning to .recording
         // would mask that.
-        let (pipe, state, capture, _, _, _, _, _) = makePipeline()
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
         let stickyMessage = "Accessibility revoked. Re-grant in System Settings."
         state.status = .error(category: .permissions, message: stickyMessage)
         pipe.startRecording()
         #expect(capture.startCallCount == 0)
         #expect(state.status == .error(category: .permissions, message: stickyMessage))
+    }
+
+    @Test func finalizeRecording_recordsCleanedTextInHistory() async throws {
+        let (pipe, state, _, transcriber, llm, _, _, _, history) = makePipeline()
+        transcriber.nextResult = .success("uh hello there")
+        llm.nextResult = .success("Hello there.")
+        await startAndFinalize(pipe, state: state)
+        #expect(history.items.count == 1)
+        #expect(history.items[0].cleanedText == "Hello there.")
+    }
+
+    @Test func empty_transcript_doesNotRecordInHistory() async throws {
+        let (pipe, state, _, transcriber, _, _, _, _, history) = makePipeline()
+        transcriber.nextResult = .success("")
+        await startAndFinalize(pipe, state: state)
+        #expect(history.items.isEmpty)
+    }
+
+    @Test func transcriptionFailure_doesNotRecordInHistory() async throws {
+        struct StubError: Error {}
+        let (pipe, state, _, transcriber, _, _, _, _, history) = makePipeline()
+        transcriber.nextResult = .failure(StubError())
+        await startAndFinalize(pipe, state: state)
+        #expect(history.items.isEmpty)
     }
 }

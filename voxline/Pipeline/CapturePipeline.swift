@@ -15,6 +15,7 @@ final class CapturePipeline {
     private let frontmost: FrontmostAppProviding
     private let fieldInspector: FocusedFieldInspecting
     private let injector: ClipboardInjecting
+    private let historyStore: DictationHistoryStore
 
     init(
         state: AppState,
@@ -24,7 +25,8 @@ final class CapturePipeline {
         modes: ModeResolving,
         frontmost: FrontmostAppProviding,
         fieldInspector: FocusedFieldInspecting,
-        injector: ClipboardInjecting
+        injector: ClipboardInjecting,
+        historyStore: DictationHistoryStore
     ) {
         self.state = state
         self.capture = capture
@@ -34,6 +36,7 @@ final class CapturePipeline {
         self.frontmost = frontmost
         self.fieldInspector = fieldInspector
         self.injector = injector
+        self.historyStore = historyStore
 
         capture.onLevel = { [weak self] level in
             Task { @MainActor in
@@ -173,6 +176,7 @@ final class CapturePipeline {
         }
         state.lastCleanupDuration = Date().timeIntervalSince(cleanupStart)
         state.lastCleanedText = cleaned
+        historyStore.record(cleanedText: cleaned)
         AppLog.llm.info("cleanup ok: in=\(transcript.count, privacy: .public) out=\(cleaned.count, privacy: .public) duration=\(self.state.lastCleanupDuration ?? 0, privacy: .public)s")
 
         // 4. Paste.
