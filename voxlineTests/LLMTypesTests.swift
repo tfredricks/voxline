@@ -11,7 +11,7 @@ import Foundation
 
     @Test func provider_default_models_match_spec() {
         #expect(LLMProvider.anthropic.defaultModel == "claude-haiku-4-5")
-        #expect(LLMProvider.openai.defaultModel == "gpt-5-nano")
+        #expect(LLMProvider.openai.defaultModel == "gpt-4.1-nano")
     }
 
     @Test func provider_display_names_are_friendly() {

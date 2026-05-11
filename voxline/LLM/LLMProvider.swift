@@ -15,7 +15,7 @@ enum LLMProvider: String, CaseIterable, Codable {
     var defaultModel: String {
         switch self {
         case .anthropic: return "claude-haiku-4-5"
-        case .openai:    return "gpt-5-nano"
+        case .openai:    return "gpt-4.1-nano"
         }
     }
 }
