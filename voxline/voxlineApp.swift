@@ -203,7 +203,11 @@ final class AppCoordinator {
         self.modes = router
 
         // Output
-        let injector = ClipboardInjector()
+        let focusedTextSystem = AXFocusedTextSystem()
+        let injector = ClipboardInjector(
+            focusedTextSystem: focusedTextSystem,
+            pasteEligibility: DefaultPasteEligibility(focusedTextSystem: focusedTextSystem)
+        )
         let frontmost = FrontmostApp()
         let fieldInspector = AXFocusedFieldInspector()
         self.injector = injector
