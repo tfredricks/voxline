@@ -36,6 +36,39 @@ Feature #1 can be marked done when the normal editable-field targets above are
 `PASS`, `PASS-UNVERIFIED`, or documented `FALLBACK`, and any failures have an
 explicit limitation or follow-up issue.
 
+## Context-aware formatting (feature #11)
+
+For each target app, record what `AppLog.context` debug line emits during a
+single dictation. Filter Console.app with
+`subsystem == "com.voxline.app" AND category == "context"`.
+
+| App                           | App line | Window | Field | Before/after | Visible labels | Vocabulary |
+| ----------------------------- | -------- | ------ | ----- | ------------ | -------------- | ---------- |
+| Apple Mail compose body       |          |        |       |              |                |            |
+| Slack message composer        |          |        |       |              |                |            |
+| Cursor editor                 |          |        |       |              |                |            |
+| Safari address/search field   |          |        |       |              |                |            |
+| Notes note body               |          |        |       |              |                |            |
+| Terminal prompt               |          |        |       |              |                |            |
+| Password / secure text field  | yes      | yes    | secure| **suppressed** | yes          | yes        |
+
+Expectations:
+
+- **App line** present whenever a frontmost app is detected (almost always).
+- **Window** present when the focused element exposes `kAXWindowAttribute`
+  with a non-empty title; can be empty in Terminal, some Electron windows.
+- **Field** present when AX returns a role; `secure` for password fields.
+- **Before/after** present when AX exposes `kAXValueAttribute` and a
+  selected-text range. Often empty in web textareas and Electron apps.
+- **Visible labels** present when the AX BFS finds title/description strings;
+  short to empty in Electron-heavy apps.
+- **Vocabulary** present iff the user saved any global terms in Settings →
+  Custom vocabulary.
+- **Secure-field row** must show value-bearing lines suppressed (no
+  before/after cursor, no selected text). Validate by dictating into a 1Password
+  or system login screen; confirm Console.app shows the captured context but
+  excludes any value content.
+
 ## Settings (single-page redesign — 2026-05-10)
 
 | State                              | Expected                                                                         |

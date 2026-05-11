@@ -10,7 +10,7 @@
 8. [ ] **Command-based editing** — Supports voice commands such as "make that shorter," "turn that into bullets," "rewrite that professionally," or "summarize this."
 9. [ ] **Custom vocabulary** — Lets users add names, company terms, acronyms, technical terms, product names, and personal shorthand.
 10. [ ] **Personal writing style adaptation** — Learns user preferences over time, such as sentence length, tone, sign-offs, formatting habits, and common phrases.
-11. [ ] **Context-aware formatting** — Adjusts output based on where the user is typing: email reply, Slack message, document, code comment, task note, or search box.
+11. [x] **Context-aware formatting** — Adjusts output based on where the user is typing: email reply, Slack message, document, code comment, task note, or search box.
 12. [ ] **Low-friction correction flow** — Makes it easy to fix mistakes by voice, quick keyboard shortcut, inline rewrite, or selecting recent dictated text.
 13. [ ] **Voice notes to structured output** — Turns rough spoken thoughts into notes, emails, memos, task lists, summaries, or outlines.
 14. [ ] **App-specific integrations** — Adds enhanced support for common apps like Gmail, Outlook, Slack, Teams, Notion, Google Docs, Word, VS Code, Cursor, and ChatGPT.
