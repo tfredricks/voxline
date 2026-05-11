@@ -79,11 +79,35 @@ struct LLMService: LLMServing {
             // Prints to stdout so it shows up directly in Xcode's debug console
             // (or `log stream`-equivalent terminals) without the Console.app
             // noise. Compiled out of Release builds via `#if DEBUG`.
+            //
+            // We also dump the raw CapturedContext so a thin Context: block
+            // doesn't look like a bug — the formatter omits empty lines, but
+            // the raw dump shows which fields the probe actually populated.
+            func snippet(_ s: String?) -> String {
+                guard let s, !s.isEmpty else { return "(nil)" }
+                return s.count > 80 ? "\(s.prefix(77))…" : s
+            }
             print("""
 
             ╔══════════════════════════════════════════════════════════════════╗
             ║ VOXLINE LLM REQUEST  provider=\(provider)  model=\(model)
             ╠══════════════════════════════════════════════════════════════════╣
+            ║ CAPTURED CONTEXT (raw)
+            ╚══════════════════════════════════════════════════════════════════╝
+            appName        : \(snippet(context.appName))
+            bundleID       : \(snippet(context.bundleID))
+            windowTitle    : \(snippet(context.windowTitle))
+            fieldRole      : \(snippet(context.fieldRole))
+            fieldSubrole   : \(snippet(context.fieldSubrole))
+            isSecureField  : \(context.isSecureField)
+            textBeforeCursor: \(snippet(context.textBeforeCursor))
+            textAfterCursor: \(snippet(context.textAfterCursor))
+            selectedText   : \(snippet(context.selectedText))
+            visibleLabels  : \(context.visibleLabels.isEmpty ? "(empty)" : context.visibleLabels.description)
+            customVocabulary: \(context.customVocabulary.isEmpty ? "(empty)" : context.customVocabulary.joined(separator: ", "))
+            captureDurationMs: \(context.captureDurationMs)
+            captureNotes   : \(context.captureNotes.isEmpty ? "(none)" : context.captureNotes.joined(separator: ", "))
+            ╔══════════════════════════════════════════════════════════════════╗
             ║ SYSTEM
             ╚══════════════════════════════════════════════════════════════════╝
             \(request.systemPrompt)
