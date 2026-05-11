@@ -19,3 +19,6 @@ Models/
 
 # Git worktrees
 .worktrees/
+
+# Superpowers skill scratch directory (per-session brainstorm state, etc.)
+.superpowers/
