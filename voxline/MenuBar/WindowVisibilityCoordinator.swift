@@ -12,7 +12,17 @@ protocol ActivationPolicySetter {
 
 @MainActor
 final class DefaultActivationPolicySetter: ActivationPolicySetter {
-    func setPolicy(_ p: NSApplication.ActivationPolicy) { NSApp.setActivationPolicy(p) }
+    func setPolicy(_ p: NSApplication.ActivationPolicy) {
+        // macOS keeps the Dock icon visible if we flip .regular → .accessory
+        // while a titled window is still ordering out (willClose fires before
+        // orderOut completes). Defer to the next runloop tick so the closing
+        // window is gone before AppKit re-evaluates the Dock state.
+        if p == .accessory {
+            DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
+        } else {
+            NSApp.setActivationPolicy(p)
+        }
+    }
     func activate() { NSApp.activate() }
 }
 

@@ -27,4 +27,13 @@ import Testing
     @Test func iconForPreparingModel() {
         #expect(MenuBarIcon.symbolName(for: .preparingModel) == "gearshape.circle")
     }
+
+    @Test func iconForIdlePaused() {
+        #expect(MenuBarIcon.symbolName(for: .idle, paused: true) == "pause.circle")
+    }
+
+    @Test func pausedDoesNotOverrideActiveStatus() {
+        #expect(MenuBarIcon.symbolName(for: .recording, paused: true) == "mic.fill")
+        #expect(MenuBarIcon.symbolName(for: .error(category: .pipeline, message: "x"), paused: true) == "mic.slash")
+    }
 }

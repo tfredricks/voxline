@@ -61,7 +61,7 @@ struct voxlineApp: App {
 private struct MenuBarLabel: View {
     @Bindable var state: AppState
     var body: some View {
-        Image(systemName: MenuBarIcon.symbolName(for: state.status))
+        Image(systemName: MenuBarIcon.symbolName(for: state.status, paused: !state.hotkeyEnabled))
     }
 }
 
