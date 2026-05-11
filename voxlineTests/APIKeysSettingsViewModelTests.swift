@@ -5,7 +5,7 @@ import Foundation
 @Suite @MainActor struct APIKeysSettingsViewModelTests {
 
     private func keychain() -> Keychain {
-        Keychain(service: "com.voxline.voxline.test.\(UUID().uuidString)")
+        Keychain(service: "com.fredricks.voxline.test.\(UUID().uuidString)")
     }
 
     @Test func commit_anthropic_persists_only_anthropic_and_trims() throws {

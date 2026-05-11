@@ -25,7 +25,7 @@ import Foundation
     }
 
     private func keychain() -> Keychain {
-        Keychain(service: "com.voxline.voxline.test.\(UUID().uuidString)")
+        Keychain(service: "com.fredricks.voxline.test.\(UUID().uuidString)")
     }
 
     @Test func cleanup_with_no_key_throws_missingAPIKey() async throws {

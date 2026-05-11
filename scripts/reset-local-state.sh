@@ -18,8 +18,8 @@
 
 set -euo pipefail
 
-BUNDLE_ID="com.voxline.voxline"
-KEYCHAIN_SERVICE="com.voxline.voxline.keys"
+BUNDLE_ID="com.fredricks.voxline"
+KEYCHAIN_SERVICE="com.fredricks.voxline.keys"
 CONTAINER="$HOME/Library/Containers/$BUNDLE_ID"
 PREFS_PLIST="$CONTAINER/Data/Library/Preferences/$BUNDLE_ID.plist"
 

@@ -1,7 +1,7 @@
 import OSLog
 
 enum AppLog {
-    static let subsystem = "com.voxline.voxline"
+    static let subsystem = "com.fredricks.voxline"
 
     static let pipeline    = Logger(subsystem: subsystem, category: "pipeline")
     static let hotkey      = Logger(subsystem: subsystem, category: "hotkey")

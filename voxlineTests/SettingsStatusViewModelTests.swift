@@ -9,7 +9,7 @@ import Foundation
     }
 
     private func keychain() -> Keychain {
-        Keychain(service: "com.voxline.voxline.test.\(UUID().uuidString)")
+        Keychain(service: "com.fredricks.voxline.test.\(UUID().uuidString)")
     }
 
     /// Build (general, keys, status) with the given configuration. Caller is

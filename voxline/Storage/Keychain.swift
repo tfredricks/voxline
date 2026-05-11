@@ -2,12 +2,12 @@ import Foundation
 import Security
 
 /// Generic-password Keychain wrapper. One instance per logical "service"
-/// (a namespace like `com.voxline.voxline.keys`); within a service, items
+/// (a namespace like `com.fredricks.voxline.keys`); within a service, items
 /// are addressed by a string `key` (i.e., the Keychain `account`).
 struct Keychain {
 
     /// Canonical service id used by the app for API keys.
-    static let appServiceID = "com.voxline.voxline.keys"
+    static let appServiceID = "com.fredricks.voxline.keys"
 
     /// Canonical account names.
     enum Account {
