@@ -1,3 +1,5 @@
+# Feature Roadmap
+
 1. [x] **Works anywhere you type** — Dictate into any active text field: browser, email, docs, chat apps, notes, terminals, IDEs, and desktop apps.
 2. [x] **Fast push-to-talk capture** — Hold a hotkey, speak, release, and the text appears quickly with minimal friction.
 3. [x] **High-quality speech-to-text transcription** — Accurately converts spoken words into text with strong handling of accents, casual speech, pauses, and background noise.
@@ -15,6 +17,5 @@
 15. [ ] **Privacy controls** — Gives users clear control over audio retention, transcript history, logging, model providers, and what gets sent to APIs.
 16. [ ] **Dictation history** — Keeps recent dictations so users can recover text, rerun transformations, or copy previous outputs.
 17. [ ] **Prompt/template presets** — Lets users save reusable output formats like "client email," "meeting note," "GitHub issue," "daily journal," or "technical explanation."
-18. [ ] **Configurable hotkeys and behavior** — Allows custom shortcuts, auto-submit settings, paste method, microphone selection, and post-processing preferences.
-19. [ ] **Visible status and feedback** — Shows when the app is listening, processing, inserting text, or waiting for correction.
-20. [ ] **Extensible open-source architecture** — Supports plugins for speech models, LLM providers, app integrations, custom commands, and user-defined workflows.
+18. [x] **Configurable hotkeys and behavior** — Custom push-to-talk shortcut, microphone selection, and LLM cleanup provider/model selection.
+19. [x] **Visible status and feedback** — Shows when the app is listening, processing, inserting text, or waiting for correction.
