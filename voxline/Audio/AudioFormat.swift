@@ -24,4 +24,14 @@ enum AudioFormat {
         }
         return min(peak, 1.0)
     }
+
+    /// Maps a linear peak amplitude in [0, 1] to a perceptual meter value in
+    /// [0, 1] on a dBFS scale (-60 dBFS → 0, 0 dBFS → 1). Normal speech peaks
+    /// near -20 dBFS (≈0.1 linear) and would otherwise barely move a linear bar.
+    static func displayLevel(fromPeak peak: Float) -> Float {
+        guard peak > 0 else { return 0 }
+        let dbfs = 20 * log10f(peak)
+        let floor: Float = -60
+        return max(0, min(1, (dbfs - floor) / -floor))
+    }
 }

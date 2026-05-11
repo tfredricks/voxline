@@ -172,7 +172,7 @@ final class AudioCaptureService {
         Task { @MainActor [weak self] in
             guard let self, self.currentEpoch == epoch else { return }
             self.samples.append(contentsOf: chunk)
-            let level = AudioFormat.peakLevel(samples: chunk)
+            let level = AudioFormat.displayLevel(fromPeak: AudioFormat.peakLevel(samples: chunk))
             self.onLevel?(level)
         }
     }

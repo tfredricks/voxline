@@ -49,9 +49,9 @@ final class MicLevelMonitor {
             guard let channelData = buffer.floatChannelData?[0] else { return }
             let count = Int(buffer.frameLength)
             let chunk = Array(UnsafeBufferPointer(start: channelData, count: count))
-            let peak = AudioFormat.peakLevel(samples: chunk)
+            let display = AudioFormat.displayLevel(fromPeak: AudioFormat.peakLevel(samples: chunk))
             Task { @MainActor [weak self] in
-                self?.publishLevel(peak)
+                self?.publishLevel(display)
             }
         }
 
