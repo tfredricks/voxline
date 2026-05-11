@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="logo.png" alt="voxline app icon" width="160" />
+
 # voxline
 
 **Hold a key. Speak. Get polished writing.**
@@ -86,7 +88,7 @@ open voxline.xcodeproj
 Build and run from Xcode (⌘R). On first launch:
 
 1. Grant **Microphone**, **Accessibility**, and **Input Monitoring** when prompted (the app will guide you).
-2. Pick your hotkey, mic, and Whisper model in the Settings window (⌘,).
+2. Pick your hotkey, mic, and Whisper model in the Settings window (⌘,). The default hotkey is **Right Cmd + Right Option** — change it if you'd rather use something else.
 3. Drop in an Anthropic or OpenAI API key in the **Cleanup (AI)** section.
 4. Hold the hotkey anywhere on your Mac and start talking.
 
