@@ -33,7 +33,7 @@ struct WizardRootView: View {
         switch vm.currentStep {
         case .welcome: WizardWelcomeView()
         case .permissions: WizardPermissionsView(allGranted: $permissionsGranted)
-        case .apiKey: WizardAPIKeyView(vm: vm.apiKeyVM)
+        case .apiKey: WizardAPIKeyView(vm: vm.apiKeyVM, selectedProvider: $vm.selectedProvider)
         case .modelDownload: WizardModelDownloadView(state: state, model: model, onRetry: onRetryDownload)
         case .done: WizardDoneView(chord: chord)
         }
@@ -64,8 +64,13 @@ struct WizardRootView: View {
     }
 
     private var hasAnyAPIKey: Bool {
+        // Require a key for the *selected* provider so Continue doesn't enable
+        // off a leftover key for the other provider. Matches what complete()
+        // will actually use.
         let ws = CharacterSet.whitespacesAndNewlines
-        return !vm.apiKeyVM.anthropicKey.trimmingCharacters(in: ws).isEmpty
-            || !vm.apiKeyVM.openaiKey.trimmingCharacters(in: ws).isEmpty
+        switch vm.selectedProvider {
+        case .anthropic: return !vm.apiKeyVM.anthropicKey.trimmingCharacters(in: ws).isEmpty
+        case .openai:    return !vm.apiKeyVM.openaiKey.trimmingCharacters(in: ws).isEmpty
+        }
     }
 }

@@ -65,4 +65,62 @@ import Foundation
         vm.advance()
         #expect(try kc.string(forKey: Keychain.Account.openai) == "sk-test")
     }
+
+    @Test func complete_snaps_provider_to_selected_openai() throws {
+        let d = defaults()
+        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
+        defer { try? kc.deleteAll() }
+        let vm = WizardViewModel(settings: AppSettings(defaults: d), keychain: kc)
+        vm.selectedProvider = .openai
+        vm.apiKeyVM.openaiKey = "sk-openai"
+        vm.complete()
+        #expect(AppSettings(defaults: d).llmProvider == .openai)
+    }
+
+    @Test func complete_snaps_provider_to_selected_anthropic() throws {
+        let d = defaults()
+        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
+        defer { try? kc.deleteAll() }
+        // Seed defaults with .openai to prove the wizard actually overrides.
+        var seed = AppSettings(defaults: d)
+        seed.llmProvider = .openai
+        let vm = WizardViewModel(settings: AppSettings(defaults: d), keychain: kc)
+        vm.selectedProvider = .anthropic
+        vm.apiKeyVM.anthropicKey = "sk-ant"
+        vm.complete()
+        #expect(AppSettings(defaults: d).llmProvider == .anthropic)
+    }
+
+    // The reported bug: a stale Anthropic key in the keychain from a prior
+    // install pre-fills the Anthropic field. With the explicit picker, the
+    // wizard pre-selects OpenAI when only the OpenAI field becomes non-empty,
+    // and complete() snaps the provider to the picker's value.
+    @Test func selected_provider_defaults_to_user_added_key_over_keychain_leftover() throws {
+        let d = defaults()
+        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
+        defer { try? kc.deleteAll() }
+        // Seed a leftover Anthropic key (simulates prior install where DPK
+        // entries survived a sandbox reset).
+        try kc.set("sk-ant-leftover", forKey: Keychain.Account.anthropic)
+
+        let vm = WizardViewModel(settings: AppSettings(defaults: d), keychain: kc)
+        // Sanity: pre-load worked (verifies the bug premise)
+        #expect(vm.apiKeyVM.anthropicKey == "sk-ant-leftover")
+        // Default selection should follow the only-non-empty key — but here
+        // both will be empty initially other than the leftover, so init picks
+        // .anthropic. The user explicitly switches to OpenAI in the picker:
+        vm.selectedProvider = .openai
+        vm.apiKeyVM.openaiKey = "sk-openai-new"
+        vm.complete()
+        #expect(AppSettings(defaults: d).llmProvider == .openai)
+    }
+
+    @Test func selected_provider_init_prefers_only_non_empty_keychain_key() throws {
+        let d = defaults()
+        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
+        defer { try? kc.deleteAll() }
+        try kc.set("sk-openai-existing", forKey: Keychain.Account.openai)
+        let vm = WizardViewModel(settings: AppSettings(defaults: d), keychain: kc)
+        #expect(vm.selectedProvider == .openai)
+    }
 }

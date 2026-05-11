@@ -39,7 +39,7 @@ struct APIKeyRow: View {
                 .buttonStyle(.borderless)
                 .help(revealed ? "Hide key" : "Reveal key")
 
-                statusPill
+                saveAffordance
             }
 
             HStack(spacing: 8) {
@@ -59,7 +59,12 @@ struct APIKeyRow: View {
             }
 
             HStack {
-                Button("Test") { onTest() }
+                // Commit the live value before hitting the network so the
+                // user doesn't end up with a successful test against an
+                // unsaved key. macOS SwiftUI doesn't reliably defocus a
+                // SecureField when another button in the same Form is
+                // clicked, so .onChange(of: focused) can't be relied on.
+                Button("Test") { onCommit(); onTest() }
                     .disabled(testing != nil || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 if testing == provider { ProgressView().controlSize(.small) }
                 testResultLabel
@@ -75,8 +80,13 @@ struct APIKeyRow: View {
         }
     }
 
+    // Save button when dirty, green "Saved" pill when persisted. Replaces the
+    // earlier "Unsaved" pill, which was a status indicator with no action
+    // attached — users had no discoverable way to commit (the only paths were
+    // pressing Return or losing focus, neither obvious nor reliable on macOS
+    // SwiftUI's SecureField + Form combo).
     @ViewBuilder
-    private var statusPill: some View {
+    private var saveAffordance: some View {
         let trimmedEmpty = key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if trimmedEmpty {
             EmptyView()
@@ -87,11 +97,9 @@ struct APIKeyRow: View {
                 .background(.green.opacity(0.2), in: Capsule())
                 .foregroundStyle(.green)
         } else {
-            Text("Unsaved")
-                .font(.caption)
-                .padding(.horizontal, 6).padding(.vertical, 2)
-                .background(.orange.opacity(0.2), in: Capsule())
-                .foregroundStyle(.orange)
+            Button("Save") { onCommit() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
         }
     }
 

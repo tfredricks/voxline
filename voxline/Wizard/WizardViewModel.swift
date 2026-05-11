@@ -12,6 +12,12 @@ final class WizardViewModel {
     /// The API-key step reuses APIKeysSettingsViewModel directly.
     let apiKeyVM: APIKeysSettingsViewModel
 
+    /// User's explicit provider choice from the API-key step. `complete()`
+    /// snaps `AppSettings.llmProvider` to this value so there's no guessing
+    /// based on which fields happen to be populated (leftover keychain
+    /// entries from a prior install used to confuse the heuristic).
+    var selectedProvider: LLMProvider
+
     private var settings: AppSettings
 
     init(
@@ -19,7 +25,21 @@ final class WizardViewModel {
         keychain: Keychain = Keychain()
     ) {
         self.settings = settings
-        self.apiKeyVM = APIKeysSettingsViewModel(keychain: keychain)
+        let vm = APIKeysSettingsViewModel(keychain: keychain)
+        self.apiKeyVM = vm
+        // Pre-select the picker based on what's already in the keychain,
+        // falling back to the current settings choice. This way a returning
+        // user who only has an OpenAI key sees OpenAI selected by default.
+        let ws = CharacterSet.whitespacesAndNewlines
+        let hasAnthropic = !vm.anthropicKey.trimmingCharacters(in: ws).isEmpty
+        let hasOpenAI    = !vm.openaiKey.trimmingCharacters(in: ws).isEmpty
+        if hasOpenAI && !hasAnthropic {
+            self.selectedProvider = .openai
+        } else if hasAnthropic && !hasOpenAI {
+            self.selectedProvider = .anthropic
+        } else {
+            self.selectedProvider = settings.llmProvider
+        }
     }
 
     var canAdvance: Bool { currentStep.next != nil }
@@ -44,19 +64,8 @@ final class WizardViewModel {
 
     func complete() {
         commitKeys()
-        // After a reset wipes the sandbox container, `llmProvider` defaults to
-        // .anthropic. If the user only filled in the OpenAI key (or vice
-        // versa), the menu bar would otherwise error with "No API key
-        // configured" because LLMService looks up the wrong provider's key.
-        // Snap the provider to match whichever single key was supplied.
-        let hasAnthropic = !apiKeyVM.anthropicKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let hasOpenAI    = !apiKeyVM.openaiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         var s = settings
-        if hasAnthropic && !hasOpenAI {
-            s.llmProvider = .anthropic
-        } else if hasOpenAI && !hasAnthropic {
-            s.llmProvider = .openai
-        }
+        s.llmProvider = selectedProvider
         s.hasCompletedFirstRun = true
         settings = s
         onComplete?()

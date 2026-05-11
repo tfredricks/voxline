@@ -3,26 +3,31 @@ import SwiftUI
 
 struct WizardAPIKeyView: View {
     @Bindable var vm: APIKeysSettingsViewModel
+    @Binding var selectedProvider: LLMProvider
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Set up API keys").font(.title.bold())
-            Text("Voxline uses your own API key for the LLM cleanup step. Paste a key for the provider you want to use.")
+            Text("Set up your API key").font(.title.bold())
+            Text("Voxline uses your own API key for the LLM cleanup step. Pick one provider — you can add the other later in Settings.")
                 .foregroundStyle(.secondary)
 
-            LabeledContent("Anthropic") {
-                SecureField("API key", text: $vm.anthropicKey).textContentType(.password)
+            Picker("Provider", selection: $selectedProvider) {
+                Text(LLMProvider.anthropic.displayName).tag(LLMProvider.anthropic)
+                Text(LLMProvider.openai.displayName).tag(LLMProvider.openai)
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
 
-            LabeledContent("OpenAI") {
-                SecureField("API key", text: $vm.openaiKey).textContentType(.password)
+            LabeledContent("\(selectedProvider.displayName) API key") {
+                SecureField("paste key", text: keyBinding)
+                    .textContentType(.password)
             }
 
             HStack {
-                Button("Test Anthropic") { Task { await vm.testConnection(.anthropic) } }
-                    .disabled(vm.testing != nil || vm.anthropicKey.isEmpty)
-                Button("Test OpenAI") { Task { await vm.testConnection(.openai) } }
-                    .disabled(vm.testing != nil || vm.openaiKey.isEmpty)
+                Button("Test \(selectedProvider.displayName)") {
+                    Task { await vm.testConnection(selectedProvider) }
+                }
+                .disabled(vm.testing != nil || currentKey.isEmpty)
                 if vm.testing != nil { ProgressView().controlSize(.small) }
                 Spacer()
                 testResultView
@@ -34,6 +39,20 @@ struct WizardAPIKeyView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var keyBinding: Binding<String> {
+        switch selectedProvider {
+        case .anthropic: return $vm.anthropicKey
+        case .openai:    return $vm.openaiKey
+        }
+    }
+
+    private var currentKey: String {
+        switch selectedProvider {
+        case .anthropic: return vm.anthropicKey
+        case .openai:    return vm.openaiKey
+        }
     }
 
     @ViewBuilder
