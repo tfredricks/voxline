@@ -76,12 +76,23 @@ struct LLMService: LLMServing {
         #if DEBUG
         if ProcessInfo.processInfo.environment["VOXLINE_TRACE_LLM"] == "1" {
             // Dev firehose: dumps the full prompt right before the HTTP call.
-            // Compiled out of Release builds via `#if DEBUG`; opt-in within
-            // Debug via the env var on the Xcode scheme. `.public` here is
-            // safe because Release builds don't include this code at all.
-            AppLog.llmTrace.debug("LLM request → provider=\(String(describing: provider), privacy: .public) model=\(model, privacy: .public)")
-            AppLog.llmTrace.debug("--- SYSTEM ---\n\(request.systemPrompt, privacy: .public)")
-            AppLog.llmTrace.debug("--- USER ---\n\(request.userPrompt, privacy: .public)")
+            // Prints to stdout so it shows up directly in Xcode's debug console
+            // (or `log stream`-equivalent terminals) without the Console.app
+            // noise. Compiled out of Release builds via `#if DEBUG`.
+            print("""
+
+            ╔══════════════════════════════════════════════════════════════════╗
+            ║ VOXLINE LLM REQUEST  provider=\(provider)  model=\(model)
+            ╠══════════════════════════════════════════════════════════════════╣
+            ║ SYSTEM
+            ╚══════════════════════════════════════════════════════════════════╝
+            \(request.systemPrompt)
+            ╔══════════════════════════════════════════════════════════════════╗
+            ║ USER
+            ╚══════════════════════════════════════════════════════════════════╝
+            \(request.userPrompt)
+            ────────────────────────────────────────────────────────────────────
+            """)
         }
         #endif
 

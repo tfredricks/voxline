@@ -12,13 +12,5 @@ enum AppLog {
     static let context     = Logger(subsystem: subsystem, category: "context")
     static let permissions = Logger(subsystem: subsystem, category: "permissions")
 
-    #if DEBUG
-    /// Dev-only firehose for the full LLM prompt. Gated by `#if DEBUG`, so
-    /// the code is stripped from Release builds entirely. Within Debug, it
-    /// only fires when the `VOXLINE_TRACE_LLM` env var is set (configure via
-    /// the Xcode scheme: Run → Arguments → Environment Variables).
-    static let llmTrace    = Logger(subsystem: subsystem, category: "llm-trace")
-    #endif
-
     static let pipelineSignposter = OSSignposter(subsystem: subsystem, category: "pipeline")
 }
