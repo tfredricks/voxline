@@ -14,7 +14,6 @@ import Foundation
 /// - Selected text: "..."
 /// - Text before cursor: "..."
 /// - Text after cursor: "..."
-/// - Visible labels: [...]
 /// - Custom vocabulary: ...
 ///
 /// Return only the final text to insert. Do not add quotes, prefixes, or commentary.
@@ -73,11 +72,6 @@ enum ContextBlockFormatter {
             if let t = c.textAfterCursor, !t.isEmpty {
                 lines.append("- Text after cursor: \"\(escape(t))\"")
             }
-        }
-
-        if !c.visibleLabels.isEmpty {
-            let quoted = c.visibleLabels.map { "\"\(escape($0))\"" }.joined(separator: ", ")
-            lines.append("- Visible labels: [\(quoted)]")
         }
 
         if !c.customVocabulary.isEmpty {

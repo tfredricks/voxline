@@ -25,7 +25,6 @@ import Foundation
         c.textBeforeCursor = "Hey Kamil, following up on"
         c.textAfterCursor = ""
         c.selectedText = "the paragraph you highlighted"
-        c.visibleLabels = ["Kamil Szczerba", "Q4 Renewal", "Acme"]
         c.customVocabulary = ["Cursor", "LangGraph", "canonical_title"]
 
         let out = ContextBlockFormatter.format(transcript: "send that update", context: c)
@@ -36,7 +35,6 @@ import Foundation
         #expect(out.contains("- Field: AXTextArea"))
         #expect(out.contains("- Selected text: \"the paragraph you highlighted\""))
         #expect(out.contains("- Text before cursor: \"Hey Kamil, following up on\""))
-        #expect(out.contains("- Visible labels: [\"Kamil Szczerba\", \"Q4 Renewal\", \"Acme\"]"))
         #expect(out.contains("- Custom vocabulary: Cursor, LangGraph, canonical_title"))
         #expect(out.hasSuffix(trailing))
         // Empty text-after-cursor must be omitted, not emitted as "" line.
@@ -55,7 +53,6 @@ import Foundation
         #expect(!out.contains("- Field:"))
         #expect(!out.contains("- Selected text:"))
         #expect(!out.contains("- Text before cursor:"))
-        #expect(!out.contains("- Visible labels:"))
         #expect(!out.contains("- Custom vocabulary:"))
     }
 
@@ -67,7 +64,6 @@ import Foundation
         c.isSecureField = true
         c.textBeforeCursor = "hunter2"   // must NOT appear
         c.selectedText = "hunter2"       // must NOT appear
-        c.visibleLabels = ["Email", "Password"]
         c.customVocabulary = ["Cursor"]
         let out = ContextBlockFormatter.format(transcript: "hi", context: c)
         #expect(out.contains("- App: 1Password (com.1password.1password)"))
@@ -77,8 +73,7 @@ import Foundation
         #expect(!out.contains("- Selected text:"))
         #expect(!out.contains("- Text before cursor:"))
         #expect(!out.contains("- Text after cursor:"))
-        // Non-value lines still allowed.
-        #expect(out.contains("- Visible labels: [\"Email\", \"Password\"]"))
+        // Non-value, non-AX lines still allowed.
         #expect(out.contains("- Custom vocabulary: Cursor"))
     }
 

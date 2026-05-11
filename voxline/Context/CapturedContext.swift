@@ -5,8 +5,8 @@ import Foundation
 /// user message. All optional/zero fields are omitted from the formatted
 /// output — there is no "unknown" line in the prompt.
 ///
-/// Caps on string/array lengths are enforced at the producer layer (probes
-/// and the walker). The formatter does not re-trim.
+/// Caps on string lengths are enforced at the producer layer (the AX probe).
+/// The formatter does not re-trim.
 struct CapturedContext: Equatable, Sendable {
 
     var appName: String?
@@ -21,7 +21,6 @@ struct CapturedContext: Equatable, Sendable {
     var textBeforeCursor: String?
     var textAfterCursor: String?
     var selectedText: String?
-    var visibleLabels: [String]
     var customVocabulary: [String]
     /// Wall-clock duration of the capture, in milliseconds. Diagnostic only.
     var captureDurationMs: Int
@@ -39,7 +38,6 @@ struct CapturedContext: Equatable, Sendable {
         textBeforeCursor: nil,
         textAfterCursor: nil,
         selectedText: nil,
-        visibleLabels: [],
         customVocabulary: [],
         captureDurationMs: 0,
         captureNotes: []

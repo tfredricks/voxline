@@ -19,11 +19,6 @@ import Foundation
         func probe(deadline: CaptureDeadline) -> AXContextProbeResult { result }
     }
 
-    struct StubWalker: AXVisibleLabelsWalking {
-        let labels: [String]
-        func walk(deadline: CaptureDeadline) -> [String] { labels }
-    }
-
     private func suite() -> UserDefaults {
         let name = "voxline-test-\(UUID().uuidString)"
         let d = UserDefaults(suiteName: name)!
@@ -31,7 +26,7 @@ import Foundation
         return d
     }
 
-    @Test func capture_aggregates_app_field_probe_labels_and_vocab() async {
+    @Test func capture_aggregates_app_field_probe_and_vocab() async {
         let front = FakeFrontmost(); front.bundleID = "com.tinyspeck.slackmacgap"
         let inspector = FakeFieldInspector(); inspector.field = FocusedField(role: "AXTextArea", subrole: nil)
         let probe = StubProbe(result: AXContextProbeResult(
@@ -40,7 +35,6 @@ import Foundation
             textAfterCursor: nil,
             selectedText: "highlighted"
         ))
-        let walker = StubWalker(labels: ["Kamil Szczerba", "Q4 Renewal"])
         let vocab = CustomVocabularyStore(defaults: suite())
         vocab.save(["Cursor", "LangGraph"])
 
@@ -49,10 +43,9 @@ import Foundation
             appNameProvider: { "Slack" },
             fieldInspector: inspector,
             axProbe: probe,
-            labelsWalker: walker,
             vocabulary: vocab,
             isAXTrusted: { true },
-            budgetMs: 150
+            budgetMs: 50
         )
 
         let c = await svc.capture()
@@ -63,7 +56,6 @@ import Foundation
         #expect(c.isSecureField == false)
         #expect(c.textBeforeCursor == "Hey Kamil,")
         #expect(c.selectedText == "highlighted")
-        #expect(c.visibleLabels == ["Kamil Szczerba", "Q4 Renewal"])
         #expect(c.customVocabulary == ["Cursor", "LangGraph"])
         #expect(c.captureNotes.contains("ax-not-trusted") == false)
     }
@@ -78,7 +70,6 @@ import Foundation
             textAfterCursor: nil,
             selectedText: "hunter2"
         ))
-        let walker = StubWalker(labels: ["Email", "Password"])
         let vocab = CustomVocabularyStore(defaults: suite())
 
         let svc = DefaultContextCaptureService(
@@ -86,10 +77,9 @@ import Foundation
             appNameProvider: { "1Password" },
             fieldInspector: inspector,
             axProbe: probe,
-            labelsWalker: walker,
             vocabulary: vocab,
             isAXTrusted: { true },
-            budgetMs: 150
+            budgetMs: 50
         )
 
         let c = await svc.capture()
@@ -98,7 +88,6 @@ import Foundation
         #expect(c.textAfterCursor == nil)
         #expect(c.selectedText == nil)
         #expect(c.windowTitle == "Login")
-        #expect(c.visibleLabels == ["Email", "Password"])
         #expect(c.captureNotes.contains("secure-field"))
     }
 
@@ -115,7 +104,6 @@ import Foundation
             textAfterCursor: nil,
             selectedText: nil
         ))
-        let walker = StubWalker(labels: [])
         let vocab = CustomVocabularyStore(defaults: suite())
 
         let svc = DefaultContextCaptureService(
@@ -123,10 +111,9 @@ import Foundation
             appNameProvider: { "Safari" },
             fieldInspector: inspector,
             axProbe: probe,
-            labelsWalker: walker,
             vocabulary: vocab,
             isAXTrusted: { true },
-            budgetMs: 150
+            budgetMs: 50
         )
 
         let c = await svc.capture()
@@ -144,7 +131,6 @@ import Foundation
         let front = FakeFrontmost(); front.bundleID = "com.foo"
         let inspector = FakeFieldInspector()
         let probe = StubProbe(result: AXContextProbeResult())
-        let walker = StubWalker(labels: [])
         let vocab = CustomVocabularyStore(defaults: suite())
 
         let svc = DefaultContextCaptureService(
@@ -152,10 +138,9 @@ import Foundation
             appNameProvider: { nil },
             fieldInspector: inspector,
             axProbe: probe,
-            labelsWalker: walker,
             vocabulary: vocab,
             isAXTrusted: { true },
-            budgetMs: 150
+            budgetMs: 50
         )
 
         let c = await svc.capture()
@@ -163,18 +148,17 @@ import Foundation
         #expect(c.captureDurationMs <= 200)
     }
 
-    @Test func capture_records_ax_not_trusted_note_and_skips_probes_when_ax_denied() async {
+    @Test func capture_records_ax_not_trusted_note_and_skips_probe_when_ax_denied() async {
         let front = FakeFrontmost(); front.bundleID = "com.apple.Safari"
         let inspector = FakeFieldInspector(); inspector.field = nil
-        // Probes/walker would still return data if asked — but the orchestrator
-        // should NOT ask them when AX is denied, so their results never land.
+        // Probe would still return data if asked — but the orchestrator
+        // should NOT ask it when AX is denied, so its results never land.
         let probe = StubProbe(result: AXContextProbeResult(
             windowTitle: "this would leak if probed",
             textBeforeCursor: "and so would this",
             textAfterCursor: nil,
             selectedText: nil
         ))
-        let walker = StubWalker(labels: ["leaky", "labels"])
         let vocab = CustomVocabularyStore(defaults: suite())
         vocab.save(["term"])
 
@@ -183,10 +167,9 @@ import Foundation
             appNameProvider: { "Safari" },
             fieldInspector: inspector,
             axProbe: probe,
-            labelsWalker: walker,
             vocabulary: vocab,
             isAXTrusted: { false },
-            budgetMs: 150
+            budgetMs: 50
         )
 
         let c = await svc.capture()
@@ -194,10 +177,9 @@ import Foundation
         #expect(c.appName == "Safari")
         #expect(c.bundleID == "com.apple.Safari")
         #expect(c.customVocabulary == ["term"])
-        // AX-dependent fields stayed unset; probe/walker results never read.
+        // AX-dependent fields stayed unset; probe results never read.
         #expect(c.windowTitle == nil)
         #expect(c.textBeforeCursor == nil)
-        #expect(c.visibleLabels == [])
         // The diagnostic flag is set so the cleanup-debug log can show it.
         #expect(c.captureNotes.contains("ax-not-trusted"))
     }

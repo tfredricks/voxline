@@ -171,7 +171,7 @@ final class CapturePipeline {
         // 3. LLM cleanup.
         let context = await contextTask?.value ?? .empty
         contextTask = nil
-        AppLog.context.debug("context: app=\(context.appName ?? "nil", privacy: .private) bundle=\(context.bundleID ?? "nil", privacy: .public) secure=\(context.isSecureField, privacy: .public) labels=\(context.visibleLabels.count, privacy: .public) durationMs=\(context.captureDurationMs, privacy: .public) notes=\(context.captureNotes.joined(separator: ","), privacy: .public)")
+        AppLog.context.debug("context: app=\(context.appName ?? "nil", privacy: .private) bundle=\(context.bundleID ?? "nil", privacy: .public) secure=\(context.isSecureField, privacy: .public) durationMs=\(context.captureDurationMs, privacy: .public) notes=\(context.captureNotes.joined(separator: ","), privacy: .public)")
         let cleaned: String
         let cleanupInterval = signposter.beginInterval("llm", id: sessionID)
         let cleanupStart = Date()

@@ -103,7 +103,6 @@ struct LLMService: LLMServing {
             textBeforeCursor: \(snippet(context.textBeforeCursor))
             textAfterCursor: \(snippet(context.textAfterCursor))
             selectedText   : \(snippet(context.selectedText))
-            visibleLabels  : \(context.visibleLabels.isEmpty ? "(empty)" : context.visibleLabels.description)
             customVocabulary: \(context.customVocabulary.isEmpty ? "(empty)" : context.customVocabulary.joined(separator: ", "))
             captureDurationMs: \(context.captureDurationMs)
             captureNotes   : \(context.captureNotes.isEmpty ? "(none)" : context.captureNotes.joined(separator: ", "))

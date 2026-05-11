@@ -1,11 +1,15 @@
 # Context-Aware Formatting (#11) — Design
 
-Status: design approved, ready to plan
+Status: shipped + post-ship trim applied (2026-05-11). Visible-labels BFS was
+removed when telemetry showed it cost 20–150ms per dictation in every app and
+returned useful data only in a narrow slice of native AppKit apps. Budget
+narrowed from 150ms to 50ms accordingly. See the "Visible labels — removed"
+section below for the rationale.
 Roadmap item: [docs/features.md #11](../../features.md)
 
 ## Goal
 
-Improve LLM cleanup quality by passing structured signals about where the user is dictating into the prompt. Today the LLM sees only the raw transcript and a per-app mode prompt. After this change it also sees the focused app, window title, the focused field's surrounding text, the current selection, a small list of visible labels from the window, and a global custom-vocabulary list.
+Improve LLM cleanup quality by passing structured signals about where the user is dictating into the prompt. Today the LLM sees only the raw transcript and a per-app mode prompt. After this change it also sees the focused app, window title, the focused field's surrounding text, the current selection, and a global custom-vocabulary list.
 
 The mode-routing system (`Modes/`, `AXFocusedFieldInspector`, `FrontmostApp`) already exists. This feature extends what we capture and how we feed it to the LLM. It does not change how modes are selected.
 
@@ -14,11 +18,11 @@ The mode-routing system (`Modes/`, `AXFocusedFieldInspector`, `FrontmostApp`) al
 In scope:
 
 - New `Context/` module that captures structured context at push-to-talk press time.
-- Extended AX probing: window title, focused-field value range (text before/after cursor), selected text, capped AX-tree walk for visible labels.
+- AX probing: window title, focused-field value range (text before/after cursor), selected text.
 - A global custom-vocabulary list (stub for feature #9), no UI beyond a single text field in Settings.
 - Append a structured `Context:` block to the LLM user message. Mode prompts stay as the system message and are not modified.
 - Secure-field handling: capture app + window only; suppress all value-bearing lines.
-- 150ms total time budget with per-step deadlines and graceful partial results.
+- 50ms total time budget with per-step deadlines and graceful partial results.
 - Diagnostic logging of what was captured.
 
 Out of scope:
@@ -37,10 +41,19 @@ voxline/Context/
   CapturedContext.swift            // struct
   ContextBlockFormatter.swift      // CapturedContext -> String
   AXContextProbe.swift             // window title, value range, selected text
-  AXVisibleLabelsWalker.swift      // capped BFS over focused window
   CaptureDeadline.swift            // small time-budget helper
   CustomVocabularyStore.swift      // global [String] via UserDefaults
 ```
+
+## Visible labels — removed
+
+The original design included an `AXVisibleLabelsWalker` (capped BFS over the focused window's AX tree, collecting label-like strings) that emitted a `- Visible labels:` line. It was removed post-ship after measurement:
+
+- **Cost:** 20–150ms per dictation in every app, regardless of payoff. Largest single contributor to the capture budget.
+- **Payoff:** non-empty only in a narrow slice of native AppKit apps (Mail recipient names, Notes folder names). For the Catalyst/Electron majority — Outlook, Slack desktop, Cursor, Obsidian, Discord, VS Code, Notion — it returned empty because those frameworks don't expose `kAXTitleAttribute`/`kAXDescriptionAttribute` on visible children.
+- **Verdict:** highest cost, lowest hit rate, most timeout-prone. Cut.
+
+The remaining AX probe (window title + cursor surrounds) self-short-circuits when AX is closed, so it stays cheap on the apps where the walker would have failed anyway.
 
 Reused without modification:
 
@@ -81,7 +94,6 @@ struct CapturedContext: Equatable {
     var textBeforeCursor: String?   // ≤ 200 chars
     var textAfterCursor: String?    // ≤ 100 chars
     var selectedText: String?       // ≤ 500 chars
-    var visibleLabels: [String]     // ≤ 20 items, each ≤ 60 chars, deduped
     var customVocabulary: [String]
     var captureDurationMs: Int
     var captureNotes: [String]      // diagnostic only; never in prompt
@@ -90,7 +102,7 @@ struct CapturedContext: Equatable {
 }
 ```
 
-All caps are enforced at the `AXContextProbe` / `AXVisibleLabelsWalker` layer — the formatter does not re-trim.
+All caps are enforced at the `AXContextProbe` layer — the formatter does not re-trim.
 
 ## Capture flow and time budget
 
@@ -101,7 +113,6 @@ Total budget: **150ms hard cap**. Capture order is cheapest-first so the most va
 3. **Secure-field gate:** if `kAXSecureTextFieldSubrole` or matching role hint, set `isSecureField=true`. Step 4 still runs because window title is useful (distinguishes a login screen from an in-app password change) and macOS refuses to return the secure field's value anyway; the orchestrator simply drops `textBeforeCursor` / `textAfterCursor` / `selectedText` on the secure path.
 4. AX selected text + `kAXSelectedTextRangeAttribute`; resolve before/after slices via `kAXStringForRangeParameterizedAttribute`. ~10–80ms.
 5. Window title via the focused element's parent window. ~5–20ms.
-6. AX-tree BFS from the focused window for visible labels. Depth cap 6, count cap 20, per-call deadline check. ~20–100ms.
 
 Each step is wrapped in a `CaptureDeadline.withRemaining(...)` helper. On any miss, append a note to `captureNotes` and continue with the next step. No exceptions cross the `ContextCaptureService` boundary.
 
@@ -122,7 +133,6 @@ Context:
 - Selected text: "the paragraph you highlighted"
 - Text before cursor: "Hey Kamil, following up on"
 - Text after cursor: ""
-- Visible labels: ["Kamil Szczerba", "Q4 Renewal", "Acme"]
 - Custom vocabulary: Cursor, LangGraph, canonical_title
 
 Return only the final text to insert. Do not add quotes, prefixes, or commentary.
@@ -161,7 +171,7 @@ The captured context is written to the existing diagnostic log at debug level fo
 Unit:
 
 - `ContextBlockFormatter` — golden-string tests for full context, partial context, all-empty (no Context block), secure-field.
-- `AXContextProbe` and `AXVisibleLabelsWalker` against a fake `AXUIElement` protocol facade (same pattern as the existing `FocusedFieldInspecting` test double).
+- `AXContextProbe` against a fake `AXUIElement` protocol facade (same pattern as the existing `FocusedFieldInspecting` test double).
 - `CaptureDeadline` — partial results return on cap-bust.
 - `CustomVocabularyStore` — round-trip with `UserDefaults` test suite.
 

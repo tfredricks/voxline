@@ -15,7 +15,6 @@ import Foundation
         #expect(c.textBeforeCursor == nil)
         #expect(c.textAfterCursor == nil)
         #expect(c.selectedText == nil)
-        #expect(c.visibleLabels == [])
         #expect(c.customVocabulary == [])
         #expect(c.captureDurationMs == 0)
         #expect(c.captureNotes == [])

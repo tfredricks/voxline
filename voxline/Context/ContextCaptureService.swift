@@ -21,7 +21,6 @@ struct DefaultContextCaptureService: ContextCapturing {
     let appNameProvider: @Sendable () -> String?
     let fieldInspector: FocusedFieldInspecting
     let axProbe: AXContextProbing
-    let labelsWalker: AXVisibleLabelsWalking
     let vocabulary: CustomVocabularyStore
     let isAXTrusted: @Sendable () -> Bool
     let budgetMs: Int
@@ -35,16 +34,14 @@ struct DefaultContextCaptureService: ContextCapturing {
         },
         fieldInspector: FocusedFieldInspecting = AXFocusedFieldInspector(),
         axProbe: AXContextProbing = DefaultAXContextProbe(),
-        labelsWalker: AXVisibleLabelsWalking = DefaultAXVisibleLabelsWalker(),
         vocabulary: CustomVocabularyStore = CustomVocabularyStore(),
         isAXTrusted: @escaping @Sendable () -> Bool = { AXIsProcessTrusted() },
-        budgetMs: Int = 150
+        budgetMs: Int = 50
     ) {
         self.frontmost = frontmost
         self.appNameProvider = appNameProvider
         self.fieldInspector = fieldInspector
         self.axProbe = axProbe
-        self.labelsWalker = labelsWalker
         self.vocabulary = vocabulary
         self.isAXTrusted = isAXTrusted
         self.budgetMs = budgetMs
@@ -61,7 +58,7 @@ struct DefaultContextCaptureService: ContextCapturing {
         // Capture the AX-trust state up front so it lands in `captureNotes` —
         // a downstream "the cleanup looked wrong" debug session needs to be
         // able to distinguish "AX denied" from "AX granted but nothing
-        // focused", and the probes/walker can't disambiguate the two.
+        // focused", and the probe can't disambiguate the two.
         let axTrusted = isAXTrusted()
         if !axTrusted {
             c.captureNotes.append("ax-not-trusted")
@@ -90,17 +87,10 @@ struct DefaultContextCaptureService: ContextCapturing {
             }
         }
 
-        // Step 4: visible-labels BFS — runs for both normal and secure fields.
-        if axTrusted && !deadline.isExpired {
-            c.visibleLabels = labelsWalker.walk(deadline: deadline)
-        }
-
-        // Step 5: custom vocabulary (cheap; UserDefaults).
+        // Step 4: custom vocabulary (cheap; UserDefaults).
         c.customVocabulary = vocabulary.load()
 
         c.captureDurationMs = deadline.elapsedMilliseconds()
-        // Single ax-timeout note covers any case where the deadline expired
-        // before capture completed (probe ate the budget, walk skipped, etc.).
         if deadline.isExpired {
             c.captureNotes.append("ax-timeout")
         }
