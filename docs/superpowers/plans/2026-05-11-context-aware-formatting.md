@@ -116,9 +116,9 @@ import Foundation
 /// Intentionally minimal: this is a stub for feature #9, which will replace it
 /// with per-mode dictionaries. `load()` is called once per dictation; keep it
 /// fast (single defaults read).
-struct CustomVocabularyStore: Sendable {
+struct CustomVocabularyStore: @unchecked Sendable {
 
-    static let key = "voxline.context.customVocabulary"
+    private static let key = "voxline.context.customVocabulary"
 
     let defaults: UserDefaults
 
@@ -141,7 +141,10 @@ struct CustomVocabularyStore: Sendable {
     /// Convert the Settings text field's contents (comma- or newline-separated)
     /// into a list. Same normalization rules as `save`.
     static func parse(_ text: String) -> [String] {
-        let separators = CharacterSet(charactersIn: ",\n")
+        // Accept all newline variants (\n, \r\n, \r, U+2028, U+2029) so paste
+        // from Windows or other-platform text editors doesn't smuggle \r into
+        // a term name.
+        let separators = CharacterSet(charactersIn: ",").union(.newlines)
         let pieces = text.components(separatedBy: separators)
         return normalize(pieces)
     }
