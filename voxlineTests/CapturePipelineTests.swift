@@ -301,4 +301,22 @@ import Foundation
         await startAndFinalize(pipe, state: state)
         #expect(history.items.isEmpty)
     }
+
+    @Test func llmFailure_doesNotRecordInHistory() async throws {
+        let (pipe, state, _, _, llm, _, _, _, history) = makePipeline()
+        llm.nextResult = .failure(LLMError.missingAPIKey)
+        await startAndFinalize(pipe, state: state)
+        #expect(history.items.isEmpty)
+    }
+
+    @Test func paste_failure_stillRecordsInHistory() async throws {
+        struct StubError: Error {}
+        let (pipe, state, _, _, llm, _, _, injector, history) = makePipeline()
+        llm.nextResult = .success("Hello there.")
+        injector.nextError = StubError()
+        await startAndFinalize(pipe, state: state)
+        if case .error = state.status { } else { Issue.record("expected .error") }
+        #expect(history.items.count == 1)
+        #expect(history.items[0].cleanedText == "Hello there.")
+    }
 }
