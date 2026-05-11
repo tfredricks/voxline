@@ -6,7 +6,7 @@ import Foundation
 
     /// Use a per-test service identifier so tests don't trample the real keychain entries.
     private func makeKeychain() -> Keychain {
-        Keychain(service: "com.fredricks.voxline.test.\(UUID().uuidString)")
+        Keychain(service: "com.voxline.app.test.\(UUID().uuidString)")
     }
 
     @Test func set_then_get_returns_stored_value() throws {

@@ -10,7 +10,7 @@
 	<true/>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)com.fredricks.voxline</string>
+		<string>$(AppIdentifierPrefix)com.voxline.app</string>
 	</array>
 </dict>
 </plist>
