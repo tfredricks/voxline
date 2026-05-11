@@ -72,7 +72,7 @@ final class CapturePipeline {
             setError("Audio capture failed: \(error.localizedDescription)")
             return
         }
-        AppLog.pipeline.info("recording started")
+        AppLog.pipeline.debug("recording started")
         state.recordingStartedAt = Date()
         state.audioLevel = 0
         state.lastPeakLevel = 0
@@ -109,7 +109,7 @@ final class CapturePipeline {
         }
 
         if samples.isEmpty {
-            AppLog.pipeline.info("empty capture, idling out")
+            AppLog.pipeline.debug("empty capture, idling out")
             resetIdle()
             return
         }
@@ -181,7 +181,7 @@ final class CapturePipeline {
             let outcome = try await injector.inject(cleaned)
             state.debugLastInsertionResult = outcome.description
             signposter.endInterval("paste", pasteInterval)
-            AppLog.paste.info("inject ok: outcome=\(outcome.description, privacy: .public)")
+            AppLog.paste.debug("inject ok: outcome=\(outcome.description, privacy: .public)")
         } catch let e as TextInsertionError {
             signposter.endInterval("paste", pasteInterval, "error")
             signposter.endInterval("session", sessionInterval, "error")

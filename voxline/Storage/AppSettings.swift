@@ -2,7 +2,10 @@ import Foundation
 
 /// Thin wrapper around UserDefaults for non-secret user preferences.
 /// Secrets live in `Keychain`.
-struct AppSettings {
+// UserDefaults isn't formally Sendable but is documented thread-safe, so we
+// vouch for AppSettings with @unchecked. All getters/setters here are pure
+// reads/writes against UserDefaults — no shared mutable state of our own.
+struct AppSettings: @unchecked Sendable {
 
     enum Key {
         static let provider = "voxline.llm.provider"

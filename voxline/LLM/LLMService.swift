@@ -3,7 +3,7 @@ import Foundation
 /// Single entry point for transcript → LLM-cleaned-text. Picks the right
 /// client based on AppSettings, fetches the corresponding key from Keychain,
 /// applies per-mode overrides, and runs the cleanup request.
-struct LLMService {
+struct LLMService: LLMServing {
 
     /// Fixed preamble prepended to every mode prompt. Establishes the model's
     /// role as a transcription post-processor so that questions or

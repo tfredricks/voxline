@@ -49,6 +49,7 @@ protocol FrontmostAppProviding: Sendable {
 
 extension AudioCaptureService: AudioCapturing {}
 extension TranscriptionService: Transcribing {}
-extension ModeRouter: ModeResolving {}
-extension LLMService: LLMServing {}
 extension ClipboardInjector: ClipboardInjecting {}
+// ModeRouter: ModeResolving and LLMService: LLMServing live in their own
+// source files — Sendable-bearing protocol conformances must be declared in
+// the same file as the type under Swift 6's strict concurrency rules.
