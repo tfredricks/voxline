@@ -26,7 +26,7 @@ import Foundation
         let query = components.queryItems ?? []
         #expect(query.contains(URLQueryItem(name: "template", value: "bug.yml")))
         let body = query.first { $0.name == "body" }?.value ?? ""
-        #expect(body.contains("voxline version: 1.0 (1)"))
+        #expect(body.contains("Voxline version: 1.0 (1)"))
         #expect(body.contains("macOS: Version 14.5 (Build 23F79)"))
         #expect(body.contains("Whisper model: large-v3-turbo"))
         #expect(body.contains("Mic device: MacBook Pro Microphone"))
