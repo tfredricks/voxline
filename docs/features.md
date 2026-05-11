@@ -15,7 +15,7 @@
 13. [ ] **Voice notes to structured output** — Turns rough spoken thoughts into notes, emails, memos, task lists, summaries, or outlines.
 14. [ ] **App-specific integrations** — Adds enhanced support for common apps like Gmail, Outlook, Slack, Teams, Notion, Google Docs, Word, VS Code, Cursor, and ChatGPT.
 15. [ ] **Privacy controls** — Gives users clear control over audio retention, transcript history, logging, model providers, and what gets sent to APIs.
-16. [ ] **Dictation history** — Keeps recent dictations so users can recover text, rerun transformations, or copy previous outputs.
+16. [x] **Dictation history** — Keeps the last 10 cleaned dictations in a menu-bar submenu; click a row to copy it to the clipboard. Re-running transformations is deferred (would require storing the raw transcript).
 17. [ ] **Prompt/template presets** — Lets users save reusable output formats like "client email," "meeting note," "GitHub issue," "daily journal," or "technical explanation."
 18. [x] **Configurable hotkeys and behavior** — Custom push-to-talk shortcut, microphone selection, and LLM cleanup provider/model selection.
 19. [x] **Visible status and feedback** — Shows when the app is listening, processing, inserting text, or waiting for correction.
