@@ -36,7 +36,7 @@ cd "$REPO_ROOT"
 DERIVED="$REPO_ROOT/.build-local"
 mkdir -p "$DERIVED"
 
-echo "==> Building voxline ($CONFIG)…"
+echo "==> Building voxline ($CONFIG)..."
 xcodebuild \
     -project voxline.xcodeproj \
     -scheme voxline \
@@ -64,7 +64,7 @@ if [[ "$INSTALL" -eq 0 ]]; then
     exit 0
 fi
 
-echo "==> Quitting any running voxline instance…"
+echo "==> Quitting any running voxline instance..."
 osascript -e 'tell application "voxline" to quit' >/dev/null 2>&1 || true
 # Give it a moment to release file locks before we replace the bundle.
 for _ in 1 2 3 4 5; do
@@ -73,7 +73,7 @@ for _ in 1 2 3 4 5; do
 done
 
 DEST="/Applications/voxline.app"
-echo "==> Installing to $DEST…"
+echo "==> Installing to ${DEST}..."
 rm -rf "$DEST"
 cp -R "$APP" "$DEST"
 
