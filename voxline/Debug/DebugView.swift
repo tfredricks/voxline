@@ -197,7 +197,7 @@ struct DebugView: View {
             state.debugLastTestResult = "No injector available"
             return
         }
-        let stamp = "voxline test paste @ \(Date().formatted(date: .omitted, time: .standard))"
+        let stamp = "Voxline test paste @ \(Date().formatted(date: .omitted, time: .standard))"
         do {
             let outcome = try await injector.inject(stamp)
             state.debugLastInsertionResult = outcome.description
@@ -308,7 +308,7 @@ final class DebugWindowController: NSObject {
         }
         let host = NSHostingController(rootView: DebugView(state: state, coordinator: coordinator))
         let w = NSWindow(contentViewController: host)
-        w.title = "voxline Debug"
+        w.title = "Voxline Debug"
         w.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         w.setContentSize(NSSize(width: 600, height: 700))
         w.isReleasedWhenClosed = false

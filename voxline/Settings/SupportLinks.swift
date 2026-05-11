@@ -10,7 +10,7 @@ struct SupportEnvironment: Equatable {
     var bodyMarkdown: String {
         """
         **Environment**
-        - voxline version: \(appVersion) (\(buildNumber))
+        - Voxline version: \(appVersion) (\(buildNumber))
         - macOS: \(osVersion)
         - Whisper model: \(whisperModel)
         - Mic device: \(micDevice ?? "(system default)")

@@ -221,7 +221,7 @@ enum TextInsertionError: Error, LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .accessibilityNotGranted:
-            return "voxline needs Accessibility permission to insert text. Grant access in System Settings → Privacy & Security → Accessibility."
+            return "Voxline needs Accessibility permission to insert text. Grant access in System Settings → Privacy & Security → Accessibility."
         case .clipboardSnapshotUnavailable(let reason):
             return "Could not safely use the clipboard paste path: \(reason)."
         case .clipboardPasteNotApplicable(let reason):
@@ -235,7 +235,7 @@ enum TextInsertionError: Error, LocalizedError, Equatable {
         case .directTypingRejected:
             return "The focused field did not appear to accept direct typing."
         case .secureFieldUnsupported:
-            return "The focused field is a secure text field. voxline will not insert dictated text into password inputs."
+            return "The focused field is a secure text field. Voxline will not insert dictated text into password inputs."
         case .allStrategiesFailed(let failures):
             return "Text insertion failed. Tried clipboard paste, Accessibility insertion, and direct typing. \(failures.joined(separator: " "))"
         }

@@ -17,9 +17,9 @@ struct voxlineApp: App {
             let keychain = Keychain()
             for account in [Keychain.Account.anthropic, Keychain.Account.openai] {
                 do { try keychain.delete(forKey: account) }
-                catch { fputs("voxline --reset-keys: failed to delete \(account): \(error)\n", stderr) }
+                catch { fputs("Voxline --reset-keys: failed to delete \(account): \(error)\n", stderr) }
             }
-            fputs("voxline: cleared keychain entries (anthropic, openai)\n", stderr)
+            fputs("Voxline: cleared keychain entries (anthropic, openai)\n", stderr)
             exit(0)
         }
     }
