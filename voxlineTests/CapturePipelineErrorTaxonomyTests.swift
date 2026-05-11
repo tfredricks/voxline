@@ -8,7 +8,7 @@ import Foundation
 
     private func pipeline(
         transcribe: @escaping ([Float]) async throws -> String = { _ in "hello" },
-        cleanup: @escaping (String, Mode) async throws -> String = { t, _ in t },
+        cleanup: @escaping (String, Mode, CapturedContext) async throws -> String = { t, _, _ in t },
         inject: @escaping (String) async throws -> TextInsertionOutcome = { _ in
             TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
         }
@@ -42,7 +42,7 @@ import Foundation
     // MARK: - Tests
 
     @Test func missing_api_key_surfaces_actionable_error() async {
-        let (p, state, _) = pipeline(cleanup: { _, _ in throw LLMError.missingAPIKey })
+        let (p, state, _) = pipeline(cleanup: { _, _, _ in throw LLMError.missingAPIKey })
         await runOnce(p, state)
         guard case .error(let category, let msg) = state.status else {
             Issue.record("Expected .error status, got \(state.status)"); return
@@ -52,7 +52,7 @@ import Foundation
     }
 
     @Test func invalid_api_key_says_so() async {
-        let (p, state, _) = pipeline(cleanup: { _, _ in throw LLMError.invalidAPIKey })
+        let (p, state, _) = pipeline(cleanup: { _, _, _ in throw LLMError.invalidAPIKey })
         await runOnce(p, state)
         guard case .error(_, let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("rejected"))
@@ -60,7 +60,7 @@ import Foundation
 
     @Test func network_error_includes_network_word() async {
         struct NetErr: Error {}
-        let (p, state, _) = pipeline(cleanup: { _, _ in throw LLMError.network(NetErr()) })
+        let (p, state, _) = pipeline(cleanup: { _, _, _ in throw LLMError.network(NetErr()) })
         await runOnce(p, state)
         guard case .error(_, let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("network"))
@@ -94,7 +94,7 @@ import Foundation
     }
 
     @Test func error_path_clears_recording_state() async {
-        let (p, state, _) = pipeline(cleanup: { _, _ in throw LLMError.missingAPIKey })
+        let (p, state, _) = pipeline(cleanup: { _, _, _ in throw LLMError.missingAPIKey })
         await runOnce(p, state)
         #expect(state.recordingStartedAt == nil)
         #expect(state.audioLevel == 0)
@@ -111,7 +111,7 @@ import Foundation
             state: state,
             capture: capture,
             transcriber: FakeTranscriber(handler: { _ in "" }),
-            llm: FakeLLM(handler: { t, _ in t }),
+            llm: FakeLLM(handler: { t, _, _ in t }),
             modes: ModeRouter(modes: [Mode(bundleID: "*", displayName: "D", prompt: "p", model: nil, temperature: nil)]),
             frontmost: FakeFrontmost(),
             fieldInspector: FakeFieldInspector(),
@@ -153,10 +153,10 @@ private final class FakeTranscriber: Transcribing {
 }
 
 private final class FakeLLM: LLMServing, @unchecked Sendable {
-    let handler: (String, Mode) async throws -> String
-    init(handler: @escaping (String, Mode) async throws -> String) { self.handler = handler }
-    func cleanup(transcript: String, mode: Mode) async throws -> String {
-        try await handler(transcript, mode)
+    let handler: (String, Mode, CapturedContext) async throws -> String
+    init(handler: @escaping (String, Mode, CapturedContext) async throws -> String) { self.handler = handler }
+    func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String {
+        try await handler(transcript, mode, context)
     }
 }
 

@@ -218,7 +218,7 @@ struct DebugView: View {
             return
         }
         do {
-            let cleaned = try await llm.cleanup(transcript: "hello world", mode: mode)
+            let cleaned = try await llm.cleanup(transcript: "hello world", mode: mode, context: .empty)
             state.debugLastTestResult = "LLM ok (\(mode.displayName)) → \(cleaned)"
         } catch {
             // Use localizedDescription rather than `\(error)`: the latter prints

@@ -27,9 +27,9 @@ import Foundation
 
     final class FakeLLM: LLMServing, @unchecked Sendable {
         var nextResult: Result<String, Error> = .success("cleaned")
-        var calls: [(transcript: String, mode: Mode)] = []
-        func cleanup(transcript: String, mode: Mode) async throws -> String {
-            calls.append((transcript, mode))
+        var calls: [(transcript: String, mode: Mode, context: CapturedContext)] = []
+        func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String {
+            calls.append((transcript, mode, context))
             return try nextResult.get()
         }
     }

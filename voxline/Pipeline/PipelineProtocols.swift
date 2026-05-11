@@ -32,7 +32,7 @@ protocol FocusedFieldInspecting: Sendable {
 }
 
 protocol LLMServing: Sendable {
-    func cleanup(transcript: String, mode: Mode) async throws -> String
+    func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String
 }
 
 @MainActor

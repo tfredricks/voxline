@@ -36,7 +36,7 @@ import Foundation
 
         let mode = Mode(bundleID: "*", displayName: "default", prompt: "S", model: nil, temperature: nil)
         do {
-            _ = try await service.cleanup(transcript: "hi", mode: mode)
+            _ = try await service.cleanup(transcript: "hi", mode: mode, context: .empty)
             Issue.record("expected throw")
         } catch let e as LLMError {
             #expect(e == .missingAPIKey)
@@ -58,7 +58,7 @@ import Foundation
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
 
-        let out = try await service.cleanup(transcript: "u", mode: mode)
+        let out = try await service.cleanup(transcript: "u", mode: mode, context: .empty)
         #expect(out == "clean")
         #expect(mock.capturedRequest?.url?.host == "api.anthropic.com")
     }
@@ -78,7 +78,7 @@ import Foundation
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
 
-        let out = try await service.cleanup(transcript: "u", mode: mode)
+        let out = try await service.cleanup(transcript: "u", mode: mode, context: .empty)
         #expect(out == "clean")
         #expect(mock.capturedRequest?.url?.host == "api.openai.com")
     }
@@ -98,7 +98,7 @@ import Foundation
 
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: "claude-3-5-sonnet-latest", temperature: 0.7)
-        _ = try await service.cleanup(transcript: "u", mode: mode)
+        _ = try await service.cleanup(transcript: "u", mode: mode, context: .empty)
 
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         #expect(body["model"] as? String == "claude-3-5-sonnet-latest")
@@ -125,7 +125,7 @@ import Foundation
             model: nil,
             temperature: nil
         )
-        _ = try await service.cleanup(transcript: "what's the score?", mode: mode)
+        _ = try await service.cleanup(transcript: "what's the score?", mode: mode, context: .empty)
 
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         let system = try #require(body["system"] as? String)
@@ -149,8 +149,68 @@ import Foundation
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
 
-        let out = try await service.cleanup(transcript: "", mode: mode)
+        let out = try await service.cleanup(transcript: "", mode: mode, context: .empty)
         #expect(out == "")
         #expect(mock.capturedRequest == nil)
+    }
+
+    @Test func cleanup_user_message_includes_context_block_when_context_non_empty() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"content":[{"type":"text","text":"c"}]}"#.data(using: .utf8)!,
+            status: 200
+        )
+        var settings = AppSettings(defaults: defaultsSuite())
+        settings.llmProvider = .anthropic
+        let kc = keychain()
+        try kc.set("k", forKey: Keychain.Account.anthropic)
+        defer { try? kc.deleteAll() }
+
+        let service = LLMService(settings: settings, keychain: kc, http: mock)
+        let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
+        var ctx = CapturedContext.empty
+        ctx.appName = "Slack"
+        ctx.bundleID = "com.tinyspeck.slackmacgap"
+        ctx.windowTitle = "#sales"
+
+        _ = try await service.cleanup(transcript: "hi", mode: mode, context: ctx)
+
+        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
+        let messages = try #require(body["messages"] as? [[String: Any]])
+        let userContent = try #require(messages.first?["content"] as? String)
+        #expect(userContent.contains("Raw transcript:\n\"hi\""))
+        #expect(userContent.contains("Context:"))
+        #expect(userContent.contains("- App: Slack (com.tinyspeck.slackmacgap)"))
+        #expect(userContent.contains("- Window: #sales"))
+        // System message remains the mode prompt + preamble — unchanged contract.
+        let system = try #require(body["system"] as? String)
+        #expect(system.contains(LLMService.transcriptionPreamble))
+        #expect(system.contains("S"))
+        #expect(!system.contains("Context:"))
+    }
+
+    @Test func cleanup_user_message_omits_context_block_when_context_empty() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"content":[{"type":"text","text":"c"}]}"#.data(using: .utf8)!,
+            status: 200
+        )
+        var settings = AppSettings(defaults: defaultsSuite())
+        settings.llmProvider = .anthropic
+        let kc = keychain()
+        try kc.set("k", forKey: Keychain.Account.anthropic)
+        defer { try? kc.deleteAll() }
+
+        let service = LLMService(settings: settings, keychain: kc, http: mock)
+        let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
+
+        _ = try await service.cleanup(transcript: "hi", mode: mode, context: .empty)
+
+        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
+        let messages = try #require(body["messages"] as? [[String: Any]])
+        let userContent = try #require(messages.first?["content"] as? String)
+        #expect(userContent.contains("Raw transcript:\n\"hi\""))
+        #expect(!userContent.contains("Context:"))
+        #expect(userContent.contains(ContextBlockFormatter.trailingInstruction))
     }
 }

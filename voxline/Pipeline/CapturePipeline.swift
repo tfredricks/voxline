@@ -161,7 +161,7 @@ final class CapturePipeline {
         let cleanupInterval = signposter.beginInterval("llm", id: sessionID)
         let cleanupStart = Date()
         do {
-            cleaned = try await llm.cleanup(transcript: transcript, mode: mode)
+            cleaned = try await llm.cleanup(transcript: transcript, mode: mode, context: .empty)
             signposter.endInterval("llm", cleanupInterval)
         } catch let e as LLMError {
             signposter.endInterval("llm", cleanupInterval, "error")

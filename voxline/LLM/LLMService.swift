@@ -40,7 +40,7 @@ struct LLMService: LLMServing {
         self.http = http
     }
 
-    func cleanup(transcript: String, mode: Mode) async throws -> String {
+    func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String {
         // No transcript → no work. Empty input would otherwise generate a
         // surprise greeting from some models.
         guard !transcript.isEmpty else { return "" }
@@ -59,10 +59,11 @@ struct LLMService: LLMServing {
         }
 
         let model = mode.model ?? settings.llmModel
+        let userPrompt = ContextBlockFormatter.format(transcript: transcript, context: context)
         let request = LLMRequest(
             model: model,
             systemPrompt: Self.transcriptionPreamble + "\n" + mode.prompt,
-            userPrompt: transcript,
+            userPrompt: userPrompt,
             temperature: mode.temperature
         )
 
