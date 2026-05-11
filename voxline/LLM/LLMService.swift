@@ -72,6 +72,19 @@ struct LLMService: LLMServing {
         case .anthropic: client = AnthropicClient(apiKey: key, http: http)
         case .openai:    client = OpenAIClient(apiKey: key, http: http)
         }
+
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["VOXLINE_TRACE_LLM"] == "1" {
+            // Dev firehose: dumps the full prompt right before the HTTP call.
+            // Compiled out of Release builds via `#if DEBUG`; opt-in within
+            // Debug via the env var on the Xcode scheme. `.public` here is
+            // safe because Release builds don't include this code at all.
+            AppLog.llmTrace.debug("LLM request → provider=\(String(describing: provider), privacy: .public) model=\(model, privacy: .public)")
+            AppLog.llmTrace.debug("--- SYSTEM ---\n\(request.systemPrompt, privacy: .public)")
+            AppLog.llmTrace.debug("--- USER ---\n\(request.userPrompt, privacy: .public)")
+        }
+        #endif
+
         return try await client.cleanup(request)
     }
 }
