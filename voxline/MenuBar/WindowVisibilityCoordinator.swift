@@ -79,29 +79,42 @@ final class WindowVisibilityCoordinator {
     }
 
     /// SwiftUI's `Settings` scene constructs its own `NSWindow` and may
-    /// pre-create it lazily-but-eagerly (definitely after the first open).
-    /// Snapshotting `NSApp.windows` doesn't work because the window may
-    /// already be in the list. `NSApp.keyWindow` also doesn't work when
-    /// the app is in `.accessory` policy. Match by title instead: SwiftUI
-    /// names the window "<AppName> Settings" or "Settings" on macOS 14+.
+    /// pre-create it before our snapshot, so we can't rely on
+    /// "newly appeared." `NSApp.keyWindow` also doesn't work when the app
+    /// is `.accessory`. Match permissively (any titled, non-borderless,
+    /// visible, untagged window) and rely on the fact that other voxline
+    /// windows are either pre-tagged dockworthy (About/Wizard/Debug) or
+    /// borderless (recording pill).
+    ///
+    /// Temporary diagnostic logging — remove once we've confirmed which
+    /// window matches in practice.
     func tagSettingsWindowAfterOpen() {
         Task { @MainActor [weak self] in
-            for delayMs in [60, 120, 200, 400] {
+            for delayMs in [60, 120, 200, 400, 800] {
                 try? await Task.sleep(for: .milliseconds(delayMs))
                 guard let self else { return }
+
+                print("[WVC] poll @\(delayMs)ms — \(NSApp.windows.count) windows in NSApp.windows:")
+                for w in NSApp.windows {
+                    let tag = w.identifier?.rawValue ?? "(none)"
+                    let className = String(describing: type(of: w))
+                    print("  - title=\"\(w.title)\" class=\(className) styleMask=\(w.styleMask.rawValue) visible=\(w.isVisible) tag=\(tag)")
+                }
+
                 let candidate = NSApp.windows.first { w in
                     w.identifier != WindowVisibilityCoordinator.dockworthyIdentifier
                         && w.styleMask.contains(.titled)
                         && !w.styleMask.contains(.borderless)
                         && w.isVisible
-                        && (w.title == "Settings" || w.title.hasSuffix(" Settings"))
                 }
                 if let w = candidate {
+                    print("[WVC] tagging \"\(w.title)\" — \(String(describing: type(of: w)))")
                     w.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
                     self.insert(w)
                     return
                 }
             }
+            print("[WVC] gave up — no titled non-borderless visible untagged window found")
         }
     }
 
