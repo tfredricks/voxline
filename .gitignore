@@ -14,6 +14,9 @@ spikes/EventTapSandboxSpike/_CodeSignature/
 .build/
 .swiftpm/
 
+# scripts/build-local.sh derived-data dir
+.build-local/
+
 # WhisperKit downloaded model cache (per-machine)
 Models/
 
