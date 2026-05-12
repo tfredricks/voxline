@@ -4,11 +4,11 @@ import SwiftUI
 
 struct MenuBarContent: View {
     @Bindable var state: AppState
-    @Bindable var historyStore: DictationHistoryStore
     @Environment(\.openSettings) private var openSettings
 
     var openDebugWindow: () -> Void = {}
     var openAboutWindow: () -> Void = {}
+    var openHistoryWindow: () -> Void = {}
     var tagSettingsWindow: () -> Void = {}
 
     var body: some View {
@@ -30,7 +30,7 @@ struct MenuBarContent: View {
 
         Divider()
 
-        DictationHistoryMenu(store: historyStore, state: state)
+        Button("Show history…") { openHistoryWindow() }
 
         Divider()
 

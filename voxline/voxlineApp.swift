@@ -28,7 +28,6 @@ struct voxlineApp: App {
         MenuBarExtra {
             MenuBarContent(
                 state: delegate.appState,
-                historyStore: delegate.historyStore,
                 openDebugWindow: {
                     delegate.debugWindow.show(
                         state: delegate.appState,
@@ -37,6 +36,12 @@ struct voxlineApp: App {
                 },
                 openAboutWindow: {
                     delegate.showAboutWindow()
+                },
+                openHistoryWindow: {
+                    delegate.historyWindow.show(
+                        store: delegate.historyStore,
+                        state: delegate.appState
+                    )
                 },
                 tagSettingsWindow: {
                     delegate.tagSettingsWindowSoon()
@@ -73,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let coordinator = AppCoordinator()
     let debugWindow = DebugWindowController()
     let aboutWindow = AboutWindowController()
+    let historyWindow = HistoryWindowController()
     let windowVisibility = WindowVisibilityCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
