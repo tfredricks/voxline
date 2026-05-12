@@ -246,7 +246,7 @@ struct DebugView: View {
         let samples = [Float](repeating: 0, count: 16_000)
         let start = Date()
         do {
-            let text = try await transcriber.transcribe(samples: samples)
+            let text = try await transcriber.transcribe(samples: samples, vocabulary: [])
             let dt = Date().timeIntervalSince(start)
             state.debugLastTestResult = "Transcribe ok in \(String(format: "%.2f", dt))s → '\(text)'"
         } catch {
