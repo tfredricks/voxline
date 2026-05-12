@@ -144,6 +144,12 @@ Built on the shoulders of:
 - [swift-transformers](https://github.com/huggingface/swift-transformers) — model hub and inference utilities
 - The macOS dictation tools that paved the way (Whispr Flow, Superwhisper, Ghost Pepper, and others) — voxline borrows the hold-to-talk UX they all converged on.
 
+## Contributing
+
+Bug reports, feature ideas, and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, testing, and the DCO sign-off requirement.
+
 ## License
 
-License TBD. Until one is added to this repository, no rights are granted beyond reading the source on GitHub.
+voxline is licensed under the [Apache License, Version 2.0](LICENSE).
+
+See [NOTICE](NOTICE) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for required attributions. The "voxline" name and logo are reserved — see [TRADEMARK.md](TRADEMARK.md).
