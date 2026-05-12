@@ -28,18 +28,27 @@ enum WhisperPromptBuilder {
     /// marker WhisperKit prepends to our list.
     static let promptTokenBudget = 100
 
-    /// Comma-space joiner with NO trailing punctuation.
+    /// Leading-space + comma-space joiner with NO trailing punctuation.
     ///
-    /// `<|startofprev|> Argmax, LangGraph` reads to the decoder as "the
-    /// previous segment was a still-open list of names." `<|startofprev|>
-    /// Argmax, LangGraph.` reads as "the previous segment was a *complete
-    /// statement*, the new audio is what came next" — and Whisper interprets
-    /// short dictation audio as post-statement silence, producing empty
-    /// output. Empirically the period was a hard-fail; the open-list form
-    /// biases vocabulary without that side effect.
+    /// Two non-obvious rules:
+    ///
+    /// 1. **Leading space is mandatory.** GPT-2 BPE encodes " Argmax" and
+    ///    "Argmax" as different token sequences — the space-prefixed form
+    ///    is the natural mid-text form and the bare form is the
+    ///    beginning-of-segment form. WhisperKit prepends `<|startofprev|>`
+    ///    before our tokens; without the leading space the decoder sees
+    ///    `<|startofprev|>Arg...max...` and treats it as gibberish,
+    ///    producing empty output. (This pattern matches WhisperKit's own
+    ///    `testPromptTokens` reference test, which starts with " prompt".)
+    ///
+    /// 2. **No trailing punctuation.** A trailing period reads to the
+    ///    decoder as "the previous segment was a *complete statement*";
+    ///    Whisper then interprets short dictation audio as
+    ///    post-statement silence and emits nothing. The open-list form
+    ///    biases vocabulary without that side effect.
     static func promptString(from terms: [String]) -> String {
         guard !terms.isEmpty else { return "" }
-        return terms.joined(separator: ", ")
+        return " " + terms.joined(separator: ", ")
     }
 
     /// Tokenize the joined-term string, drop any special-token IDs, and
