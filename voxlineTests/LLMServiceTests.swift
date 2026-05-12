@@ -213,4 +213,19 @@ import Foundation
         #expect(!userContent.contains("Context:"))
         #expect(userContent.contains(ContextBlockFormatter.trailingInstruction))
     }
+
+    @Test func transcriptionPreamble_contains_canonical_vocab_rule() {
+        let preamble = LLMService.transcriptionPreamble
+        #expect(preamble.contains("Custom vocabulary"))
+        #expect(preamble.contains("canonical spelling"))
+        #expect(preamble.contains("Never invent terms that are not in the list"))
+        #expect(preamble.contains("collapse it to a single occurrence"))
+    }
+
+    @Test func transcriptionPreamble_keeps_existing_cleaning_rules() {
+        let preamble = LLMService.transcriptionPreamble
+        #expect(preamble.contains("Strip fillers"))
+        #expect(preamble.contains("Resolve self-corrections"))
+        #expect(preamble.contains("Preserve proper nouns"))
+    }
 }
