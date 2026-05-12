@@ -65,6 +65,15 @@ final class CustomVocabularyListViewModel {
         Task { await self.refreshCount() }
     }
 
+    /// Re-read `terms` from the store. Used when something outside the
+    /// view-model mutates the store (e.g. `GeneralSettingsViewModel.resetToDefaults`
+    /// clears it). Without this the displayed list keeps showing entries the
+    /// store no longer holds until the Settings window is reopened.
+    func reload() {
+        terms = store.load()
+        Task { await self.refreshCount() }
+    }
+
     /// Recompute `tokenCount` against the current `terms`. Called on init
     /// (via the view's `.task`), after every mutation, and when the
     /// underlying Whisper model changes.

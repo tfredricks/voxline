@@ -107,7 +107,10 @@ struct SettingsView: View {
 
                     HStack {
                         Spacer()
-                        Button("Reset to Defaults") { generalVM.resetToDefaults() }
+                        Button("Reset to Defaults") {
+                            generalVM.resetToDefaults()
+                            vocabularyVM.reload()
+                        }
                     }
                 }
                 .formStyle(.grouped)
