@@ -1,4 +1,4 @@
-name: CodeQL (Swift)
+name: CodeQL
 
 on:
   push:
@@ -18,7 +18,25 @@ permissions:
   actions: read
 
 jobs:
-  analyze:
+  analyze-actions:
+    name: Analyze Actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: actions
+          build-mode: none
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:actions"
+
+  analyze-swift:
     name: Analyze Swift
     runs-on: macos-15
     timeout-minutes: 60
