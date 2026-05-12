@@ -76,4 +76,29 @@ import Foundation
         let reader = DictationHistoryStore(defaults: defaults)
         #expect(reader.items.isEmpty)
     }
+
+    @Test func loads_old_schema_json_with_nil_new_fields() throws {
+        // The 1.0 history shape: only id/timestamp/cleanedText. Existing users
+        // upgrading must keep their history; the new fields decode as nil.
+        let suite = UserDefaults(suiteName: "voxline.history.test.\(UUID().uuidString)")!
+        defer { suite.removePersistentDomain(forName: "voxline.history.test") }
+
+        let oldJSON = #"""
+        [
+          {"id":"00000000-0000-0000-0000-000000000001","timestamp":770000000.0,"cleanedText":"hello"},
+          {"id":"00000000-0000-0000-0000-000000000002","timestamp":770000001.0,"cleanedText":"world"}
+        ]
+        """#.data(using: .utf8)!
+        suite.set(oldJSON, forKey: DictationHistoryStore.key)
+
+        let store = DictationHistoryStore(defaults: suite)
+
+        #expect(store.items.count == 2)
+        let first = try #require(store.items.first)
+        #expect(first.cleanedText == "hello")
+        #expect(first.modeDisplayName == nil)
+        #expect(first.modeBundleID == nil)
+        #expect(first.appName == nil)
+        #expect(first.appBundleID == nil)
+    }
 }
