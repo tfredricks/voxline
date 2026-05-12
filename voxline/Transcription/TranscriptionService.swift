@@ -119,6 +119,15 @@ final class TranscriptionService {
     /// `WhisperPromptBuilder` and passes them through DecodingOptions to
     /// bias the decoder toward those terms. Empty input → omit promptTokens
     /// entirely (WhisperKit treats `[]` differently from `nil`).
+    ///
+    /// Options when vocab is active mirror WhisperKit's own `testPromptTokens`
+    /// reference test: `skipSpecialTokens: true` (so the prefix prompt
+    /// doesn't echo into the output), and `firstTokenLogProbThreshold: nil`
+    /// to disable the threshold that otherwise trips on the very first
+    /// generated token when the prompt has biased the decoder away from
+    /// the natural continuation. With the threshold active and a vocab
+    /// prompt, WhisperKit's fallback loop trips on every retry and the
+    /// final result is empty.
     func transcribe(samples: [Float], vocabulary: [String] = []) async throws -> String {
         let kit = try await loadIfNeeded()
         let tokens: [Int]
@@ -127,16 +136,25 @@ final class TranscriptionService {
         } else if let tokenizer = kit.tokenizer {
             tokens = WhisperPromptBuilder.promptTokens(from: vocabulary, tokenizer: tokenizer.asVocabularyTokenizing)
         } else {
-            // Tokenizer absent on a loaded kit is a WhisperKit-internal
-            // edge case; we keep going without biasing rather than fail
-            // the dictation.
             tokens = []
         }
-        let options: DecodingOptions = tokens.isEmpty
-            ? DecodingOptions()
-            : DecodingOptions(promptTokens: tokens)
+        let options: DecodingOptions
+        if tokens.isEmpty {
+            options = DecodingOptions()
+        } else {
+            AppLog.whisper.debug("vocab prompt: \(tokens.count, privacy: .public) tokens, ids=\(tokens.prefix(20).map(String.init).joined(separator: ","), privacy: .public)")
+            options = DecodingOptions(
+                skipSpecialTokens: true,
+                promptTokens: tokens,
+                firstTokenLogProbThreshold: nil
+            )
+        }
         let results = try await kit.transcribe(audioArray: samples, decodeOptions: options)
-        return results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        let joined = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tokens.isEmpty {
+            AppLog.whisper.debug("vocab transcribe result: chars=\(joined.count, privacy: .public) text=\(joined, privacy: .private)")
+        }
+        return joined
     }
 
     /// Count tokens that `terms` would contribute when fed to Whisper. Loads
