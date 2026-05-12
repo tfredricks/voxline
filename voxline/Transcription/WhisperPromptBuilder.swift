@@ -19,17 +19,27 @@ protocol VocabularyTokenizing {
 /// canonical vocabulary terms. Pure functions; no state.
 enum WhisperPromptBuilder {
 
-    /// WhisperKit's internal cap on `promptTokens` is `maxTokenContext/2 - 1`
-    /// = 223 for the standard 448-context Whisper models. We cap at 200 so
-    /// the UI counter agrees with what's actually used and we have headroom
-    /// for variants with slightly different limits.
-    static let promptTokenBudget = 200
+    /// WhisperKit's internal cap on `promptTokens` is `(maxTokenContext / 2) - 1`
+    /// where `Constants.maxTokenContext` is **224** (half of the model's 448
+    /// context budget, see `Models.swift:1334`). That gives a hard ceiling of
+    /// 111 tokens; over that, WhisperKit silently `.suffix`-truncates and may
+    /// slice a term mid-token. We cap at 100 so the UI counter agrees with
+    /// what's actually used and to leave headroom for the `<|startofprev|>`
+    /// marker WhisperKit prepends to our list.
+    static let promptTokenBudget = 100
 
-    /// Compact, naturally-occurring joiner: comma-space between terms,
-    /// trailing period. Empty input returns an empty string.
+    /// Comma-space joiner with NO trailing punctuation.
+    ///
+    /// `<|startofprev|> Argmax, LangGraph` reads to the decoder as "the
+    /// previous segment was a still-open list of names." `<|startofprev|>
+    /// Argmax, LangGraph.` reads as "the previous segment was a *complete
+    /// statement*, the new audio is what came next" — and Whisper interprets
+    /// short dictation audio as post-statement silence, producing empty
+    /// output. Empirically the period was a hard-fail; the open-list form
+    /// biases vocabulary without that side effect.
     static func promptString(from terms: [String]) -> String {
         guard !terms.isEmpty else { return "" }
-        return terms.joined(separator: ", ") + "."
+        return terms.joined(separator: ", ")
     }
 
     /// Tokenize the joined-term string, drop any special-token IDs, and

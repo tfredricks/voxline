@@ -22,9 +22,9 @@ import Foundation
         }
     }
 
-    @Test func promptString_joins_terms_with_comma_space_and_trailing_period() {
+    @Test func promptString_joins_terms_with_comma_space_no_trailing_punctuation() {
         let s = WhisperPromptBuilder.promptString(from: ["Argmax", "LangGraph", "MSL"])
-        #expect(s == "Argmax, LangGraph, MSL.")
+        #expect(s == "Argmax, LangGraph, MSL")
     }
 
     @Test func promptString_returns_empty_when_no_terms() {
@@ -41,19 +41,22 @@ import Foundation
         let tokens = WhisperPromptBuilder.promptTokens(
             from: ["AAA", "BBB", "CCC"],
             tokenizer: FakeTokenizer(),
-            budget: 10
+            budget: 8
         )
-        // Per-char ASCII: 'A'=65, ','=44, ' '=32, 'B'=66, '.'=46.
-        // Builder keeps first two terms → "AAA, BBB." → 9 tokens, fits in 10.
-        #expect(tokens == [65, 65, 65, 44, 32, 66, 66, 66, 46])
+        // Per-char ASCII: 'A'=65, ','=44, ' '=32, 'B'=66.
+        // No trailing period. Builder keeps first two terms → "AAA, BBB" →
+        // 8 tokens, fits in 8. Adding "CCC" would make "AAA, BBB, CCC" =
+        // 13 tokens, over budget → dropped.
+        #expect(tokens == [65, 65, 65, 44, 32, 66, 66, 66])
     }
 
     @Test func promptTokens_filters_special_token_ids() {
-        // "Argmax." override (the actual joined string the builder hands to
-        // the tokenizer) emits one special-token ID (99999) and two normals.
-        // Builder must drop the 99999.
+        // "Argmax" override (the actual joined string the builder hands to
+        // the tokenizer, now that there is no trailing period) emits one
+        // special-token ID (99999) and two normals. Builder must drop the
+        // 99999.
         var t = FakeTokenizer()
-        t.overrides["Argmax."] = [99_999, 65, 66]
+        t.overrides["Argmax"] = [99_999, 65, 66]
         let tokens = WhisperPromptBuilder.promptTokens(from: ["Argmax"], tokenizer: t, budget: 100)
         #expect(!tokens.contains(99_999))
         #expect(tokens.contains(65))
@@ -69,7 +72,7 @@ import Foundation
     }
 
     @Test func promptTokens_returns_empty_when_single_term_exceeds_budget() {
-        // "AAAAA." → 6 chars → 6 tokens (per-char fake). Budget 3 → the
+        // "AAAAA" → 5 chars → 5 tokens (per-char fake). Budget 3 → the
         // first (and only) candidate already overflows, so no terms are
         // kept and the builder returns []. Confirms we never byte-truncate
         // a term to fit.
@@ -87,10 +90,12 @@ import Foundation
         // via tokenCount, which has no budget concept.
         let t = FakeTokenizer()
         let terms = ["AAA", "BBB", "CCC"]
-        let truncated = WhisperPromptBuilder.promptTokens(from: terms, tokenizer: t, budget: 3)
+        // Budget 2: even the first term "AAA" (3 tokens) overflows, so the
+        // builder returns []. Counter is unbudgeted, so it returns 13.
+        let truncated = WhisperPromptBuilder.promptTokens(from: terms, tokenizer: t, budget: 2)
         let count = WhisperPromptBuilder.tokenCount(of: terms, tokenizer: t)
         #expect(truncated.isEmpty)
-        // "AAA, BBB, CCC." per-char ASCII → 14 tokens total.
-        #expect(count == 14)
+        // "AAA, BBB, CCC" per-char ASCII → 13 tokens total (no trailing period).
+        #expect(count == 13)
     }
 }
