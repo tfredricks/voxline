@@ -9,8 +9,8 @@ final class ModelDownloadWindow {
 
     func show(state: AppState) {
         if let window {
+            NSApp.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
-            NSApp.activate()
             return
         }
 
@@ -29,8 +29,9 @@ final class ModelDownloadWindow {
         win.isReleasedWhenClosed = false
 
         self.window = win
+        // See AboutWindowController.show for why this pair is in this order.
+        NSApp.activate(ignoringOtherApps: true)
         win.makeKeyAndOrderFront(nil)
-        NSApp.activate()
     }
 
     func close() {

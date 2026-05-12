@@ -16,7 +16,9 @@ final class FirstRunWindowController {
         onComplete: @escaping () -> Void
     ) {
         if let window {
-            window.makeKeyAndOrderFront(nil); NSApp.activate(); return
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            return
         }
         let vm = WizardViewModel(settings: settings)
         vm.onComplete = { [weak self] in
@@ -40,8 +42,9 @@ final class FirstRunWindowController {
         win.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
 
         self.window = win
+        // See AboutWindowController.show for why this pair is in this order.
+        NSApp.activate(ignoringOtherApps: true)
         win.makeKeyAndOrderFront(nil)
-        NSApp.activate()
     }
 
     func close() {

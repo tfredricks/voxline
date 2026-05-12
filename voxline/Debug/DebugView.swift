@@ -416,8 +416,8 @@ final class DebugWindowController: NSObject {
 
     func show(state: AppState, coordinator: AppCoordinator) {
         if let w = window {
+            NSApp.activate(ignoringOtherApps: true)
             w.makeKeyAndOrderFront(nil)
-            NSApp.activate()
             return
         }
         let host = NSHostingController(rootView: DebugView(state: state, coordinator: coordinator))
@@ -429,7 +429,8 @@ final class DebugWindowController: NSObject {
         w.center()
         w.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
         window = w
+        // See AboutWindowController.show for why this pair is in this order.
+        NSApp.activate(ignoringOtherApps: true)
         w.makeKeyAndOrderFront(nil)
-        NSApp.activate()
     }
 }

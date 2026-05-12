@@ -35,8 +35,11 @@ struct MenuBarContent: View {
         Divider()
 
         Button("Settings…") {
+            // Activate ignoring others so the Settings scene lands above the
+            // previously-frontmost app on LSUIElement (menu-bar) apps. See
+            // AboutWindowController.show for the full rationale.
+            NSApp.activate(ignoringOtherApps: true)
             openSettings()
-            NSApp.activate()
             tagSettingsWindow()
         }
         .keyboardShortcut(",")
