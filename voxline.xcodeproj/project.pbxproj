@@ -156,7 +156,7 @@
 			mainGroup = A100000000000000000000A2;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D100000000000000000000A1 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+				D100000000000000000000A1 /* XCRemoteSwiftPackageReference "argmax-oss-swift" */,
 			);
 			productRefGroup = A100000000000000000000A3 /* Products */;
 			projectDirPath = "";
@@ -458,13 +458,12 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		D100000000000000000000A1 /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+		D100000000000000000000A1 /* XCRemoteSwiftPackageReference "argmax-oss-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/argmaxinc/WhisperKit";
+			repositoryURL = "https://github.com/argmaxinc/argmax-oss-swift";
 			requirement = {
-				kind = versionRange;
-				maximumVersion = 2.0.0;
-				minimumVersion = 0.10.0;
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -472,7 +471,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		D100000000000000000000A2 /* WhisperKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D100000000000000000000A1 /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			package = D100000000000000000000A1 /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;
 			productName = WhisperKit;
 		};
 /* End XCSwiftPackageProductDependency section */
