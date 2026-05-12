@@ -5,11 +5,14 @@ import WhisperKit
 /// user-facing message instead of the raw WhisperKit error.
 enum TranscriptionPrepError: LocalizedError {
     case insufficientDiskSpace(model: WhisperModel, requiredMB: Int, availableMB: Int)
+    case tokenizerUnavailable
 
     var errorDescription: String? {
         switch self {
         case .insufficientDiskSpace(let model, let required, let available):
             return "Not enough disk space to download \(model.displayName). Need about \(required) MB free; only \(available) MB available. Free up space and try again."
+        case .tokenizerUnavailable:
+            return "The Whisper tokenizer is not available. The model may not have finished loading."
         }
     }
 }
@@ -142,7 +145,9 @@ final class TranscriptionService {
     func tokenCount(for terms: [String]) async throws -> Int {
         guard !terms.isEmpty else { return 0 }
         let kit = try await loadIfNeeded()
-        guard let tokenizer = kit.tokenizer else { return 0 }
+        guard let tokenizer = kit.tokenizer else {
+            throw TranscriptionPrepError.tokenizerUnavailable
+        }
         return WhisperPromptBuilder.tokenCount(of: terms, tokenizer: tokenizer.asVocabularyTokenizing)
     }
 
