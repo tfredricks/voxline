@@ -236,7 +236,8 @@ final class AppCoordinator {
             fieldInspector: fieldInspector,
             injector: injector,
             historyStore: historyStore,
-            contextCapture: contextCapture
+            contextCapture: contextCapture,
+            vocabularyStore: CustomVocabularyStore()
         )
         self.pipeline = pipeline
 
