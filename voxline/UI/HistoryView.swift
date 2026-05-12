@@ -38,14 +38,24 @@ struct HistoryView: View {
     @State private var selectedID: DictationHistoryItem.ID? = nil
 
     var body: some View {
-        Group {
-            if store.items.isEmpty {
-                emptyState
-            } else {
-                table
+        VStack(spacing: 0) {
+            Group {
+                if store.items.isEmpty {
+                    emptyState
+                } else {
+                    table
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
+            Text("Click an item to copy it to the clipboard.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 6)
         }
-        .frame(minWidth: 560, minHeight: 320)
+        .frame(minWidth: 760, minHeight: 320)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Clear history") { store.clear() }
@@ -74,24 +84,25 @@ struct HistoryView: View {
                 Text(Self.relativeTime(item.timestamp))
                     .help(Self.tooltip(item))
             }
-            .width(min: 80, ideal: 100)
+            .width(min: 70, ideal: 90, max: 110)
 
             TableColumn("Mode") { item in
                 Text(item.modeDisplayName ?? "—")
                     .help(Self.tooltip(item))
             }
-            .width(min: 80, ideal: 110)
+            .width(min: 70, ideal: 90, max: 130)
 
             TableColumn("App") { item in
                 Text(item.appName ?? item.appBundleID ?? "—")
                     .help(Self.tooltip(item))
             }
-            .width(min: 100, ideal: 140)
+            .width(min: 80, ideal: 110, max: 150)
 
             TableColumn("Preview") { item in
-                Text(HistoryViewFormatter.previewText(item.cleanedText, maxChars: 120))
+                Text(HistoryViewFormatter.previewText(item.cleanedText, maxChars: 200))
                     .help(Self.tooltip(item))
             }
+            .width(min: 240, ideal: 480)
         }
         .onChange(of: selectedID) { _, newID in
             guard let id = newID,

@@ -21,7 +21,7 @@ final class HistoryWindowController {
         let win = NSWindow(contentViewController: host)
         win.title = "Voxline History"
         win.styleMask = [.titled, .closable, .resizable, .miniaturizable]
-        win.setContentSize(NSSize(width: 720, height: 480))
+        win.setContentSize(NSSize(width: 920, height: 480))
         win.isReleasedWhenClosed = false
         win.center()
         win.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
