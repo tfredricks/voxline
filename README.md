@@ -15,6 +15,8 @@ macOS 14.0+ · Apple Silicon · Bring your own API key
 ![Requires](https://img.shields.io/badge/macOS-14%2B-fa4e49?style=flat-square)
 &nbsp;
 ![Status](https://img.shields.io/badge/status-early-yellow?style=flat-square)
+&nbsp;
+[![CI](https://img.shields.io/github/actions/workflow/status/tfredricks/voxline/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/tfredricks/voxline/actions/workflows/ci.yml)
 
 </div>
 
