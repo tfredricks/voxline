@@ -26,13 +26,105 @@ enum HistoryViewFormatter {
     }
 }
 
-/// Placeholder body — filled in by Task 4. Defined here so the file exists
-/// in the project and the formatter is reachable from the test target.
 struct HistoryView: View {
     @Bindable var store: DictationHistoryStore
     @Bindable var state: AppState
 
+    /// Selection-bound row click. We immediately copy and clear the selection
+    /// so a second click on the same row still fires. Using `selection:` is
+    /// the only first-class row-click affordance SwiftUI's `Table` exposes
+    /// on macOS; `onTapGesture` per cell wouldn't fire on whitespace inside
+    /// a row.
+    @State private var selectedID: DictationHistoryItem.ID? = nil
+
     var body: some View {
-        EmptyView()
+        Group {
+            if store.items.isEmpty {
+                emptyState
+            } else {
+                table
+            }
+        }
+        .frame(minWidth: 560, minHeight: 320)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Clear history") { store.clear() }
+                    .disabled(store.items.isEmpty)
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Text("No recent dictations.")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+            Text("Hold your push-to-talk hotkey to dictate. Cleaned dictations appear here.")
+                .font(.callout)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var table: some View {
+        Table(store.items, selection: $selectedID) {
+            TableColumn("Time") { item in
+                Text(Self.relativeTime(item.timestamp))
+                    .help(Self.tooltip(item))
+            }
+            .width(min: 80, ideal: 100)
+
+            TableColumn("Mode") { item in
+                Text(item.modeDisplayName ?? "—")
+                    .help(Self.tooltip(item))
+            }
+            .width(min: 80, ideal: 110)
+
+            TableColumn("App") { item in
+                Text(item.appName ?? item.appBundleID ?? "—")
+                    .help(Self.tooltip(item))
+            }
+            .width(min: 100, ideal: 140)
+
+            TableColumn("Preview") { item in
+                Text(HistoryViewFormatter.previewText(item.cleanedText, maxChars: 120))
+                    .help(Self.tooltip(item))
+            }
+        }
+        .onChange(of: selectedID) { _, newID in
+            guard let id = newID,
+                  let item = store.items.first(where: { $0.id == id })
+            else { return }
+            copy(item)
+            selectedID = nil
+        }
+    }
+
+    private func copy(_ item: DictationHistoryItem) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(item.cleanedText, forType: .string)
+        state.toastMessage = "Copied"
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            if state.toastMessage == "Copied" {
+                state.toastMessage = nil
+            }
+        }
+    }
+
+    private static func relativeTime(_ when: Date) -> String {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f.localizedString(for: when, relativeTo: Date())
+    }
+
+    private static func tooltip(_ item: DictationHistoryItem) -> String {
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        df.timeStyle = .medium
+        return "\(df.string(from: item.timestamp))\n\n\(item.cleanedText)"
     }
 }
