@@ -142,7 +142,7 @@ final class TranscriptionService {
         if tokens.isEmpty {
             options = DecodingOptions()
         } else {
-            AppLog.whisper.debug("vocab prompt: \(tokens.count, privacy: .public) tokens, ids=\(tokens.prefix(20).map(String.init).joined(separator: ","), privacy: .public)")
+            print("[voxline:whisper] vocab prompt: \(tokens.count) tokens, ids=\(tokens.prefix(20))")
             options = DecodingOptions(
                 skipSpecialTokens: true,
                 promptTokens: tokens,
@@ -152,7 +152,10 @@ final class TranscriptionService {
         let results = try await kit.transcribe(audioArray: samples, decodeOptions: options)
         let joined = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         if !tokens.isEmpty {
-            AppLog.whisper.debug("vocab transcribe result: chars=\(joined.count, privacy: .public) text=\(joined, privacy: .private)")
+            print("[voxline:whisper] vocab transcribe result: chars=\(joined.count) text=\"\(joined)\" segments=\(results.count)")
+            for (i, r) in results.enumerated() {
+                print("[voxline:whisper] segment[\(i)] text=\"\(r.text)\"")
+            }
         }
         return joined
     }
