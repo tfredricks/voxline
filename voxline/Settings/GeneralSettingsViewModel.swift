@@ -17,14 +17,6 @@ final class GeneralSettingsViewModel {
     var playHotkeySounds: Bool { didSet { if loaded { commit() } } }
     var provider: LLMProvider { didSet { if loaded { commit() } } }
 
-    var customVocabularyText: String {
-        didSet {
-            guard loaded, oldValue != customVocabularyText else { return }
-            let terms = CustomVocabularyStore.parse(customVocabularyText)
-            vocabulary.save(terms)
-        }
-    }
-
     var launchAtLogin: Bool {
         didSet {
             guard loaded, oldValue != launchAtLogin else { return }
@@ -78,7 +70,6 @@ final class GeneralSettingsViewModel {
         self.whisperModel = settings.whisperModel
         self.playHotkeySounds = settings.playHotkeySounds
         self.provider = settings.llmProvider
-        self.customVocabularyText = vocabulary.load().joined(separator: ", ")
         let initialStatus = loginItemService.status
         self.loginItemStatus = initialStatus
         self.launchAtLogin = (initialStatus == .enabled)
@@ -134,7 +125,6 @@ final class GeneralSettingsViewModel {
         whisperModel = .default
         playHotkeySounds = true
         provider = .anthropic
-        customVocabularyText = ""
         loaded = true
         vocabulary.save([])
         commit()

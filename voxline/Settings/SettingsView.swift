@@ -9,11 +9,20 @@ struct SettingsView: View {
     @State private var apiKeysVM: APIKeysSettingsViewModel
     @State private var levelMonitor = MicLevelMonitor()
     @State private var status: SettingsStatusViewModel
+    @State private var vocabularyVM: CustomVocabularyListViewModel
 
-    init(generalVM: GeneralSettingsViewModel, apiKeysVM: APIKeysSettingsViewModel) {
+    init(
+        generalVM: GeneralSettingsViewModel,
+        apiKeysVM: APIKeysSettingsViewModel,
+        tokenCounter: @escaping @Sendable ([String]) async throws -> Int
+    ) {
         _generalVM = State(wrappedValue: generalVM)
         _apiKeysVM = State(wrappedValue: apiKeysVM)
         _status = State(wrappedValue: SettingsStatusViewModel(general: generalVM, keys: apiKeysVM))
+        _vocabularyVM = State(wrappedValue: CustomVocabularyListViewModel(
+            store: CustomVocabularyStore(),
+            tokenCounter: tokenCounter
+        ))
     }
 
     var body: some View {
@@ -85,14 +94,10 @@ struct SettingsView: View {
                     CleanupSection(general: generalVM, keys: apiKeysVM)
                         .id(SettingsAnchor.cleanup)
 
-                    Section("Custom vocabulary") {
-                        TextEditor(text: $generalVM.customVocabularyText)
-                            .font(.body)
-                            .frame(minHeight: 60)
-                        Text("Comma- or newline-separated. Helps the cleanup model spell names, acronyms, and product terms correctly.")
-                            .foregroundStyle(.secondary)
-                            .font(.callout)
-                    }
+                    CustomVocabularyListView(
+                        viewModel: vocabularyVM,
+                        whisperModel: generalVM.whisperModel
+                    )
                     .id(SettingsAnchor.customVocabulary)
 
                     Section("Feedback") {

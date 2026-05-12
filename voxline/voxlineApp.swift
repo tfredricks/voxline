@@ -55,7 +55,13 @@ struct voxlineApp: App {
         Settings {
             SettingsView(
                 generalVM: GeneralSettingsViewModel(applier: delegate.coordinator),
-                apiKeysVM: APIKeysSettingsViewModel()
+                apiKeysVM: APIKeysSettingsViewModel(),
+                tokenCounter: { @MainActor terms in
+                    guard let transcriber = delegate.coordinator.transcriber else {
+                        throw TranscriptionPrepError.tokenizerUnavailable
+                    }
+                    return try await transcriber.tokenCount(for: terms)
+                }
             )
             .environment(delegate.appState)
         }
