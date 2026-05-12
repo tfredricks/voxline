@@ -105,3 +105,24 @@ submenu check.
 | Quit + relaunch                             | Existing rows persist                                                                                   |
 | Manually pre-seed UserDefaults old-shape JSON under `voxline.history.dictations` (3 fields only) | After relaunch, rows render with `—` in Mode and App columns; no crash |
 | Open History twice without closing          | Existing window is brought forward (no second window)                                                   |
+
+## Shipped mode coverage (2026-05-11 expansion)
+
+Spot-check a handful of the apps added to `ModeStore.shippedDefaults` so the
+bundle IDs actually match what's installed. Open Voxline → Debug → "View
+modes…" to confirm each app appears under the expected category, then dictate
+once into each and check the History window's Mode column.
+
+| App        | Category | Expected mode |
+| ---------- | -------- | ------------- |
+| Messages   | Chat     | `Messages`    |
+| Discord    | Chat     | `Discord`     |
+| WhatsApp   | Chat     | `WhatsApp`    |
+| Spark      | Email    | `Spark`       |
+| Notes      | Writing  | `Notes`       |
+| Obsidian   | Writing  | `Obsidian`    |
+| Notion     | Writing  | `Notion`      |
+| Keynote    | Default  | `Default`     |
+| Numbers    | Default  | `Default`     |
+| iTerm      | Code     | `iTerm`       |
+| Xcode      | Code     | `Xcode`       |

@@ -67,28 +67,41 @@ import Foundation
         }
 
         // Chat apps
-        #expect(prompt(for: "com.tinyspeck.slackmacgap") == ModeStore.chatPrompt)
-        #expect(prompt(for: "Cisco-Systems.Spark")       == ModeStore.chatPrompt)
-        #expect(prompt(for: "us.zoom.xos")               == ModeStore.chatPrompt)
-        #expect(prompt(for: "com.microsoft.teams2")      == ModeStore.chatPrompt)
-        #expect(prompt(for: "com.microsoft.teams")       == ModeStore.chatPrompt)
+        #expect(prompt(for: "com.tinyspeck.slackmacgap")         == ModeStore.chatPrompt)
+        #expect(prompt(for: "Cisco-Systems.Spark")               == ModeStore.chatPrompt)
+        #expect(prompt(for: "us.zoom.xos")                       == ModeStore.chatPrompt)
+        #expect(prompt(for: "com.microsoft.teams2")              == ModeStore.chatPrompt)
+        #expect(prompt(for: "com.microsoft.teams")               == ModeStore.chatPrompt)
+        #expect(prompt(for: "com.apple.MobileSMS")               == ModeStore.chatPrompt)
+        #expect(prompt(for: "com.hnc.Discord")                   == ModeStore.chatPrompt)
+        #expect(prompt(for: "ru.keepcoder.Telegram")             == ModeStore.chatPrompt)
+        #expect(prompt(for: "net.whatsapp.WhatsApp")             == ModeStore.chatPrompt)
+        #expect(prompt(for: "org.whispersystems.signal-desktop") == ModeStore.chatPrompt)
 
         // Email apps
-        #expect(prompt(for: "com.apple.mail")            == ModeStore.emailPrompt)
-        #expect(prompt(for: "com.microsoft.Outlook")     == ModeStore.emailPrompt)
+        #expect(prompt(for: "com.apple.mail")                    == ModeStore.emailPrompt)
+        #expect(prompt(for: "com.microsoft.Outlook")             == ModeStore.emailPrompt)
+        #expect(prompt(for: "com.readdle.smartemail-Mac")        == ModeStore.emailPrompt)
 
         // Writing apps
-        #expect(prompt(for: "com.microsoft.Word")        == ModeStore.writingPrompt)
-        #expect(prompt(for: "com.apple.iWork.Pages")     == ModeStore.writingPrompt)
+        #expect(prompt(for: "com.microsoft.Word")                == ModeStore.writingPrompt)
+        #expect(prompt(for: "com.apple.iWork.Pages")             == ModeStore.writingPrompt)
+        #expect(prompt(for: "com.apple.Notes")                   == ModeStore.writingPrompt)
+        #expect(prompt(for: "notion.id")                         == ModeStore.writingPrompt)
+        #expect(prompt(for: "md.obsidian")                       == ModeStore.writingPrompt)
 
         // Non-prose Office stays on defaultPrompt
-        #expect(prompt(for: "com.microsoft.Excel")       == ModeStore.defaultPrompt)
-        #expect(prompt(for: "com.microsoft.Powerpoint")  == ModeStore.defaultPrompt)
+        #expect(prompt(for: "com.microsoft.Excel")               == ModeStore.defaultPrompt)
+        #expect(prompt(for: "com.microsoft.Powerpoint")          == ModeStore.defaultPrompt)
+        #expect(prompt(for: "com.apple.iWork.Keynote")           == ModeStore.defaultPrompt)
+        #expect(prompt(for: "com.apple.iWork.Numbers")           == ModeStore.defaultPrompt)
 
         // Code/terminal
-        #expect(prompt(for: "com.apple.Terminal")        == ModeStore.codePrompt)
-        #expect(prompt(for: "com.microsoft.VSCode")      == ModeStore.codePrompt)
-        #expect(prompt(for: "com.todesktop.230313mzl4w4u92") == ModeStore.codePrompt)
+        #expect(prompt(for: "com.apple.Terminal")                == ModeStore.codePrompt)
+        #expect(prompt(for: "com.googlecode.iterm2")             == ModeStore.codePrompt)
+        #expect(prompt(for: "com.microsoft.VSCode")              == ModeStore.codePrompt)
+        #expect(prompt(for: "com.todesktop.230313mzl4w4u92")     == ModeStore.codePrompt)
+        #expect(prompt(for: "com.apple.dt.Xcode")                == ModeStore.codePrompt)
 
         // Wildcard fallback
         #expect(prompt(for: Mode.wildcardBundleID)       == ModeStore.defaultPrompt)
