@@ -13,15 +13,13 @@ struct SettingsView: View {
 
     init(
         generalVM: GeneralSettingsViewModel,
-        apiKeysVM: APIKeysSettingsViewModel,
-        tokenCounter: @escaping @Sendable ([String]) async throws -> Int
+        apiKeysVM: APIKeysSettingsViewModel
     ) {
         _generalVM = State(wrappedValue: generalVM)
         _apiKeysVM = State(wrappedValue: apiKeysVM)
         _status = State(wrappedValue: SettingsStatusViewModel(general: generalVM, keys: apiKeysVM))
         _vocabularyVM = State(wrappedValue: CustomVocabularyListViewModel(
-            store: CustomVocabularyStore(),
-            tokenCounter: tokenCounter
+            store: CustomVocabularyStore()
         ))
     }
 
@@ -94,11 +92,8 @@ struct SettingsView: View {
                     CleanupSection(general: generalVM, keys: apiKeysVM)
                         .id(SettingsAnchor.cleanup)
 
-                    CustomVocabularyListView(
-                        viewModel: vocabularyVM,
-                        whisperModel: generalVM.whisperModel
-                    )
-                    .id(SettingsAnchor.customVocabulary)
+                    CustomVocabularyListView(viewModel: vocabularyVM)
+                        .id(SettingsAnchor.customVocabulary)
 
                     Section("Feedback") {
                         Toggle("Play sound on record start/stop", isOn: $generalVM.playHotkeySounds)

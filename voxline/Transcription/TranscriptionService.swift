@@ -5,14 +5,11 @@ import WhisperKit
 /// user-facing message instead of the raw WhisperKit error.
 enum TranscriptionPrepError: LocalizedError {
     case insufficientDiskSpace(model: WhisperModel, requiredMB: Int, availableMB: Int)
-    case tokenizerUnavailable
 
     var errorDescription: String? {
         switch self {
         case .insufficientDiskSpace(let model, let required, let available):
             return "Not enough disk space to download \(model.displayName). Need about \(required) MB free; only \(available) MB available. Free up space and try again."
-        case .tokenizerUnavailable:
-            return "The Whisper tokenizer is not available. The model may not have finished loading."
         }
     }
 }
@@ -115,67 +112,13 @@ final class TranscriptionService {
     }
 
     /// Transcribe a Float32 PCM buffer at AudioFormat.whisperSampleRate.
-    /// When `vocabulary` is non-empty, builds promptTokens via
-    /// `WhisperPromptBuilder` and passes them through DecodingOptions to
-    /// bias the decoder toward those terms. Empty input → omit promptTokens
-    /// entirely (WhisperKit treats `[]` differently from `nil`).
-    ///
-    /// Options when vocab is active:
-    /// - `skipSpecialTokens: true` so the prefix prompt doesn't echo into
-    ///   the output (matches WhisperKit's `testPromptTokens` reference).
-    /// - `firstTokenLogProbThreshold: nil` because the vocab prompt biases
-    ///   the decoder, the first generated token's logprob against the
-    ///   actual audio falls below the default -1.5 threshold, fallback
-    ///   trips on every retry, and the final result is empty.
-    /// - `noSpeechThreshold: nil` for the same reason at the *segment*
-    ///   level: the vocab prompt pushes the model's no-speech probability
-    ///   above the default 0.6, the segment is declared "silence" with
-    ///   no fallback, and an empty segment is returned. Observed in the
-    ///   field: 2.2-second clips with actual speech were being classified
-    ///   as silence whenever any vocab term was present.
-    func transcribe(samples: [Float], vocabulary: [String] = []) async throws -> String {
+    /// Returns the concatenated text across all decoded segments, trimmed.
+    /// Vocabulary biasing is handled downstream by `LLMService` against the
+    /// `CapturedContext.customVocabulary` line in the prompt.
+    func transcribe(samples: [Float]) async throws -> String {
         let kit = try await loadIfNeeded()
-        let tokens: [Int]
-        if vocabulary.isEmpty {
-            tokens = []
-        } else if let tokenizer = kit.tokenizer {
-            tokens = WhisperPromptBuilder.promptTokens(from: vocabulary, tokenizer: tokenizer.asVocabularyTokenizing)
-        } else {
-            tokens = []
-        }
-        let options: DecodingOptions
-        if tokens.isEmpty {
-            options = DecodingOptions()
-        } else {
-            print("[voxline:whisper] vocab prompt: \(tokens.count) tokens, ids=\(tokens.prefix(20))")
-            options = DecodingOptions(
-                skipSpecialTokens: true,
-                promptTokens: tokens,
-                firstTokenLogProbThreshold: nil,
-                noSpeechThreshold: nil
-            )
-        }
-        let results = try await kit.transcribe(audioArray: samples, decodeOptions: options)
-        let joined = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !tokens.isEmpty {
-            print("[voxline:whisper] vocab transcribe result: chars=\(joined.count) text=\"\(joined)\" segments=\(results.count)")
-            for (i, r) in results.enumerated() {
-                print("[voxline:whisper] segment[\(i)] text=\"\(r.text)\"")
-            }
-        }
-        return joined
-    }
-
-    /// Count tokens that `terms` would contribute when fed to Whisper. Loads
-    /// the model if needed so the count matches reality. Used by the Settings
-    /// vocabulary UI to render `N / 200 tokens` and to gate the Add button.
-    func tokenCount(for terms: [String]) async throws -> Int {
-        guard !terms.isEmpty else { return 0 }
-        let kit = try await loadIfNeeded()
-        guard let tokenizer = kit.tokenizer else {
-            throw TranscriptionPrepError.tokenizerUnavailable
-        }
-        return WhisperPromptBuilder.tokenCount(of: terms, tokenizer: tokenizer.asVocabularyTokenizing)
+        let results = try await kit.transcribe(audioArray: samples, decodeOptions: DecodingOptions())
+        return results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Private
@@ -264,22 +207,3 @@ final class TranscriptionService {
     }
 }
 
-/// Bridge: lifts the existential `WhisperTokenizer` to the local
-/// `VocabularyTokenizing` protocol so the builder can consume it. We
-/// can't add this in WhisperPromptBuilder.swift directly because
-/// retroactive conformance of an imported protocol is restricted under
-/// Swift 6; this file-private adapter sidesteps that. The struct lives
-/// at file scope (rather than nested inside the extension getter) because
-/// types declared inside a protocol-extension member sit in a generic
-/// context and can't have synthesized initializers.
-private struct WhisperTokenizerVocabularyAdapter: VocabularyTokenizing {
-    let underlying: WhisperTokenizer
-    var specialTokenBegin: Int { underlying.specialTokens.specialTokenBegin }
-    func encode(text: String) -> [Int] { underlying.encode(text: text) }
-}
-
-private extension WhisperTokenizer {
-    var asVocabularyTokenizing: VocabularyTokenizing {
-        WhisperTokenizerVocabularyAdapter(underlying: self)
-    }
-}

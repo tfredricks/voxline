@@ -16,7 +16,6 @@ final class CapturePipeline {
     private let injector: ClipboardInjecting
     private let historyStore: DictationHistoryStore
     private let contextCapture: ContextCapturing
-    private let vocabularyStore: CustomVocabularyStore
     private var contextTask: Task<CapturedContext, Never>?
 
     init(
@@ -29,8 +28,7 @@ final class CapturePipeline {
         fieldInspector: FocusedFieldInspecting,
         injector: ClipboardInjecting,
         historyStore: DictationHistoryStore,
-        contextCapture: ContextCapturing,
-        vocabularyStore: CustomVocabularyStore
+        contextCapture: ContextCapturing
     ) {
         self.state = state
         self.capture = capture
@@ -42,7 +40,6 @@ final class CapturePipeline {
         self.injector = injector
         self.historyStore = historyStore
         self.contextCapture = contextCapture
-        self.vocabularyStore = vocabularyStore
 
         capture.onLevel = { [weak self] level in
             Task { @MainActor in
@@ -138,14 +135,7 @@ final class CapturePipeline {
         let transcribeInterval = signposter.beginInterval("transcribe", id: sessionID)
         let transcribeStart = Date()
         do {
-            // Read vocab synchronously off the store. Cheap (single
-            // UserDefaults read). ContextCaptureService reads the same list
-            // onto the captured context, so the same terms reach LLM
-            // cleanup; the two reads are independent and may briefly differ
-            // if the user edited the list between them — not worth
-            // coordinating.
-            let vocab = vocabularyStore.load()
-            transcript = try await transcriber.transcribe(samples: samples, vocabulary: vocab)
+            transcript = try await transcriber.transcribe(samples: samples)
             signposter.endInterval("transcribe", transcribeInterval)
         } catch {
             signposter.endInterval("transcribe", transcribeInterval, "error")

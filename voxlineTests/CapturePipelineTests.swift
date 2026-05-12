@@ -19,15 +19,9 @@ import Foundation
     final class FakeTranscriber: Transcribing {
         var nextResult: Result<String, Error> = .success("hello world")
         var transcribeCallCount = 0
-        var lastVocabulary: [String] = []
-        var tokenCountResult: Result<Int, Error> = .success(0)
-        func transcribe(samples: [Float], vocabulary: [String]) async throws -> String {
+        func transcribe(samples: [Float]) async throws -> String {
             transcribeCallCount += 1
-            lastVocabulary = vocabulary
             return try nextResult.get()
-        }
-        func tokenCount(for terms: [String]) async throws -> Int {
-            try tokenCountResult.get()
         }
     }
 
@@ -74,8 +68,7 @@ import Foundation
         modes: [Mode] = [
             Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil),
             Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil)
-        ],
-        vocabulary: [String] = []
+        ]
     ) -> (pipe: CapturePipeline, state: AppState, capture: FakeCapture, transcriber: FakeTranscriber, llm: FakeLLM, frontmost: FakeFrontmost, inspector: FakeFieldInspector, injector: FakeInjector, history: DictationHistoryStore) {
         let state = AppState()
         let capture = FakeCapture()
@@ -89,14 +82,11 @@ import Foundation
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let history = DictationHistoryStore(defaults: defaults)
-        let vocabStore = CustomVocabularyStore(defaults: defaults)
-        vocabStore.save(vocabulary)
         let pipe = CapturePipeline(
             state: state, capture: capture, transcriber: transcriber,
             llm: llm, modes: router, frontmost: front,
             fieldInspector: inspector, injector: injector,
-            historyStore: history, contextCapture: FakeContextCapture(),
-            vocabularyStore: vocabStore
+            historyStore: history, contextCapture: FakeContextCapture()
         )
         return (pipe, state, capture, transcriber, llm, front, inspector, injector, history)
     }
@@ -114,16 +104,11 @@ import Foundation
             Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil),
             Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil)
         ])
-        let suiteName = "voxline-test-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
-        let vocabStore = CustomVocabularyStore(defaults: defaults)
         let pipe = CapturePipeline(
             state: state, capture: capture, transcriber: transcriber,
             llm: llm, modes: router, frontmost: front,
             fieldInspector: inspector, injector: injector,
-            historyStore: history, contextCapture: ctx,
-            vocabularyStore: vocabStore
+            historyStore: history, contextCapture: ctx
         )
         return (pipe, state, capture, transcriber, llm, front, inspector, injector, history, ctx)
     }
@@ -392,21 +377,6 @@ import Foundation
         #expect(llm.calls.first?.context == CapturedContext.empty)
     }
 
-    @Test func finalize_passes_loaded_vocab_to_transcriber() async {
-        let (pipe, state, _, transcriber, _, _, _, _, _) = makePipeline(vocabulary: ["Argmax", "LangGraph"])
-        pipe.startRecording()
-        state.lastPeakLevel = 0.5
-        await pipe.finalizeRecording()
-        #expect(transcriber.lastVocabulary == ["Argmax", "LangGraph"])
-    }
-
-    @Test func finalize_with_empty_store_passes_empty_vocab() async {
-        let (pipe, state, _, transcriber, _, _, _, _, _) = makePipeline()
-        pipe.startRecording()
-        state.lastPeakLevel = 0.5
-        await pipe.finalizeRecording()
-        #expect(transcriber.lastVocabulary.isEmpty)
-    }
 }
 
 final class FakeContextCapture: ContextCapturing, @unchecked Sendable {

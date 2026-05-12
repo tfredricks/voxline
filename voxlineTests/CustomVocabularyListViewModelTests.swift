@@ -12,17 +12,11 @@ import Foundation
     }
 
     private func makeVM(
-        initial: [String] = [],
-        tokenCounter: @escaping @Sendable ([String]) async throws -> Int = { _ in 0 },
-        budget: Int = 200
+        initial: [String] = []
     ) -> (vm: CustomVocabularyListViewModel, store: CustomVocabularyStore) {
         let store = CustomVocabularyStore(defaults: suite())
         store.save(initial)
-        let vm = CustomVocabularyListViewModel(
-            store: store,
-            budget: budget,
-            tokenCounter: tokenCounter
-        )
+        let vm = CustomVocabularyListViewModel(store: store)
         return (vm, store)
     }
 
@@ -61,33 +55,21 @@ import Foundation
         #expect(store.load() == ["LangGraph"])
     }
 
-    @Test func canAdd_is_false_when_typed_term_would_exceed_budget() async {
-        let counter: @Sendable ([String]) async throws -> Int = { terms in
-            terms.contains("HUGE") ? 999 : 50
-        }
-        let (vm, _) = makeVM(initial: [], tokenCounter: counter, budget: 200)
-        await vm.refreshCount()
-        vm.draft = "HUGE"
-        await vm.refreshCanAdd()
+    @Test func canAdd_is_false_when_draft_is_empty_after_trim() {
+        let (vm, _) = makeVM()
+        vm.draft = "   "
         #expect(vm.canAdd == false)
     }
 
-    @Test func canAdd_is_true_when_typed_term_fits() async {
-        let counter: @Sendable ([String]) async throws -> Int = { _ in 10 }
-        let (vm, _) = makeVM(initial: [], tokenCounter: counter, budget: 200)
-        await vm.refreshCount()
+    @Test func canAdd_is_false_when_draft_duplicates_existing_term() {
+        let (vm, _) = makeVM(initial: ["Argmax"])
         vm.draft = "Argmax"
-        await vm.refreshCanAdd()
-        #expect(vm.canAdd == true)
+        #expect(vm.canAdd == false)
     }
 
-    @Test func refreshCount_falls_back_to_heuristic_when_counter_throws() async {
-        struct E: Error {}
-        let counter: @Sendable ([String]) async throws -> Int = { _ in throw E() }
-        let (vm, _) = makeVM(initial: ["one two three"], tokenCounter: counter)
-        await vm.refreshCount()
-        // Heuristic: ~1.3 tokens per word → ceil(3 * 1.3) = 4.
-        #expect(vm.tokenCount == 4)
-        #expect(vm.tokenCountIsApproximate == true)
+    @Test func canAdd_is_true_for_new_nonempty_term() {
+        let (vm, _) = makeVM(initial: ["Argmax"])
+        vm.draft = "LangGraph"
+        #expect(vm.canAdd == true)
     }
 }

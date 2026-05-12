@@ -13,15 +13,12 @@ protocol AudioCapturing: AnyObject {
 @MainActor
 protocol Transcribing: AnyObject {
     /// Transcribe a Float32 PCM buffer at AudioFormat.whisperSampleRate.
-    /// `vocabulary` is a list of canonical terms used to bias the Whisper
-    /// decoder via `DecodingOptions.promptTokens`. Pass an empty array to
-    /// disable biasing.
-    func transcribe(samples: [Float], vocabulary: [String]) async throws -> String
-
-    /// Live token count of `terms` against the active Whisper model's
-    /// tokenizer. Used by the Settings UI to show budget headroom. Throws
-    /// if the tokenizer cannot be obtained (model load failed).
-    func tokenCount(for terms: [String]) async throws -> Int
+    /// Vocabulary biasing happens later in the pipeline via the LLM cleanup
+    /// prompt — see `LLMService.transcriptionPreamble`. WhisperKit's
+    /// `promptTokens` decoder-biasing path was removed because it produced
+    /// empty output for short non-prose term lists; see
+    /// `docs/superpowers/specs/2026-05-12-vocab-cleanup-only-pivot-design.md`.
+    func transcribe(samples: [Float]) async throws -> String
 }
 
 protocol ModeResolving: Sendable {
