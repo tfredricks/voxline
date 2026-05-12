@@ -58,6 +58,42 @@ import Foundation
         #expect(ids.contains("com.microsoft.VSCode"))
     }
 
+    @Test func shipped_defaults_route_apps_by_category() {
+        // Each shipped bundle ID should resolve to the prompt that matches its
+        // category. If you remap an app's category, update both ModeStore and
+        // this test together.
+        func prompt(for id: String) -> String? {
+            ModeStore.shippedDefaults.first(where: { $0.bundleID == id })?.prompt
+        }
+
+        // Chat apps
+        #expect(prompt(for: "com.tinyspeck.slackmacgap") == ModeStore.chatPrompt)
+        #expect(prompt(for: "Cisco-Systems.Spark")       == ModeStore.chatPrompt)
+        #expect(prompt(for: "us.zoom.xos")               == ModeStore.chatPrompt)
+        #expect(prompt(for: "com.microsoft.teams2")      == ModeStore.chatPrompt)
+        #expect(prompt(for: "com.microsoft.teams")       == ModeStore.chatPrompt)
+
+        // Email apps
+        #expect(prompt(for: "com.apple.mail")            == ModeStore.emailPrompt)
+        #expect(prompt(for: "com.microsoft.Outlook")     == ModeStore.emailPrompt)
+
+        // Writing apps
+        #expect(prompt(for: "com.microsoft.Word")        == ModeStore.writingPrompt)
+        #expect(prompt(for: "com.apple.iWork.Pages")     == ModeStore.writingPrompt)
+
+        // Non-prose Office stays on defaultPrompt
+        #expect(prompt(for: "com.microsoft.Excel")       == ModeStore.defaultPrompt)
+        #expect(prompt(for: "com.microsoft.Powerpoint")  == ModeStore.defaultPrompt)
+
+        // Code/terminal
+        #expect(prompt(for: "com.apple.Terminal")        == ModeStore.codePrompt)
+        #expect(prompt(for: "com.microsoft.VSCode")      == ModeStore.codePrompt)
+        #expect(prompt(for: "com.todesktop.230313mzl4w4u92") == ModeStore.codePrompt)
+
+        // Wildcard fallback
+        #expect(prompt(for: Mode.wildcardBundleID)       == ModeStore.defaultPrompt)
+    }
+
     @Test func wildcard_default_is_last_so_exact_matches_win() {
         // ModeRouter scans from the front, so the `*` catch-all must sit at the
         // end — otherwise a wildcard mode could be returned ahead of an exact
@@ -84,7 +120,7 @@ import Foundation
         ]
         let reconciled = ModeStore.reconcileShippedPrompts(stale)
 
-        #expect(reconciled.first { $0.bundleID == "com.tinyspeck.slackmacgap" }?.prompt == ModeStore.defaultPrompt)
+        #expect(reconciled.first { $0.bundleID == "com.tinyspeck.slackmacgap" }?.prompt == ModeStore.chatPrompt)
         #expect(reconciled.first { $0.bundleID == "com.apple.Terminal" }?.prompt == ModeStore.codePrompt)
         #expect(reconciled.first { $0.bundleID == Mode.wildcardBundleID }?.prompt == ModeStore.defaultPrompt)
     }
@@ -98,7 +134,7 @@ import Foundation
         ]
         let reconciled = ModeStore.reconcileShippedPrompts(userTuned)
         let mail = try! #require(reconciled.first)
-        #expect(mail.prompt == ModeStore.defaultPrompt)
+        #expect(mail.prompt == ModeStore.emailPrompt)
         #expect(mail.displayName == "My Mail")
         #expect(mail.model == "gpt-5-mini")
         #expect(mail.temperature == 0.4)
@@ -124,11 +160,11 @@ import Foundation
         try store.save(stale)
 
         let loaded = try store.load()
-        #expect(loaded.first?.prompt == ModeStore.defaultPrompt)
+        #expect(loaded.first?.prompt == ModeStore.chatPrompt)
 
         // Reload from disk via a fresh store to prove the rewrite persisted.
         let fresh = ModeStore(fileURL: store.fileURL)
         let again = try fresh.load()
-        #expect(again.first?.prompt == ModeStore.defaultPrompt)
+        #expect(again.first?.prompt == ModeStore.chatPrompt)
     }
 }

@@ -63,16 +63,23 @@ final class ModeStore {
     }
 
     /// Shipped defaults. The wildcard `*` mode must remain last so that
-    /// ModeRouter's bundle-exact matches are preferred. Existing users keep
-    /// their persisted modes file — new entries here only reach a clean
-    /// install.
+    /// ModeRouter's bundle-exact matches are preferred. Existing users have
+    /// their persisted modes file reconciled on load — `reconcileShippedPrompts`
+    /// overwrites prompts for any shipped bundle ID, so the active prompt is
+    /// always whatever ships here.
     ///
-    /// We ship two prompts. Per-app distinctions like "casual chat" vs.
-    /// "formal email" are already implicit in the speaker's own dictation
-    /// (tone, salutation, etc.) and small models adapt well without explicit
-    /// per-app hints. Terminal/code editors are the one case that genuinely
-    /// inverts the default — they need filler-stripping without punctuation
-    /// or capitalization changes — so they share a separate prompt.
+    /// Five prompts, routed by app category:
+    ///
+    /// - `chatPrompt`  — Slack, Webex, Zoom, MS Teams. Short, conversational,
+    ///   light punctuation, never invents greetings or sign-offs.
+    /// - `emailPrompt` — Mail, Outlook. Full punctuation and paragraphs;
+    ///   never invents a greeting or sign-off the speaker didn't dictate.
+    /// - `writingPrompt` — Word, Pages. Long-form document prose with
+    ///   paragraph structure.
+    /// - `codePrompt`  — Terminal, VS Code, Cursor. Filler-only stripping;
+    ///   no punctuation or capitalization changes.
+    /// - `defaultPrompt` — wildcard fallback, plus Excel/PowerPoint where
+    ///   the content isn't really prose.
     static let defaultPrompt = """
     Rewrite the transcript as if the speaker had typed it. Apply these \
     transformations:
@@ -93,19 +100,84 @@ final class ModeStore {
 
     Return only the revised text.
     """
+
+    static let chatPrompt = """
+    Rewrite the transcript as if the speaker had typed it into a chat \
+    message. Apply these transformations:
+
+    - Remove filler words: um, uh, like, you know, sort of, kind of.
+    - Remove disfluencies: false starts, restarts, repeated words, \
+    trailing-off pauses.
+    - Resolve self-corrections to the speaker's final intent and DROP the \
+    correction phrase entirely.
+    - Keep it conversational. Contractions are fine. Do not add a \
+    greeting, sign-off, or formal phrasing the speaker didn't dictate.
+    - Use light punctuation. A single short message does not need a \
+    trailing period; multi-sentence messages do.
+    - Preserve the speaker's tone, voice, and word choices verbatim.
+
+    Return only the revised text.
+    """
+
+    static let emailPrompt = """
+    Rewrite the transcript as if the speaker had typed it into an email. \
+    Apply these transformations:
+
+    - Remove filler words: um, uh, like, you know, sort of, kind of.
+    - Remove disfluencies: false starts, restarts, repeated words, \
+    trailing-off pauses.
+    - Resolve self-corrections to the speaker's final intent and DROP the \
+    correction phrase entirely.
+    - Apply full punctuation, capitalization, and paragraph breaks where \
+    the speaker pauses or shifts topic.
+    - Do not invent a greeting or sign-off. If the speaker dictated one, \
+    keep it; otherwise omit.
+    - Preserve the speaker's tone, voice, and word choices — do not \
+    formalize casual phrasing for style.
+
+    Return only the revised text.
+    """
+
+    static let writingPrompt = """
+    Rewrite the transcript as if the speaker had typed it into a \
+    document. Apply these transformations:
+
+    - Remove filler words: um, uh, like, you know, sort of, kind of.
+    - Remove disfluencies: false starts, restarts, repeated words, \
+    trailing-off pauses.
+    - Resolve self-corrections to the speaker's final intent and DROP the \
+    correction phrase entirely.
+    - Apply full punctuation, capitalization, and paragraph structure. \
+    Treat the output as written prose, not a chat snippet.
+    - Preserve the speaker's tone, voice, and word choices — do not \
+    formalize or paraphrase for style.
+
+    Return only the revised text.
+    """
+
     static let codePrompt = "Strip filler words only. Do not add punctuation, change capitalization, or rephrase. Return only the revised text."
 
     static let shippedDefaults: [Mode] = [
-        Mode(bundleID: "com.tinyspeck.slackmacgap",     displayName: "Slack",      prompt: defaultPrompt, model: nil, temperature: nil),
-        Mode(bundleID: "Cisco-Systems.Spark",           displayName: "Webex",      prompt: defaultPrompt, model: nil, temperature: nil),
-        Mode(bundleID: "com.apple.mail",                displayName: "Mail",       prompt: defaultPrompt, model: nil, temperature: nil),
-        Mode(bundleID: "com.microsoft.Outlook",         displayName: "Outlook",    prompt: defaultPrompt, model: nil, temperature: nil),
-        Mode(bundleID: "com.microsoft.Word",            displayName: "Word",       prompt: defaultPrompt, model: nil, temperature: nil),
+        // Chat
+        Mode(bundleID: "com.tinyspeck.slackmacgap",     displayName: "Slack",      prompt: chatPrompt,    model: nil, temperature: nil),
+        Mode(bundleID: "Cisco-Systems.Spark",           displayName: "Webex",      prompt: chatPrompt,    model: nil, temperature: nil),
+        Mode(bundleID: "us.zoom.xos",                   displayName: "Zoom",       prompt: chatPrompt,    model: nil, temperature: nil),
+        Mode(bundleID: "com.microsoft.teams2",          displayName: "Teams",      prompt: chatPrompt,    model: nil, temperature: nil),
+        Mode(bundleID: "com.microsoft.teams",           displayName: "Teams (Classic)", prompt: chatPrompt, model: nil, temperature: nil),
+        // Email
+        Mode(bundleID: "com.apple.mail",                displayName: "Mail",       prompt: emailPrompt,   model: nil, temperature: nil),
+        Mode(bundleID: "com.microsoft.Outlook",         displayName: "Outlook",    prompt: emailPrompt,   model: nil, temperature: nil),
+        // Long-form writing
+        Mode(bundleID: "com.microsoft.Word",            displayName: "Word",       prompt: writingPrompt, model: nil, temperature: nil),
+        Mode(bundleID: "com.apple.iWork.Pages",         displayName: "Pages",      prompt: writingPrompt, model: nil, temperature: nil),
+        // Office, non-prose
         Mode(bundleID: "com.microsoft.Excel",           displayName: "Excel",      prompt: defaultPrompt, model: nil, temperature: nil),
         Mode(bundleID: "com.microsoft.Powerpoint",      displayName: "PowerPoint", prompt: defaultPrompt, model: nil, temperature: nil),
+        // Code / terminal
         Mode(bundleID: "com.apple.Terminal",            displayName: "Terminal",   prompt: codePrompt,    model: nil, temperature: nil),
         Mode(bundleID: "com.microsoft.VSCode",          displayName: "VS Code",    prompt: codePrompt,    model: nil, temperature: nil),
         Mode(bundleID: "com.todesktop.230313mzl4w4u92", displayName: "Cursor",     prompt: codePrompt,    model: nil, temperature: nil),
+        // Wildcard fallback (must stay last)
         Mode(bundleID: Mode.wildcardBundleID,           displayName: "Default",    prompt: defaultPrompt, model: nil, temperature: nil),
     ]
 }
