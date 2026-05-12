@@ -68,94 +68,50 @@ final class ModeStore {
     /// overwrites prompts for any shipped bundle ID, so the active prompt is
     /// always whatever ships here.
     ///
-    /// Five prompts, routed by app category:
+    /// Mode prompts are appended to `LLMService.transcriptionPreamble` as the
+    /// system prompt. The preamble carries the shared cleaning rules (fillers,
+    /// disfluencies, self-corrections, word-choice preservation) so each mode
+    /// prompt is a focused style delta — punctuation density, paragraph
+    /// behavior, and what the model must not invent.
     ///
-    /// - `chatPrompt`  — Slack, Webex, Zoom, MS Teams. Short, conversational,
-    ///   light punctuation, never invents greetings or sign-offs.
-    /// - `emailPrompt` — Mail, Outlook. Full punctuation and paragraphs;
-    ///   never invents a greeting or sign-off the speaker didn't dictate.
-    /// - `writingPrompt` — Word, Pages. Long-form document prose with
-    ///   paragraph structure.
-    /// - `codePrompt`  — Terminal, VS Code, Cursor. Filler-only stripping;
-    ///   no punctuation or capitalization changes.
-    /// - `defaultPrompt` — wildcard fallback, plus Excel/PowerPoint where
-    ///   the content isn't really prose.
+    /// - `chatPrompt`    — Slack, Discord, Messages, Teams, etc.
+    /// - `emailPrompt`   — Mail, Outlook, Spark.
+    /// - `writingPrompt` — Word, Pages, Notion, Obsidian, Notes.
+    /// - `codePrompt`    — Terminal, iTerm, VS Code, Cursor, Xcode.
+    /// - `defaultPrompt` — wildcard fallback, plus Excel/PowerPoint/Keynote/
+    ///   Numbers where the content isn't really prose.
     static let defaultPrompt = """
-    Rewrite the transcript as if the speaker had typed it. Apply these \
-    transformations:
-
-    - Remove filler words: um, uh, like, you know, sort of, kind of.
-    - Remove disfluencies: false starts, restarts, repeated words, \
-    trailing-off pauses.
-    - Resolve self-corrections to the speaker's final intent and DROP the \
-    correction phrase entirely. Examples:
-      "how precise, I mean fast" → "how fast"
-      "red, no blue" → "blue"
-      "Tuesday, wait, Wednesday" → "Wednesday"
-      "scratch that, Wednesday" → "Wednesday"
-      "I went to the- I went to the store" → "I went to the store"
-    - Add natural punctuation and capitalization.
-    - Preserve the speaker's tone, voice, and word choices — do not \
-    formalize casual speech or paraphrase for style.
-
-    Return only the revised text.
+    Default style. Apply natural punctuation and capitalization. Keep \
+    contractions and the speaker's register; don't formalize casual \
+    phrasing. Do not add structure (lists, headings, bullets) the speaker \
+    didn't dictate.
     """
 
     static let chatPrompt = """
-    Rewrite the transcript as if the speaker had typed it into a chat \
-    message. Apply these transformations:
-
-    - Remove filler words: um, uh, like, you know, sort of, kind of.
-    - Remove disfluencies: false starts, restarts, repeated words, \
-    trailing-off pauses.
-    - Resolve self-corrections to the speaker's final intent and DROP the \
-    correction phrase entirely.
-    - Keep it conversational. Contractions are fine. Do not add a \
-    greeting, sign-off, or formal phrasing the speaker didn't dictate.
-    - Use light punctuation. A single short message does not need a \
-    trailing period; multi-sentence messages do.
-    - Preserve the speaker's tone, voice, and word choices verbatim.
-
-    Return only the revised text.
+    Chat message. Conversational register; keep contractions and casual \
+    phrasing. Use light punctuation: a one-line message needs no trailing \
+    period; multi-sentence messages get full stops. Never invent a \
+    greeting, sign-off, or "Hi <name>" the speaker didn't dictate.
     """
 
     static let emailPrompt = """
-    Rewrite the transcript as if the speaker had typed it into an email. \
-    Apply these transformations:
-
-    - Remove filler words: um, uh, like, you know, sort of, kind of.
-    - Remove disfluencies: false starts, restarts, repeated words, \
-    trailing-off pauses.
-    - Resolve self-corrections to the speaker's final intent and DROP the \
-    correction phrase entirely.
-    - Apply full punctuation, capitalization, and paragraph breaks where \
-    the speaker pauses or shifts topic.
-    - Do not invent a greeting or sign-off. If the speaker dictated one, \
-    keep it; otherwise omit.
-    - Preserve the speaker's tone, voice, and word choices — do not \
-    formalize casual phrasing for style.
-
-    Return only the revised text.
+    Email body. Full sentences with proper capitalization and paragraph \
+    breaks at topic shifts. Never invent a greeting, sign-off, or "Dear \
+    <name>" the speaker didn't dictate. Preserve the speaker's register; \
+    don't formalize casual phrasing.
     """
 
     static let writingPrompt = """
-    Rewrite the transcript as if the speaker had typed it into a \
-    document. Apply these transformations:
-
-    - Remove filler words: um, uh, like, you know, sort of, kind of.
-    - Remove disfluencies: false starts, restarts, repeated words, \
-    trailing-off pauses.
-    - Resolve self-corrections to the speaker's final intent and DROP the \
-    correction phrase entirely.
-    - Apply full punctuation, capitalization, and paragraph structure. \
-    Treat the output as written prose, not a chat snippet.
-    - Preserve the speaker's tone, voice, and word choices — do not \
-    formalize or paraphrase for style.
-
-    Return only the revised text.
+    Document prose. Full sentences with proper capitalization and \
+    paragraph structure. Break paragraphs where the speaker pauses or \
+    shifts topic. Treat output as long-form prose, not a chat snippet.
     """
 
-    static let codePrompt = "Strip filler words only. Do not add punctuation, change capitalization, or rephrase. Return only the revised text."
+    static let codePrompt = """
+    Code, terminal command, or technical identifier. Do not add or change \
+    punctuation or capitalization the speaker didn't dictate. Do not \
+    rephrase. Pass through symbols, numbers, and identifiers verbatim.
+    """
 
     static let shippedDefaults: [Mode] = [
         // Chat
