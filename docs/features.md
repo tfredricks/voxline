@@ -7,7 +7,7 @@
 5. [x] **Automatic punctuation and capitalization** — Adds periods, commas, question marks, paragraph breaks, and capitalization without requiring spoken punctuation commands.
 6. [x] **Natural speech to polished writing** — Converts conversational dictation into clear written language instead of dumping a raw transcript.
 7. [ ] **Command-based editing and rewriting** — Supports voice commands such as "make that shorter," "turn that into bullets," "rewrite that more professionally," "make it friendlier," "summarize this," or "rewrite in a casual tone."
-8. [ ] **Custom vocabulary** — Lets users add names, company terms, acronyms, technical terms, product names, and personal shorthand so transcription gets them right.
+8. [x] **Custom vocabulary** — Lets users add names, company terms, acronyms, technical terms, product names, and personal shorthand so transcription gets them right.
 9. [ ] **Personal writing style adaptation** — Learns user preferences over time, such as sentence length, tone, sign-offs, formatting habits, and common phrases.
 10. [x] **Context-aware formatting** — Adjusts output based on where the user is typing: email reply, Slack message, document, code comment, task note, or search box, using cues from the active app, nearby text, and selection.
 11. [ ] **Low-friction correction flow** — Makes it easy to fix mistakes by voice, quick keyboard shortcut, inline rewrite, or selecting recent dictated text.
