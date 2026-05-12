@@ -29,7 +29,8 @@ import Foundation
             fieldInspector: FakeFieldInspector(),
             injector: FakeInjector(handler: inject),
             historyStore: DictationHistoryStore(defaults: defaults),
-            contextCapture: FakeContextCapture()
+            contextCapture: FakeContextCapture(),
+            vocabularyStore: CustomVocabularyStore()
         )
         return (p, state, capture)
     }
@@ -118,7 +119,8 @@ import Foundation
             fieldInspector: FakeFieldInspector(),
             injector: FakeInjector(handler: { _ in TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified) }),
             historyStore: DictationHistoryStore(defaults: defaults),
-            contextCapture: FakeContextCapture()
+            contextCapture: FakeContextCapture(),
+            vocabularyStore: CustomVocabularyStore()
         )
         p.startRecording()
         // Do NOT set lastPeakLevel above 0 — simulating a silent mic where the
@@ -151,7 +153,10 @@ private final class FakeCapture: AudioCapturing {
 private final class FakeTranscriber: Transcribing {
     let handler: ([Float]) async throws -> String
     init(handler: @escaping ([Float]) async throws -> String) { self.handler = handler }
-    func transcribe(samples: [Float]) async throws -> String { try await handler(samples) }
+    func transcribe(samples: [Float], vocabulary: [String]) async throws -> String {
+        try await handler(samples)
+    }
+    func tokenCount(for terms: [String]) async throws -> Int { 0 }
 }
 
 private final class FakeLLM: LLMServing, @unchecked Sendable {
