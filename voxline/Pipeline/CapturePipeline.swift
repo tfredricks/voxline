@@ -30,7 +30,7 @@ final class CapturePipeline {
         injector: ClipboardInjecting,
         historyStore: DictationHistoryStore,
         contextCapture: ContextCapturing,
-        vocabularyStore: CustomVocabularyStore = CustomVocabularyStore()
+        vocabularyStore: CustomVocabularyStore
     ) {
         self.state = state
         self.capture = capture
