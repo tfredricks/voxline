@@ -17,6 +17,8 @@ struct DebugView: View {
     @Bindable var state: AppState
     let coordinator: AppCoordinator
 
+    @State private var showModesSheet = false
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -28,6 +30,9 @@ struct DebugView: View {
             }
             .padding(20)
             .frame(minWidth: 520, alignment: .leading)
+        }
+        .sheet(isPresented: $showModesSheet) {
+            ModesViewerSheet(modes: coordinator.modes?.modes ?? [])
         }
     }
 
@@ -175,6 +180,7 @@ struct DebugView: View {
                 Button("Test paste") { Task { await runTestPaste() } }
                 Button("Test LLM") { Task { await runTestLLM() } }
                 Button("Test transcribe") { Task { await runTestTranscribe() } }
+                Button("View modes…") { showModesSheet = true }
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -291,6 +297,92 @@ struct DebugView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(nsColor: .textBackgroundColor))
             .cornerRadius(6)
+    }
+}
+
+// MARK: - Modes viewer (read-only)
+
+/// Read-only dump of every shipped + user mode and its full prompt. Lets the
+/// developer (or a power user during a bug report) see exactly what the
+/// model is being told for the current frontmost app. No editing — the
+/// authoritative source is `ModeStore.shippedDefaults`, and modes are
+/// reconciled on every load.
+private struct ModesViewerSheet: View {
+    let modes: [Mode]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Modes (\(modes.count))").font(.headline)
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+
+            Divider()
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    if modes.isEmpty {
+                        Text("(no modes loaded)")
+                            .foregroundStyle(.secondary)
+                            .padding(20)
+                    } else {
+                        ForEach(modes) { mode in
+                            modeCard(mode)
+                        }
+                    }
+                }
+                .padding(20)
+            }
+        }
+        .frame(minWidth: 640, minHeight: 520)
+    }
+
+    @ViewBuilder
+    private func modeCard(_ mode: Mode) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(mode.displayName).font(.headline)
+                Text(mode.bundleID)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                Spacer()
+            }
+
+            if let meta = metaLine(mode) {
+                Text(meta)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+
+            Text(mode.prompt)
+                .font(.system(.body, design: .monospaced))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+                .background(Color(nsColor: .textBackgroundColor))
+                .cornerRadius(6)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .underPageBackgroundColor))
+        .cornerRadius(8)
+    }
+
+    /// One-line summary of the non-prompt overrides. Returns nil if nothing
+    /// is set so we don't render an empty row.
+    private func metaLine(_ mode: Mode) -> String? {
+        var parts: [String] = []
+        if let kind = mode.fieldKind { parts.append("field: \(kind)") }
+        if let model = mode.model { parts.append("model: \(model)") }
+        if let temp = mode.temperature { parts.append(String(format: "temp: %.2f", temp)) }
+        return parts.isEmpty ? nil : parts.joined(separator: "  ·  ")
     }
 }
 
