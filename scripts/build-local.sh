@@ -77,4 +77,14 @@ echo "==> Installing to ${DEST}..."
 rm -rf "$DEST"
 cp -R "$APP" "$DEST"
 
+ICLOUD_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs"
+if [[ -d "$ICLOUD_DIR" ]]; then
+    ICLOUD_DEST="$ICLOUD_DIR/voxline.app"
+    echo "==> Copying to iCloud Drive (${ICLOUD_DEST})..."
+    rm -rf "$ICLOUD_DEST"
+    cp -R "$APP" "$ICLOUD_DEST"
+else
+    echo "==> Skipping iCloud copy (iCloud Drive not found at $ICLOUD_DIR)"
+fi
+
 echo "==> Done. Launch with: open -a voxline"
