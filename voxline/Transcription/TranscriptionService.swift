@@ -120,14 +120,19 @@ final class TranscriptionService {
     /// bias the decoder toward those terms. Empty input → omit promptTokens
     /// entirely (WhisperKit treats `[]` differently from `nil`).
     ///
-    /// Options when vocab is active mirror WhisperKit's own `testPromptTokens`
-    /// reference test: `skipSpecialTokens: true` (so the prefix prompt
-    /// doesn't echo into the output), and `firstTokenLogProbThreshold: nil`
-    /// to disable the threshold that otherwise trips on the very first
-    /// generated token when the prompt has biased the decoder away from
-    /// the natural continuation. With the threshold active and a vocab
-    /// prompt, WhisperKit's fallback loop trips on every retry and the
-    /// final result is empty.
+    /// Options when vocab is active:
+    /// - `skipSpecialTokens: true` so the prefix prompt doesn't echo into
+    ///   the output (matches WhisperKit's `testPromptTokens` reference).
+    /// - `firstTokenLogProbThreshold: nil` because the vocab prompt biases
+    ///   the decoder, the first generated token's logprob against the
+    ///   actual audio falls below the default -1.5 threshold, fallback
+    ///   trips on every retry, and the final result is empty.
+    /// - `noSpeechThreshold: nil` for the same reason at the *segment*
+    ///   level: the vocab prompt pushes the model's no-speech probability
+    ///   above the default 0.6, the segment is declared "silence" with
+    ///   no fallback, and an empty segment is returned. Observed in the
+    ///   field: 2.2-second clips with actual speech were being classified
+    ///   as silence whenever any vocab term was present.
     func transcribe(samples: [Float], vocabulary: [String] = []) async throws -> String {
         let kit = try await loadIfNeeded()
         let tokens: [Int]
@@ -146,7 +151,8 @@ final class TranscriptionService {
             options = DecodingOptions(
                 skipSpecialTokens: true,
                 promptTokens: tokens,
-                firstTokenLogProbThreshold: nil
+                firstTokenLogProbThreshold: nil,
+                noSpeechThreshold: nil
             )
         }
         let results = try await kit.transcribe(audioArray: samples, decodeOptions: options)
