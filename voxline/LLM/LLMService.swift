@@ -43,12 +43,19 @@ struct LLMService: LLMServing {
 
     If a `Custom vocabulary` line appears in the Context block, treat \
     each comma-separated entry as a canonical spelling. When a \
-    transcript word is phonetically close to one of those entries but \
+    transcript phrase is phonetically close to one of those entries but \
     differs in spelling, case, word-segmentation, or letter-spacing, \
-    replace the transcript form with the canonical form. Never invent \
-    terms that are not in the list. If a vocabulary term appears \
-    consecutively two or more times with no other content between, \
-    collapse it to a single occurrence.
+    replace the transcript form with the canonical form — even when \
+    the transcript form is itself a plausible spelling. Word-segmentation \
+    fixes are the most important: if the transcript splits or joins \
+    words differently from the canonical entry, snap to the canonical \
+    entry. Examples (the canonical entry comes from the vocabulary list):
+        Vocabulary has `LangGraph`, transcript says `lang graph` → `LangGraph`.
+        Vocabulary has `MSL`, transcript says `M S L` → `MSL`.
+        Vocabulary has `Argmax`, transcript says `arg max` → `Argmax`.
+    Never invent terms that are not in the vocabulary list. If a \
+    vocabulary term appears consecutively two or more times with no \
+    other content between, collapse it to a single occurrence.
 
     Style guidance for this dictation:
     """

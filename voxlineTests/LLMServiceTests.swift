@@ -218,8 +218,11 @@ import Foundation
         let preamble = LLMService.transcriptionPreamble
         #expect(preamble.contains("Custom vocabulary"))
         #expect(preamble.contains("canonical spelling"))
-        #expect(preamble.contains("Never invent terms that are not in the list"))
+        #expect(preamble.contains("Never invent terms that are not in the vocabulary list"))
         #expect(preamble.contains("collapse it to a single occurrence"))
+        // Word-segmentation directive + at least one of the worked examples.
+        #expect(preamble.contains("Word-segmentation fixes are the most important"))
+        #expect(preamble.contains("`lang graph` → `LangGraph`"))
     }
 
     @Test func transcriptionPreamble_keeps_existing_cleaning_rules() {
