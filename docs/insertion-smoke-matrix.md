@@ -86,3 +86,22 @@ Expectations:
 | Window closed during meter         | System mic indicator clears (engine stopped)                                     |
 | Window closed during recording     | Meter stopped before recording started — no contention                           |
 | Status chip click → scroll         | Clicking model/provider chip scrolls form to that section                        |
+
+## Dictation history window (feature #16, 2026-05-11 evolution)
+
+Smoke the standalone history window. Replaces the previous "Recent dictations"
+submenu check.
+
+| Case                                        | Expected                                                                                                |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Open via "Show history…"                    | Window titles "Voxline History", 720×480 default, table with Time/Mode/App/Preview columns              |
+| Empty history                               | Empty-state placeholder centered; "Clear history" disabled                                              |
+| Dictate into Slack                          | Top row shows `Slack` in Mode column, `Slack` in App column                                             |
+| Dictate into Mail                           | Row shows `Mail` in Mode, `Mail` in App                                                                 |
+| Dictate into Cursor                         | Row shows `Cursor` in Mode, `Cursor` in App                                                             |
+| Dictate into Safari (unlisted app)          | Row shows `Default` in Mode (wildcard), `Safari` in App                                                 |
+| Click any row                               | Clipboard receives `cleanedText`; "Copied" toast fires for ~1.2s                                        |
+| Click "Clear history"                       | Table replaced by empty state; no confirmation prompt                                                   |
+| Quit + relaunch                             | Existing rows persist                                                                                   |
+| Manually pre-seed UserDefaults old-shape JSON under `voxline.history.dictations` (3 fields only) | After relaunch, rows render with `—` in Mode and App columns; no crash |
+| Open History twice without closing          | Existing window is brought forward (no second window)                                                   |
