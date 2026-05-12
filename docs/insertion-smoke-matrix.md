@@ -38,19 +38,23 @@ explicit limitation or follow-up issue.
 
 ## Context-aware formatting (feature #11)
 
-For each target app, record what `AppLog.context` debug line emits during a
-single dictation. Filter Console.app with
-`subsystem == "com.voxline.app" AND category == "context"`.
+For each target app, run a single dictation and confirm the `AppLog.context`
+debug line matches the expected shape. Filter Console.app with
+`subsystem == "com.voxline.app" AND category == "context"`, or set
+`VOXLINE_TRACE_LLM=1` to dump the formatted prompt to stdout.
 
-| App                           | App line | Window | Field | Before/after | Visible labels | Vocabulary |
-| ----------------------------- | -------- | ------ | ----- | ------------ | -------------- | ---------- |
-| Apple Mail compose body       |          |        |       |              |                |            |
-| Slack message composer        |          |        |       |              |                |            |
-| Cursor editor                 |          |        |       |              |                |            |
-| Safari address/search field   |          |        |       |              |                |            |
-| Notes note body               |          |        |       |              |                |            |
-| Terminal prompt               |          |        |       |              |                |            |
-| Password / secure text field  | yes      | yes    | secure| **suppressed** | yes          | yes        |
+Legend: `yes` expected present, `maybe` framework-dependent (Catalyst/Electron
+often empty), `—` not applicable, `suppressed` value-bearing field withheld.
+
+| App                           | App line | Window | Field         | Before/after | Vocabulary | Result |
+| ----------------------------- | -------- | ------ | ------------- | ------------ | ---------- | ------ |
+| Apple Mail compose body       | yes      | yes    | AXTextArea    | yes          | if set     |        |
+| Slack message composer        | yes      | maybe  | AXTextArea    | maybe        | if set     |        |
+| Cursor editor                 | yes      | yes    | AXTextArea    | maybe        | if set     |        |
+| Safari address/search field   | yes      | yes    | AXTextField   | yes          | if set     |        |
+| Notes note body               | yes      | yes    | AXTextArea    | yes          | if set     |        |
+| Terminal prompt               | yes      | maybe  | AXTextArea    | maybe        | if set     |        |
+| Password / secure text field  | yes      | yes    | secure        | suppressed   | if set     |        |
 
 Expectations:
 
@@ -58,16 +62,16 @@ Expectations:
 - **Window** present when the focused element exposes `kAXWindowAttribute`
   with a non-empty title; can be empty in Terminal, some Electron windows.
 - **Field** present when AX returns a role; `secure` for password fields.
+  Catalyst apps (Outlook, Discord) may resolve through the app-level AX
+  fallback added in `9668bf2`.
 - **Before/after** present when AX exposes `kAXValueAttribute` and a
   selected-text range. Often empty in web textareas and Electron apps.
-- **Visible labels** present when the AX BFS finds title/description strings;
-  short to empty in Electron-heavy apps.
 - **Vocabulary** present iff the user saved any global terms in Settings →
   Custom vocabulary.
 - **Secure-field row** must show value-bearing lines suppressed (no
-  before/after cursor, no selected text). Validate by dictating into a 1Password
-  or system login screen; confirm Console.app shows the captured context but
-  excludes any value content.
+  before/after cursor, no selected text). Validate by dictating into a
+  1Password or system login screen; confirm Console.app shows the captured
+  context but excludes any value content.
 
 ## Settings (single-page redesign — 2026-05-10)
 

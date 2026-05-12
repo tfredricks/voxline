@@ -24,6 +24,13 @@ struct LLMService: LLMServing {
     Preserve proper nouns, technical terms, code identifiers, brand names, \
     and the speaker's word choice verbatim — do not "normalize" or rephrase.
 
+    If a Context section follows the transcript, treat it as background \
+    signal about where the user is dictating: ground proper nouns and \
+    spellings against it, match the register and punctuation density of \
+    any surrounding text shown, and preserve any listed vocabulary \
+    verbatim. Never quote, echo, or summarize Context fields in the output \
+    — the transcript itself is the only source of the text to return.
+
     Output only the cleaned transcript — no greeting, preface, commentary, \
     apology, quotes, or markdown fences.
 
