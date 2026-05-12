@@ -191,7 +191,7 @@ final class CapturePipeline {
         }
         state.lastCleanupDuration = Date().timeIntervalSince(cleanupStart)
         state.lastCleanedText = cleaned
-        historyStore.record(cleanedText: cleaned)
+        historyStore.record(cleanedText: cleaned, mode: mode, context: context)
         AppLog.llm.info("cleanup ok: in=\(transcript.count, privacy: .public) out=\(cleaned.count, privacy: .public) duration=\(self.state.lastCleanupDuration ?? 0, privacy: .public)s")
 
         // 4. Paste.

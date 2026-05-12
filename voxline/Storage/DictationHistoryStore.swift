@@ -39,14 +39,14 @@ struct DictationHistoryItem: Codable, Identifiable, Equatable {
     }
 }
 
-/// In-memory list (max 10, newest first) of recent cleaned dictations,
+/// In-memory list (max 25, newest first) of recent cleaned dictations,
 /// JSON-encoded into UserDefaults. Same persistence pattern as `HotkeyChord`.
 @Observable
 @MainActor
 final class DictationHistoryStore {
 
     static let key = "voxline.history.dictations"
-    private static let maxItems = 10
+    private static let maxItems = 25
 
     private(set) var items: [DictationHistoryItem] = []
 
@@ -57,13 +57,20 @@ final class DictationHistoryStore {
         self.items = Self.load(defaults: defaults)
     }
 
-    /// Prepend a new entry. Whitespace-only text is ignored. Caps at 10 by
-    /// dropping the oldest entries.
-    func record(cleanedText: String) {
+    /// Prepend a new entry for a successful dictation. Pulls the resolved mode
+    /// and frontmost-app fields so the history window can show context per row.
+    /// Whitespace-only text is ignored. Caps at 25 by dropping the oldest entries.
+    func record(cleanedText: String, mode: Mode, context: CapturedContext) {
         // Trim is a record-or-skip filter only; the stored text is the raw
         // cleanedText so history matches what was pasted into the focused app.
         guard !cleanedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let item = DictationHistoryItem(cleanedText: cleanedText)
+        let item = DictationHistoryItem(
+            cleanedText: cleanedText,
+            modeDisplayName: mode.displayName,
+            modeBundleID: mode.bundleID,
+            appName: context.appName,
+            appBundleID: context.bundleID
+        )
         var next = [item] + items
         if next.count > Self.maxItems {
             next = Array(next.prefix(Self.maxItems))

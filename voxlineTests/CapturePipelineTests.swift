@@ -301,12 +301,23 @@ import Foundation
     }
 
     @Test func finalizeRecording_recordsCleanedTextInHistory() async throws {
-        let (pipe, state, _, transcriber, llm, _, _, _, history) = makePipeline()
+        let (pipe, state, _, transcriber, llm, _, _, _, history, ctx) = makePipelineWithContext()
         transcriber.nextResult = .success("uh hello there")
         llm.nextResult = .success("Hello there.")
+        var captured = CapturedContext.empty
+        captured.appName = "Slack"
+        captured.bundleID = "com.tinyspeck.slackmacgap"
+        ctx.nextContext = captured
+
         await startAndFinalize(pipe, state: state)
+
         #expect(history.items.count == 1)
-        #expect(history.items[0].cleanedText == "Hello there.")
+        let item = try #require(history.items.first)
+        #expect(item.cleanedText == "Hello there.")
+        #expect(item.modeDisplayName == "Slack")
+        #expect(item.modeBundleID == "com.tinyspeck.slackmacgap")
+        #expect(item.appName == "Slack")
+        #expect(item.appBundleID == "com.tinyspeck.slackmacgap")
     }
 
     @Test func empty_transcript_doesNotRecordInHistory() async throws {
