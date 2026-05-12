@@ -112,10 +112,38 @@ final class TranscriptionService {
     }
 
     /// Transcribe a Float32 PCM buffer at AudioFormat.whisperSampleRate.
-    func transcribe(samples: [Float]) async throws -> String {
+    /// When `vocabulary` is non-empty, builds promptTokens via
+    /// `WhisperPromptBuilder` and passes them through DecodingOptions to
+    /// bias the decoder toward those terms. Empty input → omit promptTokens
+    /// entirely (WhisperKit treats `[]` differently from `nil`).
+    func transcribe(samples: [Float], vocabulary: [String] = []) async throws -> String {
         let kit = try await loadIfNeeded()
-        let results = try await kit.transcribe(audioArray: samples)
+        let tokens: [Int]
+        if vocabulary.isEmpty {
+            tokens = []
+        } else if let tokenizer = kit.tokenizer {
+            tokens = WhisperPromptBuilder.promptTokens(from: vocabulary, tokenizer: tokenizer.asVocabularyTokenizing)
+        } else {
+            // Tokenizer absent on a loaded kit is a WhisperKit-internal
+            // edge case; we keep going without biasing rather than fail
+            // the dictation.
+            tokens = []
+        }
+        let options: DecodingOptions = tokens.isEmpty
+            ? DecodingOptions()
+            : DecodingOptions(promptTokens: tokens)
+        let results = try await kit.transcribe(audioArray: samples, decodeOptions: options)
         return results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Count tokens that `terms` would contribute when fed to Whisper. Loads
+    /// the model if needed so the count matches reality. Used by the Settings
+    /// vocabulary UI to render `N / 200 tokens` and to gate the Add button.
+    func tokenCount(for terms: [String]) async throws -> Int {
+        guard !terms.isEmpty else { return 0 }
+        let kit = try await loadIfNeeded()
+        guard let tokenizer = kit.tokenizer else { return 0 }
+        return WhisperPromptBuilder.tokenCount(of: terms, tokenizer: tokenizer.asVocabularyTokenizing)
     }
 
     // MARK: - Private
@@ -201,5 +229,25 @@ final class TranscriptionService {
                 throw error
             }
         }
+    }
+}
+
+/// Bridge: lifts the existential `WhisperTokenizer` to the local
+/// `VocabularyTokenizing` protocol so the builder can consume it. We
+/// can't add this in WhisperPromptBuilder.swift directly because
+/// retroactive conformance of an imported protocol is restricted under
+/// Swift 6; this file-private adapter sidesteps that. The struct lives
+/// at file scope (rather than nested inside the extension getter) because
+/// types declared inside a protocol-extension member sit in a generic
+/// context and can't have synthesized initializers.
+private struct WhisperTokenizerVocabularyAdapter: VocabularyTokenizing {
+    let underlying: WhisperTokenizer
+    var specialTokenBegin: Int { underlying.specialTokens.specialTokenBegin }
+    func encode(text: String) -> [Int] { underlying.encode(text: text) }
+}
+
+private extension WhisperTokenizer {
+    var asVocabularyTokenizing: VocabularyTokenizing {
+        WhisperTokenizerVocabularyAdapter(underlying: self)
     }
 }
