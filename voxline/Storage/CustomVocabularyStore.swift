@@ -1,9 +1,10 @@
 import Foundation
 
 /// Global custom-vocabulary list. Plain `[String]` persisted to UserDefaults.
-/// Intentionally minimal: this is a stub for feature #9, which will replace it
-/// with per-mode dictionaries. `load()` is called once per dictation; keep it
-/// fast (single defaults read).
+/// `load()` is called once per dictation (by `CapturePipeline`) and once
+/// per `ContextCaptureService.capture()`; keep it fast (single defaults
+/// read). The list feeds both `WhisperPromptBuilder.promptTokens` and the
+/// LLM cleanup context block.
 ///
 /// `@unchecked Sendable` mirrors `AppSettings`: `UserDefaults` isn't formally
 /// `Sendable` but is documented thread-safe, and this struct holds no other
