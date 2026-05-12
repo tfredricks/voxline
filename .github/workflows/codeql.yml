@@ -49,7 +49,7 @@ jobs:
             -project voxline.xcodeproj \
             -scheme voxline \
             -configuration Debug \
-            -destination 'platform=macOS' \
+            -destination 'generic/platform=macOS' \
             CODE_SIGNING_ALLOWED=NO \
             build
 
