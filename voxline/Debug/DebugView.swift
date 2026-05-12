@@ -302,11 +302,11 @@ struct DebugView: View {
 
 // MARK: - Modes viewer (read-only)
 
-/// Read-only dump of every shipped + user mode and its full prompt. Lets the
-/// developer (or a power user during a bug report) see exactly what the
-/// model is being told for the current frontmost app. No editing — the
-/// authoritative source is `ModeStore.shippedDefaults`, and modes are
-/// reconciled on every load.
+/// Read-only dump of every prompt category and the apps that route to it. The
+/// list of shipped apps is long and noisy when you only want to see what
+/// prompts exist; categories collapse that down to the five buckets defined
+/// in `ModeStore`. Apps with custom prompts (unknown bundle IDs the user
+/// added by hand) are listed individually under "Custom".
 private struct ModesViewerSheet: View {
     let modes: [Mode]
     @Environment(\.dismiss) private var dismiss
@@ -314,7 +314,7 @@ private struct ModesViewerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Modes (\(modes.count))").font(.headline)
+                Text("Prompt categories").font(.headline)
                 Spacer()
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
@@ -331,8 +331,8 @@ private struct ModesViewerSheet: View {
                             .foregroundStyle(.secondary)
                             .padding(20)
                     } else {
-                        ForEach(modes) { mode in
-                            modeCard(mode)
+                        ForEach(categories, id: \.name) { category in
+                            categoryCard(category)
                         }
                     }
                 }
@@ -342,26 +342,52 @@ private struct ModesViewerSheet: View {
         .frame(minWidth: 640, minHeight: 520)
     }
 
+    private struct Category {
+        let name: String
+        let prompt: String
+        let apps: [Mode]
+    }
+
+    /// Group modes by prompt text and label each group with its category name.
+    /// Order matches the way prompts are documented in `ModeStore`. Any
+    /// remaining custom prompts (user-added bundle IDs that don't match a
+    /// shipped category) are appended as one-off rows so they aren't hidden.
+    private var categories: [Category] {
+        let known: [(String, String)] = [
+            ("Chat",    ModeStore.chatPrompt),
+            ("Email",   ModeStore.emailPrompt),
+            ("Writing", ModeStore.writingPrompt),
+            ("Code",    ModeStore.codePrompt),
+            ("Default", ModeStore.defaultPrompt),
+        ]
+        var seen = Set<String>()
+        var out: [Category] = []
+        for (name, prompt) in known {
+            let apps = modes.filter { $0.prompt == prompt }
+            if !apps.isEmpty {
+                out.append(Category(name: name, prompt: prompt, apps: apps))
+                seen.insert(prompt)
+            }
+        }
+        for mode in modes where !seen.contains(mode.prompt) {
+            out.append(Category(name: "Custom — \(mode.displayName)", prompt: mode.prompt, apps: [mode]))
+            seen.insert(mode.prompt)
+        }
+        return out
+    }
+
     @ViewBuilder
-    private func modeCard(_ mode: Mode) -> some View {
+    private func categoryCard(_ category: Category) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(mode.displayName).font(.headline)
-                Text(mode.bundleID)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                Spacer()
-            }
+            Text(category.name).font(.headline)
 
-            if let meta = metaLine(mode) {
-                Text(meta)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
+            Text(appsLine(category.apps))
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(mode.prompt)
+            Text(category.prompt)
                 .font(.system(.body, design: .monospaced))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -375,14 +401,10 @@ private struct ModesViewerSheet: View {
         .cornerRadius(8)
     }
 
-    /// One-line summary of the non-prompt overrides. Returns nil if nothing
-    /// is set so we don't render an empty row.
-    private func metaLine(_ mode: Mode) -> String? {
-        var parts: [String] = []
-        if let kind = mode.fieldKind { parts.append("field: \(kind)") }
-        if let model = mode.model { parts.append("model: \(model)") }
-        if let temp = mode.temperature { parts.append(String(format: "temp: %.2f", temp)) }
-        return parts.isEmpty ? nil : parts.joined(separator: "  ·  ")
+    /// Comma-joined list of display names, with the wildcard rendered as "*".
+    private func appsLine(_ apps: [Mode]) -> String {
+        apps.map { $0.bundleID == Mode.wildcardBundleID ? "* (wildcard)" : $0.displayName }
+            .joined(separator: ", ")
     }
 }
 
