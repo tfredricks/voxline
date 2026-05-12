@@ -67,4 +67,30 @@ import Foundation
         let tokens = WhisperPromptBuilder.promptTokens(from: terms, tokenizer: t, budget: 1_000)
         #expect(count == tokens.count)
     }
+
+    @Test func promptTokens_returns_empty_when_single_term_exceeds_budget() {
+        // "AAAAA." → 6 chars → 6 tokens (per-char fake). Budget 3 → the
+        // first (and only) candidate already overflows, so no terms are
+        // kept and the builder returns []. Confirms we never byte-truncate
+        // a term to fit.
+        let tokens = WhisperPromptBuilder.promptTokens(
+            from: ["AAAAA"],
+            tokenizer: FakeTokenizer(),
+            budget: 3
+        )
+        #expect(tokens.isEmpty)
+    }
+
+    @Test func tokenCount_does_not_apply_budget() {
+        // The same input that promptTokens would truncate to [] under a
+        // tight budget should produce its full token count when measured
+        // via tokenCount, which has no budget concept.
+        let t = FakeTokenizer()
+        let terms = ["AAA", "BBB", "CCC"]
+        let truncated = WhisperPromptBuilder.promptTokens(from: terms, tokenizer: t, budget: 3)
+        let count = WhisperPromptBuilder.tokenCount(of: terms, tokenizer: t)
+        #expect(truncated.isEmpty)
+        // "AAA, BBB, CCC." per-char ASCII → 14 tokens total.
+        #expect(count == 14)
+    }
 }
