@@ -36,6 +36,8 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 - **Works in any text field** — browser, email, IDE, terminal, Slack, Notes, Cursor, ChatGPT, anything that accepts a paste.
 - **On-device transcription** — Whisper runs locally on Apple Neural Engine. Audio never leaves your Mac.
 - **AI cleanup, not raw dump** — fillers, false starts, and rambling are smoothed out. Punctuation and capitalization are added automatically.
+- **Context-aware per-app formatting** — voxline detects the frontmost app and tunes the output for it: terse Slack messages, structured email replies, code-comment style in your IDE, search-box one-liners. Ships with sensible defaults for 28 common apps out of the box.
+- **Dictation history** — the last 10 cleaned dictations live in a menu-bar submenu; click any row to copy it back to the clipboard.
 - **Bring your own LLM key** — Anthropic or OpenAI, your account, your model, your costs. Keys live in macOS Keychain.
 - **Menu-bar native** — no Dock icon, no clutter. Configurable hotkey, mic, model, and provider.
 - **Privacy-aware feedback** — clipboard is restored after paste; the system mic indicator turns off the moment you let go.
