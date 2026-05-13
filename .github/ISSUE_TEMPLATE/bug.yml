@@ -3,14 +3,87 @@ description: Something in voxline isn't working
 title: "Bug: "
 labels: ["bug"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. The more specific you can be, the faster it gets fixed.
+
   - type: textarea
-    id: details
+    id: what-happened
     attributes:
       label: What happened?
-      description: Steps to reproduce, expected vs. actual behavior, and any environment info auto-filled below.
+      description: What did you do, what did you expect, what did you get?
       placeholder: |
-        1. Open voxline
-        2. ...
-        3. Expected: ... Actual: ...
+        1. Held the hotkey and said "..."
+        2. Released the hotkey
+        3. Expected: clean text pasted into Slack
+           Actual: nothing happened / wrong text / app crashed
     validations:
       required: true
+
+  - type: dropdown
+    id: macos-version
+    attributes:
+      label: macOS version
+      options:
+        - "26 (Tahoe)"
+        - "15 (Sequoia)"
+        - "14 (Sonoma)"
+        - Other (note in description)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mac-model
+    attributes:
+      label: Mac model
+      description: Apple Silicon family. Intel Macs are not supported.
+      options:
+        - M4 / M4 Pro / M4 Max / M4 Ultra
+        - M3 / M3 Pro / M3 Max / M3 Ultra
+        - M2 / M2 Pro / M2 Max / M2 Ultra
+        - M1 / M1 Pro / M1 Max / M1 Ultra
+        - Other (note in description)
+    validations:
+      required: true
+
+  - type: input
+    id: voxline-version
+    attributes:
+      label: voxline build / commit
+      description: Commit SHA you built from, or the build date if you don't know.
+      placeholder: "e.g. 5918fd5 or 2026-05-10 build"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: whisper-model
+    attributes:
+      label: Whisper model
+      options:
+        - large-v3-turbo (default)
+        - small.en
+        - Not sure
+    validations:
+      required: false
+
+  - type: dropdown
+    id: cleanup-provider
+    attributes:
+      label: Cleanup provider
+      options:
+        - Anthropic (Claude)
+        - OpenAI (GPT)
+        - Cleanup disabled / raw transcript
+        - Not applicable
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs (optional)
+      description: Console output, error messages, or anything from `log stream --predicate 'subsystem == "com.voxline"'`.
+      render: shell
+    validations:
+      required: false

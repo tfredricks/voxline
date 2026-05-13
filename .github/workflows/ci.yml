@@ -47,7 +47,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Build tests
+      - name: Run tests
         run: |
           set -o pipefail
           xcodebuild \
@@ -56,4 +56,4 @@ jobs:
             -configuration Debug \
             -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO \
-            build-for-testing
+            test

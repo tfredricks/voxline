@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Feature ideas & feedback
+    url: https://github.com/tfredricks/voxline/discussions/categories/ideas
+    about: Share an idea, request a feature, or give general feedback.
+  - name: Questions & help
+    url: https://github.com/tfredricks/voxline/discussions/categories/q-a
+    about: Ask a question about setup, usage, or how voxline works.
+  - name: Show & tell
+    url: https://github.com/tfredricks/voxline/discussions/categories/show-and-tell
+    about: Share how you're using voxline, prompts you've tuned, or cool workflows.

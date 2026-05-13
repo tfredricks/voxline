@@ -25,3 +25,6 @@ Models/
 
 # Superpowers skill scratch directory (per-session brainstorm state, etc.)
 .superpowers/
+
+# Claude Code scheduled-task runtime lockfile
+.claude/scheduled_tasks.lock
