@@ -30,10 +30,12 @@ struct VocabCleanupIntegrationTests {
         case voiceUnavailable
     }
 
-    /// Phrase designed to produce phonetic near-misses for two vocab terms.
-    /// Whisper transcribes the proper-noun forms naturally; the cleanup pass
-    /// is what should snap them to the canonical spellings.
-    private static let phrase = "Please use lang graph and arg max in the daily report"
+    /// Phrase designed to produce phonetic near-misses for three vocab terms.
+    /// 'lang graph' and 'arg max' exercise casing/concatenation; 'vox line'
+    /// exercises the word-segmentation path (Whisper-on-synth-speech reliably
+    /// renders the user's app name as two words) which is the case the spec's
+    /// first worked example was written to cover.
+    private static let phrase = "Please use lang graph, arg max, and vox line in the daily report"
 
     @Test
     func cleanup_normalizes_phonetic_misses_to_canonical_terms() async throws {
@@ -46,12 +48,13 @@ struct VocabCleanupIntegrationTests {
         let samples = try await Self.synthesizeSpeechSamples(Self.phrase)
         let transcript = try await service.transcribe(samples: samples)
         #expect(transcript.count > 5, "expected non-empty raw transcript, got '\(transcript)'")
+        print("[integration] transcript=\(transcript)")
 
         // 2. Real LLM cleanup with vocab injected via CapturedContext.
         let settings = AppSettings()
         let llm = LLMService(settings: settings)
         var context = CapturedContext.empty
-        context.customVocabulary = ["LangGraph", "Argmax"]
+        context.customVocabulary = ["LangGraph", "Argmax", "Voxline"]
         let mode = Mode(
             bundleID: "*",
             displayName: "Test",
@@ -61,14 +64,17 @@ struct VocabCleanupIntegrationTests {
             fieldKind: nil
         )
         let cleaned = try await llm.cleanup(transcript: transcript, mode: mode, context: context)
+        print("[integration] cleaned=\(cleaned)")
 
         // 3. The cleanup preamble (LLMService.transcriptionPreamble) instructs
         // the model to snap phonetic near-misses to the canonical spelling.
-        // We assert case-sensitively on both canonical terms.
+        // We assert case-sensitively on all three canonical terms.
         #expect(cleaned.contains("LangGraph"),
                 "expected cleaned output to contain canonical 'LangGraph'; got '\(cleaned)'")
         #expect(cleaned.contains("Argmax"),
                 "expected cleaned output to contain canonical 'Argmax'; got '\(cleaned)'")
+        #expect(cleaned.contains("Voxline"),
+                "expected cleaned output to contain canonical 'Voxline'; got '\(cleaned)'")
     }
 
     // MARK: - Skip gates
