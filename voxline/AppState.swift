@@ -7,9 +7,9 @@ import Observation
 /// chord-press silently cleared a sticky permissions banner. Adding the
 /// category keeps each owner responsible for clearing only its own errors.
 enum AppErrorCategory: Equatable {
-    /// Hotkey accessibility / Input Monitoring revoked, or first-launch
-    /// permissions not yet granted. Sticky until permissions are restored.
-    /// Cleared by AppCoordinator's reconcile loop when the tap installs.
+    /// Hotkey Accessibility revoked, or first-launch permissions not yet
+    /// granted. Sticky until Accessibility is restored. Cleared by
+    /// AppCoordinator's reconcile loop when the tap installs.
     case permissions
     /// Transient dictation failure (audio capture, transcription, LLM,
     /// paste, mode-missing, silent-mic). Cleared by the next chord press

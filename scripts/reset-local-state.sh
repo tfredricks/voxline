@@ -2,14 +2,16 @@
 # Reset voxline local state so the next launch behaves like a brand-new install.
 #
 # Wipes:
-#   - Sandbox container (UserDefaults incl. hasCompletedFirstRun, WhisperKit
-#     model cache, ANE bundle, logs)
+#   - Sandbox container (UserDefaults incl. hasCompletedFirstRun, custom
+#     modes/vocab, history, logs, caches)
 #   - Keychain entries for Anthropic + OpenAI API keys
 #   - Stray voxline-status-test-*.plist files from past test runs
 #
 # Optional flags:
-#   --keep-model      Preserve the cached Whisper model; only flip the
-#                     first-run flag and clear keys.
+#   --keep-model      Preserve the cached Whisper model AND the ANE compiled
+#                     bundle so the next launch doesn't re-download the model
+#                     or pay the 30s-2min ANE recompile. Everything else
+#                     (settings, history, keychain, etc.) is still wiped.
 #   --reset-tcc       Also reset macOS privacy prompts (mic, accessibility,
 #                     input monitoring) so the OS re-asks on next launch.
 #   --reset-keys      Accepted for explicitness. Keychain clearing is part of
@@ -18,10 +20,14 @@
 
 set -euo pipefail
 
-BUNDLE_ID="com.fredricks.voxline"
-KEYCHAIN_SERVICE="com.fredricks.voxline.keys"
+BUNDLE_ID="com.voxline.app"
+KEYCHAIN_SERVICE="com.voxline.app.keys"
 CONTAINER="$HOME/Library/Containers/$BUNDLE_ID"
-PREFS_PLIST="$CONTAINER/Data/Library/Preferences/$BUNDLE_ID.plist"
+DATA_DIR="$CONTAINER/Data"
+# Paths to preserve when --keep-model is set. Both live INSIDE the sandbox
+# container, not under ~/Documents (see voxline.entitlements: app-sandbox=true).
+HF_MODEL_PATH="$DATA_DIR/Documents/huggingface"
+ANE_BUNDLE_PATH="$DATA_DIR/Library/Caches/$BUNDLE_ID/com.apple.e5rt.e5bundlecache"
 
 KEEP_MODEL=0
 RESET_TCC=0
@@ -32,7 +38,7 @@ for arg in "$@"; do
         --reset-tcc)  RESET_TCC=1 ;;
         --reset-keys) ;; # no-op; keychain clearing is part of the default flow
         -h|--help)
-            sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -47,26 +53,49 @@ osascript -e 'tell application "voxline" to quit' >/dev/null 2>&1 || true
 # Give the app a moment to flush prefs before we delete them.
 sleep 1
 
-if [[ $KEEP_MODEL -eq 1 ]]; then
-    if [[ -f "$PREFS_PLIST" ]]; then
-        echo "→ Removing prefs plist only (model cache preserved)..."
-        rm -f "$PREFS_PLIST"
-    else
-        echo "→ No prefs plist found at $PREFS_PLIST — nothing to do."
+# NOTE: wipe $DATA_DIR contents, not $CONTAINER itself. containermanagerd
+# protects the container directory and its metadata plist, so a full
+# `rm -rf $CONTAINER` fails with EPERM. Everything app-owned lives under Data/.
+if [[ ! -d "$DATA_DIR" ]]; then
+    echo "→ No sandbox container Data/ found — already clean."
+elif [[ $KEEP_MODEL -eq 1 ]]; then
+    # Stash → wipe → restore. Doing a selective find/prune is fragile because
+    # rm -rf'ing a parent kills its preserved children. Move-out, nuke-all,
+    # move-back is the simplest correct pattern.
+    STASH=$(mktemp -d -t voxline-reset)
+    trap 'rm -rf "$STASH"' EXIT
+
+    stashed_any=0
+    if [[ -d "$HF_MODEL_PATH" ]]; then
+        echo "→ Stashing Whisper model cache..."
+        mv "$HF_MODEL_PATH" "$STASH/huggingface"
+        stashed_any=1
+    fi
+    if [[ -d "$ANE_BUNDLE_PATH" ]]; then
+        echo "→ Stashing ANE compiled-bundle cache..."
+        mv "$ANE_BUNDLE_PATH" "$STASH/anebundle"
+        stashed_any=1
+    fi
+    if [[ $stashed_any -eq 0 ]]; then
+        echo "→ Nothing to preserve (no model or ANE cache present) — wiping all of Data/."
+    fi
+
+    echo "→ Clearing sandbox container Data/ at $DATA_DIR..."
+    rm -rf "$DATA_DIR"/* "$DATA_DIR"/.[!.]* 2>/dev/null || true
+
+    if [[ -d "$STASH/huggingface" ]]; then
+        echo "→ Restoring Whisper model cache..."
+        mkdir -p "$(dirname "$HF_MODEL_PATH")"
+        mv "$STASH/huggingface" "$HF_MODEL_PATH"
+    fi
+    if [[ -d "$STASH/anebundle" ]]; then
+        echo "→ Restoring ANE compiled-bundle cache..."
+        mkdir -p "$(dirname "$ANE_BUNDLE_PATH")"
+        mv "$STASH/anebundle" "$ANE_BUNDLE_PATH"
     fi
 else
-    # NOTE: wipe $CONTAINER/Data, not $CONTAINER itself. containermanagerd
-    # protects the container directory and its metadata plist, so a full
-    # `rm -rf $CONTAINER` fails with EPERM. Everything app-owned lives
-    # under Data/, so clearing it is functionally equivalent.
-    if [[ -d "$CONTAINER/Data" ]]; then
-        echo "→ Clearing sandbox container Data/ at $CONTAINER/Data..."
-        rm -rf "$CONTAINER/Data"/* "$CONTAINER/Data"/.[!.]* 2>/dev/null || true
-    elif [[ -d "$CONTAINER" ]]; then
-        echo "→ Container exists but has no Data/ — nothing to clear."
-    else
-        echo "→ No sandbox container found — already clean."
-    fi
+    echo "→ Clearing sandbox container Data/ at $DATA_DIR (model included)..."
+    rm -rf "$DATA_DIR"/* "$DATA_DIR"/.[!.]* 2>/dev/null || true
 fi
 
 echo "→ Deleting Keychain entries (service=$KEYCHAIN_SERVICE)..."

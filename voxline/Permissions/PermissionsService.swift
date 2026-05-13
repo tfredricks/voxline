@@ -28,10 +28,11 @@ struct PermissionsService {
         AXIsProcessTrusted() ? .granted : .denied
     }
 
-    /// Input Monitoring is a separate TCC category from Accessibility. A
-    /// CGEventTap created without it will only fire while voxline itself is
-    /// the frontmost app, which makes hold-to-talk useless. Required to
-    /// observe modifier-flag changes from any other app.
+    /// Input Monitoring is a separate TCC category from Accessibility.
+    /// Best-effort, not required: a session-level CGEventTap with .listenOnly
+    /// on .flagsChanged generally works with Accessibility alone. We still
+    /// read and prompt because some macOS configurations report a more
+    /// reliable tap once IM is also granted. Surfaced in the Debug pane.
     var inputMonitoringStatus: PermissionStatus {
         let result = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent)
         if result == kIOHIDAccessTypeGranted { return .granted }

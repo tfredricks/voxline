@@ -273,11 +273,11 @@ final class AppCoordinator {
                 state?.debugLastFinalizeReason = reason
             }
         }
-        // Input Monitoring is a separate TCC category from Accessibility.
-        // Without it, a CGEventTap only fires while voxline itself is the
-        // frontmost app — which made hold-to-talk look like it "only works
-        // once". Trigger the prompt here so the user can grant it at first
-        // launch alongside Accessibility.
+        // Accessibility is the hard requirement for our session-level
+        // CGEventTap with .listenOnly on .flagsChanged. Input Monitoring is
+        // best-effort: some macOS configurations make the tap more reliable
+        // with it granted, so we trigger the prompt once at first launch but
+        // do NOT gate recording on the result.
         let perms = PermissionsService()
         _ = perms.requestInputMonitoring()
         // CGEvent.tapCreate sometimes-but-not-reliably surfaces the AX prompt.
@@ -304,7 +304,7 @@ final class AppCoordinator {
             // running process, so the reconcile loop polls until AX/IM are
             // granted and then installs the tap. The user does NOT need to
             // restart the app.
-            state.status = .error(category: .permissions, message: "Hotkey monitoring requires Accessibility AND Input Monitoring permission. Grant both in System Settings → Privacy & Security — Voxline will pick them up automatically.")
+            state.status = .error(category: .permissions, message: "Hotkey monitoring requires Accessibility permission. Grant it in System Settings → Privacy & Security — Voxline will pick it up automatically.")
         }
 
         observeToastChanges(state: state)
@@ -339,7 +339,9 @@ final class AppCoordinator {
         state.debugMicrophoneStatus = String(describing: mic)
 
         guard let monitor = hotkeyMonitor else { return }
-        let permissionsOK = (ax == .granted && im == .granted)
+        // Accessibility is the hard gate. Input Monitoring is informational —
+        // surfaced in the debug pane but not required to install the tap.
+        let permissionsOK = (ax == .granted)
         let shouldBeInstalled = state.hotkeyEnabled && permissionsOK
         let isInstalled = monitor.isTapInstalled
 
@@ -360,7 +362,7 @@ final class AppCoordinator {
             // Distinguish user-initiated pause from involuntary revocation —
             // only the latter deserves an error banner.
             if state.hotkeyEnabled && !permissionsOK {
-                state.status = .error(category: .permissions, message: "Accessibility or Input Monitoring permission was revoked. Re-grant it in System Settings → Privacy & Security; Voxline will recover automatically.")
+                state.status = .error(category: .permissions, message: "Accessibility permission was revoked. Re-grant it in System Settings → Privacy & Security; Voxline will recover automatically.")
             }
         }
     }

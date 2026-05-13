@@ -7,13 +7,12 @@ struct WizardPermissionsView: View {
     @State private var perms = PermissionsService()
     @State private var mic: PermissionStatus = .notDetermined
     @State private var ax: PermissionStatus = .notDetermined
-    @State private var im: PermissionStatus = .notDetermined
     @State private var pollTimer: Timer?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Grant permissions").font(.title.bold())
-            Text("Voxline needs three macOS permissions. Grant each, then continue.")
+            Text("Voxline needs two macOS permissions. Grant each, then continue.")
                 .foregroundStyle(.secondary)
 
             permissionRow(
@@ -30,14 +29,6 @@ struct WizardPermissionsView: View {
                 status: ax,
                 grantLabel: "Open System Settings",
                 action: openAccessibilitySettings
-            )
-
-            permissionRow(
-                title: "Input Monitoring",
-                detail: "Required for the hotkey to work outside Voxline itself.",
-                status: im,
-                grantLabel: "Open System Settings",
-                action: openInputMonitoringSettings
             )
         }
         .padding(40)
@@ -89,16 +80,6 @@ struct WizardPermissionsView: View {
         }
     }
 
-    private func openInputMonitoringSettings() {
-        // First call surfaces the TCC prompt; subsequent calls return silently,
-        // so always also deep-link into the pane in case the prompt was dismissed
-        // or the system has already recorded a decision for this binary.
-        im = perms.requestInputMonitoring()
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
     private func startPolling() {
         refresh()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
@@ -114,7 +95,6 @@ struct WizardPermissionsView: View {
     private func refresh() {
         mic = perms.microphoneStatus
         ax = perms.accessibilityStatus
-        im = perms.inputMonitoringStatus
-        allGranted = mic == .granted && ax == .granted && im == .granted
+        allGranted = mic == .granted && ax == .granted
     }
 }
