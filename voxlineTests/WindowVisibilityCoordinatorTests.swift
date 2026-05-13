@@ -7,7 +7,7 @@ import AppKit
     @Test func tagged_window_made_visible_flips_to_regular() {
         let center = NotificationCenter()
         let setter = StubActivationSetter()
-        let coord = WindowVisibilityCoordinator(center: center, setter: setter)
+        let coord = WindowVisibilityCoordinator(center: center, setter: setter, windowsProvider: { [] })
         coord.start()
 
         let w = makeStubWindow(dockworthy: true)
@@ -19,7 +19,7 @@ import AppKit
     @Test func untagged_window_made_visible_does_nothing() {
         let center = NotificationCenter()
         let setter = StubActivationSetter()
-        let coord = WindowVisibilityCoordinator(center: center, setter: setter)
+        let coord = WindowVisibilityCoordinator(center: center, setter: setter, windowsProvider: { [] })
         coord.start()
 
         let w = makeStubWindow(dockworthy: false)
@@ -31,7 +31,7 @@ import AppKit
     @Test func closing_last_tagged_window_returns_to_accessory() {
         let center = NotificationCenter()
         let setter = StubActivationSetter()
-        let coord = WindowVisibilityCoordinator(center: center, setter: setter)
+        let coord = WindowVisibilityCoordinator(center: center, setter: setter, windowsProvider: { [] })
         coord.start()
 
         let w = makeStubWindow(dockworthy: true)
@@ -43,7 +43,7 @@ import AppKit
     @Test func two_tagged_windows_only_flip_once_per_direction() {
         let center = NotificationCenter()
         let setter = StubActivationSetter()
-        let coord = WindowVisibilityCoordinator(center: center, setter: setter)
+        let coord = WindowVisibilityCoordinator(center: center, setter: setter, windowsProvider: { [] })
         coord.start()
 
         let a = makeStubWindow(dockworthy: true)
@@ -59,7 +59,7 @@ import AppKit
     @Test func same_window_visible_twice_only_increments_once() {
         let center = NotificationCenter()
         let setter = StubActivationSetter()
-        let coord = WindowVisibilityCoordinator(center: center, setter: setter)
+        let coord = WindowVisibilityCoordinator(center: center, setter: setter, windowsProvider: { [] })
         coord.start()
 
         let w = makeStubWindow(dockworthy: true)

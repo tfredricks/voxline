@@ -103,6 +103,7 @@ import AppKit
             pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: focused,
             textTyper: FakeTextTyper(),
+            accessibilityTrust: StubAccessibilityTrust(trusted: true),
             restoreDelay: .milliseconds(20)   // short for tests
         )
 
@@ -130,6 +131,7 @@ import AppKit
             pasteKeyResolver: FakePasteKeyResolver(keyCode: 12),
             focusedTextSystem: FakeFocusedTextSystem(),
             textTyper: FakeTextTyper(),
+            accessibilityTrust: StubAccessibilityTrust(trusted: true),
             restoreDelay: .milliseconds(0)
         )
 
@@ -154,6 +156,7 @@ import AppKit
             pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: FakeFocusedTextSystem(),
             textTyper: FakeTextTyper(),
+            accessibilityTrust: StubAccessibilityTrust(trusted: true),
             restoreDelay: .milliseconds(0)
         )
 
@@ -175,6 +178,7 @@ import AppKit
             pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: FakeFocusedTextSystem(),
             textTyper: FakeTextTyper(),
+            accessibilityTrust: StubAccessibilityTrust(trusted: true),
             chordReleaseTimeout: .milliseconds(20),
             chordPollInterval: .milliseconds(5),
             restoreDelay: .milliseconds(0)
@@ -215,6 +219,7 @@ import AppKit
             pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: focused,
             textTyper: typer,
+            accessibilityTrust: StubAccessibilityTrust(trusted: true),
             restoreDelay: .milliseconds(0)
         )
 
@@ -243,6 +248,7 @@ import AppKit
             focusedTextSystem: focused,
             textTyper: FakeTextTyper(),
             snapshotter: ThrowingSnapshotter(reason: "test forced failure"),
+            accessibilityTrust: StubAccessibilityTrust(trusted: true),
             restoreDelay: .milliseconds(0)
         )
 
@@ -276,6 +282,7 @@ import AppKit
             focusedTextSystem: focused,
             textTyper: typer,
             snapshotter: ThrowingSnapshotter(reason: "test forced failure"),
+            accessibilityTrust: StubAccessibilityTrust(trusted: true),
             restoreDelay: .milliseconds(0),
             verificationDelay: .milliseconds(0)
         )
@@ -303,6 +310,7 @@ import AppKit
             pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: FakeFocusedTextSystem(),
             textTyper: FakeTextTyper(),
+            accessibilityTrust: StubAccessibilityTrust(trusted: true),
             chordReleaseTimeout: .seconds(60),   // long enough that we cancel first
             chordPollInterval: .milliseconds(5),
             restoreDelay: .milliseconds(0),
@@ -367,6 +375,7 @@ import AppKit
             pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: focused,
             textTyper: typer,
+            accessibilityTrust: StubAccessibilityTrust(trusted: true),
             restoreDelay: .milliseconds(0)
         )
 

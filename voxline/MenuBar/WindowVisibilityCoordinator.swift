@@ -38,6 +38,7 @@ final class WindowVisibilityCoordinator {
 
     private let center: NotificationCenter
     private let setter: ActivationPolicySetter
+    private let windowsProvider: @MainActor () -> [NSWindow]
     private var trackedIDs: Set<ObjectIdentifier> = []
     private var observers: [NSObjectProtocol] = []
 
@@ -47,17 +48,23 @@ final class WindowVisibilityCoordinator {
     ///   - setter: The activation-policy setter. Defaults to `nil`, which uses
     ///             `DefaultActivationPolicySetter` (calls `NSApp` directly).
     ///             Inject a stub in unit tests.
+    ///   - windowsProvider: Source of pre-existing windows for the `start()`
+    ///             seed pass. Defaults to `NSApp.windows`. Inject `{ [] }` in
+    ///             tests so leftover NSWindow instances from prior cases don't
+    ///             pollute the seed (AppKit retains NSWindows process-wide).
     init(
         center: NotificationCenter = .default,
-        setter: ActivationPolicySetter? = nil
+        setter: ActivationPolicySetter? = nil,
+        windowsProvider: @escaping @MainActor () -> [NSWindow] = { NSApp.windows }
     ) {
         self.center = center
         self.setter = setter ?? DefaultActivationPolicySetter()
+        self.windowsProvider = windowsProvider
     }
 
     func start() {
         // Seed from windows that were already visible before we started observing.
-        for w in NSApp.windows where isDockworthy(w) && w.isVisible {
+        for w in windowsProvider() where isDockworthy(w) && w.isVisible {
             insert(w)
         }
 
