@@ -36,8 +36,8 @@ final class APIKeysSettingsViewModel {
     ) {
         self.keychain = keychain
         self.clientFactory = clientFactory
-        self.anthropicKey = (try? keychain.string(forKey: Keychain.Account.anthropic)) ?? ""
-        self.openaiKey    = (try? keychain.string(forKey: Keychain.Account.openai)) ?? ""
+        self.anthropicKey = (try? keychain.string(forKey: KeychainAccount.anthropic)) ?? ""
+        self.openaiKey    = (try? keychain.string(forKey: KeychainAccount.openai)) ?? ""
         self.anthropicPersisted = self.anthropicKey
         self.openaiPersisted    = self.openaiKey
     }
@@ -45,13 +45,13 @@ final class APIKeysSettingsViewModel {
     /// Persist the Anthropic key. Whitespace is trimmed; an empty/whitespace
     /// value deletes the keychain entry.
     func commitAnthropic() {
-        persist(value: anthropicKey, account: Keychain.Account.anthropic)
+        persist(value: anthropicKey, account: KeychainAccount.anthropic)
         anthropicPersisted = trimmed(anthropicKey)
     }
 
     /// Persist the OpenAI key. Same rules as commitAnthropic.
     func commitOpenAI() {
-        persist(value: openaiKey, account: Keychain.Account.openai)
+        persist(value: openaiKey, account: KeychainAccount.openai)
         openaiPersisted = trimmed(openaiKey)
     }
 

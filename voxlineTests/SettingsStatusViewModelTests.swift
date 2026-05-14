@@ -25,10 +25,10 @@ import Foundation
     ) throws -> (general: GeneralSettingsViewModel, keys: APIKeysSettingsViewModel, status: SettingsStatusViewModel, kc: Keychain) {
         let kc = keychain()
         if !anthropicKey.isEmpty {
-            try kc.set(anthropicKey, forKey: Keychain.Account.anthropic)
+            try kc.set(anthropicKey, forKey: KeychainAccount.anthropic)
         }
         if !openaiKey.isEmpty {
-            try kc.set(openaiKey, forKey: Keychain.Account.openai)
+            try kc.set(openaiKey, forKey: KeychainAccount.openai)
         }
         var settings = AppSettings(defaults: defaults())
         settings.whisperModel = model
@@ -85,7 +85,7 @@ import Foundation
 
     @Test func setup_needed_when_no_devices_and_no_uid() throws {
         let kc = keychain()
-        try kc.set("sk-ant-good", forKey: Keychain.Account.anthropic)
+        try kc.set("sk-ant-good", forKey: KeychainAccount.anthropic)
         defer { try? kc.deleteAll() }
         var settings = AppSettings(defaults: defaults())
         settings.audioInputDeviceUID = nil

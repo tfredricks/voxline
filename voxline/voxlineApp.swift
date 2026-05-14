@@ -15,7 +15,7 @@ struct voxlineApp: App {
         // appears and exits the process when done.
         if CommandLine.arguments.contains("--reset-keys") {
             let keychain = Keychain()
-            for account in [Keychain.Account.anthropic, Keychain.Account.openai] {
+            for account in [KeychainAccount.anthropic, KeychainAccount.openai] {
                 do { try keychain.delete(forKey: account) }
                 catch { fputs("Voxline --reset-keys: failed to delete \(account): \(error)\n", stderr) }
             }

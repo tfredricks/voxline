@@ -14,8 +14,8 @@ import Foundation
         vm.anthropicKey = "  sk-ant-123\n "
         vm.openaiKey    = "should-not-write"
         vm.commitAnthropic()
-        #expect(try kc.string(forKey: Keychain.Account.anthropic) == "sk-ant-123")
-        #expect(try kc.string(forKey: Keychain.Account.openai) == nil)
+        #expect(try kc.string(forKey: KeychainAccount.anthropic) == "sk-ant-123")
+        #expect(try kc.string(forKey: KeychainAccount.openai) == nil)
     }
 
     @Test func commit_openai_persists_only_openai_and_trims() throws {
@@ -23,16 +23,16 @@ import Foundation
         let vm = APIKeysSettingsViewModel(keychain: kc)
         vm.openaiKey = "\tsk-openai-xyz \n"
         vm.commitOpenAI()
-        #expect(try kc.string(forKey: Keychain.Account.openai) == "sk-openai-xyz")
+        #expect(try kc.string(forKey: KeychainAccount.openai) == "sk-openai-xyz")
     }
 
     @Test func empty_commit_deletes_keychain_entry() throws {
         let kc = keychain()
-        try kc.set("preexisting", forKey: Keychain.Account.anthropic)
+        try kc.set("preexisting", forKey: KeychainAccount.anthropic)
         let vm = APIKeysSettingsViewModel(keychain: kc)
         vm.anthropicKey = "   "
         vm.commitAnthropic()
-        #expect(try kc.string(forKey: Keychain.Account.anthropic) == nil)
+        #expect(try kc.string(forKey: KeychainAccount.anthropic) == nil)
     }
 
     @Test func test_result_resets_when_relevant_key_changes() {
@@ -58,7 +58,7 @@ import Foundation
 
     @Test func test_connection_success_sets_success_for_provider() async throws {
         let kc = keychain()
-        try kc.set("k", forKey: Keychain.Account.anthropic)
+        try kc.set("k", forKey: KeychainAccount.anthropic)
         let vm = APIKeysSettingsViewModel(
             keychain: kc,
             clientFactory: { _, _ in StubClient(mode: .ok) }
@@ -71,7 +71,7 @@ import Foundation
 
     @Test func test_connection_fail_sets_failed_for_provider_with_message() async throws {
         let kc = keychain()
-        try kc.set("k", forKey: Keychain.Account.openai)
+        try kc.set("k", forKey: KeychainAccount.openai)
         let vm = APIKeysSettingsViewModel(
             keychain: kc,
             clientFactory: { _, _ in StubClient(mode: .fail(.invalidAPIKey)) }
@@ -107,7 +107,7 @@ import Foundation
 
     @Test func isPersisted_true_when_trimmed_live_matches_keychain() throws {
         let kc = keychain()
-        try kc.set("real-key", forKey: Keychain.Account.anthropic)
+        try kc.set("real-key", forKey: KeychainAccount.anthropic)
         let vm = APIKeysSettingsViewModel(keychain: kc)
         vm.anthropicKey = "  real-key\n"   // whitespace doesn't matter
         #expect(vm.isPersisted(.anthropic) == true)
@@ -115,7 +115,7 @@ import Foundation
 
     @Test func isPersisted_false_when_live_differs_from_keychain() throws {
         let kc = keychain()
-        try kc.set("real-key", forKey: Keychain.Account.anthropic)
+        try kc.set("real-key", forKey: KeychainAccount.anthropic)
         let vm = APIKeysSettingsViewModel(keychain: kc)
         vm.anthropicKey = "different"
         #expect(vm.isPersisted(.anthropic) == false)
@@ -123,13 +123,13 @@ import Foundation
 
     @Test func isPersisted_uses_cached_value_not_keychain_read() throws {
         let kc = keychain()
-        try kc.set("real-key", forKey: Keychain.Account.anthropic)
+        try kc.set("real-key", forKey: KeychainAccount.anthropic)
 
         let vm = APIKeysSettingsViewModel(keychain: kc)
         #expect(vm.isPersisted(.anthropic))   // seeded from keychain at init
 
         // Mutate keychain externally — VM cache should not change.
-        try kc.set("changed-out-of-band", forKey: Keychain.Account.anthropic)
+        try kc.set("changed-out-of-band", forKey: KeychainAccount.anthropic)
         #expect(vm.isPersisted(.anthropic))   // still true; cache reflects in-memory pair
 
         // Edit live — cache stale until commit.

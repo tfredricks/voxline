@@ -54,7 +54,7 @@ import Foundation
         let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: kc)
         vm.apiKeyVM.anthropicKey = "sk-ant-test"
         vm.complete()
-        #expect(try kc.string(forKey: Keychain.Account.anthropic) == "sk-ant-test")
+        #expect(try kc.string(forKey: KeychainAccount.anthropic) == "sk-ant-test")
     }
 
     @Test func advance_persists_keys_to_keychain() throws {
@@ -62,7 +62,7 @@ import Foundation
         let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: kc)
         vm.apiKeyVM.openaiKey = "sk-test"
         vm.advance()
-        #expect(try kc.string(forKey: Keychain.Account.openai) == "sk-test")
+        #expect(try kc.string(forKey: KeychainAccount.openai) == "sk-test")
     }
 
     // complete() writes `selectedProvider` verbatim — what the picker shows
@@ -92,7 +92,7 @@ import Foundation
 
     @Test func selected_provider_init_prefers_only_non_empty_keychain_key() throws {
         let d = defaults()
-        let kc = InMemoryKeychain(seed: [Keychain.Account.openai: "sk-openai-existing"])
+        let kc = InMemoryKeychain(seed: [KeychainAccount.openai: "sk-openai-existing"])
         let vm = WizardViewModel(settings: AppSettings(defaults: d), keychain: kc)
         #expect(vm.selectedProvider == .openai)
     }

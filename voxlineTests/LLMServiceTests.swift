@@ -24,15 +24,11 @@ import Foundation
         return d
     }
 
-    private func keychain() -> Keychain {
-        Keychain(service: "com.voxline.app.test.\(UUID().uuidString)")
-    }
-
     @Test func cleanup_with_no_key_throws_missingAPIKey() async throws {
         let mock = MockHTTPClient()
         var settings = AppSettings(defaults: defaultsSuite())
         settings.llmProvider = .anthropic
-        let service = LLMService(settings: settings, keychain: keychain(), http: mock)
+        let service = LLMService(settings: settings, keychain: InMemoryKeychain(), http: mock)
 
         let mode = Mode(bundleID: "*", displayName: "default", prompt: "S", model: nil, temperature: nil)
         do {
@@ -51,9 +47,8 @@ import Foundation
         )
         var settings = AppSettings(defaults: defaultsSuite())
         settings.llmProvider = .anthropic
-        let kc = keychain()
-        try kc.set("sk-ant", forKey: Keychain.Account.anthropic)
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
+        try kc.set("sk-ant", forKey: KeychainAccount.anthropic)
 
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
@@ -71,9 +66,8 @@ import Foundation
         )
         var settings = AppSettings(defaults: defaultsSuite())
         settings.llmProvider = .openai
-        let kc = keychain()
-        try kc.set("sk-oai", forKey: Keychain.Account.openai)
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
+        try kc.set("sk-oai", forKey: KeychainAccount.openai)
 
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
@@ -92,9 +86,8 @@ import Foundation
         var settings = AppSettings(defaults: defaultsSuite())
         settings.llmProvider = .anthropic
         settings.llmModel = "claude-haiku-4-5"
-        let kc = keychain()
-        try kc.set("k", forKey: Keychain.Account.anthropic)
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
+        try kc.set("k", forKey: KeychainAccount.anthropic)
 
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: "claude-3-5-sonnet-latest", temperature: 0.7)
@@ -113,9 +106,8 @@ import Foundation
         )
         var settings = AppSettings(defaults: defaultsSuite())
         settings.llmProvider = .anthropic
-        let kc = keychain()
-        try kc.set("k", forKey: Keychain.Account.anthropic)
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
+        try kc.set("k", forKey: KeychainAccount.anthropic)
 
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(
@@ -142,9 +134,8 @@ import Foundation
         let mock = MockHTTPClient()
         var settings = AppSettings(defaults: defaultsSuite())
         settings.llmProvider = .anthropic
-        let kc = keychain()
-        try kc.set("k", forKey: Keychain.Account.anthropic)
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
+        try kc.set("k", forKey: KeychainAccount.anthropic)
 
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
@@ -162,9 +153,8 @@ import Foundation
         )
         var settings = AppSettings(defaults: defaultsSuite())
         settings.llmProvider = .anthropic
-        let kc = keychain()
-        try kc.set("k", forKey: Keychain.Account.anthropic)
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
+        try kc.set("k", forKey: KeychainAccount.anthropic)
 
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
@@ -197,9 +187,8 @@ import Foundation
         )
         var settings = AppSettings(defaults: defaultsSuite())
         settings.llmProvider = .anthropic
-        let kc = keychain()
-        try kc.set("k", forKey: Keychain.Account.anthropic)
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
+        try kc.set("k", forKey: KeychainAccount.anthropic)
 
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)

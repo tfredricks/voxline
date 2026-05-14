@@ -96,8 +96,8 @@ struct VocabCleanupIntegrationTests {
         let provider = settings.llmProvider
         let account: String
         switch provider {
-        case .anthropic: account = Keychain.Account.anthropic
-        case .openai:    account = Keychain.Account.openai
+        case .anthropic: account = KeychainAccount.anthropic
+        case .openai:    account = KeychainAccount.openai
         }
         let key = try Keychain().string(forKey: account)
         if let key, !key.isEmpty {

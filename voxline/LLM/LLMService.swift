@@ -61,10 +61,10 @@ struct LLMService: LLMServing {
     """
 
     let settings: AppSettings
-    let keychain: Keychain
+    let keychain: any KeychainStorage
     let http: HTTPClient
 
-    init(settings: AppSettings, keychain: Keychain = Keychain(), http: HTTPClient = URLSessionHTTPClient()) {
+    init(settings: AppSettings, keychain: any KeychainStorage = DataProtectionKeychain(), http: HTTPClient = URLSessionHTTPClient()) {
         self.settings = settings
         self.keychain = keychain
         self.http = http
@@ -78,8 +78,8 @@ struct LLMService: LLMServing {
         let provider = settings.llmProvider
         let account: String
         switch provider {
-        case .anthropic: account = Keychain.Account.anthropic
-        case .openai:    account = Keychain.Account.openai
+        case .anthropic: account = KeychainAccount.anthropic
+        case .openai:    account = KeychainAccount.openai
         }
         guard
             let key = try keychain.string(forKey: account),
