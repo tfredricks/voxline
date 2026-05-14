@@ -151,12 +151,6 @@ if [[ -n "$STASHED_VOCAB_PLIST" && -f "$STASHED_VOCAB_PLIST" ]]; then
 fi
 
 echo "→ Deleting Keychain entries (service=$KEYCHAIN_SERVICE)..."
-# Legacy file keychain (covers older builds that wrote here).
-for account in anthropic openai; do
-    if security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$account" >/dev/null 2>&1; then
-        echo "   removed (legacy): $account"
-    fi
-done
 # Data-protection keychain (where current builds write). The `security` CLI
 # can't reach DPK items — they're gated by the app's keychain-access-groups
 # entitlement. Drive deletion through the signed app binary itself.

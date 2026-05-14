@@ -1,8 +1,7 @@
 import Foundation
 
-/// Generic-password keychain abstraction. Three impls live behind this:
+/// Generic-password keychain abstraction. Two impls live behind this:
 ///   - `DataProtectionKeychain` — production. DPK only. Fails loud.
-///   - `LegacyKeychain` — file keychain. Only used by `LegacyKeychainMigrator`.
 ///   - `InMemoryKeychain` — test double.
 ///
 /// `account` is the per-record name (e.g. "anthropic", "openai"); the service

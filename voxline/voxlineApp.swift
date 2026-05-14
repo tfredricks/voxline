@@ -11,32 +11,17 @@ struct voxlineApp: App {
         // Dev/test entry point: scripts/reset-local-state.sh invokes the signed
         // app binary with this flag so it can delete data-protection-keychain
         // items the bare `security` CLI cannot reach (DPK items are gated by
-        // the app's keychain-access-groups entitlement). Also clears any
-        // lingering legacy file-keychain entries the script's `security`
-        // delete-generic-password may have missed (older builds wrote there
-        // when the DPK probe failed). Runs before any UI appears and exits
-        // the process when done.
+        // the app's keychain-access-groups entitlement). Runs before any UI
+        // appears and exits the process when done.
         if CommandLine.arguments.contains("--reset-keys") {
             let dpk = DataProtectionKeychain()
-            let legacy = LegacyKeychain()
             for account in KeychainAccount.all {
                 do { try dpk.delete(forKey: account) }
                 catch { fputs("Voxline --reset-keys: failed to delete DPK \(account): \(error)\n", stderr) }
-                do { try legacy.delete(forKey: account) }
-                catch { fputs("Voxline --reset-keys: failed to delete legacy \(account): \(error)\n", stderr) }
             }
-            // Clear the migration flag so a subsequent normal launch picks up
-            // any entries the user re-enters via the wizard (no-op if nothing
-            // to migrate, but resets state cleanly).
-            UserDefaults.standard.removeObject(forKey: LegacyKeychainMigrator.completedKey)
             fputs("Voxline: cleared keychain entries (anthropic, openai)\n", stderr)
             exit(0)
         }
-
-        // Normal launch path: lift any orphaned legacy entries into DPK
-        // before the rest of the app reads from the keychain. Idempotent
-        // via UserDefaults flag — subsequent launches no-op cheaply.
-        LegacyKeychainMigrator().migrateIfNeeded()
     }
 
     var body: some Scene {
