@@ -172,6 +172,9 @@ final class CapturePipeline {
         let context = await contextTask?.value ?? .empty
         contextTask = nil
         AppLog.context.debug("context: app=\(context.appName ?? "nil", privacy: .private) bundle=\(context.bundleID ?? "nil", privacy: .public) secure=\(context.isSecureField, privacy: .public) durationMs=\(context.captureDurationMs, privacy: .public) notes=\(context.captureNotes.joined(separator: ","), privacy: .public)")
+        if !context.captureNotes.isEmpty {
+            AppLog.context.info("context partial: notes=\(context.captureNotes.joined(separator: ","), privacy: .public) durationMs=\(context.captureDurationMs, privacy: .public)")
+        }
         let cleaned: String
         let cleanupInterval = signposter.beginInterval("llm", id: sessionID)
         let cleanupStart = Date()
