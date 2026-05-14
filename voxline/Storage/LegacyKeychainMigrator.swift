@@ -21,6 +21,8 @@ import os
 /// Delete this type (and `LegacyKeychain`) one release after this migration
 /// has shipped and baked. By then every active install has either migrated
 /// or had the legacy entries deleted by the reset script.
+// TODO(post-2026-05-14-migration): delete this file (and the matching call
+// site in voxlineApp.init()). See LegacyKeychain.swift for the rationale.
 struct LegacyKeychainMigrator {
 
     static let completedKey = "voxline.keychain.legacyMigrated.v1"

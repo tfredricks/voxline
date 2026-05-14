@@ -8,6 +8,9 @@ import Security
 ///
 /// Delete this file (and `LegacyKeychainMigrator`) one release after the
 /// migration has shipped and baked.
+// TODO(post-2026-05-14-migration): delete this file. The keychain storage
+// refactor that introduced it shipped on 2026-05-14; one user-facing release
+// after that, every active install has either migrated or been reset.
 struct LegacyKeychain: KeychainStorage {
 
     static let serviceID = DataProtectionKeychain.serviceID
