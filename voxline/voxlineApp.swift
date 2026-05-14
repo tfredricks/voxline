@@ -213,9 +213,7 @@ final class AppCoordinator {
             let store = try ModeStore()
             modes = try store.load()
         } catch {
-            // Fall back to shipped defaults if disk I/O fails — the app should
-            // still work; the user just won't have a writable modes.json this
-            // session. (Plan 4's Modes editor will surface the disk error.)
+            AppLog.pipeline.error("modes load failed, using shipped defaults: \(error.localizedDescription, privacy: .public)")
             modes = ModeStore.shippedDefaults
         }
         let router = ModeRouter(modes: modes)
