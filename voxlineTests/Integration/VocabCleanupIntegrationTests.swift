@@ -99,7 +99,7 @@ struct VocabCleanupIntegrationTests {
         case .anthropic: account = KeychainAccount.anthropic
         case .openai:    account = KeychainAccount.openai
         }
-        let key = try Keychain().string(forKey: account)
+        let key = try DataProtectionKeychain().string(forKey: account)
         if let key, !key.isEmpty {
             return true
         }
