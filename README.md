@@ -47,18 +47,26 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 ## How it works
 
 ```
-                      ┌──────────────────┐
-   🎙  microphone  →  │  Whisper (local) │  →  raw transcript
-                      └──────────────────┘
-                              │
-                              ▼
-                      ┌──────────────────┐
-                      │  Claude or GPT   │  →  polished writing
-                      └──────────────────┘
-                              │
-                              ▼
-                       ⌨️  pasted into
-                          the focused field
+┌──────────────── ON YOUR MAC ─────────────────┐
+│  🎙 audio  →  Whisper (ANE)  →  transcript   │
+│                                              │
+│  Context block, assembled at press time:     │
+│  • per-app mode prompt                       │
+│  • focused-field AX (role, surroundings)     │
+│  • custom vocabulary (canonical spellings)   │
+└─────────────────────┬────────────────────────┘
+                      │  transcript + context
+                      ▼
+┌────────── CLAUDE or GPT (your key) ──────────┐
+│  strip fillers · fix self-corrections ·      │
+│  match register · snap to vocab              │
+└─────────────────────┬────────────────────────┘
+                      │  polished writing
+                      ▼
+┌──────────────── ON YOUR MAC ─────────────────┐
+│  paste into focused field                    │
+│  (clipboard restored; AX/typing fallback)    │
+└──────────────────────────────────────────────┘
 ```
 
 ### Speech models (on-device)
