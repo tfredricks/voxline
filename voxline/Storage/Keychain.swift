@@ -4,7 +4,7 @@ import Security
 /// Generic-password Keychain wrapper. One instance per logical "service"
 /// (a namespace like `com.voxline.app.keys`); within a service, items
 /// are addressed by a string `key` (i.e., the Keychain `account`).
-struct Keychain {
+struct Keychain: KeychainStorage {
 
     /// Canonical service id used by the app for API keys.
     static let appServiceID = "com.voxline.app.keys"

@@ -20,13 +20,13 @@ final class APIKeysSettingsViewModel {
     var testResult: APIKeyTestResult = .untested
     var testing: LLMProvider?
 
-    private let keychain: Keychain
+    private let keychain: any KeychainStorage
     private let clientFactory: LLMClientFactory
     private var anthropicPersisted: String = ""
     private var openaiPersisted: String = ""
 
     init(
-        keychain: Keychain = Keychain(),
+        keychain: any KeychainStorage = DataProtectionKeychain(),
         clientFactory: @escaping LLMClientFactory = { provider, key in
             switch provider {
             case .anthropic: return AnthropicClient(apiKey: key)

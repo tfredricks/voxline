@@ -4,13 +4,12 @@ import Foundation
 
 @Suite @MainActor struct APIKeysSettingsViewModelTests {
 
-    private func keychain() -> Keychain {
-        Keychain(service: "com.voxline.app.test.\(UUID().uuidString)")
+    private func keychain() -> InMemoryKeychain {
+        InMemoryKeychain()
     }
 
     @Test func commit_anthropic_persists_only_anthropic_and_trims() throws {
         let kc = keychain()
-        defer { try? kc.deleteAll() }
         let vm = APIKeysSettingsViewModel(keychain: kc)
         vm.anthropicKey = "  sk-ant-123\n "
         vm.openaiKey    = "should-not-write"
@@ -21,7 +20,6 @@ import Foundation
 
     @Test func commit_openai_persists_only_openai_and_trims() throws {
         let kc = keychain()
-        defer { try? kc.deleteAll() }
         let vm = APIKeysSettingsViewModel(keychain: kc)
         vm.openaiKey = "\tsk-openai-xyz \n"
         vm.commitOpenAI()
@@ -31,7 +29,6 @@ import Foundation
     @Test func empty_commit_deletes_keychain_entry() throws {
         let kc = keychain()
         try kc.set("preexisting", forKey: Keychain.Account.anthropic)
-        defer { try? kc.deleteAll() }
         let vm = APIKeysSettingsViewModel(keychain: kc)
         vm.anthropicKey = "   "
         vm.commitAnthropic()
@@ -62,7 +59,6 @@ import Foundation
     @Test func test_connection_success_sets_success_for_provider() async throws {
         let kc = keychain()
         try kc.set("k", forKey: Keychain.Account.anthropic)
-        defer { try? kc.deleteAll() }
         let vm = APIKeysSettingsViewModel(
             keychain: kc,
             clientFactory: { _, _ in StubClient(mode: .ok) }
@@ -76,7 +72,6 @@ import Foundation
     @Test func test_connection_fail_sets_failed_for_provider_with_message() async throws {
         let kc = keychain()
         try kc.set("k", forKey: Keychain.Account.openai)
-        defer { try? kc.deleteAll() }
         let vm = APIKeysSettingsViewModel(
             keychain: kc,
             clientFactory: { _, _ in StubClient(mode: .fail(.invalidAPIKey)) }
@@ -93,7 +88,6 @@ import Foundation
 
     @Test func test_connection_no_key_sets_failed_without_calling_factory() async throws {
         let kc = keychain()
-        defer { try? kc.deleteAll() }
         final class CallCounter { var n = 0 }
         let counter = CallCounter()
         let vm = APIKeysSettingsViewModel(
@@ -114,7 +108,6 @@ import Foundation
     @Test func isPersisted_true_when_trimmed_live_matches_keychain() throws {
         let kc = keychain()
         try kc.set("real-key", forKey: Keychain.Account.anthropic)
-        defer { try? kc.deleteAll() }
         let vm = APIKeysSettingsViewModel(keychain: kc)
         vm.anthropicKey = "  real-key\n"   // whitespace doesn't matter
         #expect(vm.isPersisted(.anthropic) == true)
@@ -123,7 +116,6 @@ import Foundation
     @Test func isPersisted_false_when_live_differs_from_keychain() throws {
         let kc = keychain()
         try kc.set("real-key", forKey: Keychain.Account.anthropic)
-        defer { try? kc.deleteAll() }
         let vm = APIKeysSettingsViewModel(keychain: kc)
         vm.anthropicKey = "different"
         #expect(vm.isPersisted(.anthropic) == false)
@@ -132,7 +124,6 @@ import Foundation
     @Test func isPersisted_uses_cached_value_not_keychain_read() throws {
         let kc = keychain()
         try kc.set("real-key", forKey: Keychain.Account.anthropic)
-        defer { try? kc.deleteAll() }
 
         let vm = APIKeysSettingsViewModel(keychain: kc)
         #expect(vm.isPersisted(.anthropic))   // seeded from keychain at init
