@@ -1,7 +1,7 @@
 import Foundation
 
 /// Thin wrapper around UserDefaults for non-secret user preferences.
-/// Secrets live in `Keychain`.
+/// Secrets live in the data-protection keychain (see `KeychainStorage`).
 // UserDefaults isn't formally Sendable but is documented thread-safe, so we
 // vouch for AppSettings with @unchecked. All getters/setters here are pure
 // reads/writes against UserDefaults — no shared mutable state of our own.
