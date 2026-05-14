@@ -1,4 +1,5 @@
 import Foundation
+@testable import voxline
 
 /// Test double. Pure Swift, no OS calls. Internally synchronized so tests can
 /// share an instance across actors without TSan complaints, though most tests
