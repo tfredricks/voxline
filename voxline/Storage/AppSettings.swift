@@ -24,9 +24,10 @@ struct AppSettings: @unchecked Sendable {
     }
 
     /// LLM provider choice. Defaults to .anthropic.
-    /// Setting a new provider clears any model override so the spec default
+    /// Changing the provider clears any model override so the spec default
     /// for the new provider takes over (a model id from one provider is
-    /// almost never valid for another).
+    /// almost never valid for another). Re-assigning the same provider is
+    /// a no-op — the override survives.
     var llmProvider: LLMProvider {
         get {
             guard
@@ -36,8 +37,17 @@ struct AppSettings: @unchecked Sendable {
             return p
         }
         set {
+            // Read the previous value off disk so we can detect no-op writes.
+            // The model-override clear is intentional on a real provider change
+            // but must NOT fire when the same provider is re-assigned —
+            // GeneralSettingsViewModel.commit() rebuilds the whole snapshot on
+            // every unrelated settings change, and an unconditional clear here
+            // would wipe Key.model on every mic / chord / sound toggle.
+            let previous = defaults.string(forKey: Key.provider).flatMap(LLMProvider.init(rawValue:))
             defaults.set(newValue.rawValue, forKey: Key.provider)
-            defaults.removeObject(forKey: Key.model)
+            if previous != newValue {
+                defaults.removeObject(forKey: Key.model)
+            }
         }
     }
 

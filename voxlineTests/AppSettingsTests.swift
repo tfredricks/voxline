@@ -44,6 +44,31 @@ import Foundation
         #expect(s.llmModel == "gpt-4.1-nano")
     }
 
+    @Test func reassigning_same_provider_preserves_model_override() {
+        let defaults = makeDefaults()
+        var s = AppSettings(defaults: defaults)
+        s.llmProvider = .anthropic
+        s.llmModel = "claude-3-5-sonnet-latest"
+        #expect(s.llmModel == "claude-3-5-sonnet-latest")
+
+        // Re-writing the SAME provider must not clear the model override.
+        // Without this guard, every unrelated settings change that flows
+        // through GeneralSettingsViewModel.commit() wipes the override
+        // (commit() writes every field on every change, including provider).
+        s.llmProvider = .anthropic
+        #expect(s.llmModel == "claude-3-5-sonnet-latest")
+    }
+
+    @Test func reassigning_same_provider_when_no_override_is_a_noop() {
+        let defaults = makeDefaults()
+        var s = AppSettings(defaults: defaults)
+        s.llmProvider = .anthropic
+        // No explicit model set — llmModel returns the spec default.
+        #expect(s.llmModel == LLMProvider.anthropic.defaultModel)
+        s.llmProvider = .anthropic
+        #expect(s.llmModel == LLMProvider.anthropic.defaultModel)
+    }
+
     @Test func unset_hotkey_chord_returns_default() {
         let d = UserDefaults(suiteName: "voxline-test-\(UUID().uuidString)")!
         #expect(AppSettings(defaults: d).hotkeyChord == .default)
