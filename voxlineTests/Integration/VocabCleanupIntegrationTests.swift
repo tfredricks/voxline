@@ -18,7 +18,20 @@ extension Tag {
 ///
 /// See `docs/superpowers/specs/2026-05-12-vocab-cleanup-only-pivot-design.md`
 /// for context on why the Whisper-prompt biasing channel was removed.
-@Suite(.tags(.integration))
+///
+/// Disabled by default: live-API tests are environment-dependent (model
+/// cache present, network reachable, provider credentials accepted) and
+/// flake the green-suite invariant when any of those conditions slip. Opt
+/// in by setting `VOXLINE_RUN_INTEGRATION=1` in the test invocation's env.
+/// When opted in, failures are real signals — fix the environment or the
+/// code, don't add another silent skip.
+@Suite(
+    .tags(.integration),
+    .disabled(
+        if: ProcessInfo.processInfo.environment["VOXLINE_RUN_INTEGRATION"] == nil,
+        "Set VOXLINE_RUN_INTEGRATION=1 to run live integration tests."
+    )
+)
 @MainActor
 struct VocabCleanupIntegrationTests {
 
