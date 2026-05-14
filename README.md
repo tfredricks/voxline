@@ -39,7 +39,7 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 - **On-device transcription** — Whisper runs locally on Apple Neural Engine. Audio never leaves your Mac.
 - **AI cleanup, not raw dump** — fillers, false starts, and rambling are smoothed out. Punctuation and capitalization are added automatically.
 - **Context-aware per-app formatting** — voxline detects the frontmost app and tunes the output for it: terse Slack messages, structured email replies, code-comment style in your IDE, search-box one-liners. Ships with sensible defaults for 28 common apps out of the box.
-- **Dictation history** — the last 10 cleaned dictations live in a menu-bar submenu; click any row to copy it back to the clipboard.
+- **Dictation history** — the last 25 cleaned dictations live in a menu-bar submenu; click any row to copy it back to the clipboard.
 - **Bring your own LLM key** — Anthropic or OpenAI, your account, your model, your costs. Keys live in macOS Keychain.
 - **Menu-bar native** — no Dock icon, no clutter. Configurable hotkey, mic, model, and provider.
 - **Privacy-aware feedback** — clipboard is restored after paste; the system mic indicator turns off the moment you let go.
@@ -104,7 +104,7 @@ open voxline.xcodeproj
 
 Build and run from Xcode (⌘R). On first launch:
 
-1. Grant **Microphone**, **Accessibility**, and **Input Monitoring** when prompted (the app will guide you).
+1. Grant **Microphone** and **Accessibility** when prompted (the app will guide you).
 2. Pick your hotkey, mic, and Whisper model in the Settings window (⌘,). The default hotkey is **Right Cmd + Right Option** — change it if you'd rather use something else.
 3. Drop in an Anthropic or OpenAI API key in the **Cleanup (AI)** section.
 4. Hold the hotkey anywhere on your Mac and start talking.
@@ -115,7 +115,8 @@ Build and run from Xcode (⌘R). On first launch:
 |---|---|
 | Microphone | Capture your voice while the hotkey is held. Audio never leaves your Mac. |
 | Accessibility | Detect the global hotkey and paste into the focused field. |
-| Input Monitoring | Required so the hotkey works when voxline isn't the frontmost app. |
+
+Input Monitoring is **not** required — Accessibility alone is enough for the global hotkey. macOS may still surface an Input Monitoring entry for voxline; you can leave it off. The Debug pane shows its status for diagnostics only.
 
 ## Privacy
 
