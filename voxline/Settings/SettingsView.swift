@@ -113,7 +113,10 @@ struct SettingsView: View {
             }
             .frame(minWidth: 440, idealWidth: 460, maxWidth: 520, minHeight: 460, idealHeight: 540)
         }
-        .task { generalVM.refreshLoginItemStatus() }
+        .task {
+            generalVM.refreshFromUserDefaults()
+            generalVM.refreshLoginItemStatus()
+        }
         .onAppear {
             levelMonitor.preferredInputDeviceUID = generalVM.audioInputDeviceUID
             startMonitorIfAllowed()

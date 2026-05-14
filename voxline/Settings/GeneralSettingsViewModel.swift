@@ -113,6 +113,24 @@ final class GeneralSettingsViewModel {
         }
     }
 
+    /// Re-reads UserDefaults-backed settings so the Settings UI reflects
+    /// writes made elsewhere in the app (e.g., the wizard's `advance()`
+    /// persisting `selectedProvider`). The view model otherwise caches the
+    /// value from init and would show stale state on subsequent window
+    /// opens. Called via `.task` on the Settings window the same way
+    /// `refreshLoginItemStatus()` is.
+    func refreshFromUserDefaults() {
+        // Guard with `loaded = false` so the didSet → commit chain doesn't
+        // fire and write the same value right back.
+        loaded = false
+        chord = settings.hotkeyChord
+        audioInputDeviceUID = settings.audioInputDeviceUID
+        whisperModel = settings.whisperModel
+        playHotkeySounds = settings.playHotkeySounds
+        provider = settings.llmProvider
+        loaded = true
+    }
+
     /// Restore Spec defaults: hotkey to Left Ctrl + Left Option, system-default
     /// mic, large-v3-turbo, sounds on. Performs one batched commit so the
     /// applier sees a single coherent snapshot rather than four partial ones.

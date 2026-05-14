@@ -8,7 +8,7 @@ struct WizardAPIKeyView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Set up your API key").font(.title.bold())
-            Text("Voxline uses your own API key for the LLM cleanup step. Pick one provider — you can add the other later in Settings.")
+            Text("You only need a key for one provider — Voxline uses it for the cleanup step. You can add the other later in Settings.")
                 .foregroundStyle(.secondary)
 
             Picker("Provider", selection: $selectedProvider) {
@@ -19,15 +19,24 @@ struct WizardAPIKeyView: View {
             .labelsHidden()
 
             LabeledContent("\(selectedProvider.displayName) API key") {
-                SecureField("paste key", text: keyBinding)
+                SecureField(placeholder, text: keyBinding)
                     .textContentType(.password)
+                    // Force SwiftUI to rebuild the SecureField when the
+                    // provider toggle flips. Without this, the field keeps
+                    // editor state from the previous provider (cursor pos,
+                    // selection) which is confusing — and on some SwiftUI
+                    // versions, the binding capture itself can stale.
+                    .id(selectedProvider)
             }
+
+            Link("Get a \(selectedProvider.displayName) key →", destination: getKeyURL)
+                .font(.callout)
 
             HStack {
                 Button("Test \(selectedProvider.displayName)") {
                     Task { await vm.testConnection(selectedProvider) }
                 }
-                .disabled(vm.testing != nil || currentKey.isEmpty)
+                .disabled(vm.testing != nil || currentKeyEmpty)
                 if vm.testing != nil { ProgressView().controlSize(.small) }
                 Spacer()
                 testResultView
@@ -48,11 +57,24 @@ struct WizardAPIKeyView: View {
         }
     }
 
-    private var currentKey: String {
+    private var placeholder: String {
         switch selectedProvider {
-        case .anthropic: return vm.anthropicKey
-        case .openai:    return vm.openaiKey
+        case .anthropic: return "sk-ant-…"
+        case .openai:    return "sk-…"
         }
+    }
+
+    private var getKeyURL: URL {
+        switch selectedProvider {
+        case .anthropic: return URL(string: "https://console.anthropic.com/settings/keys")!
+        case .openai:    return URL(string: "https://platform.openai.com/api-keys")!
+        }
+    }
+
+    private var currentKeyEmpty: Bool {
+        keyBinding.wrappedValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
     }
 
     @ViewBuilder

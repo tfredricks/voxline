@@ -5,13 +5,11 @@ struct CleanupSection: View {
     @Bindable var general: GeneralSettingsViewModel
     @Bindable var keys: APIKeysSettingsViewModel
 
-    @State private var showOtherKey: Bool = false
-    @State private var anthropicRevealed = false
-    @State private var openaiRevealed = false
+    @State private var revealed = false
 
     var body: some View {
         Section("Cleanup (AI)") {
-            Picker("Provider", selection: $general.provider) {
+            Picker("Default provider", selection: $general.provider) {
                 ForEach(LLMProvider.allCases, id: \.self) { p in
                     Text(p.displayName).tag(p)
                 }
@@ -19,15 +17,16 @@ struct CleanupSection: View {
             .pickerStyle(.segmented)
         }
 
+        // One key row at a time, bound to the picker's provider. Switching
+        // the picker swaps which key is visible; saving writes that key to
+        // its provider's keychain slot. The `.id(general.provider)` forces
+        // SwiftUI to rebuild APIKeyRow on switch so editor state from the
+        // previous provider can't bleed through. `revealed` is intentionally
+        // reset on switch so we never reveal the new provider's key just
+        // because the previous one was being shown in plaintext.
         keyRow(for: general.provider)
-
-        DisclosureGroup(isExpanded: $showOtherKey) {
-            keyRow(for: other(general.provider))
-        } label: {
-            Text("Also store \(other(general.provider).displayName) key")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
+            .id(general.provider)
+            .onChange(of: general.provider) { _, _ in revealed = false }
     }
 
     @ViewBuilder
@@ -38,7 +37,7 @@ struct CleanupSection: View {
                 title: "Anthropic",
                 provider: .anthropic,
                 key: $keys.anthropicKey,
-                revealed: $anthropicRevealed,
+                revealed: $revealed,
                 getKeyURL: URL(string: "https://console.anthropic.com/settings/keys")!,
                 expectedPrefix: "sk-ant-",
                 isPersisted: keys.isPersisted(.anthropic),
@@ -53,7 +52,7 @@ struct CleanupSection: View {
                 title: "OpenAI",
                 provider: .openai,
                 key: $keys.openaiKey,
-                revealed: $openaiRevealed,
+                revealed: $revealed,
                 getKeyURL: URL(string: "https://platform.openai.com/api-keys")!,
                 expectedPrefix: "sk-",
                 isPersisted: keys.isPersisted(.openai),
@@ -64,9 +63,5 @@ struct CleanupSection: View {
                 onTest: { Task { await keys.testConnection(.openai) } }
             )
         }
-    }
-
-    private func other(_ p: LLMProvider) -> LLMProvider {
-        p == .anthropic ? .openai : .anthropic
     }
 }
