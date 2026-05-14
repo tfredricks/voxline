@@ -22,7 +22,7 @@ final class WizardViewModel {
 
     init(
         settings: AppSettings = AppSettings(),
-        keychain: Keychain = Keychain()
+        keychain: any KeychainStorage = DataProtectionKeychain()
     ) {
         self.settings = settings
         let vm = APIKeysSettingsViewModel(keychain: keychain)

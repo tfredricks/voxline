@@ -50,8 +50,7 @@ import Foundation
     }
 
     @Test func complete_persists_keys_to_keychain() throws {
-        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
         let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: kc)
         vm.apiKeyVM.anthropicKey = "sk-ant-test"
         vm.complete()
@@ -59,8 +58,7 @@ import Foundation
     }
 
     @Test func advance_persists_keys_to_keychain() throws {
-        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
         let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: kc)
         vm.apiKeyVM.openaiKey = "sk-test"
         vm.advance()
@@ -72,8 +70,7 @@ import Foundation
 
     @Test func complete_saves_selected_provider_openai() throws {
         let d = defaults()
-        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
         let vm = WizardViewModel(settings: AppSettings(defaults: d), keychain: kc)
         vm.selectedProvider = .openai
         vm.apiKeyVM.openaiKey = "sk-openai"
@@ -83,8 +80,7 @@ import Foundation
 
     @Test func complete_saves_selected_provider_anthropic() throws {
         let d = defaults()
-        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
         var seed = AppSettings(defaults: d)
         seed.llmProvider = .openai
         let vm = WizardViewModel(settings: AppSettings(defaults: d), keychain: kc)
@@ -96,9 +92,7 @@ import Foundation
 
     @Test func selected_provider_init_prefers_only_non_empty_keychain_key() throws {
         let d = defaults()
-        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
-        defer { try? kc.deleteAll() }
-        try kc.set("sk-openai-existing", forKey: Keychain.Account.openai)
+        let kc = InMemoryKeychain(seed: [Keychain.Account.openai: "sk-openai-existing"])
         let vm = WizardViewModel(settings: AppSettings(defaults: d), keychain: kc)
         #expect(vm.selectedProvider == .openai)
     }
@@ -110,8 +104,7 @@ import Foundation
     // provider whose keychain slot is empty.
 
     @Test func cannot_advance_when_selected_provider_has_no_key() {
-        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
         let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: kc)
         vm.selectedProvider = .openai
         vm.apiKeyVM.anthropicKey = "sk-ant"
@@ -120,8 +113,7 @@ import Foundation
     }
 
     @Test func can_advance_when_selected_provider_has_key() {
-        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
         let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: kc)
         vm.selectedProvider = .openai
         vm.apiKeyVM.openaiKey = "sk-openai"
@@ -129,8 +121,7 @@ import Foundation
     }
 
     @Test func whitespace_only_key_does_not_satisfy_gate() {
-        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
         let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: kc)
         vm.selectedProvider = .anthropic
         vm.apiKeyVM.anthropicKey = "   \n"
@@ -147,8 +138,7 @@ import Foundation
 
     @Test func advance_persists_selected_provider_to_user_defaults() throws {
         let d = defaults()
-        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
         let vm = WizardViewModel(settings: AppSettings(defaults: d), keychain: kc)
         vm.selectedProvider = .openai
         vm.apiKeyVM.openaiKey = "sk-openai"
@@ -164,8 +154,7 @@ import Foundation
     // wizard would silently lose their model override on the first advance.
     @Test func commit_progress_does_not_clear_model_when_provider_unchanged() throws {
         let d = defaults()
-        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
         var seed = AppSettings(defaults: d)
         seed.llmProvider = .openai
         seed.llmModel = "gpt-custom-tuned"
@@ -179,8 +168,7 @@ import Foundation
 
     @Test func advance_then_change_provider_then_advance_writes_latest_choice() throws {
         let d = defaults()
-        let kc = Keychain(service: "com.voxline.test.\(UUID().uuidString)")
-        defer { try? kc.deleteAll() }
+        let kc = InMemoryKeychain()
         let vm = WizardViewModel(settings: AppSettings(defaults: d), keychain: kc)
         vm.selectedProvider = .openai
         vm.apiKeyVM.openaiKey = "sk-openai"
