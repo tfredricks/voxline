@@ -71,6 +71,7 @@ import Foundation
         m.migrateIfNeeded()
 
         #expect(try modern.string(forKey: KeychainAccount.openai) == nil)
+        #expect(defaults.bool(forKey: LegacyKeychainMigrator.completedKey) == true)
     }
 
     @Test func migrates_multiple_accounts() throws {
