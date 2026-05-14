@@ -86,8 +86,15 @@ struct DataProtectionKeychain: KeychainStorage {
         case errSecSuccess, errSecItemNotFound:
             return
         case errSecMissingEntitlement:
-            Self.log.error("DPK delete missing entitlement; treating account=\(account, privacy: .public) as absent")
-            return
+            // Mirrors `set`: a broken-signing build cannot reach DPK, so we
+            // genuinely don't know whether the entry exists or not. Treating
+            // delete as a silent no-op would lie to the caller — Settings
+            // would show the field as cleared while the keychain entry stays
+            // intact for whatever build comes next. Throw so the caller
+            // surfaces the failure (APIKeysSettingsViewModel sets lastError;
+            // --reset-keys writes to stderr).
+            Self.log.error("DPK delete rejected: missing entitlement (signing broken or unsigned build)")
+            throw KeychainError.dataProtectionKeychainUnavailable
         default:
             throw KeychainError.unhandledStatus(status)
         }
