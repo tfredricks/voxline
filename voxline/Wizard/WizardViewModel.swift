@@ -93,6 +93,4 @@ final class WizardViewModel {
         settings = s
         onComplete?()
     }
-
-
 }
