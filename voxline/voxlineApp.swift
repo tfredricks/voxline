@@ -301,8 +301,8 @@ final class AppCoordinator {
         let ax = perms.accessibilityStatus
 
         guard let monitor = hotkeyMonitor else { return }
-        // Accessibility is the hard gate. Input Monitoring is informational —
-        // surfaced in the debug pane but not required to install the tap.
+        // Accessibility is the hard gate. Input Monitoring is informational
+        // and not required to install the tap.
         let permissionsOK = (ax == .granted)
         let shouldBeInstalled = state.hotkeyEnabled && permissionsOK
         let isInstalled = monitor.isTapInstalled
