@@ -3,30 +3,19 @@ import Testing
 import AppKit
 @testable import voxline
 
+/// Thread-safe box for capturing closure side-effects in tests.
+final class LockedBox<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: T
+    init(_ initial: T) { self.value = initial }
+    func read() -> T { lock.lock(); defer { lock.unlock() }; return value }
+    func write(_ new: T) { lock.lock(); value = new; lock.unlock() }
+    func mutate(_ body: (inout T) -> Void) {
+        lock.lock(); body(&value); lock.unlock()
+    }
+}
+
 @Suite struct ClipboardInjectorTests {
-
-    final class FakeModifierGate: ModifierGate, @unchecked Sendable {
-        var sequence: [Bool] = [false]   // Each call pops the front; default = released
-        var calls = 0
-        var clearAttempts = 0
-        func chordIsHeld() -> Bool {
-            calls += 1
-            return sequence.isEmpty ? false : sequence.removeFirst()
-        }
-        func forceClearChord() { clearAttempts += 1 }
-    }
-
-    final class FakeKeyPoster: KeyEventPosting, @unchecked Sendable {
-        var posted: [(keyCode: CGKeyCode, flags: CGEventFlags)] = []
-        func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags) {
-            posted.append((keyCode, flags))
-        }
-    }
-
-    struct FakePasteKeyResolver: PasteKeyResolving {
-        let keyCode: CGKeyCode
-        func pasteVirtualKeyCode() -> CGKeyCode { keyCode }
-    }
 
     final class FakeFocusedTextSystem: FocusedTextSystem, @unchecked Sendable {
         var currentValue: String?
@@ -67,23 +56,6 @@ import AppKit
         }
     }
 
-    struct StubAccessibilityTrust: AccessibilityTrustChecking {
-        let trusted: Bool
-        func isAccessibilityTrusted() -> Bool { trusted }
-    }
-
-    final class FakeTextTyper: TextTyping, @unchecked Sendable {
-        var typed: [String] = []
-        var error: Error?
-        var onType: ((String) -> Void)?
-
-        func typeText(_ text: String) throws {
-            if let error { throw error }
-            typed.append(text)
-            onType?(text)
-        }
-    }
-
     private func makeBoard() -> NSPasteboard {
         NSPasteboard(name: NSPasteboard.Name(rawValue: "voxline-inject-\(UUID().uuidString)"))
     }
@@ -93,18 +65,19 @@ import AppKit
         board.clearContents()
         board.setString("ORIGINAL", forType: .string)
 
-        let gate = FakeModifierGate()
-        let poster = FakeKeyPoster()
         let focused = FakeFocusedTextSystem()
+        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
-            modifierGate: gate,
-            keyPoster: poster,
-            pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: focused,
-            textTyper: FakeTextTyper(),
-            accessibilityTrust: StubAccessibilityTrust(trusted: true),
-            restoreDelay: .milliseconds(20)   // short for tests
+            pasteEligibility: AlwaysPasteEligible(),
+            chordIsHeld: { false },
+            forceClearChord: {},
+            postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
+            pasteVirtualKeyCode: { 9 },
+            typeText: { _ in },
+            isAccessibilityTrusted: { true },
+            restoreDelay: .milliseconds(20)
         )
 
         let outcome = try await injector.inject("CLEAN")
@@ -112,9 +85,10 @@ import AppKit
         // After full inject + restoreDelay, original is back.
         #expect(board.string(forType: .string) == "ORIGINAL")
         // Cmd+V was posted exactly once with only Command flag.
-        #expect(poster.posted.count == 1)
-        #expect(poster.posted[0].keyCode == 9)               // 'V'
-        #expect(poster.posted[0].flags == [.maskCommand])
+        let snapshot = posted.read()
+        #expect(snapshot.count == 1)
+        #expect(snapshot[0].0 == 9)               // 'V'
+        #expect(snapshot[0].1 == [.maskCommand])
         #expect(outcome == TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified))
     }
 
@@ -123,62 +97,78 @@ import AppKit
         board.clearContents()
         board.setString("ORIGINAL", forType: .string)
 
-        let poster = FakeKeyPoster()
+        let posted = LockedBox<[CGKeyCode]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
-            modifierGate: FakeModifierGate(),
-            keyPoster: poster,
-            pasteKeyResolver: FakePasteKeyResolver(keyCode: 12),
             focusedTextSystem: FakeFocusedTextSystem(),
-            textTyper: FakeTextTyper(),
-            accessibilityTrust: StubAccessibilityTrust(trusted: true),
+            pasteEligibility: AlwaysPasteEligible(),
+            chordIsHeld: { false },
+            forceClearChord: {},
+            postKey: { code, _ in posted.mutate { $0.append(code) } },
+            pasteVirtualKeyCode: { 12 },
+            typeText: { _ in },
+            isAccessibilityTrusted: { true },
             restoreDelay: .milliseconds(0)
         )
 
         _ = try await injector.inject("CLEAN")
 
-        #expect(poster.posted.map(\.keyCode) == [12])
+        #expect(posted.read() == [12])
     }
 
     @Test func waits_for_chord_release_before_posting() async throws {
         let board = makeBoard()
         board.clearContents()
 
-        let gate = FakeModifierGate()
         // Held twice, then released — should NOT clear, just wait.
-        gate.sequence = [true, true, false]
+        let chordSeq = LockedBox<[Bool]>([true, true, false])
+        let callCount = LockedBox<Int>(0)
+        let clearCount = LockedBox<Int>(0)
+        let chordIsHeldClosure: @Sendable () -> Bool = {
+            var result = false
+            chordSeq.mutate { seq in
+                if !seq.isEmpty { result = seq.removeFirst() }
+            }
+            callCount.mutate { $0 += 1 }
+            return result
+        }
 
-        let poster = FakeKeyPoster()
+        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
-            modifierGate: gate,
-            keyPoster: poster,
-            pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: FakeFocusedTextSystem(),
-            textTyper: FakeTextTyper(),
-            accessibilityTrust: StubAccessibilityTrust(trusted: true),
+            pasteEligibility: AlwaysPasteEligible(),
+            chordIsHeld: chordIsHeldClosure,
+            forceClearChord: { clearCount.mutate { $0 += 1 } },
+            postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
+            pasteVirtualKeyCode: { 9 },
+            typeText: { _ in },
+            isAccessibilityTrusted: { true },
             restoreDelay: .milliseconds(0)
         )
 
         try await injector.inject("text")
 
-        #expect(gate.calls >= 3)        // polled until released
-        #expect(gate.clearAttempts == 0) // never had to force-clear
+        #expect(callCount.read() >= 3)        // polled until released
+        #expect(clearCount.read() == 0)        // never had to force-clear
     }
 
     @Test func force_clears_chord_after_timeout() async throws {
         let board = makeBoard()
         board.clearContents()
-        let poster = FakeKeyPoster()
-        let alwaysHeld = AlwaysHeldGate()
+
+        let clearCount = LockedBox<Int>(0)
+        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
-            modifierGate: alwaysHeld,
-            keyPoster: poster,
-            pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: FakeFocusedTextSystem(),
-            textTyper: FakeTextTyper(),
-            accessibilityTrust: StubAccessibilityTrust(trusted: true),
+            pasteEligibility: AlwaysPasteEligible(),
+            chordIsHeld: { true },
+            forceClearChord: { clearCount.mutate { $0 += 1 } },
+            postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
+            pasteVirtualKeyCode: { 9 },
+            typeText: { _ in },
+            isAccessibilityTrusted: { true },
             chordReleaseTimeout: .milliseconds(20),
             chordPollInterval: .milliseconds(5),
             restoreDelay: .milliseconds(0)
@@ -186,14 +176,8 @@ import AppKit
 
         try await injector.inject("t")
 
-        #expect(alwaysHeld.clearAttempts == 1)
-        #expect(poster.posted.count == 1)   // Cmd+V still fired after force-clear
-    }
-
-    final class AlwaysHeldGate: ModifierGate, @unchecked Sendable {
-        var clearAttempts = 0
-        func chordIsHeld() -> Bool { true }
-        func forceClearChord() { clearAttempts += 1 }
+        #expect(clearCount.read() == 1)
+        #expect(posted.read().count == 1)   // Cmd+V still fired after force-clear
     }
 
     @Test func paste_with_ax_unchanged_returns_unverified_and_does_not_double_insert() async throws {
@@ -210,24 +194,26 @@ import AppKit
             FocusedTextSnapshot(value: "before"),
             FocusedTextSnapshot(value: "before")
         ]
-        let poster = FakeKeyPoster()
-        let typer = FakeTextTyper()
+        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
+        let typed = LockedBox<[String]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
-            modifierGate: FakeModifierGate(),
-            keyPoster: poster,
-            pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: focused,
-            textTyper: typer,
-            accessibilityTrust: StubAccessibilityTrust(trusted: true),
+            pasteEligibility: AlwaysPasteEligible(),
+            chordIsHeld: { false },
+            forceClearChord: {},
+            postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
+            pasteVirtualKeyCode: { 9 },
+            typeText: { text in typed.mutate { $0.append(text) } },
+            isAccessibilityTrusted: { true },
             restoreDelay: .milliseconds(0)
         )
 
         let outcome = try await injector.inject("CLEAN")
 
-        #expect(poster.posted.count == 1)
+        #expect(posted.read().count == 1)
         #expect(focused.inserted.isEmpty)
-        #expect(typer.typed.isEmpty)
+        #expect(typed.read().isEmpty)
         #expect(outcome == TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified))
         #expect(board.string(forType: .string) == "ORIGINAL")
     }
@@ -239,16 +225,18 @@ import AppKit
 
         let focused = FakeFocusedTextSystem()
         focused.currentValue = "before"
-        let poster = FakeKeyPoster()
+        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
-            modifierGate: FakeModifierGate(),
-            keyPoster: poster,
-            pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: focused,
-            textTyper: FakeTextTyper(),
             snapshotter: ThrowingSnapshotter(reason: "test forced failure"),
-            accessibilityTrust: StubAccessibilityTrust(trusted: true),
+            pasteEligibility: AlwaysPasteEligible(),
+            chordIsHeld: { false },
+            forceClearChord: {},
+            postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
+            pasteVirtualKeyCode: { 9 },
+            typeText: { _ in },
+            isAccessibilityTrusted: { true },
             restoreDelay: .milliseconds(0)
         )
 
@@ -257,7 +245,7 @@ import AppKit
         #expect(focused.inserted == ["CLEAN"])
         #expect(outcome == TextInsertionOutcome(strategy: .accessibility, verification: .confirmed))
         // Paste path bailed before touching the clipboard.
-        #expect(poster.posted.isEmpty)
+        #expect(posted.read().isEmpty)
         #expect(board.string(forType: .string) == "ORIGINAL")
     }
 
@@ -271,18 +259,21 @@ import AppKit
         focused.currentValue = "before"
         focused.insertError = NoAX()
 
-        let typer = FakeTextTyper()
-        typer.onType = { text in focused.currentValue = (focused.currentValue ?? "") + text }
-
+        let typed = LockedBox<[String]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
-            modifierGate: FakeModifierGate(),
-            keyPoster: FakeKeyPoster(),
-            pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: focused,
-            textTyper: typer,
             snapshotter: ThrowingSnapshotter(reason: "test forced failure"),
-            accessibilityTrust: StubAccessibilityTrust(trusted: true),
+            pasteEligibility: AlwaysPasteEligible(),
+            chordIsHeld: { false },
+            forceClearChord: {},
+            postKey: { _, _ in },
+            pasteVirtualKeyCode: { 9 },
+            typeText: { text in
+                typed.mutate { $0.append(text) }
+                focused.currentValue = (focused.currentValue ?? "") + text
+            },
+            isAccessibilityTrusted: { true },
             restoreDelay: .milliseconds(0),
             verificationDelay: .milliseconds(0)
         )
@@ -290,7 +281,7 @@ import AppKit
         let outcome = try await injector.inject("CLEAN")
 
         #expect(focused.inserted.isEmpty)
-        #expect(typer.typed == ["CLEAN"])
+        #expect(typed.read() == ["CLEAN"])
         #expect(outcome == TextInsertionOutcome(strategy: .directTyping, verification: .confirmed))
     }
 
@@ -305,12 +296,14 @@ import AppKit
 
         let injector = await ClipboardInjector(
             pasteboard: board,
-            modifierGate: AlwaysHeldGate(),
-            keyPoster: FakeKeyPoster(),
-            pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: FakeFocusedTextSystem(),
-            textTyper: FakeTextTyper(),
-            accessibilityTrust: StubAccessibilityTrust(trusted: true),
+            pasteEligibility: AlwaysPasteEligible(),
+            chordIsHeld: { true },
+            forceClearChord: {},
+            postKey: { _, _ in },
+            pasteVirtualKeyCode: { 9 },
+            typeText: { _ in },
+            isAccessibilityTrusted: { true },
             chordReleaseTimeout: .seconds(60),   // long enough that we cancel first
             chordPollInterval: .milliseconds(5),
             restoreDelay: .milliseconds(0),
@@ -333,16 +326,18 @@ import AppKit
 
         let focused = FakeFocusedTextSystem()
         focused.currentValue = "before"
-        let poster = FakeKeyPoster()
-        let typer = FakeTextTyper()
+        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
+        let typed = LockedBox<[String]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
-            modifierGate: FakeModifierGate(),
-            keyPoster: poster,
-            pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: focused,
-            textTyper: typer,
-            accessibilityTrust: StubAccessibilityTrust(trusted: false),
+            pasteEligibility: AlwaysPasteEligible(),
+            chordIsHeld: { false },
+            forceClearChord: {},
+            postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
+            pasteVirtualKeyCode: { 9 },
+            typeText: { text in typed.mutate { $0.append(text) } },
+            isAccessibilityTrusted: { false },
             restoreDelay: .milliseconds(0)
         )
 
@@ -352,9 +347,9 @@ import AppKit
 
         // Trust check must run before any strategy. None should have side-effected.
         #expect(board.string(forType: .string) == "ORIGINAL")
-        #expect(poster.posted.isEmpty)
+        #expect(posted.read().isEmpty)
         #expect(focused.inserted.isEmpty)
-        #expect(typer.typed.isEmpty)
+        #expect(typed.read().isEmpty)
     }
 
     @Test func secure_field_short_circuits_without_writing_clipboard_or_typing() async throws {
@@ -366,16 +361,18 @@ import AppKit
         focused.currentValue = "before"
         focused.isSecure = true
 
-        let poster = FakeKeyPoster()
-        let typer = FakeTextTyper()
+        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
+        let typed = LockedBox<[String]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
-            modifierGate: FakeModifierGate(),
-            keyPoster: poster,
-            pasteKeyResolver: FakePasteKeyResolver(keyCode: 9),
             focusedTextSystem: focused,
-            textTyper: typer,
-            accessibilityTrust: StubAccessibilityTrust(trusted: true),
+            pasteEligibility: AlwaysPasteEligible(),
+            chordIsHeld: { false },
+            forceClearChord: {},
+            postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
+            pasteVirtualKeyCode: { 9 },
+            typeText: { text in typed.mutate { $0.append(text) } },
+            isAccessibilityTrusted: { true },
             restoreDelay: .milliseconds(0)
         )
 
@@ -385,8 +382,8 @@ import AppKit
 
         // None of the three strategies ran.
         #expect(board.string(forType: .string) == "ORIGINAL")
-        #expect(poster.posted.isEmpty)
+        #expect(posted.read().isEmpty)
         #expect(focused.inserted.isEmpty)
-        #expect(typer.typed.isEmpty)
+        #expect(typed.read().isEmpty)
     }
 }

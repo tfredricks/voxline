@@ -4,35 +4,6 @@ import ApplicationServices
 import Carbon.HIToolbox
 import CoreGraphics
 
-/// Polled by ClipboardInjector to gate the synthetic Cmd+V on the user
-/// physically releasing the chord. Production impl wraps CGEventSource;
-/// tests fake it.
-protocol ModifierGate: Sendable {
-    /// True iff Left-Ctrl OR Left-Option is currently physically held.
-    func chordIsHeld() -> Bool
-    /// Synthesize a flagsChanged that clears Left-Ctrl + Left-Option.
-    /// Used after the release-timeout elapses.
-    func forceClearChord()
-}
-
-/// Posts synthetic key events. Wraps CGEvent.post in production; faked in tests.
-protocol KeyEventPosting: Sendable {
-    func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags)
-}
-
-/// Resolves the physical key currently producing "v" in the active keyboard
-/// layout. Tests fake this so we do not bake US-ANSI assumptions into the
-/// injector behavior.
-protocol PasteKeyResolving: Sendable {
-    func pasteVirtualKeyCode() -> CGKeyCode
-}
-
-/// Last-resort insertion path for apps that accept synthetic Unicode input
-/// but reject paste / AX value updates.
-protocol TextTyping: Sendable {
-    func typeText(_ text: String) throws
-}
-
 /// Pasteboard snapshot capture seam. Production wraps `PasteboardSnapshot.capture`;
 /// tests fake it to drive the snapshot-throws → AX/typing fallback chain.
 protocol PasteboardSnapshotting: Sendable {
@@ -43,17 +14,6 @@ struct DefaultPasteboardSnapshotter: PasteboardSnapshotting {
     func capture(from pasteboard: NSPasteboard) throws -> PasteboardSnapshot {
         try PasteboardSnapshot.capture(from: pasteboard)
     }
-}
-
-/// Wraps `AXIsProcessTrusted()` so `inject()` can short-circuit with a
-/// permissions-tagged error when Accessibility is revoked, rather than
-/// running all three strategies and reporting three meaningless AX failures.
-protocol AccessibilityTrustChecking: Sendable {
-    func isAccessibilityTrusted() -> Bool
-}
-
-struct SystemAccessibilityTrust: AccessibilityTrustChecking {
-    func isAccessibilityTrusted() -> Bool { AXIsProcessTrusted() }
 }
 
 /// Pre-flight check: does the current paste target look like it will honor
@@ -240,123 +200,6 @@ enum TextInsertionError: Error, LocalizedError, Equatable {
     }
 }
 
-struct CGEventModifierGate: ModifierGate {
-    func chordIsHeld() -> Bool {
-        let flags = CGEventSource.flagsState(.combinedSessionState)
-        // Flag bits for individual sides aren't exposed publicly on macOS;
-        // checking the combined Control/Option masks is the documented way.
-        // (This is conservative — any Ctrl or any Option held returns true.
-        //  In practice voxline's chord IS Left-Ctrl + Left-Option so this is fine.)
-        return flags.contains(.maskControl) || flags.contains(.maskAlternate)
-    }
-
-    func forceClearChord() {
-        // .hidSystemState (vs .combinedSessionState) presents the event as
-        // if it came from the keyboard hardware itself. Some apps — notably
-        // TUI hosts running Claude Code-style autocomplete in Terminal /
-        // iTerm — reliably honor HID-sourced modifier-clear events but
-        // sometimes drop session-sourced ones.
-        let src = CGEventSource(stateID: .hidSystemState)
-        let event = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false)
-        event?.flags = []   // Clearing all modifier flags — a synthetic "fingers off keyboard"
-        event?.type = .flagsChanged
-        event?.post(tap: .cghidEventTap)
-    }
-}
-
-struct CGEventKeyPoster: KeyEventPosting {
-    func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags) {
-        // .hidSystemState matches what a physical key press produces. Some
-        // terminals with a mounted autocomplete suggestion swallow synthetic
-        // Cmd+V posted from .combinedSessionState because they consult
-        // CGEventSource.flagsState before processing the keystroke.
-        let src = CGEventSource(stateID: .hidSystemState)
-        let down = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: true)
-        down?.flags = flags
-        down?.post(tap: .cghidEventTap)
-        let up = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: false)
-        up?.flags = flags
-        up?.post(tap: .cghidEventTap)
-    }
-}
-
-struct CurrentKeyboardLayoutPasteKeyResolver: PasteKeyResolving {
-    private static let fallbackUSAnsiV: CGKeyCode = 9
-
-    func pasteVirtualKeyCode() -> CGKeyCode {
-        keyCode(forLowercaseCharacter: "v") ?? Self.fallbackUSAnsiV
-    }
-
-    private func keyCode(forLowercaseCharacter target: String) -> CGKeyCode? {
-        guard
-            let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
-            let layoutDataPointer = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
-        else {
-            return nil
-        }
-
-        let layoutData = Unmanaged<CFData>.fromOpaque(layoutDataPointer).takeUnretainedValue()
-        guard let bytes = CFDataGetBytePtr(layoutData) else { return nil }
-        let keyboardLayout = UnsafeRawPointer(bytes).assumingMemoryBound(to: UCKeyboardLayout.self)
-        let keyboardType = UInt32(LMGetKbdType())
-
-        for keyCode in UInt16(0)..<UInt16(128) {
-            var deadKeyState: UInt32 = 0
-            var actualLength = 0
-            var chars = [UniChar](repeating: 0, count: 8)
-            let status = chars.withUnsafeMutableBufferPointer { buffer in
-                UCKeyTranslate(
-                    keyboardLayout,
-                    keyCode,
-                    UInt16(kUCKeyActionDisplay),
-                    0,
-                    keyboardType,
-                    OptionBits(kUCKeyTranslateNoDeadKeysBit),
-                    &deadKeyState,
-                    buffer.count,
-                    &actualLength,
-                    buffer.baseAddress
-                )
-            }
-
-            guard status == noErr, actualLength > 0 else { continue }
-            let produced = String(utf16CodeUnits: chars, count: actualLength).lowercased()
-            if produced == target {
-                return CGKeyCode(keyCode)
-            }
-        }
-
-        return nil
-    }
-}
-
-struct CGEventTextTyper: TextTyping {
-    func typeText(_ text: String) throws {
-        guard !text.isEmpty else { return }
-        let src = CGEventSource(stateID: .combinedSessionState)
-        let units = Array(text.utf16)
-        let chunkSize = 20
-
-        var index = units.startIndex
-        while index < units.endIndex {
-            let end = units.index(index, offsetBy: chunkSize, limitedBy: units.endIndex) ?? units.endIndex
-            var chunk = Array(units[index..<end])
-
-            let down = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: true)
-            let up = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false)
-            guard let down, let up else {
-                throw TextInsertionError.directTypingUnavailable("Could not create synthetic key events.")
-            }
-            chunk.withUnsafeMutableBufferPointer { buffer in
-                down.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: buffer.baseAddress)
-            }
-            down.post(tap: .cghidEventTap)
-            up.post(tap: .cghidEventTap)
-            index = end
-        }
-    }
-}
-
 struct AXFocusedTextSystem: FocusedTextSystem {
     func snapshot() -> FocusedTextSnapshot? {
         guard
@@ -467,7 +310,7 @@ final class ClipboardInjector {
     typealias InjectError = TextInsertionError
 
     /// Virtual key code for "V" on macOS US ANSI layout.
-    static let kVirtualKeyV: CGKeyCode = 9
+    nonisolated static let kVirtualKeyV: CGKeyCode = 9
 
     /// De-facto pasteboard hint types (nspasteboard.org) that well-behaved
     /// clipboard managers (Maccy, Paste, Pastebot, Alfred) honor by NOT
@@ -478,15 +321,109 @@ final class ClipboardInjector {
     private static let autoGeneratedType = NSPasteboard.PasteboardType("org.nspasteboard.AutoGeneratedType")
     private static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
 
+    nonisolated static let defaultChordIsHeld: @Sendable () -> Bool = {
+        let flags = CGEventSource.flagsState(.combinedSessionState)
+        return flags.contains(.maskControl) || flags.contains(.maskAlternate)
+    }
+
+    nonisolated static let defaultForceClearChord: @Sendable () -> Void = {
+        let src = CGEventSource(stateID: .hidSystemState)
+        let event = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false)
+        event?.flags = []
+        event?.type = .flagsChanged
+        event?.post(tap: .cghidEventTap)
+    }
+
+    nonisolated static let defaultPostKey: @Sendable (CGKeyCode, CGEventFlags) -> Void = { keyCode, flags in
+        // .hidSystemState matches what a physical key press produces. Some
+        // terminals with a mounted autocomplete suggestion swallow synthetic
+        // Cmd+V posted from .combinedSessionState because they consult
+        // CGEventSource.flagsState before processing the keystroke.
+        let src = CGEventSource(stateID: .hidSystemState)
+        let down = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: true)
+        down?.flags = flags
+        down?.post(tap: .cghidEventTap)
+        let up = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: false)
+        up?.flags = flags
+        up?.post(tap: .cghidEventTap)
+    }
+
+    nonisolated static let defaultPasteVirtualKeyCode: @Sendable () -> CGKeyCode = {
+        resolvePasteVirtualKey() ?? kVirtualKeyV
+    }
+
+    nonisolated static let defaultTypeText: @Sendable (String) throws -> Void = { text in
+        guard !text.isEmpty else { return }
+        let src = CGEventSource(stateID: .combinedSessionState)
+        let units = Array(text.utf16)
+        let chunkSize = 20
+        var index = units.startIndex
+        while index < units.endIndex {
+            let end = units.index(index, offsetBy: chunkSize, limitedBy: units.endIndex) ?? units.endIndex
+            var chunk = Array(units[index..<end])
+            let down = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: true)
+            let up = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false)
+            guard let down, let up else {
+                throw TextInsertionError.directTypingUnavailable("Could not create synthetic key events.")
+            }
+            chunk.withUnsafeMutableBufferPointer { buffer in
+                down.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: buffer.baseAddress)
+            }
+            down.post(tap: .cghidEventTap)
+            up.post(tap: .cghidEventTap)
+            index = end
+        }
+    }
+
+    nonisolated private static func resolvePasteVirtualKey() -> CGKeyCode? {
+        let target = "v"
+        guard
+            let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+            let layoutDataPointer = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+        else {
+            return nil
+        }
+        let layoutData = Unmanaged<CFData>.fromOpaque(layoutDataPointer).takeUnretainedValue()
+        guard let bytes = CFDataGetBytePtr(layoutData) else { return nil }
+        let keyboardLayout = UnsafeRawPointer(bytes).assumingMemoryBound(to: UCKeyboardLayout.self)
+        let keyboardType = UInt32(LMGetKbdType())
+        for keyCode in UInt16(0)..<UInt16(128) {
+            var deadKeyState: UInt32 = 0
+            var actualLength = 0
+            var chars = [UniChar](repeating: 0, count: 8)
+            let status = chars.withUnsafeMutableBufferPointer { buffer in
+                UCKeyTranslate(
+                    keyboardLayout,
+                    keyCode,
+                    UInt16(kUCKeyActionDisplay),
+                    0,
+                    keyboardType,
+                    OptionBits(kUCKeyTranslateNoDeadKeysBit),
+                    &deadKeyState,
+                    buffer.count,
+                    &actualLength,
+                    buffer.baseAddress
+                )
+            }
+            guard status == noErr, actualLength > 0 else { continue }
+            let produced = String(utf16CodeUnits: chars, count: actualLength).lowercased()
+            if produced == target {
+                return CGKeyCode(keyCode)
+            }
+        }
+        return nil
+    }
+
     let pasteboard: NSPasteboard
-    let modifierGate: ModifierGate
-    let keyPoster: KeyEventPosting
-    let pasteKeyResolver: PasteKeyResolving
     let focusedTextSystem: FocusedTextSystem
-    let textTyper: TextTyping
     let snapshotter: PasteboardSnapshotting
-    let accessibilityTrust: AccessibilityTrustChecking
     let pasteEligibility: PasteEligibilityChecking
+    let chordIsHeld: @Sendable () -> Bool
+    let forceClearChord: @Sendable () -> Void
+    let postKey: @Sendable (CGKeyCode, CGEventFlags) -> Void
+    let pasteVirtualKeyCode: @Sendable () -> CGKeyCode
+    let typeText: @Sendable (String) throws -> Void
+    let isAccessibilityTrusted: @Sendable () -> Bool
     let chordReleaseTimeout: Duration
     let chordPollInterval: Duration
     /// Sleep between writing the cleaned text to the pasteboard and posting
@@ -501,14 +438,15 @@ final class ClipboardInjector {
 
     init(
         pasteboard: NSPasteboard = .general,
-        modifierGate: ModifierGate = CGEventModifierGate(),
-        keyPoster: KeyEventPosting = CGEventKeyPoster(),
-        pasteKeyResolver: PasteKeyResolving = CurrentKeyboardLayoutPasteKeyResolver(),
         focusedTextSystem: FocusedTextSystem = AXFocusedTextSystem(),
-        textTyper: TextTyping = CGEventTextTyper(),
         snapshotter: PasteboardSnapshotting = DefaultPasteboardSnapshotter(),
-        accessibilityTrust: AccessibilityTrustChecking = SystemAccessibilityTrust(),
         pasteEligibility: PasteEligibilityChecking = AlwaysPasteEligible(),
+        chordIsHeld: @escaping @Sendable () -> Bool = ClipboardInjector.defaultChordIsHeld,
+        forceClearChord: @escaping @Sendable () -> Void = ClipboardInjector.defaultForceClearChord,
+        postKey: @escaping @Sendable (CGKeyCode, CGEventFlags) -> Void = ClipboardInjector.defaultPostKey,
+        pasteVirtualKeyCode: @escaping @Sendable () -> CGKeyCode = ClipboardInjector.defaultPasteVirtualKeyCode,
+        typeText: @escaping @Sendable (String) throws -> Void = ClipboardInjector.defaultTypeText,
+        isAccessibilityTrusted: @escaping @Sendable () -> Bool = { AXIsProcessTrusted() },
         chordReleaseTimeout: Duration = .seconds(1),
         chordPollInterval: Duration = .milliseconds(15),
         pasteWriteSettleDelay: Duration = .milliseconds(50),
@@ -516,14 +454,15 @@ final class ClipboardInjector {
         verificationDelay: Duration = .milliseconds(150)
     ) {
         self.pasteboard = pasteboard
-        self.modifierGate = modifierGate
-        self.keyPoster = keyPoster
-        self.pasteKeyResolver = pasteKeyResolver
         self.focusedTextSystem = focusedTextSystem
-        self.textTyper = textTyper
         self.snapshotter = snapshotter
-        self.accessibilityTrust = accessibilityTrust
         self.pasteEligibility = pasteEligibility
+        self.chordIsHeld = chordIsHeld
+        self.forceClearChord = forceClearChord
+        self.postKey = postKey
+        self.pasteVirtualKeyCode = pasteVirtualKeyCode
+        self.typeText = typeText
+        self.isAccessibilityTrusted = isAccessibilityTrusted
         self.chordReleaseTimeout = chordReleaseTimeout
         self.chordPollInterval = chordPollInterval
         self.pasteWriteSettleDelay = pasteWriteSettleDelay
@@ -553,7 +492,7 @@ final class ClipboardInjector {
         // user-hostile: paste posts Cmd+V via cghidEventTap (silently
         // no-ops), AX queries return nil, synthetic typing produces no
         // events. Bail with a sticky permissions error instead.
-        guard accessibilityTrust.isAccessibilityTrusted() else {
+        guard isAccessibilityTrusted() else {
             throw TextInsertionError.accessibilityNotGranted
         }
 
@@ -633,7 +572,7 @@ final class ClipboardInjector {
             try await Task.sleep(for: pasteWriteSettleDelay)
 
             // 4. Post Cmd+V with ONLY the Command flag.
-            keyPoster.postKey(pasteKeyResolver.pasteVirtualKeyCode(), flags: [.maskCommand])
+            postKey(pasteVirtualKeyCode(), [.maskCommand])
 
             // 5. Let the target app consume the paste, then verify.
             try await Task.sleep(for: restoreDelay)
@@ -672,7 +611,7 @@ final class ClipboardInjector {
     private func injectViaDirectTyping(_ text: String) async throws -> TextInsertionOutcome {
         let before = focusedTextSystem.snapshot()
         try await waitForChordRelease()
-        try textTyper.typeText(text)
+        try typeText(text)
         try await Task.sleep(for: verificationDelay)
         switch focusedTextSystem.checkInsertion(before: before, insertedText: text) {
         case .confirmedChanged:
@@ -686,9 +625,9 @@ final class ClipboardInjector {
 
     private func waitForChordRelease() async throws {
         let deadline = ContinuousClock.now.advanced(by: chordReleaseTimeout)
-        while modifierGate.chordIsHeld() {
+        while chordIsHeld() {
             if ContinuousClock.now >= deadline {
-                modifierGate.forceClearChord()
+                forceClearChord()
                 return
             }
             try await Task.sleep(for: chordPollInterval)
