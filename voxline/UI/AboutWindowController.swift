@@ -22,7 +22,6 @@ final class AboutWindowController {
         win.contentView = host
         win.center()
         win.isReleasedWhenClosed = false
-        win.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
         self.window = win
         // LSUIElement (menu-bar) apps: activate BEFORE ordering the window so
         // the policy flip lands before AppKit decides z-order, otherwise the

@@ -39,7 +39,6 @@ final class FirstRunWindowController {
         win.contentView = host
         win.center()
         win.isReleasedWhenClosed = false
-        win.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
 
         self.window = win
         // See AboutWindowController.show for why this pair is in this order.

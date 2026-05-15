@@ -24,7 +24,6 @@ final class HistoryWindowController {
         win.setContentSize(NSSize(width: 920, height: 480))
         win.isReleasedWhenClosed = false
         win.center()
-        win.identifier = WindowVisibilityCoordinator.dockworthyIdentifier
         self.window = win
         // See AboutWindowController.show for why this pair is in this order.
         NSApp.activate(ignoringOtherApps: true)

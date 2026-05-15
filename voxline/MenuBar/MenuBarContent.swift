@@ -9,7 +9,6 @@ struct MenuBarContent: View {
     var openDebugWindow: () -> Void = {}
     var openAboutWindow: () -> Void = {}
     var openHistoryWindow: () -> Void = {}
-    var tagSettingsWindow: () -> Void = {}
 
     var body: some View {
         if let message = state.status.errorMessage {
@@ -40,7 +39,6 @@ struct MenuBarContent: View {
             // AboutWindowController.show for the full rationale.
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
-            tagSettingsWindow()
         }
         .keyboardShortcut(",")
 

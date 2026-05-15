@@ -42,9 +42,6 @@ struct voxlineApp: App {
                         store: delegate.historyStore,
                         state: delegate.appState
                     )
-                },
-                tagSettingsWindow: {
-                    delegate.tagSettingsWindowSoon()
                 }
             )
         } label: {
@@ -92,9 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         aboutWindow.show(env: env)
     }
 
-    func tagSettingsWindowSoon() {
-        windowVisibility.tagSettingsWindowAfterOpen()
-    }
+
 }
 
 @MainActor
