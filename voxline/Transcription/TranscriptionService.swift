@@ -136,10 +136,6 @@ final class TranscriptionService {
             .appendingPathComponent("argmaxinc", isDirectory: true)
             .appendingPathComponent("whisperkit-coreml", isDirectory: true)
             .appendingPathComponent(model.whisperKitIdentifier, isDirectory: true)
-        var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: path.path, isDirectory: &isDir), isDir.boolValue else {
-            return nil
-        }
         let contents = (try? FileManager.default.contentsOfDirectory(atPath: path.path)) ?? []
         return contents.isEmpty ? nil : path
     }

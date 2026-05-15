@@ -68,7 +68,6 @@ struct AboutView: View {
         appVersion: "1.0",
         buildNumber: "1",
         osVersion: "Version 14.5 (Build 23F79)",
-        whisperModel: "large-v3-turbo",
-        micDevice: "MacBook Pro Microphone"
+        whisperModel: "large-v3-turbo"
     ))
 }

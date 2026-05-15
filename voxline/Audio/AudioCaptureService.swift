@@ -37,9 +37,7 @@ final class AudioCaptureService {
     /// Begin capture. Throws if the input device is unavailable or sample-rate
     /// negotiation fails.
     func start() throws {
-        if engine.isRunning {
-            engine.stop()
-        }
+        engine.stop()
         let input = engine.inputNode
         input.removeTap(onBus: 0)
 
@@ -125,9 +123,7 @@ final class AudioCaptureService {
     /// indicator turns off.
     func stop() {
         engine.inputNode.removeTap(onBus: 0)
-        if engine.isRunning {
-            engine.stop()
-        }
+        engine.stop()
         // Invalidate any tap-callback Tasks that have not yet hopped to
         // MainActor — they would otherwise append into the buffer the next
         // recording is about to use.

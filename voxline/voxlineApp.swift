@@ -75,8 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func showAboutWindow() {
         let env = SupportEnvironment.current(
-            whisperModel: coordinator.transcriber?.model.displayName ?? "(unknown)",
-            micDevice: nil
+            whisperModel: coordinator.transcriber?.model.displayName ?? "(unknown)"
         )
         aboutWindow.show(env: env)
     }
@@ -465,7 +464,7 @@ extension AppCoordinator: GeneralSettingsApplier {
     func apply(_ snapshot: GeneralSettingsSnapshot) {
         // snapshot.provider is consumed by LLMService at the next dictation;
         // no per-snapshot action needed here.
-        hotkeyMonitor?.update(chord: snapshot.chord)
+        hotkeyMonitor?.chord = snapshot.chord
 
         // AudioCaptureService applies preferredInputDeviceUID at next start();
         // CapturePipeline restarts the engine on every chord, so the new device

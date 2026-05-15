@@ -20,23 +20,6 @@ struct DictationHistoryItem: Codable, Identifiable, Equatable {
     /// Bundle ID of the frontmost app, from `CapturedContext.bundleID`.
     let appBundleID: String?
 
-    init(
-        id: UUID = UUID(),
-        timestamp: Date = Date(),
-        cleanedText: String,
-        modeDisplayName: String? = nil,
-        modeBundleID: String? = nil,
-        appName: String? = nil,
-        appBundleID: String? = nil
-    ) {
-        self.id = id
-        self.timestamp = timestamp
-        self.cleanedText = cleanedText
-        self.modeDisplayName = modeDisplayName
-        self.modeBundleID = modeBundleID
-        self.appName = appName
-        self.appBundleID = appBundleID
-    }
 }
 
 /// In-memory list (max 25, newest first) of recent cleaned dictations,
@@ -65,6 +48,8 @@ final class DictationHistoryStore {
         // cleanedText so history matches what was pasted into the focused app.
         guard !cleanedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let item = DictationHistoryItem(
+            id: UUID(),
+            timestamp: Date(),
             cleanedText: cleanedText,
             modeDisplayName: mode.displayName,
             modeBundleID: mode.bundleID,
@@ -86,13 +71,8 @@ final class DictationHistoryStore {
     }
 
     private func persist() {
-        do {
-            let data = try JSONEncoder().encode(items)
-            defaults.set(data, forKey: Self.key)
-        } catch {
-            // Encoding can't realistically fail for this shape, but if it
-            // ever does we'd rather lose history-on-disk than crash.
-        }
+        guard let data = try? JSONEncoder().encode(items) else { return }
+        defaults.set(data, forKey: Self.key)
     }
 
     private static func load(defaults: UserDefaults) -> [DictationHistoryItem] {

@@ -5,20 +5,11 @@ import Foundation
 /// No CGEventTap, no timers, no AVFoundation — fully unit-testable.
 final class HotkeyStateMachine {
 
-    enum State: Equatable, CustomStringConvertible {
+    enum State: Equatable {
         case idle
         case armed       // exactly one chord modifier down
         case recording   // both chord modifiers down, audio capture in progress
         case finalizing  // either modifier released or fail-safe fired; awaiting transcription
-
-        var description: String {
-            switch self {
-            case .idle:       return "idle"
-            case .armed:      return "armed"
-            case .recording:  return "recording"
-            case .finalizing: return "finalizing"
-            }
-        }
     }
 
     enum Input: Equatable {

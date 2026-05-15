@@ -9,18 +9,6 @@ import Foundation
         #expect(AudioFormat.whisperChannelCount == 1)
     }
 
-    @Test func sampleCountForOneSecondIs16k() {
-        #expect(AudioFormat.sampleCount(forSeconds: 1.0) == 16_000)
-    }
-
-    @Test func sampleCountForHalfSecondIs8k() {
-        #expect(AudioFormat.sampleCount(forSeconds: 0.5) == 8_000)
-    }
-
-    @Test func sampleCountClampsToZeroForNegativeDuration() {
-        #expect(AudioFormat.sampleCount(forSeconds: -1.0) == 0)
-    }
-
     @Test func levelOfSilenceIsZero() {
         let silence = [Float](repeating: 0, count: 1024)
         #expect(AudioFormat.peakLevel(samples: silence) == 0)

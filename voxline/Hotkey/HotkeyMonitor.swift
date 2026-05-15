@@ -13,8 +13,6 @@ final class HotkeyMonitor {
     var onStartRecording: (() -> Void)?
     var onFinalizeRecording: (() -> Void)?
 
-    /// Snapshot of state-machine state for diagnostics.
-    var currentState: HotkeyStateMachine.State { machine.state }
     var isTapInstalled: Bool { eventTap != nil }
 
     /// Maximum recording duration fail-safe. Configurable.
@@ -63,11 +61,6 @@ final class HotkeyMonitor {
 
         maxDurationTimer?.invalidate()
         maxDurationTimer = nil
-    }
-
-    /// Update the active chord at runtime. No tap rebuild required.
-    func update(chord: HotkeyChord) {
-        self.chord = chord
     }
 
     /// External signal that transcription has finished and we can return to idle.

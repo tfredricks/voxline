@@ -38,7 +38,6 @@ struct OpenAIClient: LLMClient {
         do {
             (data, response) = try await http.send(req)
         } catch {
-            AppLog.llm.error("openai network error: \(error.localizedDescription)")
             throw LLMError.network(error)
         }
         AppLog.llm.debug("openai HTTP \(response.statusCode) (bytes=\(data.count))")
@@ -49,7 +48,6 @@ struct OpenAIClient: LLMClient {
             struct Choice: Decodable {
                 let message: Message
                 struct Message: Decodable {
-                    let role: String
                     let content: String
                 }
             }
@@ -58,11 +56,9 @@ struct OpenAIClient: LLMClient {
         do {
             env = try JSONDecoder().decode(Envelope.self, from: data)
         } catch {
-            AppLog.llm.error("openai: response JSON decode failed: \(error.localizedDescription)")
             throw LLMError.badResponseShape(reason: "JSON decode failed: \(error.localizedDescription)")
         }
         guard let first = env.choices.first else {
-            AppLog.llm.error("openai: response had no choices")
             throw LLMError.badResponseShape(reason: "no choices in response")
         }
         return first.message.content

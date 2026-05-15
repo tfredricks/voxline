@@ -34,7 +34,6 @@ struct AnthropicClient: LLMClient {
         do {
             (data, response) = try await http.send(req)
         } catch {
-            AppLog.llm.error("anthropic network error: \(error.localizedDescription)")
             throw LLMError.network(error)
         }
         AppLog.llm.debug("anthropic HTTP \(response.statusCode) (bytes=\(data.count))")
@@ -74,12 +73,10 @@ struct AnthropicClient: LLMClient {
         do {
             env = try JSONDecoder().decode(Envelope.self, from: data)
         } catch {
-            AppLog.llm.error("anthropic: response JSON decode failed: \(error.localizedDescription)")
             throw LLMError.badResponseShape(reason: "JSON decode failed: \(error.localizedDescription)")
         }
         let text = env.content.compactMap { $0.type == "text" ? $0.text : nil }.joined()
         if text.isEmpty {
-            AppLog.llm.error("anthropic: response had no text blocks")
             throw LLMError.badResponseShape(reason: "no text blocks in response")
         }
         return text

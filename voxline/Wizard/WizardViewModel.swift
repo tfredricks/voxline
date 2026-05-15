@@ -53,7 +53,6 @@ final class WizardViewModel {
         }
     }
 
-    var canAdvance: Bool { currentStep.next != nil }
     var canGoBack: Bool { currentStep.previous != nil }
 
     /// Persist all in-progress wizard state — keys to keychain, picker choice

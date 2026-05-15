@@ -65,9 +65,9 @@ final class MicLevelMonitor {
     }
 
     func stop() {
-        // Unconditional removeTap makes stop() idempotent — safe to call when not running.
+        // Unconditional removeTap + stop makes stop() idempotent — safe to call when not running.
         engine.inputNode.removeTap(onBus: 0)
-        if engine.isRunning { engine.stop() }
+        engine.stop()
         running = false
         level = 0
     }
