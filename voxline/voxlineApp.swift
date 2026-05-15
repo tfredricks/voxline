@@ -192,9 +192,11 @@ final class AppCoordinator {
 
         // Output
         let focusedTextSystem = AXFocusedTextSystem()
+        let chordProvider: @Sendable () -> HotkeyChord = { AppSettings().hotkeyChord }
         let injector = ClipboardInjector(
             focusedTextSystem: focusedTextSystem,
-            pasteEligibility: DefaultPasteEligibility(focusedTextSystem: focusedTextSystem)
+            pasteEligibility: DefaultPasteEligibility(focusedTextSystem: focusedTextSystem),
+            chordIsHeld: ClipboardInjector.makeChordIsHeld(chord: chordProvider)
         )
         let frontmost = FrontmostApp()
         let fieldInspector = AXFocusedFieldInspector()
