@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 
 /// Coordinates the hotkey → audio capture → transcription → LLM cleanup →
 /// clipboard inject pipeline. Updates AppState along the way.

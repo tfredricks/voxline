@@ -1,4 +1,3 @@
-// voxlineTests/CapturePipelineTests.swift  (replace contents)
 import Testing
 import Foundation
 @testable import voxline
@@ -261,7 +260,7 @@ import Foundation
     }
 
     @Test func finalizeRecording_setsLastRecordingDurationFromSampleCount() async {
-        // The Debug window's "Duration" row reads `lastRecordingDuration`.
+        // lastRecordingDuration drives the recording-pill UI's duration row.
         // Three samples / 16 kHz ≈ 0.0001875s — assert the formula, not a literal.
         let (pipe, state, _, _, _, _, _, _, _) = makePipeline()
         await startAndFinalize(pipe, state: state)

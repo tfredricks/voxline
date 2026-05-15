@@ -52,8 +52,9 @@ final class AppState {
     var audioLevel: Float = 0
 
     /// Most recently produced raw (pre-cleanup) transcript. Set by
-    /// CapturePipeline as a debug aid — the pasted text is the LLM-cleaned
-    /// version, not this string.
+    /// CapturePipeline after a successful Whisper transcription; scrubbed to
+    /// nil at the start of each new recording so spoken passwords/2FA codes
+    /// don't linger in process memory.
     var lastTranscript: String?
 
     /// Most recently produced LLM-cleaned text — i.e. exactly what was (or

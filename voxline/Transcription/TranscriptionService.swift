@@ -1,5 +1,4 @@
 import Foundation
-import OSLog
 import WhisperKit
 
 /// Errors thrown by transcription prep paths that warrant a tailored

@@ -1,4 +1,3 @@
-// voxline/voxlineApp.swift  (replace contents)
 import AppKit
 import SwiftUI
 

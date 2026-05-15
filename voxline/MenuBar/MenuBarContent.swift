@@ -1,4 +1,3 @@
-// voxline/MenuBar/MenuBarContent.swift  (replace contents)
 import AppKit
 import SwiftUI
 
