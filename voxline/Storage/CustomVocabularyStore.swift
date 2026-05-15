@@ -1,14 +1,7 @@
 import Foundation
 
 /// Global custom-vocabulary list. Plain `[String]` persisted to UserDefaults.
-/// `load()` is called once per `ContextCaptureService.capture()`; keep it
-/// fast (single defaults read). The list reaches the model only through the
-/// LLM cleanup context block.
-///
-/// `@unchecked Sendable` mirrors `AppSettings`: `UserDefaults` isn't formally
-/// `Sendable` but is documented thread-safe, and this struct holds no other
-/// shared mutable state.
-struct CustomVocabularyStore: @unchecked Sendable {
+struct CustomVocabularyStore {
 
     private static let key = "voxline.context.customVocabulary"
 
