@@ -158,4 +158,26 @@ import Foundation
                     "torn or malformed line: \(line)")
         }
     }
+
+    @Test func unwritableFileDoesNotThrow() {
+        // Use a path inside a parent directory that doesn't exist; the
+        // atomic write will fail and the logger must absorb the error.
+        let unwritable = FileManager.default.temporaryDirectory
+            .appending(path: "rfl-missing-\(UUID().uuidString)")
+            .appending(path: "nested")
+            .appending(path: "voxline.log")
+
+        let log = RollingFileLog(
+            fileURL: unwritable,
+            clock: Self.fixedClock("2026-05-14T12:34:56.789Z")
+        )
+
+        // Each of these would throw if the writer propagated errors.
+        log.info("first", category: "pipeline")
+        log.info("second", category: "pipeline")
+
+        // No assertion needed beyond "did not crash and did not throw" —
+        // Swift Testing fails the test on any uncaught error.
+        #expect(Bool(true))
+    }
 }

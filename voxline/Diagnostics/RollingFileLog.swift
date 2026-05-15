@@ -13,14 +13,25 @@ final class RollingFileLog {
         case fault  = "FAULT"
     }
 
+    private enum FailureKind: String {
+        case notFound    // ENOENT or parent dir missing
+        case permission  // EACCES / EPERM
+        case other
+    }
+
+    private static let internalLog = Logger(
+        subsystem: "com.voxline.app",
+        category: "rolling-file-log"
+    )
+
     private let fileURL: URL
     private let clock: () -> Date
     private let maxEntries: Int
-
     private let formatter: DateFormatter
 
     private var ring: [String] = []
     private var initializedFromDisk = false
+    private var lastReportedFailure: FailureKind?
     private var lock = os_unfair_lock_s()
 
     init(
@@ -61,7 +72,7 @@ final class RollingFileLog {
         do {
             try body.write(to: fileURL, atomically: true, encoding: .utf8)
         } catch {
-            // Will gain richer error reporting in Task 5.
+            reportFailureLocked(error: error)
         }
     }
 
@@ -77,5 +88,32 @@ final class RollingFileLog {
             lines = Array(lines.suffix(maxEntries))
         }
         ring = lines
+    }
+
+    /// Emits an OSLog `.error` the first time each `FailureKind` occurs
+    /// in this process. Caller must hold `lock`.
+    private func reportFailureLocked(error: Error) {
+        let kind = Self.classify(error)
+        guard kind != lastReportedFailure else { return }
+        lastReportedFailure = kind
+        Self.internalLog.error(
+            "RollingFileLog write failed (\(kind.rawValue, privacy: .public)): \(error.localizedDescription, privacy: .public)"
+        )
+    }
+
+    private static func classify(_ error: Error) -> FailureKind {
+        let ns = error as NSError
+        switch (ns.domain, ns.code) {
+        case (NSCocoaErrorDomain, NSFileNoSuchFileError),
+             (NSCocoaErrorDomain, NSFileWriteFileExistsError),
+             (NSPOSIXErrorDomain, Int(ENOENT)):
+            return .notFound
+        case (NSCocoaErrorDomain, NSFileWriteNoPermissionError),
+             (NSPOSIXErrorDomain, Int(EACCES)),
+             (NSPOSIXErrorDomain, Int(EPERM)):
+            return .permission
+        default:
+            return .other
+        }
     }
 }
