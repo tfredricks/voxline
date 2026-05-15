@@ -26,7 +26,7 @@ final class HotkeyMonitor {
     var currentState: HotkeyStateMachine.State { machine.state }
     var isTapInstalled: Bool { eventTap != nil }
 
-    /// Maximum recording duration (spec §4.1 fail-safe). Configurable.
+    /// Maximum recording duration fail-safe. Configurable.
     var maxRecordingDuration: TimeInterval = 60.0
 
     /// Active chord. Read by the tap callback to test the right device-mask bits.

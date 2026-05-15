@@ -2,9 +2,8 @@ import SwiftUI
 
 /// SwiftUI section for managing the global custom-vocabulary list. Rows show
 /// each term with a delete button; an inline Add field appends after trim +
-/// dedupe; a footer shows `N terms`. Vocab biasing now flows through the LLM
-/// cleanup prompt — see
-/// `docs/superpowers/specs/2026-05-12-vocab-cleanup-only-pivot-design.md`.
+/// dedupe; a footer shows `N terms`. Vocab biasing flows through the LLM
+/// cleanup prompt — see `LLMService.transcriptionPreamble`.
 struct CustomVocabularyListView: View {
 
     @Bindable var viewModel: CustomVocabularyListViewModel

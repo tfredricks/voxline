@@ -3,9 +3,7 @@ import Observation
 
 /// View-model for `CustomVocabularyListView`. Owns the in-memory `terms`
 /// array and persists every mutation through `CustomVocabularyStore`.
-/// Vocab biasing now flows through the LLM cleanup prompt; the Whisper
-/// `promptTokens` path (and the token-budget UI that fed it) was removed
-/// per `docs/superpowers/specs/2026-05-12-vocab-cleanup-only-pivot-design.md`.
+/// Vocab biasing flows through the LLM cleanup prompt.
 @Observable
 @MainActor
 final class CustomVocabularyListViewModel {

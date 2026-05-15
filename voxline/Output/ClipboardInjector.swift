@@ -57,11 +57,9 @@ struct SystemAccessibilityTrust: AccessibilityTrustChecking {
 }
 
 /// Pre-flight check: does the current paste target look like it will honor
-/// a Cmd+V keystroke? When this returns false, ClipboardInjector skips the
-/// clipboard-paste strategy entirely (without dirtying the clipboard) so the
-/// AX value-set and synthetic-typing fallbacks can run instead. Mirrors the
-/// pattern GhostPepper uses to avoid stranded synthetic keystrokes in apps
-/// that don't actually accept paste.
+/// a Cmd+V keystroke? When false, ClipboardInjector skips the clipboard-paste
+/// strategy entirely (without dirtying the clipboard) so the AX value-set
+/// and synthetic-typing fallbacks can run instead.
 protocol PasteEligibilityChecking: Sendable {
     func isPasteEligible() -> Bool
 }
@@ -268,14 +266,10 @@ struct CGEventModifierGate: ModifierGate {
 
 struct CGEventKeyPoster: KeyEventPosting {
     func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags) {
-        // .hidSystemState matches what a physical key press produces. The
-        // previous .combinedSessionState source caused synthetic Cmd+V to
-        // be silently swallowed by some terminals when an autocomplete
-        // ghost suggestion was mounted — those terminals consult
-        // CGEventSource.flagsState to decide whether to dismiss the
-        // suggestion before processing the keystroke, and the session
-        // source can disagree with the per-event flags. (Mirrors what
-        // GhostPepper does.)
+        // .hidSystemState matches what a physical key press produces. Some
+        // terminals with a mounted autocomplete suggestion swallow synthetic
+        // Cmd+V posted from .combinedSessionState because they consult
+        // CGEventSource.flagsState before processing the keystroke.
         let src = CGEventSource(stateID: .hidSystemState)
         let down = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: true)
         down?.flags = flags
@@ -498,8 +492,7 @@ final class ClipboardInjector {
     /// Sleep between writing the cleaned text to the pasteboard and posting
     /// the synthetic Cmd+V. Some apps (notably terminals hosting a TUI with
     /// an autocomplete suggestion mounted) drop the paste when the keystroke
-    /// arrives too quickly after the clipboard write. A small cushion matches
-    /// GhostPepper's `preKeystrokeDelay` and resolves the bug in practice.
+    /// arrives too quickly after the clipboard write.
     let pasteWriteSettleDelay: Duration
     let restoreDelay: Duration
     let verificationDelay: Duration
@@ -637,7 +630,7 @@ final class ClipboardInjector {
             // because of natural human-timing slack.
             try await Task.sleep(for: pasteWriteSettleDelay)
 
-            // 4. Post Cmd+V with ONLY the Command flag (per spec §4.3 step 4).
+            // 4. Post Cmd+V with ONLY the Command flag.
             keyPoster.postKey(pasteKeyResolver.pasteVirtualKeyCode(), flags: [.maskCommand])
 
             // 5. Let the target app consume the paste, then verify.

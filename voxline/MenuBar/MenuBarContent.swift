@@ -44,9 +44,6 @@ struct MenuBarContent: View {
         }
         .keyboardShortcut(",")
 
-        // TODO: revert — temporarily exposing Debug in Release builds for
-        // field diagnostics. Restore the `#if DEBUG` / `#endif` wrapper
-        // around the Divider + Button below before shipping.
         Divider()
         Button("Debug…") { openDebugWindow() }
 

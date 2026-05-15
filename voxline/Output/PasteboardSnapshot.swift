@@ -2,7 +2,7 @@
 import AppKit
 
 /// In-memory snapshot of every data-bearing pasteboard type, per item.
-/// Promised/lazy types are not captured (see spec §7.1).
+/// Promised/lazy types are not captured.
 struct PasteboardSnapshot: Equatable {
 
     struct ItemSnapshot: Equatable {

@@ -59,8 +59,6 @@ struct voxlineApp: App {
             )
             .environment(delegate.appState)
         }
-        // Plan 2's debug Window scene removed in Plan 3 — paste replaces the
-        // verification UI.
     }
 }
 
@@ -128,9 +126,7 @@ final class AppCoordinator {
     /// keeps both this coordinator and the state alive for the app lifetime.
     private weak var appState: AppState?
     /// Single 1s timer that reconciles `hotkeyEnabled` + permission state with
-    /// the tap's installed/uninstalled status. Replaces the three separate
-    /// timers (retry, revocation watchdog, enabled observer) that used to race
-    /// over the same eventTap.
+    /// the tap's installed/uninstalled status.
     private var permissionPollTimer: Timer?
     private var firstRunWindow: FirstRunWindowController?
 
@@ -311,10 +307,6 @@ final class AppCoordinator {
     }
 
     /// Single source of truth for "should the tap be installed right now?".
-    /// Replaces three separately-timed loops (accessibility-retry, IM watchdog,
-    /// hotkey-enabled observer) that used to race against each other when, for
-    /// example, the watchdog tore down the tap while the enabled observer was
-    /// trying to install it the same second.
     private func startPermissionAndStateLoop(state: AppState) {
         permissionPollTimer?.invalidate()
         permissionPollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self, weak state] _ in

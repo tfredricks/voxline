@@ -14,10 +14,7 @@ protocol AudioCapturing: AnyObject {
 protocol Transcribing: AnyObject {
     /// Transcribe a Float32 PCM buffer at AudioFormat.whisperSampleRate.
     /// Vocabulary biasing happens later in the pipeline via the LLM cleanup
-    /// prompt — see `LLMService.transcriptionPreamble`. WhisperKit's
-    /// `promptTokens` decoder-biasing path was removed because it produced
-    /// empty output for short non-prose term lists; see
-    /// `docs/superpowers/specs/2026-05-12-vocab-cleanup-only-pivot-design.md`.
+    /// prompt — see `LLMService.transcriptionPreamble`.
     func transcribe(samples: [Float]) async throws -> String
 }
 
