@@ -230,7 +230,7 @@ import Foundation
 
 }
 
-private let noopApply: @MainActor (GeneralSettingsSnapshot) -> Void = { _ in }
+private let noopApply: (GeneralSettingsSnapshot) -> Void = { _ in }
 
 @MainActor
 private final class ApplyRecorder {
