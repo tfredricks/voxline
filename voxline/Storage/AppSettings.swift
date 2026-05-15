@@ -1,6 +1,7 @@
 import Foundation
 
 /// Thin wrapper around UserDefaults for non-secret user preferences.
+/// Secrets live in the data-protection keychain (see `KeychainStorage`).
 struct AppSettings {
 
     enum Key {

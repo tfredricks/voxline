@@ -1,6 +1,8 @@
 import Foundation
 
 /// Global custom-vocabulary list. Plain `[String]` persisted to UserDefaults.
+/// UserDefaults is documented thread-safe, so this struct (held by the
+/// `Sendable`-conforming `DefaultContextCaptureService`) is safe across actors.
 struct CustomVocabularyStore {
 
     private static let key = "voxline.context.customVocabulary"
