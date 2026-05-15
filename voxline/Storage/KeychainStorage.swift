@@ -1,8 +1,7 @@
 import Foundation
 
-/// Generic-password keychain abstraction. Two impls live behind this:
-///   - `DataProtectionKeychain` — production. DPK only. Fails loud.
-///   - `InMemoryKeychain` — test double.
+/// Generic-password keychain abstraction. `DataProtectionKeychain` is the
+/// only production impl; tests inject `InMemoryKeychain` from `voxlineTests/`.
 ///
 /// `account` is the per-record name (e.g. "anthropic", "openai"); the service
 /// id is fixed at the implementation layer and never crosses this boundary.
