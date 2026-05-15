@@ -166,7 +166,7 @@ final class CapturePipeline {
             contextTask?.cancel(); contextTask = nil
             return setError("No mode for app '\(bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes.")
         }
-        AppLog.pipeline.debug("mode resolved: bundle=\(bundleID ?? "unknown", privacy: .public) mode=\(mode.displayName, privacy: .private)")
+        AppLog.pipeline.info("mode resolved: bundle=\(bundleID ?? "unknown", privacy: .public) mode=\(mode.displayName, privacy: .public)")
 
         // 3. LLM cleanup.
         let context = await contextTask?.value ?? .empty
@@ -203,7 +203,7 @@ final class CapturePipeline {
             let outcome = try await injector.inject(cleaned)
             state.debugLastInsertionResult = outcome.description
             signposter.endInterval("paste", pasteInterval)
-            AppLog.paste.debug("inject ok: outcome=\(outcome.description, privacy: .public)")
+            AppLog.paste.info("inject ok: outcome=\(outcome.description, privacy: .public)")
         } catch let e as TextInsertionError {
             signposter.endInterval("paste", pasteInterval, "error")
             signposter.endInterval("session", sessionInterval, "error")

@@ -9,13 +9,19 @@ import Foundation
         UserDefaults(suiteName: "voxline-test-\(UUID().uuidString)")!
     }
 
+    // advance() and complete() both call commitProgress(), which writes
+    // through to the wizard's keychain. Without an explicit InMemoryKeychain
+    // here the default DataProtectionKeychain() is used — and in the
+    // sandboxed test host (TEST_HOST = voxline.app, bundle id com.voxline.app)
+    // that resolves to the user's real DPK entries, clobbering live API keys
+    // on every test run.
     @Test func starts_at_welcome() {
-        let vm = WizardViewModel(settings: AppSettings(defaults: defaults()))
+        let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: InMemoryKeychain())
         #expect(vm.currentStep == .welcome)
     }
 
     @Test func advance_walks_through_steps() {
-        let vm = WizardViewModel(settings: AppSettings(defaults: defaults()))
+        let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: InMemoryKeychain())
         vm.advance()
         #expect(vm.currentStep == .permissions)
         vm.advance()
@@ -27,7 +33,7 @@ import Foundation
     }
 
     @Test func go_back_steps_backwards() {
-        let vm = WizardViewModel(settings: AppSettings(defaults: defaults()))
+        let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: InMemoryKeychain())
         vm.advance(); vm.advance()
         #expect(vm.currentStep == .apiKey)
         vm.goBack()
@@ -36,7 +42,7 @@ import Foundation
 
     @Test func complete_sets_first_run_flag_and_calls_callback() {
         let d = defaults()
-        let vm = WizardViewModel(settings: AppSettings(defaults: d))
+        let vm = WizardViewModel(settings: AppSettings(defaults: d), keychain: InMemoryKeychain())
         var didCallback = false
         vm.onComplete = { didCallback = true }
 

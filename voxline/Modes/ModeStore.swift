@@ -33,6 +33,7 @@ final class ModeStore {
             }
             return reconciled
         }
+        AppLog.pipeline.info("modes: no on-disk file, writing shipped defaults")
         try save(Self.shippedDefaults)
         return Self.shippedDefaults
     }

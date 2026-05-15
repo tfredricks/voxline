@@ -46,6 +46,7 @@ struct AppSettings: @unchecked Sendable {
             let previous = defaults.string(forKey: Key.provider).flatMap(LLMProvider.init(rawValue:))
             defaults.set(newValue.rawValue, forKey: Key.provider)
             if previous != newValue {
+                AppLog.llm.info("provider changed: \(previous?.rawValue ?? "(none)", privacy: .public) → \(newValue.rawValue, privacy: .public)")
                 defaults.removeObject(forKey: Key.model)
             }
         }

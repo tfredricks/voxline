@@ -140,6 +140,7 @@ final class AppCoordinator {
         self.appState = state
 
         let settings = AppSettings()
+        logLaunchTrace(settings: settings)
         if !settings.hasCompletedFirstRun {
             startWizardThenApp(state: state, settings: settings, historyStore: historyStore)
         } else {
@@ -463,6 +464,7 @@ final class AppCoordinator {
                 // user-facing error.
                 return
             } catch {
+                AppLog.whisper.error("model prep failed: \(error.localizedDescription, privacy: .public)")
                 if let state {
                     state.status = .error(category: .modelPrep, message: "Model setup failed: \(error.localizedDescription). Try Retry or relaunch Voxline.")
                 }
@@ -484,6 +486,16 @@ final class AppCoordinator {
     deinit {
         permissionPollTimer?.invalidate()
         modelPrepTask?.cancel()
+    }
+
+    private func logLaunchTrace(settings: AppSettings) {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = (info["CFBundleShortVersionString"] as? String) ?? "?"
+        let build = (info["CFBundleVersion"] as? String) ?? "?"
+        AppLog.pipeline.info("launch: voxline \(version, privacy: .public) (build \(build, privacy: .public))")
+        AppLog.pipeline.info("launch: hotkey=\(settings.hotkeyChord.displayName, privacy: .public), llm=\(settings.llmProvider.rawValue, privacy: .public)/\(settings.llmModel, privacy: .public), whisper=\(settings.whisperModel.rawValue, privacy: .public)")
+        let perms = PermissionsService()
+        AppLog.permissions.info("launch: mic=\(String(describing: perms.microphoneStatus), privacy: .public), ax=\(String(describing: perms.accessibilityStatus), privacy: .public), im=\(String(describing: perms.inputMonitoringStatus), privacy: .public)")
     }
 }
 

@@ -102,7 +102,8 @@ import Foundation
     }
 
     @Test func reset_restores_spec_defaults_and_calls_applier_once() {
-        var settings = AppSettings(defaults: defaults())
+        let d = defaults()
+        var settings = AppSettings(defaults: d)
         settings.hotkeyChord = HotkeyChord(modifierA: .rightCommand, modifierB: .rightShift)
         settings.audioInputDeviceUID = "MicX"
         settings.whisperModel = .smallEn
@@ -110,7 +111,17 @@ import Foundation
         settings.llmProvider = .openai
 
         let applier = RecordingApplier()
-        let vm = GeneralSettingsViewModel(settings: settings, applier: applier)
+        // resetToDefaults() calls vocabulary.save([]). Without an explicit
+        // suite-backed store here, the default CustomVocabularyStore() hits
+        // UserDefaults.standard — which in the sandboxed test host resolves
+        // to the live com.voxline.app prefs and silently wipes the user's
+        // real custom-vocabulary list.
+        let vm = GeneralSettingsViewModel(
+            settings: settings,
+            applier: applier,
+            loginItemService: LoginItemService(),
+            vocabulary: CustomVocabularyStore(defaults: d)
+        )
         vm.resetToDefaults()
 
         #expect(vm.chord == .default)

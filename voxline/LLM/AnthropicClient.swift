@@ -29,12 +29,15 @@ struct AnthropicClient: LLMClient {
         if let t = request.temperature { body["temperature"] = t }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
+        AppLog.llm.debug("anthropic POST model=\(request.model, privacy: .public)")
         let (data, response): (Data, HTTPURLResponse)
         do {
             (data, response) = try await http.send(req)
         } catch {
+            AppLog.llm.error("anthropic network error: \(error.localizedDescription, privacy: .public)")
             throw LLMError.network(error)
         }
+        AppLog.llm.debug("anthropic HTTP \(response.statusCode, privacy: .public) (bytes=\(data.count, privacy: .public))")
         try mapStatus(response: response, body: data)
 
         return try parseTextBlocks(from: data)
@@ -43,10 +46,18 @@ struct AnthropicClient: LLMClient {
     private func mapStatus(response: HTTPURLResponse, body: Data) throws {
         switch response.statusCode {
         case 200..<300: return
-        case 401: throw LLMError.invalidAPIKey
-        case 429: throw LLMError.rateLimited
+        case 401:
+            // Body intentionally not logged: 401 responses can echo the
+            // offending API key prefix.
+            AppLog.llm.error("anthropic: 401 invalid API key")
+            throw LLMError.invalidAPIKey
+        case 429:
+            AppLog.llm.error("anthropic: 429 rate limited")
+            throw LLMError.rateLimited
         default:
             let text = String(data: body, encoding: .utf8) ?? ""
+            let excerpt = text.prefix(200)
+            AppLog.llm.error("anthropic: HTTP \(response.statusCode, privacy: .public) body=\(excerpt, privacy: .public)")
             throw LLMError.badStatus(code: response.statusCode, body: text)
         }
     }
@@ -63,10 +74,12 @@ struct AnthropicClient: LLMClient {
         do {
             env = try JSONDecoder().decode(Envelope.self, from: data)
         } catch {
+            AppLog.llm.error("anthropic: response JSON decode failed: \(error.localizedDescription, privacy: .public)")
             throw LLMError.badResponseShape(reason: "JSON decode failed: \(error.localizedDescription)")
         }
         let text = env.content.compactMap { $0.type == "text" ? $0.text : nil }.joined()
         if text.isEmpty {
+            AppLog.llm.error("anthropic: response had no text blocks")
             throw LLMError.badResponseShape(reason: "no text blocks in response")
         }
         return text

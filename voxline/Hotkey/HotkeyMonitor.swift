@@ -62,6 +62,7 @@ final class HotkeyMonitor {
         runLoopSource = source
         CGEvent.tapEnable(tap: tap, enable: true)
         onDebugStateChanged?(machine.state, true)
+        AppLog.hotkey.info("monitor installed")
     }
 
     func stop() {
@@ -114,10 +115,12 @@ final class HotkeyMonitor {
                 monitor.feed(.flagsChanged(modAFlag: modA, modBFlag: modB))
             }
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            let reason = (type == .tapDisabledByTimeout) ? "timeout" : "user-input"
             MainActor.assumeIsolated {
                 if let tap = monitor.eventTap {
                     CGEvent.tapEnable(tap: tap, enable: true)
                 }
+                AppLog.hotkey.debug("tap re-enabled (\(reason, privacy: .public))")
                 monitor.feed(.tapDisabled)
             }
         default:

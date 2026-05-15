@@ -24,6 +24,7 @@ struct URLSessionHTTPClient: HTTPClient {
             // while a fresh request that follows succeeds. One retry on this
             // specific code is the standard remedy; do not retry on other
             // URLErrors so genuine failures still surface immediately.
+            AppLog.llm.debug("network connection lost, retrying once")
             return try await perform(request)
         }
     }

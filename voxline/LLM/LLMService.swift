@@ -85,6 +85,7 @@ struct LLMService: LLMServing {
             let key = try keychain.string(forKey: account),
             !key.isEmpty
         else {
+            AppLog.llm.error("\(provider.rawValue, privacy: .public): no API key configured")
             throw LLMError.missingAPIKey
         }
 

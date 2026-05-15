@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import WhisperKit
 
 /// Errors thrown by transcription prep paths that warrant a tailored
@@ -183,6 +184,7 @@ final class TranscriptionService {
             }
             let entry = LoadEntry(variant: variant, task: task)
             loadTask = entry
+            let loadStart = Date()
             do {
                 let kit = try await task.value
                 // The model may have been swapped between Task creation and
@@ -198,6 +200,8 @@ final class TranscriptionService {
                 }
                 whisperKit = kit
                 if loadTask === entry { loadTask = nil }
+                let loadDuration = Date().timeIntervalSince(loadStart)
+                AppLog.whisper.info("model loaded: \(variant, privacy: .public) (\(String(format: "%.1f", loadDuration), privacy: .public)s)")
                 return kit
             } catch {
                 if loadTask === entry { loadTask = nil }

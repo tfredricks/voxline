@@ -107,6 +107,18 @@ final class AudioCaptureService {
             input.removeTap(onBus: 0)
             throw error
         }
+
+        let deviceName = resolvedInputDeviceName()
+        AppLog.audio.info("capture started: device='\(deviceName, privacy: .public)', \(Int(hwFormat.sampleRate), privacy: .public)Hz → \(Int(AudioFormat.whisperSampleRate), privacy: .public)Hz")
+    }
+
+    private func resolvedInputDeviceName() -> String {
+        let inputs = AudioDeviceEnumerator.inputDevices()
+        if let uid = preferredInputDeviceUID,
+           let match = inputs.first(where: { $0.uid == uid }) {
+            return match.name
+        }
+        return inputs.first(where: { $0.isDefault })?.name ?? "(unknown)"
     }
 
     /// Stop capture. Removes the tap and stops the engine so the system mic

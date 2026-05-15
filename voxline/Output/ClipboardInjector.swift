@@ -571,18 +571,21 @@ final class ClipboardInjector {
         do {
             return try await injectViaClipboardPaste(text)
         } catch {
+            AppLog.paste.debug("clipboard-paste failed: \(error.localizedDescription, privacy: .public); trying AX value-set")
             failures.append(error.localizedDescription)
         }
 
         do {
             return try injectViaAccessibility(text)
         } catch {
+            AppLog.paste.debug("AX value-set failed: \(error.localizedDescription, privacy: .public); trying synthetic typing")
             failures.append(error.localizedDescription)
         }
 
         do {
             return try await injectViaDirectTyping(text)
         } catch {
+            AppLog.paste.debug("synthetic typing failed: \(error.localizedDescription, privacy: .public); all strategies exhausted")
             failures.append(error.localizedDescription)
         }
 
