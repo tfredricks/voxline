@@ -23,6 +23,8 @@ final class LockedBox<T>: @unchecked Sendable {
         var inserted: [String] = []
         var insertError: Error?
         var isSecure = false
+        var identityQueue: [AnyHashable?] = []
+        var currentIdentity: AnyHashable? = "default-element"
 
         func snapshot() -> FocusedTextSnapshot? {
             if !snapshotQueue.isEmpty {
@@ -43,6 +45,13 @@ final class LockedBox<T>: @unchecked Sendable {
             if let insertError { throw insertError }
             inserted.append(text)
             currentValue = (currentValue ?? "") + text
+        }
+
+        func focusedElementIdentity() -> AnyHashable? {
+            if !identityQueue.isEmpty {
+                return identityQueue.removeFirst()
+            }
+            return currentIdentity
         }
     }
 

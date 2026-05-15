@@ -143,6 +143,10 @@ protocol FocusedTextSystem: Sendable {
     /// `inject()` short-circuits in this case so dictated text never lands in
     /// a password store via paste, AX value-set, or synthetic typing.
     func focusedFieldIsSecure() -> Bool
+    /// Opaque identity of the currently focused element. Lets the paste
+    /// verifier distinguish stale-AX (same element, unchanged value) from
+    /// focus shift (different element after Cmd+V). Nil when unavailable.
+    func focusedElementIdentity() -> AnyHashable?
 }
 
 enum TextInsertionStrategy: String, Equatable, Sendable {
@@ -226,6 +230,11 @@ struct AXFocusedTextSystem: FocusedTextSystem {
         return subrole == (kAXSecureTextFieldSubrole as String)
     }
 
+    func focusedElementIdentity() -> AnyHashable? {
+        guard let element = focusedElement() else { return nil }
+        return AnyHashable(AXElementIdentity(element: element))
+    }
+
     func insertText(_ text: String) throws {
         guard let element = focusedElement() else {
             throw TextInsertionError.accessibilityUnavailable("No focused editable element was exposed by macOS.")
@@ -301,6 +310,21 @@ struct AXFocusedTextSystem: FocusedTextSystem {
         var settable = DarwinBoolean(false)
         let status = AXUIElementIsAttributeSettable(element, attribute as CFString, &settable)
         return status == .success && settable.boolValue
+    }
+}
+
+/// CFEqual/CFHash-backed identity wrapper so an AXUIElement can be
+/// boxed in AnyHashable. CFType equality is by underlying UI element,
+/// not by pointer value.
+private struct AXElementIdentity: Hashable, @unchecked Sendable {
+    let element: AXUIElement
+
+    static func == (lhs: AXElementIdentity, rhs: AXElementIdentity) -> Bool {
+        CFEqual(lhs.element, rhs.element)
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(CFHash(element))
     }
 }
 
