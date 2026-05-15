@@ -4,7 +4,7 @@ import Foundation
 /// with `*` wildcard fallback. Snapshot-style: pass the current modes in;
 /// ModeRouter doesn't observe changes itself (callers re-create or update
 /// `.modes` when modes change).
-struct ModeRouter: ModeResolving {
+struct ModeRouter {
 
     var modes: [Mode]
 

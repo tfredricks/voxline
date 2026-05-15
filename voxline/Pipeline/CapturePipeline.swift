@@ -10,7 +10,7 @@ final class CapturePipeline {
     private let capture: AudioCapturing
     private let transcriber: Transcribing
     private let llm: LLMServing
-    var modes: ModeResolving
+    var modes: ModeRouter
     private let frontmost: FrontmostAppProviding
     private let fieldInspector: FocusedFieldInspecting
     private let injector: ClipboardInjecting
@@ -23,7 +23,7 @@ final class CapturePipeline {
         capture: AudioCapturing,
         transcriber: Transcribing,
         llm: LLMServing,
-        modes: ModeResolving,
+        modes: ModeRouter,
         frontmost: FrontmostAppProviding,
         fieldInspector: FocusedFieldInspecting,
         injector: ClipboardInjecting,
