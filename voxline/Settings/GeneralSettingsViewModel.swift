@@ -113,7 +113,7 @@ final class GeneralSettingsViewModel {
         loginItemStatus = status
         let actual = (status == .enabled)
         if launchAtLogin != actual {
-            syncing { launchAtLogin = actual }
+            withoutCommitting { launchAtLogin = actual }
         }
     }
 
@@ -124,7 +124,7 @@ final class GeneralSettingsViewModel {
     /// opens. Called via `.task` on the Settings window the same way
     /// `refreshLoginItemStatus()` is.
     func refreshFromUserDefaults() {
-        syncing {
+        withoutCommitting {
             chord = settings.hotkeyChord
             audioInputDeviceUID = settings.audioInputDeviceUID
             whisperModel = settings.whisperModel
@@ -139,7 +139,7 @@ final class GeneralSettingsViewModel {
     /// Launch-at-Login is intentionally left untouched — Reset is for pipeline
     /// settings, not OS-level integration.
     func resetToDefaults() {
-        syncing {
+        withoutCommitting {
             chord = .default
             audioInputDeviceUID = nil
             whisperModel = .default
@@ -180,7 +180,7 @@ final class GeneralSettingsViewModel {
     /// `LoginItemService.status`, the Reset-to-defaults path) where the
     /// changes already represent ground truth and committing them back would
     /// be redundant at best, recursive at worst.
-    private func syncing(_ mutations: () -> Void) {
+    private func withoutCommitting(_ mutations: () -> Void) {
         loaded = false
         mutations()
         loaded = true
