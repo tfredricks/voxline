@@ -1,6 +1,15 @@
 import Foundation
 import Observation
 
+/// Snapshot the General settings VM hands to the coordinator on save.
+struct GeneralSettingsSnapshot: Equatable {
+    let chord: HotkeyChord
+    let audioInputDeviceUID: String?
+    let whisperModel: WhisperModel
+    let playHotkeySounds: Bool
+    let provider: LLMProvider
+}
+
 struct AudioDeviceRow: Identifiable, Equatable {
     let uid: String?
     let label: String
@@ -28,7 +37,7 @@ final class GeneralSettingsViewModel {
     private(set) var devices: [AudioDevice] = []
 
     private var settings: AppSettings
-    private let applier: GeneralSettingsApplier
+    private let onApply: (GeneralSettingsSnapshot) -> Void
     private let deviceEnumerator: () -> [AudioDevice]
     private var deviceListener: AudioDeviceListener?
     private let loginItemService: LoginItemService
@@ -41,12 +50,12 @@ final class GeneralSettingsViewModel {
     /// isolation context, so we build them in the body instead.
     convenience init(
         settings: AppSettings = AppSettings(),
-        applier: GeneralSettingsApplier,
+        onApply: @escaping (GeneralSettingsSnapshot) -> Void,
         deviceEnumerator: @escaping () -> [AudioDevice] = AudioDeviceEnumerator.inputDevices
     ) {
         self.init(
             settings: settings,
-            applier: applier,
+            onApply: onApply,
             deviceEnumerator: deviceEnumerator,
             loginItemService: LoginItemService(),
             vocabulary: CustomVocabularyStore()
@@ -55,13 +64,13 @@ final class GeneralSettingsViewModel {
 
     init(
         settings: AppSettings = AppSettings(),
-        applier: GeneralSettingsApplier,
+        onApply: @escaping (GeneralSettingsSnapshot) -> Void,
         deviceEnumerator: @escaping () -> [AudioDevice] = AudioDeviceEnumerator.inputDevices,
         loginItemService: LoginItemService,
         vocabulary: CustomVocabularyStore = CustomVocabularyStore()
     ) {
         self.settings = settings
-        self.applier = applier
+        self.onApply = onApply
         self.deviceEnumerator = deviceEnumerator
         self.loginItemService = loginItemService
         self.vocabulary = vocabulary
@@ -163,7 +172,7 @@ final class GeneralSettingsViewModel {
         s.playHotkeySounds = playHotkeySounds
         s.llmProvider = provider
         settings = s
-        applier.apply(GeneralSettingsSnapshot(
+        onApply(GeneralSettingsSnapshot(
             chord: chord,
             audioInputDeviceUID: audioInputDeviceUID,
             whisperModel: whisperModel,

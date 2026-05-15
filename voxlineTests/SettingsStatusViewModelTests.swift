@@ -36,7 +36,7 @@ import Foundation
         settings.audioInputDeviceUID = deviceUID
         let general = GeneralSettingsViewModel(
             settings: settings,
-            applier: NoopApplier(),
+            onApply: { _ in },
             deviceEnumerator: { [AudioDevice(uid: "uid-1", name: deviceLabel, isDefault: true)] }
         )
         let keys = APIKeysSettingsViewModel(keychain: kc)
@@ -86,7 +86,7 @@ import Foundation
         settings.llmProvider = .anthropic
         let general = GeneralSettingsViewModel(
             settings: settings,
-            applier: NoopApplier(),
+            onApply: { _ in },
             deviceEnumerator: { [] }   // no mics at all
         )
         let keys = APIKeysSettingsViewModel(keychain: kc)
@@ -97,8 +97,4 @@ import Foundation
         )
         #expect(status.isReady == false)
     }
-}
-
-private struct NoopApplier: GeneralSettingsApplier {
-    func apply(_ snapshot: GeneralSettingsSnapshot) {}
 }

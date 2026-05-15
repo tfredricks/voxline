@@ -18,7 +18,7 @@ import Foundation
         settings.playHotkeySounds = false
         settings.llmProvider = .openai
 
-        let vm = GeneralSettingsViewModel(settings: settings, applier: NoopApplier())
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
         #expect(vm.chord == chord)
         #expect(vm.audioInputDeviceUID == "MyMic")
         #expect(vm.whisperModel == .smallEn)
@@ -29,35 +29,35 @@ import Foundation
     @Test func mutations_persist_and_call_applier_immediately() {
         let d = defaults()
         let settings = AppSettings(defaults: d)
-        let applier = RecordingApplier()
-        let vm = GeneralSettingsViewModel(settings: settings, applier: applier)
+        let recorder = ApplyRecorder()
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: { recorder.record($0) })
 
         let chord = HotkeyChord(modifierA: .rightCommand, modifierB: .rightShift)
         vm.chord = chord
-        #expect(applier.applied?.chord == chord)
+        #expect(recorder.applied?.chord == chord)
         #expect(AppSettings(defaults: d).hotkeyChord == chord)
 
         vm.audioInputDeviceUID = "NewMic"
-        #expect(applier.applied?.audioInputDeviceUID == "NewMic")
+        #expect(recorder.applied?.audioInputDeviceUID == "NewMic")
         #expect(AppSettings(defaults: d).audioInputDeviceUID == "NewMic")
 
         vm.whisperModel = .smallEn
-        #expect(applier.applied?.whisperModel == .smallEn)
+        #expect(recorder.applied?.whisperModel == .smallEn)
         #expect(AppSettings(defaults: d).whisperModel == .smallEn)
 
         vm.playHotkeySounds = false
-        #expect(applier.applied?.playHotkeySounds == false)
+        #expect(recorder.applied?.playHotkeySounds == false)
         #expect(AppSettings(defaults: d).playHotkeySounds == false)
 
-        #expect(applier.applied?.provider == .anthropic)
+        #expect(recorder.applied?.provider == .anthropic)
     }
 
     @Test func init_does_not_call_applier() {
         var settings = AppSettings(defaults: defaults())
         settings.hotkeyChord = HotkeyChord(modifierA: .leftCommand, modifierB: .rightOption)
-        let applier = RecordingApplier()
-        _ = GeneralSettingsViewModel(settings: settings, applier: applier)
-        #expect(applier.applied == nil)
+        let recorder = ApplyRecorder()
+        _ = GeneralSettingsViewModel(settings: settings, onApply: { recorder.record($0) })
+        #expect(recorder.applied == nil)
     }
 
     @Test func device_rows_includes_disconnected_marker_when_saved_uid_is_absent() {
@@ -65,7 +65,7 @@ import Foundation
         settings.audioInputDeviceUID = "GhostMic"
         let vm = GeneralSettingsViewModel(
             settings: settings,
-            applier: NoopApplier(),
+            onApply: noopApply,
             deviceEnumerator: { [] }   // no devices present
         )
         let rows = vm.deviceRows
@@ -78,7 +78,7 @@ import Foundation
         let stubDevices = [AudioDevice(uid: "MicA", name: "Mic A", isDefault: false)]
         let vm = GeneralSettingsViewModel(
             settings: settings,
-            applier: NoopApplier(),
+            onApply: noopApply,
             deviceEnumerator: { stubDevices }
         )
         let rows = vm.deviceRows
@@ -91,7 +91,7 @@ import Foundation
         let settings = AppSettings(defaults: defaults())
         let vm = GeneralSettingsViewModel(
             settings: settings,
-            applier: NoopApplier(),
+            onApply: noopApply,
             deviceEnumerator: { nextDevices }
         )
         #expect(vm.devices.isEmpty)
@@ -110,7 +110,7 @@ import Foundation
         settings.playHotkeySounds = false
         settings.llmProvider = .openai
 
-        let applier = RecordingApplier()
+        let recorder = ApplyRecorder()
         // resetToDefaults() calls vocabulary.save([]). Without an explicit
         // suite-backed store here, the default CustomVocabularyStore() hits
         // UserDefaults.standard — which in the sandboxed test host resolves
@@ -118,7 +118,7 @@ import Foundation
         // real custom-vocabulary list.
         let vm = GeneralSettingsViewModel(
             settings: settings,
-            applier: applier,
+            onApply: { recorder.record($0) },
             loginItemService: LoginItemService(),
             vocabulary: CustomVocabularyStore(defaults: d)
         )
@@ -128,22 +128,22 @@ import Foundation
         #expect(vm.audioInputDeviceUID == nil)
         #expect(vm.whisperModel == .default)
         #expect(vm.playHotkeySounds == true)
-        #expect(applier.applied?.chord == .default)
-        #expect(applier.applied?.whisperModel == .default)
-        #expect(applier.applied?.playHotkeySounds == true)
-        #expect(applier.applied?.audioInputDeviceUID == nil)
+        #expect(recorder.applied?.chord == .default)
+        #expect(recorder.applied?.whisperModel == .default)
+        #expect(recorder.applied?.playHotkeySounds == true)
+        #expect(recorder.applied?.audioInputDeviceUID == nil)
         #expect(vm.provider == .anthropic)
-        #expect(applier.applied?.provider == .anthropic)
+        #expect(recorder.applied?.provider == .anthropic)
     }
 
     @Test func provider_change_persists_and_calls_applier() {
         let d = defaults()
         let settings = AppSettings(defaults: d)
-        let applier = RecordingApplier()
-        let vm = GeneralSettingsViewModel(settings: settings, applier: applier)
+        let recorder = ApplyRecorder()
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: { recorder.record($0) })
 
         vm.provider = .openai
-        #expect(applier.applied?.provider == .openai)
+        #expect(recorder.applied?.provider == .openai)
         #expect(AppSettings(defaults: d).llmProvider == .openai)
     }
 
@@ -152,7 +152,7 @@ import Foundation
         let svc = LoginItemService(backend: backend)
         let vm = GeneralSettingsViewModel(
             settings: AppSettings(defaults: defaults()),
-            applier: NoopApplier(),
+            onApply: noopApply,
             loginItemService: svc
         )
         #expect(vm.launchAtLogin == true)
@@ -164,7 +164,7 @@ import Foundation
         let svc = LoginItemService(backend: backend)
         let vm = GeneralSettingsViewModel(
             settings: AppSettings(defaults: defaults()),
-            applier: NoopApplier(),
+            onApply: noopApply,
             loginItemService: svc
         )
         #expect(vm.launchAtLogin == false)
@@ -176,7 +176,7 @@ import Foundation
         let svc = LoginItemService(backend: backend)
         let vm = GeneralSettingsViewModel(
             settings: AppSettings(defaults: defaults()),
-            applier: NoopApplier(),
+            onApply: noopApply,
             loginItemService: svc
         )
         vm.launchAtLogin = true
@@ -190,7 +190,7 @@ import Foundation
         let svc = LoginItemService(backend: backend)
         let vm = GeneralSettingsViewModel(
             settings: AppSettings(defaults: defaults()),
-            applier: NoopApplier(),
+            onApply: noopApply,
             loginItemService: svc
         )
         vm.launchAtLogin = false
@@ -205,7 +205,7 @@ import Foundation
         let svc = LoginItemService(backend: backend)
         let vm = GeneralSettingsViewModel(
             settings: AppSettings(defaults: defaults()),
-            applier: NoopApplier(),
+            onApply: noopApply,
             loginItemService: svc
         )
         vm.launchAtLogin = true
@@ -218,7 +218,7 @@ import Foundation
         let svc = LoginItemService(backend: backend)
         let vm = GeneralSettingsViewModel(
             settings: AppSettings(defaults: defaults()),
-            applier: NoopApplier(),
+            onApply: noopApply,
             loginItemService: svc
         )
         #expect(vm.launchAtLogin == false)
@@ -230,12 +230,10 @@ import Foundation
 
 }
 
-private struct NoopApplier: GeneralSettingsApplier {
-    func apply(_ snapshot: GeneralSettingsSnapshot) {}
-}
+private let noopApply: @MainActor (GeneralSettingsSnapshot) -> Void = { _ in }
 
 @MainActor
-private final class RecordingApplier: GeneralSettingsApplier {
+private final class ApplyRecorder {
     var applied: GeneralSettingsSnapshot?
-    func apply(_ snapshot: GeneralSettingsSnapshot) { applied = snapshot }
+    func record(_ snapshot: GeneralSettingsSnapshot) { applied = snapshot }
 }

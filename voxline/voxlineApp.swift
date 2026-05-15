@@ -44,7 +44,9 @@ struct voxlineApp: App {
 
         Settings {
             SettingsView(
-                generalVM: GeneralSettingsViewModel(applier: delegate.coordinator),
+                generalVM: GeneralSettingsViewModel(onApply: { [weak coordinator = delegate.coordinator] snapshot in
+                    coordinator?.apply(snapshot)
+                }),
                 apiKeysVM: APIKeysSettingsViewModel()
             )
             .environment(delegate.appState)
@@ -460,7 +462,7 @@ final class AppCoordinator {
     }
 }
 
-extension AppCoordinator: GeneralSettingsApplier {
+extension AppCoordinator {
     func apply(_ snapshot: GeneralSettingsSnapshot) {
         // snapshot.provider is consumed by LLMService at the next dictation;
         // no per-snapshot action needed here.
