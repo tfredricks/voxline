@@ -153,6 +153,7 @@ Built on the shoulders of:
 - [WhisperKit](https://github.com/argmaxinc/WhisperKit) — on-device Whisper inference for Apple Silicon
 - [Whisper](https://github.com/openai/whisper) — the original model from OpenAI
 - [swift-transformers](https://github.com/huggingface/swift-transformers) — model hub and inference utilities
+- The macOS dictation tools that paved the way (Whispr Flow, Superwhisper, Ghost Pepper, and others) — voxline borrows the hold-to-talk UX they all converged on.
 
 ## Contributing
 
