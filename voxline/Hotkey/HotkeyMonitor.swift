@@ -122,7 +122,6 @@ final class HotkeyMonitor {
     // MARK: - Routing inputs through the machine
 
     private func feed(_ input: HotkeyStateMachine.Input) {
-        let stateBefore = machine.state
         let outputs = machine.handle(input)
         for output in outputs {
             switch output {
