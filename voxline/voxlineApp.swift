@@ -126,7 +126,9 @@ final class AppCoordinator {
     /// keeps both this coordinator and the state alive for the app lifetime.
     private weak var appState: AppState?
     /// Single 1s timer that reconciles `hotkeyEnabled` + permission state with
-    /// the tap's installed/uninstalled status.
+    /// the tap's installed/uninstalled status. One timer prevents the
+    /// accessibility-retry, IM watchdog, and hotkey-enabled paths from racing
+    /// against each other over the same eventTap.
     private var permissionPollTimer: Timer?
     private var firstRunWindow: FirstRunWindowController?
 
@@ -307,6 +309,9 @@ final class AppCoordinator {
     }
 
     /// Single source of truth for "should the tap be installed right now?".
+    /// Centralizing the decision here prevents concurrent install/uninstall races
+    /// when accessibility is revoked, hotkeyEnabled changes, and the IM watchdog
+    /// all fire within the same second.
     private func startPermissionAndStateLoop(state: AppState) {
         permissionPollTimer?.invalidate()
         permissionPollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self, weak state] _ in

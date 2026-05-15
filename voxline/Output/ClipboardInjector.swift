@@ -492,7 +492,9 @@ final class ClipboardInjector {
     /// Sleep between writing the cleaned text to the pasteboard and posting
     /// the synthetic Cmd+V. Some apps (notably terminals hosting a TUI with
     /// an autocomplete suggestion mounted) drop the paste when the keystroke
-    /// arrives too quickly after the clipboard write.
+    /// arrives too quickly after the clipboard write. The delay is
+    /// known-necessary; removing it causes intermittent paste drops in
+    /// affected terminals.
     let pasteWriteSettleDelay: Duration
     let restoreDelay: Duration
     let verificationDelay: Duration
