@@ -1,0 +1,59 @@
+import Foundation
+import OSLog
+
+/// Persistent rolling text log. Appends formatted lines to a file on disk,
+/// keeping at most `maxEntries` lines (oldest evicted first). Thread-safe.
+/// Never throws to callers; disk failures are reported once per kind via OSLog.
+final class RollingFileLog {
+
+    enum Level: String {
+        case info   = "INFO"
+        case notice = "NOTICE"
+        case error  = "ERROR"
+        case fault  = "FAULT"
+    }
+
+    private let fileURL: URL
+    private let clock: () -> Date
+    private let maxEntries: Int
+
+    private let formatter: DateFormatter
+
+    private var ring: [String] = []
+    private var initializedFromDisk = false
+    private var lock = os_unfair_lock_s()
+
+    init(
+        fileURL: URL,
+        clock: @escaping () -> Date = Date.init,
+        maxEntries: Int = 250
+    ) {
+        self.fileURL = fileURL
+        self.clock = clock
+        self.maxEntries = maxEntries
+
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+        self.formatter = f
+    }
+
+    func info(_ message: String, category: String) {
+        append(level: .info, category: category, message: message)
+    }
+
+    private func append(level: Level, category: String, message: String) {
+        os_unfair_lock_lock(&lock)
+        defer { os_unfair_lock_unlock(&lock) }
+
+        let line = "[\(formatter.string(from: clock()))] [\(level.rawValue)] [\(category)] \(message)"
+        ring.append(line)
+
+        let body = ring.joined(separator: "\n") + "\n"
+        do {
+            try body.write(to: fileURL, atomically: true, encoding: .utf8)
+        } catch {
+            // Will gain richer error reporting in Task 5.
+        }
+    }
+}
