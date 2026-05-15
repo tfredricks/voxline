@@ -48,6 +48,9 @@ final class RollingFileLog {
 
         let line = "[\(formatter.string(from: clock()))] [\(level.rawValue)] [\(category)] \(message)"
         ring.append(line)
+        while ring.count > maxEntries {
+            ring.removeFirst()
+        }
 
         let body = ring.joined(separator: "\n") + "\n"
         do {

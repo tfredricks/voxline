@@ -35,4 +35,28 @@ import Foundation
         #expect(body.hasSuffix("[INFO] [pipeline] Dictation finished\n"))
         #expect(body.split(separator: "\n").count == 1)
     }
+
+    @Test func respects250Cap() throws {
+        let url = Self.tempURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let log = RollingFileLog(
+            fileURL: url,
+            clock: Self.fixedClock("2026-05-14T12:34:56.789Z")
+        )
+
+        for i in 0..<260 {
+            log.info("entry \(i)", category: "pipeline")
+        }
+
+        let body = try String(contentsOf: url, encoding: .utf8)
+        let lines = body.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.isEmpty }
+
+        #expect(lines.count == 250)
+        // First 10 entries (0..<10) must have been evicted; oldest
+        // surviving entry is "entry 10".
+        #expect(lines.first?.hasSuffix("entry 10") == true)
+        #expect(lines.last?.hasSuffix("entry 259") == true)
+    }
 }
