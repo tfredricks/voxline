@@ -198,7 +198,7 @@ final class AppCoordinator {
             let store = try ModeStore()
             modes = try store.load()
         } catch {
-            AppLog.pipeline.error("modes load failed, using shipped defaults: \(error.localizedDescription, privacy: .public)")
+            AppLog.pipeline.error("modes load failed, using shipped defaults: \(error.localizedDescription)")
             modes = ModeStore.shippedDefaults
         }
         let router = ModeRouter(modes: modes)

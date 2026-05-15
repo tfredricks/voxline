@@ -74,7 +74,7 @@ final class CapturePipeline {
         do {
             try capture.start()
         } catch {
-            AppLog.pipeline.error("capture.start failed: \(error.localizedDescription, privacy: .public)")
+            AppLog.pipeline.error("capture.start failed: \(error.localizedDescription)")
             setError("Audio capture failed: \(error.localizedDescription)")
             return
         }
@@ -108,7 +108,7 @@ final class CapturePipeline {
         let samples = capture.takeSamples()
         state.status = .thinking
         state.lastRecordingDuration = Double(samples.count) / 16_000.0
-        AppLog.pipeline.info("recording stopped: samples=\(samples.count, privacy: .public) duration=\(self.state.lastRecordingDuration ?? 0, privacy: .public)s peak=\(self.state.lastPeakLevel, privacy: .public)")
+        AppLog.pipeline.info("recording stopped: samples=\(samples.count) duration=\(self.state.lastRecordingDuration ?? 0)s peak=\(self.state.lastPeakLevel)")
 
         // Silent-capture detector: tap fired (samples non-empty) but no audio
         // signal reached the converter (peak stayed at 0). Almost always means
@@ -140,13 +140,13 @@ final class CapturePipeline {
         } catch {
             signposter.endInterval("transcribe", transcribeInterval, "error")
             signposter.endInterval("session", sessionInterval, "error")
-            AppLog.whisper.error("transcribe failed: \(error.localizedDescription, privacy: .public)")
+            AppLog.whisper.error("transcribe failed: \(error.localizedDescription)")
             contextTask?.cancel(); contextTask = nil
             return setError("Transcription failed. Try again or pick a different model in Settings → General.")
         }
         state.lastTranscribeDuration = Date().timeIntervalSince(transcribeStart)
         state.lastTranscript = transcript
-        AppLog.whisper.info("transcribed: chars=\(transcript.count, privacy: .public) duration=\(self.state.lastTranscribeDuration ?? 0, privacy: .public)s")
+        AppLog.whisper.info("transcribed: chars=\(transcript.count) duration=\(self.state.lastTranscribeDuration ?? 0)s")
 
         if transcript.isEmpty {
             // Nothing to clean / paste — quietly idle out.
@@ -162,18 +162,18 @@ final class CapturePipeline {
         let field = fieldInspector.inspect()
         guard let mode = modes.mode(for: bundleID, field: field) else {
             signposter.endInterval("session", sessionInterval, "no-mode")
-            AppLog.pipeline.error("no mode for bundle=\(bundleID ?? "unknown", privacy: .public)")
+            AppLog.pipeline.error("no mode for bundle=\(bundleID ?? "unknown")")
             contextTask?.cancel(); contextTask = nil
             return setError("No mode for app '\(bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes.")
         }
-        AppLog.pipeline.debug("mode resolved: bundle=\(bundleID ?? "unknown", privacy: .public) mode=\(mode.displayName, privacy: .private)")
+        AppLog.pipeline.debug("mode resolved: bundle=\(bundleID ?? "unknown") mode=\(mode.displayName)")
 
         // 3. LLM cleanup.
         let context = await contextTask?.value ?? .empty
         contextTask = nil
-        AppLog.context.debug("context: app=\(context.appName ?? "nil", privacy: .private) bundle=\(context.bundleID ?? "nil", privacy: .public) secure=\(context.isSecureField, privacy: .public) durationMs=\(context.captureDurationMs, privacy: .public) notes=\(context.captureNotes.joined(separator: ","), privacy: .public)")
+        AppLog.context.debug("context: app=\(context.appName ?? "nil") bundle=\(context.bundleID ?? "nil") secure=\(context.isSecureField) durationMs=\(context.captureDurationMs) notes=\(context.captureNotes.joined(separator: ","))")
         if !context.captureNotes.isEmpty {
-            AppLog.context.info("context partial: notes=\(context.captureNotes.joined(separator: ","), privacy: .public) durationMs=\(context.captureDurationMs, privacy: .public)")
+            AppLog.context.info("context partial: notes=\(context.captureNotes.joined(separator: ",")) durationMs=\(context.captureDurationMs)")
         }
         let cleaned: String
         let cleanupInterval = signposter.beginInterval("llm", id: sessionID)
@@ -184,18 +184,18 @@ final class CapturePipeline {
         } catch let e as LLMError {
             signposter.endInterval("llm", cleanupInterval, "error")
             signposter.endInterval("session", sessionInterval, "error")
-            AppLog.llm.error("cleanup failed: \(e.errorDescription ?? "unknown", privacy: .public)")
+            AppLog.llm.error("cleanup failed: \(e.errorDescription ?? "unknown")")
             return setError(e.errorDescription ?? "LLM cleanup failed.")
         } catch {
             signposter.endInterval("llm", cleanupInterval, "error")
             signposter.endInterval("session", sessionInterval, "error")
-            AppLog.llm.error("cleanup failed: \(error.localizedDescription, privacy: .public)")
+            AppLog.llm.error("cleanup failed: \(error.localizedDescription)")
             return setError("LLM cleanup failed: \(error.localizedDescription)")
         }
         state.lastCleanupDuration = Date().timeIntervalSince(cleanupStart)
         state.lastCleanedText = cleaned
         historyStore.record(cleanedText: cleaned, mode: mode, context: context)
-        AppLog.llm.info("cleanup ok: in=\(transcript.count, privacy: .public) out=\(cleaned.count, privacy: .public) duration=\(self.state.lastCleanupDuration ?? 0, privacy: .public)s")
+        AppLog.llm.info("cleanup ok: in=\(transcript.count) out=\(cleaned.count) duration=\(self.state.lastCleanupDuration ?? 0)s")
 
         // 4. Paste.
         let pasteInterval = signposter.beginInterval("paste", id: sessionID)
@@ -203,17 +203,17 @@ final class CapturePipeline {
             let outcome = try await injector.inject(cleaned)
             state.debugLastInsertionResult = outcome.description
             signposter.endInterval("paste", pasteInterval)
-            AppLog.paste.debug("inject ok: outcome=\(outcome.description, privacy: .public)")
+            AppLog.paste.debug("inject ok: outcome=\(outcome.description)")
         } catch let e as TextInsertionError {
             signposter.endInterval("paste", pasteInterval, "error")
             signposter.endInterval("session", sessionInterval, "error")
             let category: AppErrorCategory = (e == .accessibilityNotGranted) ? .permissions : .pipeline
-            AppLog.paste.error("inject failed: \(e.errorDescription ?? "unknown", privacy: .public)")
+            AppLog.paste.error("inject failed: \(e.errorDescription ?? "unknown")")
             return setError(e.errorDescription ?? "Text insertion failed.", category: category)
         } catch {
             signposter.endInterval("paste", pasteInterval, "error")
             signposter.endInterval("session", sessionInterval, "error")
-            AppLog.paste.error("inject failed: \(error.localizedDescription, privacy: .public)")
+            AppLog.paste.error("inject failed: \(error.localizedDescription)")
             return setError("Text insertion failed: \(error.localizedDescription)")
         }
 
