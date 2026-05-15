@@ -199,7 +199,7 @@ final class AppCoordinator {
             let store = try ModeStore()
             modes = try store.load()
         } catch {
-            AppLog.pipeline.error("modes load failed, using shipped defaults: \(error.localizedDescription, privacy: .public)")
+            AppLog.pipeline.error("modes load failed, using shipped defaults: \(error.localizedDescription)")
             modes = ModeStore.shippedDefaults
         }
         let router = ModeRouter(modes: modes)
@@ -464,7 +464,7 @@ final class AppCoordinator {
                 // user-facing error.
                 return
             } catch {
-                AppLog.whisper.error("model prep failed: \(error.localizedDescription, privacy: .public)")
+                AppLog.whisper.error("model prep failed: \(error.localizedDescription)")
                 if let state {
                     state.status = .error(category: .modelPrep, message: "Model setup failed: \(error.localizedDescription). Try Retry or relaunch Voxline.")
                 }
@@ -492,10 +492,10 @@ final class AppCoordinator {
         let info = Bundle.main.infoDictionary ?? [:]
         let version = (info["CFBundleShortVersionString"] as? String) ?? "?"
         let build = (info["CFBundleVersion"] as? String) ?? "?"
-        AppLog.pipeline.info("launch: voxline \(version, privacy: .public) (build \(build, privacy: .public))")
-        AppLog.pipeline.info("launch: hotkey=\(settings.hotkeyChord.displayName, privacy: .public), llm=\(settings.llmProvider.rawValue, privacy: .public)/\(settings.llmModel, privacy: .public), whisper=\(settings.whisperModel.rawValue, privacy: .public)")
+        AppLog.pipeline.info("launch: voxline \(version) (build \(build))")
+        AppLog.pipeline.info("launch: hotkey=\(settings.hotkeyChord.displayName), llm=\(settings.llmProvider.rawValue)/\(settings.llmModel), whisper=\(settings.whisperModel.rawValue)")
         let perms = PermissionsService()
-        AppLog.permissions.info("launch: mic=\(String(describing: perms.microphoneStatus), privacy: .public), ax=\(String(describing: perms.accessibilityStatus), privacy: .public), im=\(String(describing: perms.inputMonitoringStatus), privacy: .public)")
+        AppLog.permissions.info("launch: mic=\(String(describing: perms.microphoneStatus)), ax=\(String(describing: perms.accessibilityStatus)), im=\(String(describing: perms.inputMonitoringStatus))")
     }
 }
 

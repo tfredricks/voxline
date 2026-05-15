@@ -201,7 +201,7 @@ final class TranscriptionService {
                 whisperKit = kit
                 if loadTask === entry { loadTask = nil }
                 let loadDuration = Date().timeIntervalSince(loadStart)
-                AppLog.whisper.info("model loaded: \(variant, privacy: .public) (\(String(format: "%.1f", loadDuration), privacy: .public)s)")
+                AppLog.whisper.info("model loaded: \(variant) (\(String(format: "%.1f", loadDuration))s)")
                 return kit
             } catch {
                 if loadTask === entry { loadTask = nil }

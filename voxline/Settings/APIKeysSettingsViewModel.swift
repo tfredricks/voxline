@@ -47,7 +47,7 @@ final class APIKeysSettingsViewModel {
     func commitAnthropic() {
         let new = trimmed(anthropicKey)
         if new != anthropicPersisted {
-            AppLog.llm.info("anthropic API key \(new.isEmpty ? "cleared" : "updated", privacy: .public)")
+            AppLog.llm.info("anthropic API key \(new.isEmpty ? "cleared" : "updated")")
         }
         persist(value: anthropicKey, account: KeychainAccount.anthropic)
         anthropicPersisted = new
@@ -57,7 +57,7 @@ final class APIKeysSettingsViewModel {
     func commitOpenAI() {
         let new = trimmed(openaiKey)
         if new != openaiPersisted {
-            AppLog.llm.info("openai API key \(new.isEmpty ? "cleared" : "updated", privacy: .public)")
+            AppLog.llm.info("openai API key \(new.isEmpty ? "cleared" : "updated")")
         }
         persist(value: openaiKey, account: KeychainAccount.openai)
         openaiPersisted = new

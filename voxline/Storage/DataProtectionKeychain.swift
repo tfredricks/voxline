@@ -42,7 +42,7 @@ struct DataProtectionKeychain: KeychainStorage {
         case errSecItemNotFound:
             return nil
         case errSecMissingEntitlement:
-            Self.log.error("DPK read missing entitlement; treating account=\(account, privacy: .public) as absent")
+            Self.log.error("DPK read missing entitlement; treating account=\(account) as absent")
             return nil
         default:
             throw KeychainError.unhandledStatus(status)

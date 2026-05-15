@@ -29,15 +29,15 @@ struct AnthropicClient: LLMClient {
         if let t = request.temperature { body["temperature"] = t }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        AppLog.llm.debug("anthropic POST model=\(request.model, privacy: .public)")
+        AppLog.llm.debug("anthropic POST model=\(request.model)")
         let (data, response): (Data, HTTPURLResponse)
         do {
             (data, response) = try await http.send(req)
         } catch {
-            AppLog.llm.error("anthropic network error: \(error.localizedDescription, privacy: .public)")
+            AppLog.llm.error("anthropic network error: \(error.localizedDescription)")
             throw LLMError.network(error)
         }
-        AppLog.llm.debug("anthropic HTTP \(response.statusCode, privacy: .public) (bytes=\(data.count, privacy: .public))")
+        AppLog.llm.debug("anthropic HTTP \(response.statusCode) (bytes=\(data.count))")
         try mapStatus(response: response, body: data)
 
         return try parseTextBlocks(from: data)
@@ -57,7 +57,7 @@ struct AnthropicClient: LLMClient {
         default:
             let text = String(data: body, encoding: .utf8) ?? ""
             let excerpt = text.prefix(200)
-            AppLog.llm.error("anthropic: HTTP \(response.statusCode, privacy: .public) body=\(excerpt, privacy: .public)")
+            AppLog.llm.error("anthropic: HTTP \(response.statusCode) body=\(excerpt)")
             throw LLMError.badStatus(code: response.statusCode, body: text)
         }
     }
@@ -74,7 +74,7 @@ struct AnthropicClient: LLMClient {
         do {
             env = try JSONDecoder().decode(Envelope.self, from: data)
         } catch {
-            AppLog.llm.error("anthropic: response JSON decode failed: \(error.localizedDescription, privacy: .public)")
+            AppLog.llm.error("anthropic: response JSON decode failed: \(error.localizedDescription)")
             throw LLMError.badResponseShape(reason: "JSON decode failed: \(error.localizedDescription)")
         }
         let text = env.content.compactMap { $0.type == "text" ? $0.text : nil }.joined()

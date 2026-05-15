@@ -109,7 +109,7 @@ final class AudioCaptureService {
         }
 
         let deviceName = resolvedInputDeviceName()
-        AppLog.audio.info("capture started: device='\(deviceName, privacy: .public)', \(Int(hwFormat.sampleRate), privacy: .public)Hz → \(Int(AudioFormat.whisperSampleRate), privacy: .public)Hz")
+        AppLog.audio.info("capture started: device='\(deviceName)', \(Int(hwFormat.sampleRate))Hz → \(Int(AudioFormat.whisperSampleRate))Hz")
     }
 
     private func resolvedInputDeviceName() -> String {

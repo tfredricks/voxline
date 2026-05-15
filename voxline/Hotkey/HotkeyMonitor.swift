@@ -120,7 +120,7 @@ final class HotkeyMonitor {
                 if let tap = monitor.eventTap {
                     CGEvent.tapEnable(tap: tap, enable: true)
                 }
-                AppLog.hotkey.debug("tap re-enabled (\(reason, privacy: .public))")
+                AppLog.hotkey.debug("tap re-enabled (\(reason))")
                 monitor.feed(.tapDisabled)
             }
         default:
