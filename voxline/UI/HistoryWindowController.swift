@@ -13,8 +13,7 @@ final class HistoryWindowController {
 
     func show(store: DictationHistoryStore, state: AppState) {
         if let w = window {
-            NSApp.activate(ignoringOtherApps: true)
-            w.makeKeyAndOrderFront(nil)
+            w.presentInAccessoryApp()
             return
         }
         let host = NSHostingController(rootView: HistoryView(store: store, state: state))
@@ -25,8 +24,6 @@ final class HistoryWindowController {
         win.isReleasedWhenClosed = false
         win.center()
         self.window = win
-        // See AboutWindowController.show for why this pair is in this order.
-        NSApp.activate(ignoringOtherApps: true)
-        win.makeKeyAndOrderFront(nil)
+        win.presentInAccessoryApp()
     }
 }
