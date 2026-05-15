@@ -7,7 +7,8 @@ final class AboutWindowController {
 
     func show(env: SupportEnvironment) {
         if let w = window {
-            w.presentInAccessoryApp()
+            NSApp.activate(ignoringOtherApps: true)
+            w.makeKeyAndOrderFront(nil)
             return
         }
         let host = NSHostingView(rootView: AboutView(env: env))
@@ -22,6 +23,13 @@ final class AboutWindowController {
         win.center()
         win.isReleasedWhenClosed = false
         self.window = win
-        win.presentInAccessoryApp()
+        // LSUIElement (menu-bar) apps: activate BEFORE ordering the window so
+        // the policy flip lands before AppKit decides z-order, otherwise the
+        // window appears behind whatever app was previously frontmost.
+        // `ignoringOtherApps: true` is deprecated but still the documented
+        // escape hatch for accessory apps; `NSApp.activate()` alone is
+        // unreliable here.
+        NSApp.activate(ignoringOtherApps: true)
+        win.makeKeyAndOrderFront(nil)
     }
 }
