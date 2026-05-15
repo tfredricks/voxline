@@ -46,6 +46,11 @@ final class RollingFileLog {
         os_unfair_lock_lock(&lock)
         defer { os_unfair_lock_unlock(&lock) }
 
+        if !initializedFromDisk {
+            seedFromDiskLocked()
+            initializedFromDisk = true
+        }
+
         let line = "[\(formatter.string(from: clock()))] [\(level.rawValue)] [\(category)] \(message)"
         ring.append(line)
         while ring.count > maxEntries {
@@ -58,5 +63,19 @@ final class RollingFileLog {
         } catch {
             // Will gain richer error reporting in Task 5.
         }
+    }
+
+    /// Loads up to `maxEntries` lines from `fileURL` into `ring`. Tolerates
+    /// missing or unreadable files by leaving `ring` empty. Caller must
+    /// hold `lock`.
+    private func seedFromDiskLocked() {
+        guard let existing = try? String(contentsOf: fileURL, encoding: .utf8) else { return }
+        var lines = existing.split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+        if lines.last == "" { lines.removeLast() }
+        if lines.count > maxEntries {
+            lines = Array(lines.suffix(maxEntries))
+        }
+        ring = lines
     }
 }
