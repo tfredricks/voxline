@@ -87,7 +87,7 @@ struct HistoryView: View {
             .width(min: 70, ideal: 90, max: 110)
 
             TableColumn("Mode") { item in
-                Text(item.modeDisplayName ?? "—")
+                Text(item.modeCategoryName ?? "—")
                     .help(Self.tooltip(item))
             }
             .width(min: 70, ideal: 90, max: 130)

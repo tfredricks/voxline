@@ -65,8 +65,8 @@ import Foundation
         frontmostBundleID: String? = "com.tinyspeck.slackmacgap",
         focusedField: FocusedField? = nil,
         modes: [Mode] = [
-            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil),
-            Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil)
+            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil, category: .chat),
+            Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil, category: .general)
         ]
     ) -> (pipe: CapturePipeline, state: AppState, capture: FakeCapture, transcriber: FakeTranscriber, llm: FakeLLM, frontmost: FakeFrontmost, inspector: FakeFieldInspector, injector: FakeInjector, history: DictationHistoryStore) {
         let state = AppState()
@@ -100,8 +100,8 @@ import Foundation
         // Re-build the pipeline with all the same deps, plus a FakeContextCapture.
         let ctx = FakeContextCapture()
         let router = ModeRouter(modes: [
-            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil),
-            Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil)
+            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil, category: .chat),
+            Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil, category: .general)
         ])
         let pipe = CapturePipeline(
             state: state, capture: capture, transcriber: transcriber,
@@ -312,8 +312,7 @@ import Foundation
         #expect(history.items.count == 1)
         let item = try #require(history.items.first)
         #expect(item.cleanedText == "Hello there.")
-        #expect(item.modeDisplayName == "Slack")
-        #expect(item.modeBundleID == "com.tinyspeck.slackmacgap")
+        #expect(item.modeCategoryName == "Chat")
         #expect(item.appName == "Slack")
         #expect(item.appBundleID == "com.tinyspeck.slackmacgap")
     }

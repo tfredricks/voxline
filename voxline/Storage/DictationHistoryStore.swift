@@ -9,17 +9,14 @@ struct DictationHistoryItem: Codable, Identifiable, Equatable {
     let id: UUID
     let timestamp: Date
     let cleanedText: String
-    /// Display name of the resolved Mode at capture time (e.g. "Slack"). Nil
-    /// only for rows persisted before mode capture existed.
-    let modeDisplayName: String?
-    /// Bundle ID the resolved Mode is keyed on. `"*"` for the wildcard.
-    let modeBundleID: String?
+    /// Display name of the resolved Mode's category (e.g. "Chat", "Email").
+    /// Nil only for rows persisted before category capture existed.
+    let modeCategoryName: String?
     /// Localized name of the frontmost app, from `CapturedContext.appName`.
     /// Nil when AX denied capture or no app was frontmost.
     let appName: String?
     /// Bundle ID of the frontmost app, from `CapturedContext.bundleID`.
     let appBundleID: String?
-
 }
 
 /// In-memory list (max 25, newest first) of recent cleaned dictations,
@@ -51,8 +48,7 @@ final class DictationHistoryStore {
             id: UUID(),
             timestamp: Date(),
             cleanedText: cleanedText,
-            modeDisplayName: mode.displayName,
-            modeBundleID: mode.bundleID,
+            modeCategoryName: mode.category.displayName,
             appName: context.appName,
             appBundleID: context.bundleID
         )

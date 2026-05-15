@@ -72,7 +72,7 @@ import Foundation
         #expect(reader.items[2].cleanedText == "alpha")
     }
 
-    @Test func record_captures_mode_fields() {
+    @Test func record_captures_mode_category() {
         let suite = UserDefaults(suiteName: "voxline.history.test.\(UUID().uuidString)")!
         defer { suite.removePersistentDomain(forName: "voxline.history.test") }
         let store = DictationHistoryStore(defaults: suite)
@@ -82,13 +82,13 @@ import Foundation
             displayName: "Test",
             prompt: "p",
             model: nil,
-            temperature: nil
+            temperature: nil,
+            category: .chat
         )
         store.record(cleanedText: "hi", mode: mode, context: .empty)
 
         let item = try! #require(store.items.first)
-        #expect(item.modeDisplayName == "Test")
-        #expect(item.modeBundleID == "com.test.app")
+        #expect(item.modeCategoryName == "Chat")
     }
 
     @Test func record_captures_app_fields_from_context() {
@@ -155,8 +155,7 @@ import Foundation
         #expect(store.items.count == 2)
         let first = try #require(store.items.first)
         #expect(first.cleanedText == "hello")
-        #expect(first.modeDisplayName == nil)
-        #expect(first.modeBundleID == nil)
+        #expect(first.modeCategoryName == nil)
         #expect(first.appName == nil)
         #expect(first.appBundleID == nil)
     }
