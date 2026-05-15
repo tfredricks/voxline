@@ -41,7 +41,7 @@ struct OpenAIClient: LLMClient {
             throw LLMError.network(error)
         }
         AppLog.llm.debug("openai HTTP \(response.statusCode) (bytes=\(data.count))")
-        try mapStatus(response: response, body: data)
+        try mapHTTPStatus(response, body: data, provider: "openai")
 
         struct Envelope: Decodable {
             let choices: [Choice]
@@ -62,24 +62,5 @@ struct OpenAIClient: LLMClient {
             throw LLMError.badResponseShape(reason: "no choices in response")
         }
         return first.message.content
-    }
-
-    private func mapStatus(response: HTTPURLResponse, body: Data) throws {
-        switch response.statusCode {
-        case 200..<300: return
-        case 401:
-            // Body intentionally not logged: 401 responses can echo the
-            // offending API key prefix.
-            AppLog.llm.error("openai: 401 invalid API key")
-            throw LLMError.invalidAPIKey
-        case 429:
-            AppLog.llm.error("openai: 429 rate limited")
-            throw LLMError.rateLimited
-        default:
-            let text = String(data: body, encoding: .utf8) ?? ""
-            let excerpt = text.prefix(200)
-            AppLog.llm.error("openai: HTTP \(response.statusCode) body=\(excerpt)")
-            throw LLMError.badStatus(code: response.statusCode, body: text)
-        }
     }
 }

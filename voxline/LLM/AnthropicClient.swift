@@ -37,28 +37,9 @@ struct AnthropicClient: LLMClient {
             throw LLMError.network(error)
         }
         AppLog.llm.debug("anthropic HTTP \(response.statusCode) (bytes=\(data.count))")
-        try mapStatus(response: response, body: data)
+        try mapHTTPStatus(response, body: data, provider: "anthropic")
 
         return try parseTextBlocks(from: data)
-    }
-
-    private func mapStatus(response: HTTPURLResponse, body: Data) throws {
-        switch response.statusCode {
-        case 200..<300: return
-        case 401:
-            // Body intentionally not logged: 401 responses can echo the
-            // offending API key prefix.
-            AppLog.llm.error("anthropic: 401 invalid API key")
-            throw LLMError.invalidAPIKey
-        case 429:
-            AppLog.llm.error("anthropic: 429 rate limited")
-            throw LLMError.rateLimited
-        default:
-            let text = String(data: body, encoding: .utf8) ?? ""
-            let excerpt = text.prefix(200)
-            AppLog.llm.error("anthropic: HTTP \(response.statusCode) body=\(excerpt)")
-            throw LLMError.badStatus(code: response.statusCode, body: text)
-        }
     }
 
     private func parseTextBlocks(from data: Data) throws -> String {
