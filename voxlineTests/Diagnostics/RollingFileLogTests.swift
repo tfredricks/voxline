@@ -89,6 +89,11 @@ import Foundation
         #expect(lines.count == 205)
         #expect(lines.first?.hasSuffix("entry 0") == true)
         #expect(lines.last?.hasSuffix("entry 204") == true)
+        // Boundary check: seeded entries (0..<200) come first, then freshly
+        // appended entries (200..<205). A bug that interleaved or reordered
+        // them would still satisfy the count and first/last assertions.
+        #expect(lines[199].hasSuffix("entry 199") == true)
+        #expect(lines[200].hasSuffix("entry 200") == true)
     }
 
     @Test func parsesExistingFileOnFirstAppend() throws {
@@ -116,6 +121,6 @@ import Foundation
         // Oldest survivor of the 300 seeded was index 51 (0..<300 minus
         // the oldest 50, then minus 1 more when "fresh entry" pushed
         // index 50 out).
-        #expect(lines.first?.contains("entry 51") == true)
+        #expect(lines.first?.hasSuffix("entry 51") == true)
     }
 }
