@@ -54,6 +54,18 @@ final class RollingFileLog {
         append(level: .info, category: category, message: message)
     }
 
+    func notice(_ message: String, category: String) {
+        append(level: .notice, category: category, message: message)
+    }
+
+    func error(_ message: String, category: String) {
+        append(level: .error, category: category, message: message)
+    }
+
+    func fault(_ message: String, category: String) {
+        append(level: .fault, category: category, message: message)
+    }
+
     private func append(level: Level, category: String, message: String) {
         os_unfair_lock_lock(&lock)
         defer { os_unfair_lock_unlock(&lock) }

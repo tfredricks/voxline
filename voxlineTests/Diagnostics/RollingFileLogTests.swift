@@ -180,4 +180,29 @@ import Foundation
         // Swift Testing fails the test on any uncaught error.
         #expect(Bool(true))
     }
+
+    @Test func levelStringsAreFixed() throws {
+        let url = Self.tempURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let log = RollingFileLog(
+            fileURL: url,
+            clock: Self.fixedClock("2026-05-14T12:34:56.789Z")
+        )
+
+        log.info("a", category: "pipeline")
+        log.notice("b", category: "pipeline")
+        log.error("c", category: "pipeline")
+        log.fault("d", category: "pipeline")
+
+        let body = try String(contentsOf: url, encoding: .utf8)
+        let lines = body.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.isEmpty }
+
+        #expect(lines.count == 4)
+        #expect(lines[0].contains("[INFO] [pipeline] a"))
+        #expect(lines[1].contains("[NOTICE] [pipeline] b"))
+        #expect(lines[2].contains("[ERROR] [pipeline] c"))
+        #expect(lines[3].contains("[FAULT] [pipeline] d"))
+    }
 }
