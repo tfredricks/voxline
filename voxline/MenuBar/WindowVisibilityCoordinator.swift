@@ -15,10 +15,12 @@ final class WindowVisibilityCoordinator {
     }
 
     func start() {
+        // Seed from already-visible titled windows. We do NOT call into the
+        // policy logic from start(): LSUIElement starts the app at .accessory,
+        // which is exactly where we want to be when no windows are tracked.
         for w in NSApp.windows where isTitled(w) && w.isVisible {
             tracked.insert(ObjectIdentifier(w))
         }
-        reconcile()
 
         let key = center.addObserver(
             forName: NSWindow.didBecomeKeyNotification,
@@ -26,8 +28,7 @@ final class WindowVisibilityCoordinator {
         ) { [weak self] note in
             MainActor.assumeIsolated {
                 guard let self, let w = note.object as? NSWindow, self.isTitled(w) else { return }
-                self.tracked.insert(ObjectIdentifier(w))
-                self.reconcile()
+                self.insert(w)
             }
         }
         let close = center.addObserver(
@@ -36,8 +37,7 @@ final class WindowVisibilityCoordinator {
         ) { [weak self] note in
             MainActor.assumeIsolated {
                 guard let self, let w = note.object as? NSWindow else { return }
-                self.tracked.remove(ObjectIdentifier(w))
-                self.reconcile()
+                self.remove(w)
             }
         }
         observers = [key, close]
@@ -47,16 +47,28 @@ final class WindowVisibilityCoordinator {
         w.styleMask.contains(.titled)
     }
 
-    private func reconcile() {
-        let policy: NSApplication.ActivationPolicy = tracked.isEmpty ? .accessory : .regular
-        // Defer to next runloop tick when going .accessory so a closing
-        // window has time to finish ordering out before AppKit re-evaluates
-        // the Dock state (avoids a stuck Dock icon).
-        if policy == .accessory {
-            DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
-        } else {
+    /// Add `w` to the tracked set. Flip the app to `.regular` only on the
+    /// 0 → 1 edge — repeated didBecomeKey events for an already-tracked window
+    /// must NOT re-issue `setActivationPolicy(.regular)`, because the
+    /// redundant call interrupts AppKit's in-flight activation and produces a
+    /// visible flicker on the very window we're trying to show.
+    private func insert(_ w: NSWindow) {
+        let wasEmpty = tracked.isEmpty
+        let inserted = tracked.insert(ObjectIdentifier(w)).inserted
+        if wasEmpty && inserted {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate()
+        }
+    }
+
+    /// Remove `w` from the tracked set. Flip back to `.accessory` only on the
+    /// 1 → 0 edge. Deferred to the next runloop tick so the closing window
+    /// finishes ordering out before AppKit re-evaluates the Dock state
+    /// (avoids a stuck Dock icon).
+    private func remove(_ w: NSWindow) {
+        let removed = tracked.remove(ObjectIdentifier(w)) != nil
+        if removed && tracked.isEmpty {
+            DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
         }
     }
 
