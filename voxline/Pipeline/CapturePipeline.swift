@@ -64,9 +64,7 @@ final class CapturePipeline {
         // would mask a real "tap is uninstalled" condition. Pipeline and
         // modelPrep errors are clearable by the user retrying.
         switch state.status {
-        case .recording, .thinking, .downloadingModel, .preparingModel:
-            return
-        case .error(.permissions, _):
+        case .recording, .thinking, .downloadingModel, .preparingModel, .permissionsError:
             return
         case .idle, .error:
             break
@@ -187,9 +185,8 @@ final class CapturePipeline {
             state.debugLastInsertionResult = outcome.description
             AppLog.paste.info("inject ok: outcome=\(outcome.description)")
         } catch let e as TextInsertionError {
-            let category: AppErrorCategory = (e == .accessibilityNotGranted) ? .permissions : .pipeline
             AppLog.paste.error("inject failed: \(e.errorDescription ?? "unknown")")
-            return setError(e.errorDescription ?? "Text insertion failed.", category: category)
+            return setError(e.errorDescription ?? "Text insertion failed.", permissions: e == .accessibilityNotGranted)
         } catch {
             AppLog.paste.error("inject failed: \(error.localizedDescription)")
             return setError("Text insertion failed: \(error.localizedDescription)")
@@ -204,8 +201,8 @@ final class CapturePipeline {
         state.status = .idle
     }
 
-    private func setError(_ message: String, category: AppErrorCategory = .pipeline) {
-        state.status = .error(category: category, message: message)
+    private func setError(_ message: String, permissions: Bool = false) {
+        state.status = permissions ? .permissionsError(message) : .error(message)
         state.recordingStartedAt = nil
         state.audioLevel = 0
     }

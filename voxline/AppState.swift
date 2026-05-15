@@ -1,25 +1,6 @@
 import Foundation
 import Observation
 
-/// Distinguishes who set the current error so consumers can decide whether
-/// to clear it. Without this tag, the AppCoordinator's reconcile loop
-/// clobbered transient pipeline errors when permissions came back, and a
-/// chord-press silently cleared a sticky permissions banner. Adding the
-/// category keeps each owner responsible for clearing only its own errors.
-enum AppErrorCategory: Equatable {
-    /// Hotkey Accessibility revoked, or first-launch permissions not yet
-    /// granted. Sticky until Accessibility is restored. Cleared by
-    /// AppCoordinator's reconcile loop when the tap installs.
-    case permissions
-    /// Transient dictation failure (audio capture, transcription, LLM,
-    /// paste, mode-missing, silent-mic). Cleared by the next chord press
-    /// (the user retrying).
-    case pipeline
-    /// Whisper model download or prewarm failure. Cleared by the next
-    /// successful prep run.
-    case modelPrep
-}
-
 enum AppStatus: Equatable {
     case idle
     case recording
@@ -29,13 +10,28 @@ enum AppStatus: Equatable {
     /// Model files are on disk but Core ML / Apple Neural Engine is still
     /// compiling them. The first run after download can take 30s-2min.
     case preparingModel
-    case error(category: AppErrorCategory, message: String)
+    /// Sticky failure that requires the user to act in System Settings.
+    /// Cleared by AppCoordinator's reconcile loop when permissions return.
+    case permissionsError(String)
+    /// Transient failure (audio, transcription, LLM, paste, model prep).
+    /// Cleared by the next user action — chord press or successful model prep.
+    case error(String)
 
-    /// Recording is blocked until the model is fully ready.
     var blocksRecording: Bool {
         switch self {
         case .downloadingModel, .preparingModel: return true
         default: return false
+        }
+    }
+}
+
+extension AppStatus {
+    /// Non-nil iff status is `.error` or `.permissionsError`. Used by the
+    /// menu bar's error banner.
+    var errorMessage: String? {
+        switch self {
+        case .error(let m), .permissionsError(let m): return m
+        default: return nil
         }
     }
 }

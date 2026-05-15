@@ -10,7 +10,7 @@ enum MenuBarIcon {
         case .thinking:         return "ellipsis.circle"
         case .downloadingModel: return "arrow.down.circle"
         case .preparingModel:   return "gearshape.circle"
-        case .error:            return "mic.slash"
+        case .error, .permissionsError: return "mic.slash"
         case .idle:             return paused ? "pause.circle" : "mic"
         }
     }

@@ -16,7 +16,7 @@ import Testing
     }
 
     @Test func iconForError() {
-        #expect(MenuBarIcon.symbolName(for: .error(category: .pipeline, message: "anything")) == "mic.slash")
+        #expect(MenuBarIcon.symbolName(for: .error("anything")) == "mic.slash")
     }
 
     @Test func iconForDownloadingModel() {
@@ -34,6 +34,6 @@ import Testing
 
     @Test func pausedDoesNotOverrideActiveStatus() {
         #expect(MenuBarIcon.symbolName(for: .recording, paused: true) == "mic.fill")
-        #expect(MenuBarIcon.symbolName(for: .error(category: .pipeline, message: "x"), paused: true) == "mic.slash")
+        #expect(MenuBarIcon.symbolName(for: .error("x"), paused: true) == "mic.slash")
     }
 }

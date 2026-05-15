@@ -301,7 +301,7 @@ final class AppCoordinator {
             // running process, so the reconcile loop polls until AX/IM are
             // granted and then installs the tap. The user does NOT need to
             // restart the app.
-            state.status = .error(category: .permissions, message: "Hotkey monitoring requires Accessibility permission. Grant it in System Settings → Privacy & Security — Voxline will pick it up automatically.")
+            state.status = .permissionsError("Hotkey monitoring requires Accessibility permission. Grant it in System Settings → Privacy & Security — Voxline will pick it up automatically.")
         }
 
         observeToastChanges(state: state)
@@ -347,7 +347,7 @@ final class AppCoordinator {
                 // Clear only the permissions banner that this loop owns.
                 // A pipeline or modelPrep error in flight is unrelated to
                 // tap installation and must not be silently dismissed.
-                if case .error(.permissions, _) = state.status {
+                if case .permissionsError = state.status {
                     state.status = .idle
                 }
             } catch {
@@ -358,7 +358,7 @@ final class AppCoordinator {
             // Distinguish user-initiated pause from involuntary revocation —
             // only the latter deserves an error banner.
             if state.hotkeyEnabled && !permissionsOK {
-                state.status = .error(category: .permissions, message: "Accessibility permission was revoked. Re-grant it in System Settings → Privacy & Security; Voxline will recover automatically.")
+                state.status = .permissionsError("Accessibility permission was revoked. Re-grant it in System Settings → Privacy & Security; Voxline will recover automatically.")
             }
         }
     }
@@ -463,7 +463,7 @@ final class AppCoordinator {
             } catch {
                 AppLog.whisper.error("model prep failed: \(error.localizedDescription)")
                 if let state {
-                    state.status = .error(category: .modelPrep, message: "Model setup failed: \(error.localizedDescription). Try Retry or relaunch Voxline.")
+                    state.status = .error("Model setup failed: \(error.localizedDescription). Try Retry or relaunch Voxline.")
                 }
                 if managesDownloadWindow {
                     self?.downloadWindow?.close()

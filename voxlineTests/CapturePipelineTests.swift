@@ -183,8 +183,7 @@ import Foundation
         let (pipe, state, _, _, llm, _, _, _, _) = makePipeline()
         llm.nextResult = .failure(LLMError.missingAPIKey)
         await startAndFinalize(pipe, state: state)
-        if case .error(let category, let msg) = state.status {
-            #expect(category == .pipeline)
+        if case .error(let msg) = state.status {
             #expect(msg.contains("Settings"))
         } else {
             Issue.record("expected .error")
@@ -255,7 +254,7 @@ import Foundation
         // user-recoverable by retrying. Pressing the chord again should
         // start a new recording.
         let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
-        state.status = .error(category: .pipeline, message: "Paste failed.")
+        state.status = .error("Paste failed.")
         pipe.startRecording()
         #expect(capture.startCallCount == 1)
         #expect(state.status == .recording)
@@ -294,10 +293,10 @@ import Foundation
         // would mask that.
         let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
         let stickyMessage = "Accessibility revoked. Re-grant in System Settings."
-        state.status = .error(category: .permissions, message: stickyMessage)
+        state.status = .permissionsError(stickyMessage)
         pipe.startRecording()
         #expect(capture.startCallCount == 0)
-        #expect(state.status == .error(category: .permissions, message: stickyMessage))
+        #expect(state.status == .permissionsError(stickyMessage))
     }
 
     @Test func finalizeRecording_recordsCleanedTextInHistory() async throws {

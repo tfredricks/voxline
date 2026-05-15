@@ -12,7 +12,7 @@ struct MenuBarContent: View {
     var tagSettingsWindow: () -> Void = {}
 
     var body: some View {
-        if case .error(_, let message) = state.status {
+        if let message = state.status.errorMessage {
             Text(message)
                 .foregroundStyle(.red)
             Divider()

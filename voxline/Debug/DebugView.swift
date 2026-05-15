@@ -263,7 +263,8 @@ struct DebugView: View {
         case .thinking: return "thinking"
         case .preparingModel: return "preparingModel"
         case .downloadingModel(let p): return "downloadingModel(\(Int(p * 100))%)"
-        case .error(let category, let msg): return "error[\(category)]: \(msg)"
+        case .error(let msg): return "error: \(msg)"
+        case .permissionsError(let msg): return "permissionsError: \(msg)"
         }
     }
 
