@@ -178,6 +178,7 @@ enum TextInsertionError: Error, LocalizedError, Equatable {
     case directTypingUnavailable(String)
     case directTypingRejected
     case secureFieldUnsupported
+    case pasteVerificationFailed
     case allStrategiesFailed([String])
 
     var errorDescription: String? {
@@ -198,6 +199,8 @@ enum TextInsertionError: Error, LocalizedError, Equatable {
             return "The focused field did not appear to accept direct typing."
         case .secureFieldUnsupported:
             return "The focused field is a secure text field. Voxline will not insert dictated text into password inputs."
+        case .pasteVerificationFailed:
+            return "Voxline could not confirm the paste landed in the focused field. Click the field you want to dictate into and try again."
         case .allStrategiesFailed(let failures):
             return "Text insertion failed. Tried clipboard paste, Accessibility insertion, and direct typing. \(failures.joined(separator: " "))"
         }
@@ -541,6 +544,12 @@ final class ClipboardInjector {
 
         do {
             return try await injectViaClipboardPaste(text)
+        } catch TextInsertionError.pasteVerificationFailed {
+            // Focus shifted mid-paste; the cleaned text landed in an
+            // unintended target. Fallback strategies would write into
+            // the new focus, compounding the harm. Surface directly.
+            AppLog.paste.error("paste verification failed: focused element changed mid-paste")
+            throw TextInsertionError.pasteVerificationFailed
         } catch {
             AppLog.paste.debug("clipboard-paste failed: \(error.localizedDescription); trying AX value-set")
             failures.append(error.localizedDescription)
@@ -574,6 +583,7 @@ final class ClipboardInjector {
         }
 
         let before = focusedTextSystem.snapshot()
+        let beforeIdentity = focusedTextSystem.focusedElementIdentity()
 
         // 1. Snapshot. Throws on refuse-to-clobber; we propagate without
         // having touched the pasteboard.
@@ -619,11 +629,19 @@ final class ClipboardInjector {
         switch check {
         case .confirmedChanged:
             return TextInsertionOutcome(strategy: .clipboardPaste, verification: .confirmed)
-        case .unavailable, .unchanged:
-            // .unchanged here means "AX disagrees that anything changed."
-            // That's not proof of failure — many editors expose stale
-            // values via AX. Treat as unverified so we don't double-insert
-            // on top of a paste that may well have succeeded.
+        case .unavailable:
+            // Many opaque editors (Electron, WKWebView, custom NSTextView)
+            // expose no usable AX value; the paste likely landed.
+            return TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
+        case .unchanged:
+            // Same focused element → stale-AX quirk; paste probably landed.
+            // Different focused element → focus shifted mid-paste; the
+            // Cmd+V landed in an unintended target. Fallbacks would
+            // compound the harm; surface a clear failure instead.
+            let afterIdentity = focusedTextSystem.focusedElementIdentity()
+            if let beforeIdentity, let afterIdentity, beforeIdentity != afterIdentity {
+                throw TextInsertionError.pasteVerificationFailed
+            }
             return TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
         }
     }
