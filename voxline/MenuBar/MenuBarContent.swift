@@ -34,7 +34,9 @@ struct MenuBarContent: View {
         Button("Settings…") {
             // Activate ignoring others so the Settings scene lands above the
             // previously-frontmost app on LSUIElement (menu-bar) apps. See
-            // AboutWindowController.show for the full rationale.
+            // NSWindow.presentInAccessoryApp in WindowPresentation.swift for
+            // the full rationale; this site can't use it because openSettings
+            // doesn't expose the underlying NSWindow.
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
         }
