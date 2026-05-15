@@ -123,4 +123,39 @@ import Foundation
         // index 50 out).
         #expect(lines.first?.hasSuffix("entry 51") == true)
     }
+
+    @Test func concurrentAppendsPreserveCountAndOrdering() async throws {
+        let url = Self.tempURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let log = RollingFileLog(
+            fileURL: url,
+            clock: Self.fixedClock("2026-05-14T12:34:56.789Z")
+        )
+
+        // 4 concurrent producers × 100 lines each = 400 calls; the file
+        // ring caps at 250.
+        await withTaskGroup(of: Void.self) { group in
+            for producer in 0..<4 {
+                group.addTask {
+                    for i in 0..<100 {
+                        log.info("p\(producer)-\(i)", category: "pipeline")
+                    }
+                }
+            }
+        }
+
+        let body = try String(contentsOf: url, encoding: .utf8)
+        let lines = body.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.isEmpty }
+
+        // Exactly 250 lines, none torn (each must contain "[INFO]
+        // [pipeline]" — proves the writer never interleaved a partial
+        // file body).
+        #expect(lines.count == 250)
+        for line in lines {
+            #expect(line.contains("[INFO] [pipeline] p"),
+                    "torn or malformed line: \(line)")
+        }
+    }
 }
