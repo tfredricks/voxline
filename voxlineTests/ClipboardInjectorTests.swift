@@ -438,4 +438,81 @@ final class LockedBox<T>: @unchecked Sendable {
 
         #expect(board.string(forType: .string) == "ORIGINAL")
     }
+
+    @Test func paste_with_ax_unchanged_and_same_element_remains_unverified() async throws {
+        // Electron/WKWebView path: AX exposes a stale value AND the focused
+        // element is the same one we sampled before the paste. We must NOT
+        // escalate (would double-insert on top of a paste that likely
+        // succeeded). Behavior identical to today's `.unverified` outcome.
+        let board = makeBoard()
+        board.clearContents()
+        board.setString("ORIGINAL", forType: .string)
+
+        let focused = FakeFocusedTextSystem()
+        focused.currentValue = "before"
+        focused.snapshotQueue = [
+            FocusedTextSnapshot(value: "before"),
+            FocusedTextSnapshot(value: "before")
+        ]
+        focused.identityQueue = ["webview-1", "webview-1"]
+
+        let injector = await ClipboardInjector(
+            pasteboard: board,
+            focusedTextSystem: focused,
+            chordIsHeld: { false },
+            forceClearChord: {},
+            postKey: { _, _ in },
+            pasteVirtualKeyCode: { 9 },
+            typeText: { _ in },
+            isAccessibilityTrusted: { true },
+            restoreDelay: .milliseconds(0)
+        )
+
+        let outcome = try await injector.inject("CLEAN")
+
+        #expect(outcome == TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified))
+        #expect(focused.inserted.isEmpty)   // did NOT double-insert via AX
+        #expect(board.string(forType: .string) == "ORIGINAL")
+    }
+
+    @Test func paste_with_ax_unchanged_and_different_element_surfaces_failure() async throws {
+        // Focus shifted between the pre- and post-paste reads. The paste
+        // landed somewhere we didn't intend, and AX value is unchanged for
+        // the new focus target. We must NOT fall back (would write into the
+        // new focus target). Surface a clear failure so the user can retry.
+        let board = makeBoard()
+        board.clearContents()
+        board.setString("ORIGINAL", forType: .string)
+
+        let focused = FakeFocusedTextSystem()
+        focused.currentValue = "before"
+        focused.snapshotQueue = [
+            FocusedTextSnapshot(value: "before"),
+            FocusedTextSnapshot(value: "before")
+        ]
+        focused.identityQueue = ["element-A", "element-B"]   // focus shifted
+
+        let typed = LockedBox<[String]>([])
+        let injector = await ClipboardInjector(
+            pasteboard: board,
+            focusedTextSystem: focused,
+            chordIsHeld: { false },
+            forceClearChord: {},
+            postKey: { _, _ in },
+            pasteVirtualKeyCode: { 9 },
+            typeText: { text in typed.mutate { $0.append(text) } },
+            isAccessibilityTrusted: { true },
+            restoreDelay: .milliseconds(0)
+        )
+
+        await #expect(throws: TextInsertionError.pasteVerificationFailed) {
+            _ = try await injector.inject("CLEAN")
+        }
+
+        // No fallback ran — neither AX value-set nor synthetic typing.
+        #expect(focused.inserted.isEmpty)
+        #expect(typed.read().isEmpty)
+        // Clipboard restored even on the failure path.
+        #expect(board.string(forType: .string) == "ORIGINAL")
+    }
 }
