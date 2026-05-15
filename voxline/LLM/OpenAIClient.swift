@@ -41,7 +41,7 @@ struct OpenAIClient: LLMClient {
             throw LLMError.network(error)
         }
         AppLog.llm.debug("openai HTTP \(response.statusCode) (bytes=\(data.count))")
-        try mapHTTPStatus(response, body: data, provider: "openai")
+        try mapHTTPStatus(response, body: data, provider: .openai)
 
         struct Envelope: Decodable {
             let choices: [Choice]

@@ -37,7 +37,7 @@ struct AnthropicClient: LLMClient {
             throw LLMError.network(error)
         }
         AppLog.llm.debug("anthropic HTTP \(response.statusCode) (bytes=\(data.count))")
-        try mapHTTPStatus(response, body: data, provider: "anthropic")
+        try mapHTTPStatus(response, body: data, provider: .anthropic)
 
         return try parseTextBlocks(from: data)
     }
