@@ -88,8 +88,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         aboutWindow.show(env: env)
     }
-
-
 }
 
 @MainActor

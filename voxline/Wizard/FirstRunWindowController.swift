@@ -39,7 +39,6 @@ final class FirstRunWindowController {
         win.contentView = host
         win.center()
         win.isReleasedWhenClosed = false
-
         self.window = win
         // See AboutWindowController.show for why this pair is in this order.
         NSApp.activate(ignoringOtherApps: true)
@@ -47,7 +46,7 @@ final class FirstRunWindowController {
     }
 
     func close() {
-        window?.orderOut(nil)
+        window?.close()
         window = nil
     }
 }

@@ -35,7 +35,7 @@ final class ModelDownloadWindow {
     }
 
     func close() {
-        window?.orderOut(nil)
+        window?.close()
         window = nil
     }
 }
