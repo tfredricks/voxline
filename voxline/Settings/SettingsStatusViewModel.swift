@@ -46,8 +46,8 @@ final class SettingsStatusViewModel {
     private var providerKeySaved: Bool {
         let live: String
         switch general.provider {
-        case .anthropic: live = keys.anthropicKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        case .openai:    live = keys.openaiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .anthropic: live = keys.anthropicKey.trimmed
+        case .openai:    live = keys.openaiKey.trimmed
         }
         // isPersisted returns true when both live and saved are empty (empty == empty),
         // so the !live.isEmpty guard is needed to distinguish "key not set" from "key saved".

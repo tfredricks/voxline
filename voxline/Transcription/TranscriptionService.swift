@@ -118,7 +118,7 @@ final class TranscriptionService {
     func transcribe(samples: [Float]) async throws -> String {
         let kit = try await loadIfNeeded()
         let results = try await kit.transcribe(audioArray: samples, decodeOptions: DecodingOptions())
-        return results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        return results.map(\.text).joined(separator: " ").trimmed
     }
 
     // MARK: - Private

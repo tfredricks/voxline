@@ -46,13 +46,13 @@ final class APIKeysSettingsViewModel {
     /// value deletes the keychain entry.
     func commitAnthropic() {
         persist(value: anthropicKey, account: KeychainAccount.anthropic)
-        anthropicPersisted = trimmed(anthropicKey)
+        anthropicPersisted = anthropicKey.trimmed
     }
 
     /// Persist the OpenAI key. Same rules as commitAnthropic.
     func commitOpenAI() {
         persist(value: openaiKey, account: KeychainAccount.openai)
-        openaiPersisted = trimmed(openaiKey)
+        openaiPersisted = openaiKey.trimmed
     }
 
     /// Issue a tiny no-op LLM call to verify the current in-memory key for
@@ -61,7 +61,7 @@ final class APIKeysSettingsViewModel {
     func testConnection(_ provider: LLMProvider) async {
         testing = provider
         defer { testing = nil }
-        let key = trimmed(liveKey(for: provider))
+        let key = liveKey(for: provider).trimmed
         guard !key.isEmpty else {
             testResult = .failed(provider, "No API key set.")
             return
@@ -88,7 +88,7 @@ final class APIKeysSettingsViewModel {
     /// True when the field's current value (trimmed) matches the last committed
     /// value. Uses an in-memory cache — no keychain IO on every render.
     func isPersisted(_ provider: LLMProvider) -> Bool {
-        let live = trimmed(provider == .anthropic ? anthropicKey : openaiKey)
+        let live = (provider == .anthropic ? anthropicKey : openaiKey).trimmed
         let saved = (provider == .anthropic) ? anthropicPersisted : openaiPersisted
         return saved == live
     }
@@ -107,7 +107,7 @@ final class APIKeysSettingsViewModel {
     }
 
     private func persist(value: String, account: String) {
-        let v = trimmed(value)
+        let v = value.trimmed
         do {
             if v.isEmpty {
                 try keychain.delete(forKey: account)
@@ -119,7 +119,4 @@ final class APIKeysSettingsViewModel {
         }
     }
 
-    private func trimmed(_ s: String) -> String {
-        s.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
 }

@@ -72,9 +72,7 @@ struct WizardAPIKeyView: View {
     }
 
     private var currentKeyEmpty: Bool {
-        keyBinding.wrappedValue
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .isEmpty
+        keyBinding.wrappedValue.isBlank
     }
 
     @ViewBuilder

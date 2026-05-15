@@ -43,7 +43,7 @@ final class DictationHistoryStore {
     func record(cleanedText: String, mode: Mode, context: CapturedContext) {
         // Trim is a record-or-skip filter only; the stored text is the raw
         // cleanedText so history matches what was pasted into the focused app.
-        guard !cleanedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !cleanedText.isBlank else { return }
         let item = DictationHistoryItem(
             id: UUID(),
             timestamp: Date(),

@@ -45,7 +45,7 @@ struct APIKeyRow: View {
             HStack(spacing: 8) {
                 Link("Get a \(title) key →", destination: getKeyURL).font(.callout)
                 Spacer()
-                let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmed = key.trimmed
                 let prefixMismatch = !trimmed.isEmpty && !trimmed.hasPrefix(expectedPrefix)
                 let antInOpenAI = (provider == .openai) && trimmed.hasPrefix("sk-ant-")
                 if prefixMismatch || antInOpenAI {
@@ -65,7 +65,7 @@ struct APIKeyRow: View {
                 // SecureField when another button in the same Form is
                 // clicked, so .onChange(of: focused) can't be relied on.
                 Button("Test") { onCommit(); onTest() }
-                    .disabled(testing != nil || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(testing != nil || key.isBlank)
                 if testing == provider { ProgressView().controlSize(.small) }
                 testResultLabel
                 Spacer()
@@ -87,7 +87,7 @@ struct APIKeyRow: View {
     // SwiftUI's SecureField + Form combo).
     @ViewBuilder
     private var saveAffordance: some View {
-        let trimmedEmpty = key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let trimmedEmpty = key.isBlank
         if trimmedEmpty {
             EmptyView()
         } else if isPersisted {

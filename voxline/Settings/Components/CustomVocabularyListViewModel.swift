@@ -17,7 +17,7 @@ final class CustomVocabularyListViewModel {
     /// True when adding `draft` (trimmed) is meaningful: non-empty and not
     /// already in the list. Drives the Add button's disabled state.
     var canAdd: Bool {
-        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = draft.trimmed
         return !trimmed.isEmpty && !terms.contains(trimmed)
     }
 
@@ -29,7 +29,7 @@ final class CustomVocabularyListViewModel {
     }
 
     func addTerm() {
-        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = draft.trimmed
         guard !trimmed.isEmpty else { return }
         guard !terms.contains(trimmed) else { draft = ""; return }
         terms.append(trimmed)

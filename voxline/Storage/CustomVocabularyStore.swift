@@ -40,7 +40,7 @@ struct CustomVocabularyStore {
         var seen = Set<String>()
         var out: [String] = []
         for raw in terms {
-            let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let t = raw.trimmed
             if t.isEmpty { continue }
             if seen.insert(t).inserted { out.append(t) }
         }

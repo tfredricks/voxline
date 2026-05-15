@@ -30,8 +30,8 @@ final class WizardViewModel {
         // Pre-select the picker based on what's already in the keychain,
         // falling back to the current settings choice. A returning user who
         // only has an OpenAI key sees OpenAI selected by default.
-        let hasAnt = !Self.trimmedIsEmpty(vm.anthropicKey)
-        let hasOA  = !Self.trimmedIsEmpty(vm.openaiKey)
+        let hasAnt = !vm.anthropicKey.isBlank
+        let hasOA  = !vm.openaiKey.isBlank
         if hasOA && !hasAnt {
             self.selectedProvider = .openai
         } else if hasAnt && !hasOA {
@@ -48,8 +48,8 @@ final class WizardViewModel {
     /// provider has no key.
     var canAdvanceFromAPIKeyStep: Bool {
         switch selectedProvider {
-        case .anthropic: return !Self.trimmedIsEmpty(apiKeyVM.anthropicKey)
-        case .openai:    return !Self.trimmedIsEmpty(apiKeyVM.openaiKey)
+        case .anthropic: return !apiKeyVM.anthropicKey.isBlank
+        case .openai:    return !apiKeyVM.openaiKey.isBlank
         }
     }
 
@@ -94,7 +94,5 @@ final class WizardViewModel {
         onComplete?()
     }
 
-    private static func trimmedIsEmpty(_ s: String) -> Bool {
-        s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
+
 }
