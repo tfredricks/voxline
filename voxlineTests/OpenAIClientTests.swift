@@ -5,26 +5,6 @@ import Foundation
 
 @Suite struct OpenAIClientTests {
 
-    final class MockHTTPClient: HTTPClient, @unchecked Sendable {
-        var capturedRequest: URLRequest?
-        var stubResponse: (data: Data, status: Int) = (Data(), 200)
-        var stubError: Error?
-
-        func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-            capturedRequest = request
-            if let stubError { throw stubError }
-            return (
-                stubResponse.data,
-                HTTPURLResponse(
-                    url: request.url!,
-                    statusCode: stubResponse.status,
-                    httpVersion: "HTTP/1.1",
-                    headerFields: nil
-                )!
-            )
-        }
-    }
-
     @Test func sends_post_to_chat_completions_with_bearer_token() async throws {
         let mock = MockHTTPClient()
         mock.stubResponse = (
