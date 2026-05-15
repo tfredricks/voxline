@@ -1,8 +1,8 @@
 // voxline/UI/HistoryWindowController.swift
 //
 // Hosts HistoryView in a regular activating NSWindow. Same pattern as
-// AboutWindowController and DebugWindowController: lazy-create on first
-// show, just bring forward on subsequent calls.
+// AboutWindowController: lazy-create on first show, just bring forward
+// on subsequent calls.
 
 import AppKit
 import SwiftUI

@@ -58,8 +58,7 @@ final class AppState {
 
     /// Most recently produced LLM-cleaned text — i.e. exactly what was (or
     /// would have been) pasted into the focused field. Populated by
-    /// CapturePipeline after the LLM step completes and before the paste
-    /// step runs, so it is visible in the Debug window even when paste fails.
+    /// CapturePipeline after the LLM step completes and before the paste step runs.
     var lastCleanedText: String?
 
     /// Wall-clock time the current recording began, or nil while idle.
@@ -68,8 +67,7 @@ final class AppState {
 
     /// Peak audio level observed during the most recent recording. Stays
     /// at 0 if the mic was muted/denied or the input device produced silence.
-    /// Read by CapturePipeline's silent-capture detector (not debug-only) and
-    /// rendered in the Debug window's Last-attempt panel.
+    /// Read by CapturePipeline's silent-capture detector.
     var lastPeakLevel: Float = 0
 
     /// Duration of the most recent recording in seconds, derived from the
@@ -86,31 +84,4 @@ final class AppState {
     /// transcript was empty).
     var lastCleanupDuration: TimeInterval?
 
-    // MARK: - Debug diagnostics (rendered in the Debug window)
-
-    /// Current `HotkeyStateMachine.State`, stringified. Updated by HotkeyMonitor
-    /// after every state transition, so a stuck state (e.g. `.recording` or
-    /// `.finalizing` while the user isn't holding the chord) is immediately visible.
-    var debugHotkeyState: String = "idle"
-
-    /// Whether the CGEventTap is currently installed and active.
-    var debugTapInstalled: Bool = false
-
-    /// Last insertion strategy used by ClipboardInjector, including whether
-    /// AX could confirm that the focused field changed.
-    var debugLastInsertionResult: String = "(none yet)"
-
-    /// Live permission states polled by the debug-screen watchdog.
-    var debugMicrophoneStatus: String = "?"
-    var debugAccessibilityStatus: String = "?"
-    var debugInputMonitoringStatus: String = "?"
-
-    /// Last log line emitted by the debug screen's manual test buttons.
-    /// Empty string when nothing has been run yet.
-    var debugLastTestResult: String = ""
-
-    /// Why finalize ran on the most recent chord cycle. Set by HotkeyMonitor
-    /// the moment finalize is triggered, so a too-short recording explains
-    /// itself: chord-release vs app-deactivated vs tap-disabled vs max-duration.
-    var debugLastFinalizeReason: String = "(none yet)"
 }

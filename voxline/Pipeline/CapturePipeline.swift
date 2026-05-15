@@ -81,9 +81,8 @@ final class CapturePipeline {
         state.audioLevel = 0
         state.lastPeakLevel = 0
         // Scrub the prior dictation's text so it doesn't linger in process
-        // memory (and the Debug window) for the lifetime of the app. Spoken
-        // content can include passwords / 2FA codes / private notes; not a
-        // hard secret leak, but a defensible-by-default hygiene measure.
+        // memory for the lifetime of the app. Spoken content can include
+        // passwords / 2FA codes / private notes; defensible-by-default hygiene.
         state.lastTranscript = nil
         state.lastCleanedText = nil
         state.lastTranscribeDuration = nil
@@ -182,7 +181,6 @@ final class CapturePipeline {
         // 4. Paste.
         do {
             let outcome = try await injector.inject(cleaned)
-            state.debugLastInsertionResult = outcome.description
             AppLog.paste.info("inject ok: outcome=\(outcome.description)")
         } catch let e as TextInsertionError {
             AppLog.paste.error("inject failed: \(e.errorDescription ?? "unknown")")

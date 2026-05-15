@@ -6,7 +6,6 @@ struct MenuBarContent: View {
     @Bindable var state: AppState
     @Environment(\.openSettings) private var openSettings
 
-    var openDebugWindow: () -> Void = {}
     var openAboutWindow: () -> Void = {}
     var openHistoryWindow: () -> Void = {}
 
@@ -41,9 +40,6 @@ struct MenuBarContent: View {
             openSettings()
         }
         .keyboardShortcut(",")
-
-        Divider()
-        Button("Debug…") { openDebugWindow() }
 
         Divider()
 

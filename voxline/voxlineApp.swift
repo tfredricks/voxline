@@ -28,12 +28,6 @@ struct voxlineApp: App {
         MenuBarExtra {
             MenuBarContent(
                 state: delegate.appState,
-                openDebugWindow: {
-                    delegate.debugWindow.show(
-                        state: delegate.appState,
-                        coordinator: delegate.coordinator
-                    )
-                },
                 openAboutWindow: {
                     delegate.showAboutWindow()
                 },
@@ -71,7 +65,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
     let historyStore = DictationHistoryStore()
     let coordinator = AppCoordinator()
-    let debugWindow = DebugWindowController()
     let aboutWindow = AboutWindowController()
     let historyWindow = HistoryWindowController()
     let windowVisibility = WindowVisibilityCoordinator()
@@ -92,9 +85,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 @MainActor
 final class AppCoordinator {
-    // Exposed (not private) so the Debug screen can drive end-to-end test
-    // buttons (e.g. "test paste", "test LLM", "force unwedge"). Not part of
-    // the app's public surface — internal-only.
     var hotkeyMonitor: HotkeyMonitor?
     var pipeline: CapturePipeline?
     var transcriber: TranscriptionService?
@@ -251,18 +241,6 @@ final class AppCoordinator {
                 if let state { self?.pillWindow?.updateVisibility(state: state) }
             }
         }
-        monitor.onDebugStateChanged = { [weak state] s, installed in
-            Task { @MainActor in
-                guard let state else { return }
-                state.debugHotkeyState = String(describing: s)
-                state.debugTapInstalled = installed
-            }
-        }
-        monitor.onDebugFinalizeReason = { [weak state] reason in
-            Task { @MainActor in
-                state?.debugLastFinalizeReason = reason
-            }
-        }
         // Accessibility is the hard requirement for our session-level
         // CGEventTap with .listenOnly on .flagsChanged. Input Monitoring is
         // best-effort: some macOS configurations make the tap more reliable
@@ -321,11 +299,6 @@ final class AppCoordinator {
     private func reconcileTapWithPermissionsAndEnabled(state: AppState) {
         let perms = PermissionsService()
         let ax = perms.accessibilityStatus
-        let im = perms.inputMonitoringStatus
-        let mic = perms.microphoneStatus
-        state.debugAccessibilityStatus = String(describing: ax)
-        state.debugInputMonitoringStatus = String(describing: im)
-        state.debugMicrophoneStatus = String(describing: mic)
 
         guard let monitor = hotkeyMonitor else { return }
         // Accessibility is the hard gate. Input Monitoring is informational —

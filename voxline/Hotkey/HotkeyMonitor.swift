@@ -13,15 +13,6 @@ final class HotkeyMonitor {
     var onStartRecording: (() -> Void)?
     var onFinalizeRecording: (() -> Void)?
 
-    /// Optional debug observer — fired whenever the state machine state or
-    /// tap-installation status changes. Used by the menu-bar debug section.
-    var onDebugStateChanged: ((HotkeyStateMachine.State, Bool) -> Void)?
-
-    /// Optional debug observer — fired with a label describing what triggered
-    /// the most recent finalize (chord-release / tap-disabled / max-duration).
-    /// Lets the Debug window explain a too-short recording.
-    var onDebugFinalizeReason: ((String) -> Void)?
-
     /// Snapshot of state-machine state for diagnostics.
     var currentState: HotkeyStateMachine.State { machine.state }
     var isTapInstalled: Bool { eventTap != nil }
@@ -61,7 +52,6 @@ final class HotkeyMonitor {
         eventTap = tap
         runLoopSource = source
         CGEvent.tapEnable(tap: tap, enable: true)
-        onDebugStateChanged?(machine.state, true)
         AppLog.hotkey.info("monitor installed")
     }
 
@@ -141,22 +131,8 @@ final class HotkeyMonitor {
                 onStartRecording?()
             case .finalizeRecording:
                 cancelMaxDurationTimer()
-                if stateBefore == .recording {
-                    onDebugFinalizeReason?(reasonLabel(for: input))
-                }
                 onFinalizeRecording?()
             }
-        }
-        onDebugStateChanged?(machine.state, eventTap != nil)
-    }
-
-    private func reasonLabel(for input: HotkeyStateMachine.Input) -> String {
-        switch input {
-        case .flagsChanged(let a, let b):
-            return "chord-release (modA=\(a), modB=\(b))"
-        case .maxDurationElapsed: return "max-duration"
-        case .tapDisabled:        return "tap-disabled"
-        case .recordingFinished:  return "recording-finished"
         }
     }
 
