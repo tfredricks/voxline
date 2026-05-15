@@ -113,12 +113,7 @@ final class GeneralSettingsViewModel {
         loginItemStatus = status
         let actual = (status == .enabled)
         if launchAtLogin != actual {
-            // Same trick as resetToDefaults: temporarily disable the didSet
-            // → applyLaunchAtLogin chain so reconciling to backend truth
-            // doesn't recursively call setEnabled.
-            loaded = false
-            launchAtLogin = actual
-            loaded = true
+            syncing { launchAtLogin = actual }
         }
     }
 
@@ -129,15 +124,13 @@ final class GeneralSettingsViewModel {
     /// opens. Called via `.task` on the Settings window the same way
     /// `refreshLoginItemStatus()` is.
     func refreshFromUserDefaults() {
-        // Guard with `loaded = false` so the didSet → commit chain doesn't
-        // fire and write the same value right back.
-        loaded = false
-        chord = settings.hotkeyChord
-        audioInputDeviceUID = settings.audioInputDeviceUID
-        whisperModel = settings.whisperModel
-        playHotkeySounds = settings.playHotkeySounds
-        provider = settings.llmProvider
-        loaded = true
+        syncing {
+            chord = settings.hotkeyChord
+            audioInputDeviceUID = settings.audioInputDeviceUID
+            whisperModel = settings.whisperModel
+            playHotkeySounds = settings.playHotkeySounds
+            provider = settings.llmProvider
+        }
     }
 
     /// Restore Spec defaults: hotkey to Left Ctrl + Left Option, system-default
@@ -146,13 +139,13 @@ final class GeneralSettingsViewModel {
     /// Launch-at-Login is intentionally left untouched — Reset is for pipeline
     /// settings, not OS-level integration.
     func resetToDefaults() {
-        loaded = false
-        chord = .default
-        audioInputDeviceUID = nil
-        whisperModel = .default
-        playHotkeySounds = true
-        provider = .anthropic
-        loaded = true
+        syncing {
+            chord = .default
+            audioInputDeviceUID = nil
+            whisperModel = .default
+            playHotkeySounds = true
+            provider = .anthropic
+        }
         vocabulary.save([])
         commit()
     }
@@ -179,5 +172,17 @@ final class GeneralSettingsViewModel {
             playHotkeySounds: playHotkeySounds,
             provider: provider
         ))
+    }
+
+    /// Run `mutations` with `loaded == false` so the `didSet` → `commit()`
+    /// chain on `chord`, `audioInputDeviceUID`, etc. does not fire. Use this
+    /// when batch-syncing the view model to a backing store (UserDefaults,
+    /// `LoginItemService.status`, the Reset-to-defaults path) where the
+    /// changes already represent ground truth and committing them back would
+    /// be redundant at best, recursive at worst.
+    private func syncing(_ mutations: () -> Void) {
+        loaded = false
+        mutations()
+        loaded = true
     }
 }
