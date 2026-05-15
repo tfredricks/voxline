@@ -392,4 +392,41 @@ final class LockedBox<T>: @unchecked Sendable {
         #expect(predicateWhenCtrlOnly == false)
         #expect(predicateWhenEmpty == false)
     }
+
+    /// Pins the invariant: cancellation between postKey and the AX verification read must restore the clipboard.
+    @Test func paste_path_restores_clipboard_when_cancelled_after_postkey() async throws {
+        let board = makeBoard()
+        board.clearContents()
+        board.setString("ORIGINAL", forType: .string)
+
+        let postedAt = LockedBox<Date?>(nil)
+        let injector = await ClipboardInjector(
+            pasteboard: board,
+            focusedTextSystem: FakeFocusedTextSystem(),
+            chordIsHeld: { false },
+            forceClearChord: {},
+            postKey: { _, _ in postedAt.write(Date()) },
+            pasteVirtualKeyCode: { 9 },
+            typeText: { _ in },
+            isAccessibilityTrusted: { true },
+            chordReleaseTimeout: .seconds(60),
+            chordPollInterval: .milliseconds(5),
+            // Long restoreDelay so we can cancel between postKey and the
+            // AX verification read.
+            restoreDelay: .seconds(60),
+            verificationDelay: .milliseconds(0)
+        )
+
+        let task = Task { try await injector.inject("SECRET") }
+        // Wait until postKey has been observed, then cancel.
+        for _ in 0..<200 {
+            if postedAt.read() != nil { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(postedAt.read() != nil, "postKey should have fired before cancellation")
+        task.cancel()
+        _ = try? await task.value
+
+        #expect(board.string(forType: .string) == "ORIGINAL")
+    }
 }
