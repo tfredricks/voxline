@@ -13,9 +13,10 @@ final class RollingFileLog {
         case fault  = "FAULT"
     }
 
-    private enum FailureKind: String {
+    private enum FailureKind: String, Hashable {
         case notFound    // ENOENT or parent dir missing
         case permission  // EACCES / EPERM
+        case diskFull    // ENOSPC / NSFileWriteOutOfSpaceError / read-only volume
         case other
     }
 
@@ -31,7 +32,7 @@ final class RollingFileLog {
 
     private var ring: [String] = []
     private var initializedFromDisk = false
-    private var lastReportedFailure: FailureKind?
+    private var reportedFailures: Set<FailureKind> = []
     private var lock = os_unfair_lock_s()
 
     init(
@@ -91,11 +92,11 @@ final class RollingFileLog {
     }
 
     /// Emits an OSLog `.error` the first time each `FailureKind` occurs
-    /// in this process. Caller must hold `lock`.
+    /// in this instance's lifetime (per-process when used via the
+    /// `AppLog.fileLog` singleton). Caller must hold `lock`.
     private func reportFailureLocked(error: Error) {
         let kind = Self.classify(error)
-        guard kind != lastReportedFailure else { return }
-        lastReportedFailure = kind
+        guard reportedFailures.insert(kind).inserted else { return }
         Self.internalLog.error(
             "RollingFileLog write failed (\(kind.rawValue, privacy: .public)): \(error.localizedDescription, privacy: .public)"
         )
@@ -105,13 +106,16 @@ final class RollingFileLog {
         let ns = error as NSError
         switch (ns.domain, ns.code) {
         case (NSCocoaErrorDomain, NSFileNoSuchFileError),
-             (NSCocoaErrorDomain, NSFileWriteFileExistsError),
              (NSPOSIXErrorDomain, Int(ENOENT)):
             return .notFound
         case (NSCocoaErrorDomain, NSFileWriteNoPermissionError),
              (NSPOSIXErrorDomain, Int(EACCES)),
              (NSPOSIXErrorDomain, Int(EPERM)):
             return .permission
+        case (NSCocoaErrorDomain, NSFileWriteOutOfSpaceError),
+             (NSCocoaErrorDomain, NSFileWriteVolumeReadOnlyError),
+             (NSPOSIXErrorDomain, Int(ENOSPC)):
+            return .diskFull
         default:
             return .other
         }
