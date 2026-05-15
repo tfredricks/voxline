@@ -376,4 +376,24 @@ final class LockedBox<T>: @unchecked Sendable {
         #expect(focused.inserted.isEmpty)
         #expect(typed.read().isEmpty)
     }
+
+    @Test func chord_held_predicate_uses_chord_specific_device_bits() {
+        // Cmd+Shift chord — neither bit overlaps the Ctrl/Alt bits the old
+        // hardcoded predicate consulted. The chord-aware factory must report
+        // "held" when the right Cmd bit is set, and "not held" when only the
+        // (unrelated) Control bit is set.
+        let chord = HotkeyChord(modifierA: .rightCommand, modifierB: .rightShift)
+
+        let rightCmdFlags = CGEventFlags(rawValue: HotkeyChord.Modifier.rightCommand.deviceMaskBit)
+        let controlOnly  = CGEventFlags(rawValue: HotkeyChord.Modifier.leftControl.deviceMaskBit)
+        let none         = CGEventFlags(rawValue: 0)
+
+        let predicateWhenRightCmd = ClipboardInjector.chordIsHeld(in: rightCmdFlags, chord: chord)
+        let predicateWhenCtrlOnly = ClipboardInjector.chordIsHeld(in: controlOnly, chord: chord)
+        let predicateWhenEmpty    = ClipboardInjector.chordIsHeld(in: none, chord: chord)
+
+        #expect(predicateWhenRightCmd == true)
+        #expect(predicateWhenCtrlOnly == false)
+        #expect(predicateWhenEmpty == false)
+    }
 }
