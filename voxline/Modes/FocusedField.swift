@@ -1,4 +1,5 @@
 import Foundation
+import ApplicationServices
 
 /// Coarse classification of the focused UI element, derived from AX role +
 /// subrole. Drives ModeRouter's field-specific lookup so users can configure,
@@ -22,8 +23,8 @@ struct FocusedField: Equatable, Sendable {
     let subrole: String?
 
     var kind: FieldKind {
-        if subrole == "AXSecureTextField" { return .secure }
-        if subrole == "AXSearchField" { return .search }
+        if subrole == (kAXSecureTextFieldSubrole as String) { return .secure }
+        if subrole == (kAXSearchFieldSubrole as String) { return .search }
         return .text
     }
 }
