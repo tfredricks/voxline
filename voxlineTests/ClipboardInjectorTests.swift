@@ -66,11 +66,10 @@ final class LockedBox<T>: @unchecked Sendable {
         board.setString("ORIGINAL", forType: .string)
 
         let focused = FakeFocusedTextSystem()
-        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
+        let posted = LockedBox<[(code: CGKeyCode, flags: CGEventFlags)]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
             focusedTextSystem: focused,
-            pasteEligibility: AlwaysPasteEligible(),
             chordIsHeld: { false },
             forceClearChord: {},
             postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
@@ -87,8 +86,8 @@ final class LockedBox<T>: @unchecked Sendable {
         // Cmd+V was posted exactly once with only Command flag.
         let snapshot = posted.read()
         #expect(snapshot.count == 1)
-        #expect(snapshot[0].0 == 9)               // 'V'
-        #expect(snapshot[0].1 == [.maskCommand])
+        #expect(snapshot[0].code == 9)             // 'V'
+        #expect(snapshot[0].flags == [.maskCommand])
         #expect(outcome == TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified))
     }
 
@@ -101,7 +100,6 @@ final class LockedBox<T>: @unchecked Sendable {
         let injector = await ClipboardInjector(
             pasteboard: board,
             focusedTextSystem: FakeFocusedTextSystem(),
-            pasteEligibility: AlwaysPasteEligible(),
             chordIsHeld: { false },
             forceClearChord: {},
             postKey: { code, _ in posted.mutate { $0.append(code) } },
@@ -133,11 +131,10 @@ final class LockedBox<T>: @unchecked Sendable {
             return result
         }
 
-        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
+        let posted = LockedBox<[(code: CGKeyCode, flags: CGEventFlags)]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
             focusedTextSystem: FakeFocusedTextSystem(),
-            pasteEligibility: AlwaysPasteEligible(),
             chordIsHeld: chordIsHeldClosure,
             forceClearChord: { clearCount.mutate { $0 += 1 } },
             postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
@@ -158,11 +155,10 @@ final class LockedBox<T>: @unchecked Sendable {
         board.clearContents()
 
         let clearCount = LockedBox<Int>(0)
-        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
+        let posted = LockedBox<[(code: CGKeyCode, flags: CGEventFlags)]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
             focusedTextSystem: FakeFocusedTextSystem(),
-            pasteEligibility: AlwaysPasteEligible(),
             chordIsHeld: { true },
             forceClearChord: { clearCount.mutate { $0 += 1 } },
             postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
@@ -194,12 +190,11 @@ final class LockedBox<T>: @unchecked Sendable {
             FocusedTextSnapshot(value: "before"),
             FocusedTextSnapshot(value: "before")
         ]
-        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
+        let posted = LockedBox<[(code: CGKeyCode, flags: CGEventFlags)]>([])
         let typed = LockedBox<[String]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
             focusedTextSystem: focused,
-            pasteEligibility: AlwaysPasteEligible(),
             chordIsHeld: { false },
             forceClearChord: {},
             postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
@@ -225,12 +220,11 @@ final class LockedBox<T>: @unchecked Sendable {
 
         let focused = FakeFocusedTextSystem()
         focused.currentValue = "before"
-        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
+        let posted = LockedBox<[(code: CGKeyCode, flags: CGEventFlags)]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
             focusedTextSystem: focused,
             snapshotter: ThrowingSnapshotter(reason: "test forced failure"),
-            pasteEligibility: AlwaysPasteEligible(),
             chordIsHeld: { false },
             forceClearChord: {},
             postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
@@ -264,7 +258,6 @@ final class LockedBox<T>: @unchecked Sendable {
             pasteboard: board,
             focusedTextSystem: focused,
             snapshotter: ThrowingSnapshotter(reason: "test forced failure"),
-            pasteEligibility: AlwaysPasteEligible(),
             chordIsHeld: { false },
             forceClearChord: {},
             postKey: { _, _ in },
@@ -297,7 +290,6 @@ final class LockedBox<T>: @unchecked Sendable {
         let injector = await ClipboardInjector(
             pasteboard: board,
             focusedTextSystem: FakeFocusedTextSystem(),
-            pasteEligibility: AlwaysPasteEligible(),
             chordIsHeld: { true },
             forceClearChord: {},
             postKey: { _, _ in },
@@ -326,12 +318,11 @@ final class LockedBox<T>: @unchecked Sendable {
 
         let focused = FakeFocusedTextSystem()
         focused.currentValue = "before"
-        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
+        let posted = LockedBox<[(code: CGKeyCode, flags: CGEventFlags)]>([])
         let typed = LockedBox<[String]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
             focusedTextSystem: focused,
-            pasteEligibility: AlwaysPasteEligible(),
             chordIsHeld: { false },
             forceClearChord: {},
             postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
@@ -361,12 +352,11 @@ final class LockedBox<T>: @unchecked Sendable {
         focused.currentValue = "before"
         focused.isSecure = true
 
-        let posted = LockedBox<[(CGKeyCode, CGEventFlags)]>([])
+        let posted = LockedBox<[(code: CGKeyCode, flags: CGEventFlags)]>([])
         let typed = LockedBox<[String]>([])
         let injector = await ClipboardInjector(
             pasteboard: board,
             focusedTextSystem: focused,
-            pasteEligibility: AlwaysPasteEligible(),
             chordIsHeld: { false },
             forceClearChord: {},
             postKey: { code, flags in posted.mutate { $0.append((code, flags)) } },
