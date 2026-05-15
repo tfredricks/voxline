@@ -10,7 +10,7 @@
 
 A hotkey-driven dictation app for macOS. Hold the hotkey, talk, release. Speech is transcribed locally; the transcript is cleaned by an LLM using a per-app prompt, then auto-pasted into the focused field.
 
-Reference apps: Wispr Flow (cloud), Ghost Pepper (local), Superwhisper (modes). voxline takes the per-app prompt model from Wispr/Superwhisper but runs STT locally and uses the user's own LLM API key — no subscription.
+voxline runs STT locally and uses the user's own LLM API key — no subscription. The per-app prompt model lets the cleanup adapt to the active app (different tone for chat vs. email vs. code).
 
 ## 2. Non-Goals (v1)
 
