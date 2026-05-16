@@ -49,25 +49,17 @@ if ! git diff-index --quiet HEAD --; then
 fi
 
 echo "==> Building voxline ($CONFIG, build $BUILD_NUMBER, $GIT_COMMIT)..."
-xcodebuild \
-    -project voxline.xcodeproj \
-    -scheme voxline \
-    -configuration "$CONFIG" \
-    -destination 'platform=macOS' \
-    -derivedDataPath "$DERIVED" \
-    CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-    GIT_COMMIT="$GIT_COMMIT" \
-    build \
-    | xcbeautify 2>/dev/null || \
-xcodebuild \
-    -project voxline.xcodeproj \
-    -scheme voxline \
-    -configuration "$CONFIG" \
-    -destination 'platform=macOS' \
-    -derivedDataPath "$DERIVED" \
-    CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-    GIT_COMMIT="$GIT_COMMIT" \
+XCBUILD_ARGS=(
+    -project voxline.xcodeproj
+    -scheme voxline
+    -configuration "$CONFIG"
+    -destination 'platform=macOS'
+    -derivedDataPath "$DERIVED"
+    CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+    GIT_COMMIT="$GIT_COMMIT"
     build
+)
+xcodebuild "${XCBUILD_ARGS[@]}" | xcbeautify 2>/dev/null || xcodebuild "${XCBUILD_ARGS[@]}"
 
 APP="$DERIVED/Build/Products/$CONFIG/voxline.app"
 if [[ ! -d "$APP" ]]; then
@@ -96,5 +88,5 @@ cp -R "$APP" "$DEST"
 PLIST="$DEST/Contents/Info.plist"
 SHORT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST")
-SHA=$(/usr/libexec/PlistBuddy -c "Print :GitCommit" "$PLIST" 2>/dev/null || echo "?")
+SHA=$(/usr/libexec/PlistBuddy -c "Print :GitCommit" "$PLIST")
 echo "==> Installed voxline $SHORT ($BUILD, $SHA). Launch with: open -a voxline"
