@@ -155,6 +155,32 @@ Built on the shoulders of:
 - [swift-transformers](https://github.com/huggingface/swift-transformers) — model hub and inference utilities
 - The macOS dictation tools that paved the way (Whispr Flow, Superwhisper, Ghost Pepper, and others) — voxline borrows the hold-to-talk UX they all converged on.
 
+## Releasing
+
+Maintainer notes — the steps to cut a tagged release.
+
+**Versioning.** voxline uses [SemVer](https://semver.org/) for the marketing version (`CFBundleShortVersionString` — e.g. `0.2.1`). Bump it manually when cutting a release:
+
+- **Patch** (`0.2.0` → `0.2.1`) — bugfixes only
+- **Minor** (`0.2.0` → `0.3.0`) — new features, backwards-compatible
+- **Major** (`0.x` → `1.0.0`) — first stable release, or breaking changes after that
+
+The build number (`CFBundleVersion`) is the commit count on `main` and stamps itself at build time — never edit it by hand.
+
+**Release checklist.**
+
+1. Update `MARKETING_VERSION` in `voxline.xcodeproj/project.pbxproj` (one line).
+2. In `CHANGELOG.md`, move `[Unreleased]` items under a new `[X.Y.Z] - YYYY-MM-DD` heading.
+3. Commit: `chore: release vX.Y.Z`.
+4. Tag and push:
+   ```bash
+   git tag vX.Y.Z
+   git push origin main --tags
+   ```
+5. Create a GitHub Release from the tag; paste the CHANGELOG entry as the body.
+
+That's the whole flow. Between releases, `MARKETING_VERSION` stays put — every dev build reports the last released version with a higher commit-count build number.
+
 ## Contributing
 
 Bug reports, feature ideas, and pull requests are welcome. See

@@ -18,6 +18,14 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # need full history so commit-count build number is monotonic
+
+      - name: Compute version metadata
+        id: ver
+        run: |
+          echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Select latest Xcode 16
         run: |
@@ -45,6 +53,8 @@ jobs:
             -configuration Debug \
             -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO \
+            CURRENT_PROJECT_VERSION="${{ steps.ver.outputs.build }}" \
+            GIT_COMMIT="${{ steps.ver.outputs.sha }}" \
             build
 
       - name: Run tests
@@ -56,4 +66,6 @@ jobs:
             -configuration Debug \
             -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO \
+            CURRENT_PROJECT_VERSION="${{ steps.ver.outputs.build }}" \
+            GIT_COMMIT="${{ steps.ver.outputs.sha }}" \
             test

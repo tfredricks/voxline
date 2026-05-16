@@ -31,6 +31,13 @@ open voxline.xcodeproj
 
 Then build and run with `⌘R`.
 
+> Heads up: `CFBundleVersion` and `GitCommit` are stamped from git by the
+> wrapper scripts (`scripts/build-local.sh` and CI). Building straight
+> from the Xcode IDE skips that, so dev builds will show
+> `CFBundleVersion = 1` and an empty `GitCommit`. That's fine for
+> day-to-day work — use `./scripts/build-local.sh` when you need a
+> realistically-versioned bundle.
+
 ## Running tests
 
 ```bash

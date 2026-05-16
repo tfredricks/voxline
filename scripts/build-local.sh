@@ -36,13 +36,27 @@ cd "$REPO_ROOT"
 DERIVED="$REPO_ROOT/.build-local"
 mkdir -p "$DERIVED"
 
-echo "==> Building voxline ($CONFIG)..."
+# Stamp version metadata from git so the built bundle reflects the commit
+# being built. CFBundleVersion is the commit count on the current branch
+# (monotonic, numeric — what App Store / Sparkle expect). GitCommit is
+# the short SHA, with "-dirty" appended when the working tree has
+# uncommitted changes — lets you tell which build a binary actually came
+# from when CFBundleVersion alone is ambiguous.
+BUILD_NUMBER=$(git rev-list --count HEAD)
+GIT_COMMIT=$(git rev-parse --short HEAD)
+if ! git diff-index --quiet HEAD --; then
+    GIT_COMMIT="${GIT_COMMIT}-dirty"
+fi
+
+echo "==> Building voxline ($CONFIG, build $BUILD_NUMBER, $GIT_COMMIT)..."
 xcodebuild \
     -project voxline.xcodeproj \
     -scheme voxline \
     -configuration "$CONFIG" \
     -destination 'platform=macOS' \
     -derivedDataPath "$DERIVED" \
+    CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+    GIT_COMMIT="$GIT_COMMIT" \
     build \
     | xcbeautify 2>/dev/null || \
 xcodebuild \
@@ -51,6 +65,8 @@ xcodebuild \
     -configuration "$CONFIG" \
     -destination 'platform=macOS' \
     -derivedDataPath "$DERIVED" \
+    CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+    GIT_COMMIT="$GIT_COMMIT" \
     build
 
 APP="$DERIVED/Build/Products/$CONFIG/voxline.app"
@@ -77,4 +93,8 @@ echo "==> Installing to ${DEST}..."
 rm -rf "$DEST"
 cp -R "$APP" "$DEST"
 
-echo "==> Done. Launch with: open -a voxline"
+PLIST="$DEST/Contents/Info.plist"
+SHORT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST")
+BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST")
+SHA=$(/usr/libexec/PlistBuddy -c "Print :GitCommit" "$PLIST" 2>/dev/null || echo "?")
+echo "==> Installed voxline $SHORT ($BUILD, $SHA). Launch with: open -a voxline"
