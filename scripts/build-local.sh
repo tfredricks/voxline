@@ -59,7 +59,11 @@ XCBUILD_ARGS=(
     GIT_COMMIT="$GIT_COMMIT"
     build
 )
-xcodebuild "${XCBUILD_ARGS[@]}" | xcbeautify 2>/dev/null || xcodebuild "${XCBUILD_ARGS[@]}"
+if command -v xcbeautify >/dev/null 2>&1; then
+    xcodebuild "${XCBUILD_ARGS[@]}" | xcbeautify
+else
+    xcodebuild "${XCBUILD_ARGS[@]}"
+fi
 
 APP="$DERIVED/Build/Products/$CONFIG/voxline.app"
 if [[ ! -d "$APP" ]]; then
