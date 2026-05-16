@@ -4,6 +4,9 @@ Thanks for your interest in voxline. Bug reports, feature ideas, and pull
 requests are all welcome. File issues at
 https://github.com/tfredricks/voxline/issues.
 
+Please review and follow the project's [Code of Conduct](CODE_OF_CONDUCT.md)
+when participating in the community.
+
 ## Building locally
 
 voxline is a native macOS app built with Xcode. See the

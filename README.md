@@ -157,7 +157,9 @@ Built on the shoulders of:
 
 ## Contributing
 
-Bug reports, feature ideas, and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, testing, and the DCO sign-off requirement.
+Bug reports, feature ideas, and pull requests are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, testing, the DCO
+sign-off requirement, and the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
