@@ -60,14 +60,14 @@ enum AXMenuBarInspector {
     static func frontmostAppHasPasteMenuItem() -> Bool {
         guard let app = NSWorkspace.shared.frontmostApplication else { return false }
         let appElement = AXUIElementCreateApplication(app.processIdentifier)
-        guard let menuBar = axElement(kAXMenuBarAttribute as CFString, on: appElement) else {
+        guard let menuBar = appElement.elementAttribute(kAXMenuBarAttribute as CFString) else {
             return false
         }
         for menuBarItem in axChildren(of: menuBar) {
             for submenu in axChildren(of: menuBarItem) {
                 for menuItem in axChildren(of: submenu) {
                     if isPasteMenuItem(menuItem) {
-                        return axBool(kAXEnabledAttribute as CFString, on: menuItem) ?? true
+                        return menuItem.boolAttribute(kAXEnabledAttribute as CFString) ?? true
                     }
                 }
             }
@@ -76,9 +76,7 @@ enum AXMenuBarInspector {
     }
 
     private static func isPasteMenuItem(_ element: AXUIElement) -> Bool {
-        var cmdCharRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, "AXMenuItemCmdChar" as CFString, &cmdCharRef) == .success,
-              let cmdChar = cmdCharRef as? String,
+        guard let cmdChar = element.stringAttribute("AXMenuItemCmdChar"),
               cmdChar.lowercased() == "v" else { return false }
         // AXMenuItemCmdModifiers: 0 means Command-only (no Shift/Option/Control).
         // Reject Cmd+Shift+V / Cmd+Option+V which are "Paste and Match Style"
@@ -92,15 +90,6 @@ enum AXMenuBarInspector {
         return true
     }
 
-    private static func axElement(_ attribute: CFString, on element: AXUIElement) -> AXUIElement? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success,
-              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else {
-            return nil
-        }
-        return (value as! AXUIElement)
-    }
-
     private static func axChildren(of element: AXUIElement) -> [AXUIElement] {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &value) == .success,
@@ -110,14 +99,6 @@ enum AXMenuBarInspector {
             guard CFGetTypeID(v) == AXUIElementGetTypeID() else { return nil }
             return (v as! AXUIElement)
         }
-    }
-
-    private static func axBool(_ attribute: CFString, on element: AXUIElement) -> Bool? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success else {
-            return nil
-        }
-        return value as? Bool
     }
 }
 
@@ -210,8 +191,8 @@ enum TextInsertionError: Error, LocalizedError, Equatable {
 struct AXFocusedTextSystem: FocusedTextSystem {
     func snapshot() -> FocusedTextSnapshot? {
         guard
-            let element = focusedElement(),
-            let value = stringValue(of: element)
+            let element = AXUIElement.systemWideFocusedElement(),
+            let value = element.stringAttribute(kAXValueAttribute)
         else {
             return nil
         }
@@ -226,20 +207,17 @@ struct AXFocusedTextSystem: FocusedTextSystem {
     }
 
     func focusedFieldIsSecure() -> Bool {
-        guard let element = focusedElement() else { return false }
-        var value: CFTypeRef?
-        let status = AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &value)
-        guard status == .success, let subrole = value as? String else { return false }
-        return subrole == (kAXSecureTextFieldSubrole as String)
+        guard let element = AXUIElement.systemWideFocusedElement() else { return false }
+        return element.stringAttribute(kAXSubroleAttribute) == (kAXSecureTextFieldSubrole as String)
     }
 
     func focusedElementIdentity() -> AnyHashable? {
-        guard let element = focusedElement() else { return nil }
+        guard let element = AXUIElement.systemWideFocusedElement() else { return nil }
         return AnyHashable(AXElementIdentity(element: element))
     }
 
     func insertText(_ text: String) throws {
-        guard let element = focusedElement() else {
+        guard let element = AXUIElement.systemWideFocusedElement() else {
             throw TextInsertionError.accessibilityUnavailable("No focused editable element was exposed by macOS.")
         }
 
@@ -251,7 +229,7 @@ struct AXFocusedTextSystem: FocusedTextSystem {
         guard isAttributeSettable(kAXValueAttribute, on: element) else {
             throw TextInsertionError.accessibilityUnavailable("The focused element does not allow its value to be changed.")
         }
-        guard let value = stringValue(of: element) else {
+        guard let value = element.stringAttribute(kAXValueAttribute) else {
             throw TextInsertionError.accessibilityUnavailable("The focused element does not expose a string value.")
         }
 
@@ -277,23 +255,6 @@ struct AXFocusedTextSystem: FocusedTextSystem {
         if let axRange = AXValueCreate(.cfRange, &insertionPoint) {
             _ = AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, axRange)
         }
-    }
-
-    private func focusedElement() -> AXUIElement? {
-        let system = AXUIElementCreateSystemWide()
-        var value: CFTypeRef?
-        let status = AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &value)
-        guard status == .success, let value, CFGetTypeID(value) == AXUIElementGetTypeID() else {
-            return nil
-        }
-        return (value as! AXUIElement)
-    }
-
-    private func stringValue(of element: AXUIElement) -> String? {
-        var value: CFTypeRef?
-        let status = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value)
-        guard status == .success else { return nil }
-        return value as? String
     }
 
     private func selectedTextRange(of element: AXUIElement) -> CFRange? {

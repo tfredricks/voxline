@@ -42,26 +42,14 @@ struct DefaultAXContextProbe: AXContextProbing {
         if deadline.isExpired { return result }
         guard AXIsProcessTrusted() else { return result }
 
-        let system = AXUIElementCreateSystemWide()
-        var focusedValue: CFTypeRef?
-        let focusStatus = AXUIElementCopyAttributeValue(
-            system, kAXFocusedUIElementAttribute as CFString, &focusedValue
-        )
-        let focused: AXUIElement?
-        if focusStatus == .success,
-           let focusedValue,
-           CFGetTypeID(focusedValue) == AXUIElementGetTypeID() {
-            focused = (focusedValue as! AXUIElement)
-        } else {
-            focused = nil
-        }
+        let focused = AXUIElement.systemWideFocusedElement()
 
         if let focused {
             if deadline.isExpired { return result }
             result.windowTitle = readWindowTitle(focused: focused)
 
             if deadline.isExpired { return result }
-            result.selectedText = clip(readString(focused, kAXSelectedTextAttribute), Self.selectedTextMax)
+            result.selectedText = clip(focused.stringAttribute(kAXSelectedTextAttribute), Self.selectedTextMax)
 
             if deadline.isExpired { return result }
             let (before, after) = readBeforeAfter(focused: focused)
@@ -85,23 +73,13 @@ struct DefaultAXContextProbe: AXContextProbing {
 
     private func readAppFocusedWindowTitle(pid: pid_t) -> String? {
         let app = AXUIElementCreateApplication(pid)
-        var windowValue: CFTypeRef?
-        let s = AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute as CFString, &windowValue)
-        guard s == .success,
-              let windowValue,
-              CFGetTypeID(windowValue) == AXUIElementGetTypeID() else { return nil }
-        let win = windowValue as! AXUIElement
-        return clip(readString(win, kAXTitleAttribute), Self.windowTitleMax)
+        guard let window = app.elementAttribute(kAXFocusedWindowAttribute as CFString) else { return nil }
+        return clip(window.stringAttribute(kAXTitleAttribute), Self.windowTitleMax)
     }
 
     private func readWindowTitle(focused: AXUIElement) -> String? {
-        var windowValue: CFTypeRef?
-        let s = AXUIElementCopyAttributeValue(focused, kAXWindowAttribute as CFString, &windowValue)
-        guard s == .success,
-              let windowValue,
-              CFGetTypeID(windowValue) == AXUIElementGetTypeID() else { return nil }
-        let win = windowValue as! AXUIElement
-        return clip(readString(win, kAXTitleAttribute), Self.windowTitleMax)
+        guard let window = focused.elementAttribute(kAXWindowAttribute as CFString) else { return nil }
+        return clip(window.stringAttribute(kAXTitleAttribute), Self.windowTitleMax)
     }
 
     private func readBeforeAfter(focused: AXUIElement) -> (String?, String?) {
@@ -124,7 +102,7 @@ struct DefaultAXContextProbe: AXContextProbing {
         var range = CFRange(location: 0, length: 0)
         guard AXValueGetValue(axValue, .cfRange, &range) else { return (nil, nil) }
 
-        guard let full = readString(focused, kAXValueAttribute) else { return (nil, nil) }
+        guard let full = focused.stringAttribute(kAXValueAttribute) else { return (nil, nil) }
         let nsFull = full as NSString
         let location = max(0, min(range.location, nsFull.length))
 
@@ -140,13 +118,6 @@ struct DefaultAXContextProbe: AXContextProbing {
 
         return (beforeSlice.isEmpty ? nil : beforeSlice,
                 afterSlice.isEmpty ? nil : afterSlice)
-    }
-
-    private func readString(_ element: AXUIElement, _ attribute: String) -> String? {
-        var value: CFTypeRef?
-        let s = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
-        guard s == .success else { return nil }
-        return value as? String
     }
 
     private func clip(_ s: String?, _ maxLen: Int) -> String? {

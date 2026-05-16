@@ -88,15 +88,20 @@ final class APIKeysSettingsViewModel {
     /// True when the field's current value (trimmed) matches the last committed
     /// value. Uses an in-memory cache — no keychain IO on every render.
     func isPersisted(_ provider: LLMProvider) -> Bool {
-        let live = (provider == .anthropic ? anthropicKey : openaiKey).trimmed
-        let saved = (provider == .anthropic) ? anthropicPersisted : openaiPersisted
-        return saved == live
+        persistedKey(for: provider) == liveKey(for: provider).trimmed
     }
 
     private func liveKey(for provider: LLMProvider) -> String {
         switch provider {
         case .anthropic: return anthropicKey
         case .openai:    return openaiKey
+        }
+    }
+
+    private func persistedKey(for provider: LLMProvider) -> String {
+        switch provider {
+        case .anthropic: return anthropicPersisted
+        case .openai:    return openaiPersisted
         }
     }
 
