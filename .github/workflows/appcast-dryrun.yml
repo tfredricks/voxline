@@ -1,0 +1,86 @@
+name: Appcast dry-run
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - '.github/workflows/appcast-dryrun.yml'
+      - 'voxline/Info.plist'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: appcast-dryrun-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Select latest Xcode 16
+        run: |
+          # shellcheck disable=SC2012
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -scheme voxline \
+            -project voxline.xcodeproj
+
+      - name: Debug-build the app (so we have a real .app to test with)
+        run: |
+          xcodebuild \
+            -project voxline.xcodeproj \
+            -scheme voxline \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            build | xcbeautify
+
+      - name: Generate throwaway EdDSA key
+        id: keys
+        run: |
+          SPARKLE_FRAMEWORK="$(find "$RUNNER_TEMP/DerivedData" -type d -name 'Sparkle.framework' | head -1)"
+          GEN_KEYS="$SPARKLE_FRAMEWORK/Resources/generate_keys"
+          if [[ -x "$GEN_KEYS" ]]; then
+            "$GEN_KEYS" -x "$RUNNER_TEMP/dummy_ed.pem"
+          else
+            openssl genpkey -algorithm ed25519 -out "$RUNNER_TEMP/dummy_ed.pem"
+          fi
+          echo "framework=$SPARKLE_FRAMEWORK" >> "$GITHUB_OUTPUT"
+
+      - name: Package a throwaway DMG
+        run: |
+          APP="$(find "$RUNNER_TEMP/DerivedData" -type d -name 'voxline.app' -path '*Build/Products/Debug/*' | head -1)"
+          brew install create-dmg
+          create-dmg \
+            --volname "voxline dryrun" \
+            --hdiutil-quiet \
+            --no-internet-enable \
+            "$RUNNER_TEMP/voxline-dryrun.dmg" \
+            "$APP"
+
+      - name: Run generate_appcast against the dummy DMG
+        run: |
+          GEN="${{ steps.keys.outputs.framework }}/Resources/generate_appcast"
+          STAGE="$RUNNER_TEMP/stage"
+          mkdir -p "$STAGE"
+          cp "$RUNNER_TEMP/voxline-dryrun.dmg" "$STAGE/"
+          "$GEN" \
+            --ed-key-file "$RUNNER_TEMP/dummy_ed.pem" \
+            --download-url-prefix "https://example.invalid/" \
+            -o "$RUNNER_TEMP/dryrun-appcast.xml" \
+            "$STAGE"
+
+      - name: Validate appcast
+        run: |
+          xmllint --noout "$RUNNER_TEMP/dryrun-appcast.xml"
+          grep -q 'sparkle:edSignature="..*"' "$RUNNER_TEMP/dryrun-appcast.xml" \
+            || { echo "ERROR: appcast missing edSignature" >&2; cat "$RUNNER_TEMP/dryrun-appcast.xml" >&2; exit 1; }
+          echo "Appcast dry-run passed."
