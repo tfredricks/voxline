@@ -49,6 +49,17 @@ jobs:
             echo "build=$BUILD"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Pre-flight checks
+        run: |
+          if grep -q 'REPLACE_WITH_REAL_KEY' voxline/Info.plist; then
+            echo "ERROR: SUPublicEDKey in voxline/Info.plist is still the placeholder." >&2
+            echo "Run the one-time setup in docs/release/RELEASE.md before tagging a release." >&2
+            exit 1
+          fi
+
+      - name: Install xcbeautify
+        run: brew install xcbeautify
+
       - name: Create temporary keychain
         run: |
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
@@ -166,16 +177,6 @@ jobs:
           echo "framework=$SPARKLE_FRAMEWORK" >> "$GITHUB_OUTPUT"
           # shellcheck disable=SC2010
           ls "$SPARKLE_FRAMEWORK/Resources" | grep -E 'sign_update|generate_appcast' || true
-
-      - name: EdDSA-sign the DMG
-        env:
-          ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
-        run: |
-          SIGN="${{ steps.sparkle.outputs.framework }}/Resources/sign_update"
-          DMG="$RUNNER_TEMP/voxline-${{ steps.ver.outputs.version }}.dmg"
-          SIG="$(echo "$ED_KEY" | "$SIGN" -f /dev/stdin "$DMG")"
-          echo "$SIG"
-          echo "ed_signature_line=$SIG" >> "$GITHUB_ENV"
 
       - name: Checkout gh-pages
         uses: actions/checkout@v6

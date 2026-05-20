@@ -27,6 +27,9 @@ jobs:
           XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
           sudo xcode-select -s "$XCODE"
 
+      - name: Install xcbeautify
+        run: brew install xcbeautify
+
       - name: Resolve Swift packages
         run: |
           xcodebuild -resolvePackageDependencies \
