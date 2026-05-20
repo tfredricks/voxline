@@ -1,0 +1,241 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write  # to upload the DMG to the release and push to gh-pages
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    name: Build, sign, notarize, publish
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      KEYCHAIN_NAME: voxline-release.keychain
+      KEYCHAIN_PASSWORD: ${{ github.run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Select latest Xcode 16
+        run: |
+          # shellcheck disable=SC2012
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [[ -z "$XCODE" ]]; then
+            echo "No Xcode 16.x found on runner" >&2
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Read version from tag
+        id: ver
+        run: |
+          TAG="${GITHUB_REF##*/}"      # v1.0.1
+          VERSION="${TAG#v}"            # 1.0.1
+          BUILD="$(git rev-list --count HEAD)"
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "build=$BUILD"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create temporary keychain
+        run: |
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN_NAME"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
+          # shellcheck disable=SC2046
+          security list-keychains -d user -s "$KEYCHAIN_NAME" \
+            $(security list-keychains -d user | tr -d '"')
+          security default-keychain -s "$KEYCHAIN_NAME"
+
+      - name: Import Developer ID certificate
+        env:
+          CERT_B64: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          CERT_PWD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+          echo "$CERT_B64" | base64 --decode > "$CERT_PATH"
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_NAME" \
+            -P "$CERT_PWD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
+          rm "$CERT_PATH"
+
+      - name: Write notarization API key
+        env:
+          NOTARY_KEY: ${{ secrets.APPLE_NOTARY_API_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/notary"
+          printf '%s' "$NOTARY_KEY" > "$RUNNER_TEMP/notary/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/notary/AuthKey.p8"
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -scheme voxline \
+            -project voxline.xcodeproj
+
+      - name: Archive Release build
+        run: |
+          xcodebuild \
+            -project voxline.xcodeproj \
+            -scheme voxline \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/voxline.xcarchive" \
+            CURRENT_PROJECT_VERSION="${{ steps.ver.outputs.build }}" \
+            MARKETING_VERSION="${{ steps.ver.outputs.version }}" \
+            archive | xcbeautify
+
+      - name: Export signed .app
+        run: |
+          cat > "$RUNNER_TEMP/exportOptions.plist" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>developer-id</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>teamID</key>
+            <string>2B5FBFV6CF</string>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$RUNNER_TEMP/voxline.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/exportOptions.plist" | xcbeautify
+          ls -la "$RUNNER_TEMP/export"
+
+      - name: Notarize and staple
+        run: |
+          APP="$RUNNER_TEMP/export/voxline.app"
+          ZIP="$RUNNER_TEMP/voxline.zip"
+          /usr/bin/ditto -c -k --keepParent "$APP" "$ZIP"
+          xcrun notarytool submit "$ZIP" \
+            --key "$RUNNER_TEMP/notary/AuthKey.p8" \
+            --key-id "${{ secrets.APPLE_NOTARY_KEY_ID }}" \
+            --issuer "${{ secrets.APPLE_NOTARY_ISSUER_ID }}" \
+            --wait
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+
+      - name: Package DMG
+        run: |
+          brew install create-dmg
+          APP="$RUNNER_TEMP/export/voxline.app"
+          DMG="$RUNNER_TEMP/voxline-${{ steps.ver.outputs.version }}.dmg"
+          create-dmg \
+            --volname "voxline ${{ steps.ver.outputs.version }}" \
+            --hdiutil-quiet \
+            --no-internet-enable \
+            --hide-extension voxline.app \
+            "$DMG" \
+            "$APP"
+          ls -la "$DMG"
+
+      - name: Locate Sparkle tools
+        id: sparkle
+        run: |
+          SPARKLE_FRAMEWORK="$(find ~/Library/Developer/Xcode/DerivedData -type d -name 'Sparkle.framework' -path '*Build/Products/Release*' 2>/dev/null | head -1)"
+          if [[ -z "$SPARKLE_FRAMEWORK" ]]; then
+            SPARKLE_FRAMEWORK="$(find ~/Library/Developer/Xcode/DerivedData -type d -name 'Sparkle.framework' 2>/dev/null | head -1)"
+          fi
+          if [[ -z "$SPARKLE_FRAMEWORK" ]]; then
+            echo "Sparkle.framework not found in DerivedData" >&2
+            exit 1
+          fi
+          echo "framework=$SPARKLE_FRAMEWORK" >> "$GITHUB_OUTPUT"
+          # shellcheck disable=SC2010
+          ls "$SPARKLE_FRAMEWORK/Resources" | grep -E 'sign_update|generate_appcast' || true
+
+      - name: EdDSA-sign the DMG
+        env:
+          ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          SIGN="${{ steps.sparkle.outputs.framework }}/Resources/sign_update"
+          DMG="$RUNNER_TEMP/voxline-${{ steps.ver.outputs.version }}.dmg"
+          SIG="$(echo "$ED_KEY" | "$SIGN" -f /dev/stdin "$DMG")"
+          echo "$SIG"
+          echo "ed_signature_line=$SIG" >> "$GITHUB_ENV"
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v6
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Regenerate appcast
+        run: |
+          GEN="${{ steps.sparkle.outputs.framework }}/Resources/generate_appcast"
+          STAGE="$RUNNER_TEMP/appcast-stage"
+          mkdir -p "$STAGE"
+          cp "$RUNNER_TEMP/voxline-${{ steps.ver.outputs.version }}.dmg" "$STAGE/"
+          NOTES_HTML="$RUNNER_TEMP/release-notes.html"
+          git for-each-ref refs/tags/${{ steps.ver.outputs.tag }} \
+            --format='%(contents)' > "$RUNNER_TEMP/release-notes.md"
+          python3 -c "import markdown,sys; print(markdown.markdown(open('$RUNNER_TEMP/release-notes.md').read()))" \
+            > "$NOTES_HTML" 2>/dev/null || cp "$RUNNER_TEMP/release-notes.md" "$NOTES_HTML"
+          echo "${{ secrets.SPARKLE_ED_PRIVATE_KEY }}" > "$RUNNER_TEMP/ed_key.pem"
+          "$GEN" \
+            --ed-key-file "$RUNNER_TEMP/ed_key.pem" \
+            --download-url-prefix "https://github.com/tfredricks/voxline/releases/download/${{ steps.ver.outputs.tag }}/" \
+            --release-notes-url-prefix "https://tfredricks.github.io/voxline/notes/" \
+            -o "$RUNNER_TEMP/new-appcast.xml" \
+            "$STAGE"
+          rm "$RUNNER_TEMP/ed_key.pem"
+
+          xmllint --noout "$RUNNER_TEMP/new-appcast.xml"
+          grep -q 'sparkle:edSignature="..*"' "$RUNNER_TEMP/new-appcast.xml" \
+            || { echo "appcast missing edSignature" >&2; exit 1; }
+
+          cp "$RUNNER_TEMP/new-appcast.xml" gh-pages/appcast.xml
+          mkdir -p "gh-pages/notes"
+          cp "$NOTES_HTML" "gh-pages/notes/${{ steps.ver.outputs.version }}.html"
+
+      - name: Publish appcast to gh-pages
+        run: |
+          cd gh-pages
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml notes/
+          if git diff --cached --quiet; then
+            echo "No appcast changes to publish."
+          else
+            git commit -m "release: appcast for ${{ steps.ver.outputs.tag }}"
+            git push origin gh-pages
+          fi
+
+      - name: Upload DMG to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          files: |
+            ${{ runner.temp }}/voxline-${{ steps.ver.outputs.version }}.dmg
+          body_path: ${{ runner.temp }}/release-notes.md
+          fail_on_unmatched_files: true
+
+      - name: Clean up keychain
+        if: always()
+        run: |
+          security default-keychain -s login.keychain || true
+          security delete-keychain "$KEYCHAIN_NAME" || true
+          rm -f "$RUNNER_TEMP/notary/AuthKey.p8" || true
