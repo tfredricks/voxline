@@ -69,10 +69,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let aboutWindow = AboutWindowController()
     let historyWindow = HistoryWindowController()
     let windowVisibility = WindowVisibilityCoordinator()
+    let dictationActivity = DictationActivityMonitor()
+    lazy var updateService = UpdateService(dictationActivity: dictationActivity)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowVisibility.start()
         coordinator.startIfNeeded(state: appState, historyStore: historyStore)
+        _ = updateService // force-init so Sparkle's scheduler starts
+        observeStatusForUpdates()
+    }
+
+    /// Mirrors the `observeHotkeyEnabledChanges` / `observeToastChanges`
+    /// pattern in `AppCoordinator`: each fire re-arms the tracker so we
+    /// keep getting callbacks across the lifetime of the app.
+    private func observeStatusForUpdates() {
+        withObservationTracking {
+            _ = appState.status
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                self.dictationActivity.observe(status: self.appState.status)
+                self.observeStatusForUpdates()
+            }
+        }
+        // Also seed the initial value.
+        dictationActivity.observe(status: appState.status)
     }
 
     func showAboutWindow() {
