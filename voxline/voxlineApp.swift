@@ -27,6 +27,7 @@ struct voxlineApp: App {
         MenuBarExtra {
             MenuBarContent(
                 state: delegate.appState,
+                updateService: delegate.updateService,
                 openAboutWindow: {
                     delegate.showAboutWindow()
                 },
@@ -38,7 +39,7 @@ struct voxlineApp: App {
                 }
             )
         } label: {
-            MenuBarLabel(state: delegate.appState)
+            MenuBarLabel(state: delegate.appState, updateService: delegate.updateService)
         }
         .menuBarExtraStyle(.menu)
 
@@ -56,8 +57,18 @@ struct voxlineApp: App {
 
 private struct MenuBarLabel: View {
     @Bindable var state: AppState
+    @Bindable var updateService: UpdateService
     var body: some View {
-        Image(systemName: MenuBarIcon.symbolName(for: state.status, paused: !state.hotkeyEnabled))
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: MenuBarIcon.symbolName(for: state.status, paused: !state.hotkeyEnabled))
+            if updateService.hasPendingUpdate {
+                Circle()
+                    .fill(.blue)
+                    .frame(width: 5, height: 5)
+                    .offset(x: 2, y: -2)
+                    .accessibilityLabel("Update available")
+            }
+        }
     }
 }
 

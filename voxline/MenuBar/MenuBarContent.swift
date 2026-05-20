@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MenuBarContent: View {
     @Bindable var state: AppState
+    @Bindable var updateService: UpdateService
     @Environment(\.openSettings) private var openSettings
 
     var openAboutWindow: () -> Void = {}
@@ -21,6 +22,13 @@ struct MenuBarContent: View {
             Divider()
         }
 
+        if updateService.hasPendingUpdate {
+            Button("Install update…") {
+                updateService.checkForUpdates()
+            }
+            Divider()
+        }
+
         Button(state.hotkeyEnabled ? "Pause Voxline" : "Resume Voxline") {
             state.hotkeyEnabled.toggle()
         }
@@ -32,17 +40,16 @@ struct MenuBarContent: View {
         Divider()
 
         Button("Settings…") {
-            // Activate ignoring others so the Settings scene lands above the
-            // previously-frontmost app on LSUIElement (menu-bar) apps. See
-            // NSWindow.presentInAccessoryApp in WindowPresentation.swift for
-            // the full rationale; this site can't use it because openSettings
-            // doesn't expose the underlying NSWindow.
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
         }
         .keyboardShortcut(",")
 
         Divider()
+
+        Button("Check for updates…") {
+            updateService.checkForUpdates()
+        }
 
         Button("About Voxline") { openAboutWindow() }
 
