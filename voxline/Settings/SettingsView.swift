@@ -5,6 +5,7 @@ import AppKit
 struct SettingsView: View {
 
     @Environment(AppState.self) private var appState
+    @Environment(UpdateService.self) private var updateService
     @State private var generalVM: GeneralSettingsViewModel
     @State private var apiKeysVM: APIKeysSettingsViewModel
     @State private var levelMonitor = MicLevelMonitor()
@@ -51,6 +52,15 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.link)
                         }
+                    }
+
+                    Section("Software Updates") {
+                        @Bindable var updateService = updateService
+                        Toggle("Automatically check for updates",
+                               isOn: $updateService.automaticallyChecksForUpdates)
+                        Text("Voxline checks once a day in the background and shows a small badge on the menu-bar icon when an update is ready. Click \"Check for updates…\" in the menu to check manually.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
                     }
 
                     Section("Hotkey") {

@@ -51,6 +51,7 @@ struct voxlineApp: App {
                 apiKeysVM: APIKeysSettingsViewModel()
             )
             .environment(delegate.appState)
+            .environment(delegate.updateService)
         }
     }
 }
