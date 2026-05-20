@@ -53,5 +53,70 @@ extension UpdateService: SPUUpdaterDelegate {
     }
 }
 
-// Gentle-reminders delegate methods land in Task 5.
-extension UpdateService: SPUStandardUserDriverDelegate {}
+extension UpdateService {
+    /// Testable seam — independent of Sparkle types.
+    /// Returns `false`: Sparkle should NOT use its modal UI for scheduled checks.
+    func shouldSparkleHandleScheduledUpdateUI() -> Bool { false }
+
+    /// Testable seam — true when the menu badge / "Install Update…" row
+    /// is allowed to appear right now. (Once allowed, we set
+    /// `hasPendingUpdate = true` and leave it there — the user dismisses
+    /// it by clicking Install or by installing via Sparkle's modal.)
+    func canSurfaceGentleReminder(now: Date = .now) -> Bool {
+        !dictationActivity.isWithinDeferralWindow(now: now)
+    }
+}
+
+extension UpdateService: SPUStandardUserDriverDelegate {
+
+    /// Tell Sparkle we support gentle scheduled-update reminders.
+    var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    /// Per-scheduled-check decision: should Sparkle itself drive the UI?
+    /// We always answer "no" — voxline handles the presentation via the
+    /// menu-bar badge, deferred around active dictation.
+    func standardUserDriverShouldHandleShowingScheduledUpdate(
+        _ update: SUAppcastItem,
+        andInImmediateFocus immediateFocus: Bool
+    ) -> Bool {
+        shouldSparkleHandleScheduledUpdateUI()
+    }
+
+    /// Sparkle notifies us when it is about to (or just decided not to)
+    /// present the standard UI for an update. We cache the item so a
+    /// later menu-bar click can re-enter Sparkle's modal flow.
+    func standardUserDriverWillHandleShowingUpdate(
+        _ handleShowingUpdate: Bool,
+        forUpdate update: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+        if !handleShowingUpdate {
+            pendingAppcastItem = update
+            // Apply the deferral gate: only flip the visible badge once
+            // dictation activity has settled. If we're inside the window,
+            // poll back periodically until we can surface.
+            tryRaisePendingFlag()
+        }
+    }
+
+    /// Sparkle calls this once an update has been installed (or skipped
+    /// permanently). Either way, our pending state is no longer valid.
+    func standardUserDriverWillFinishUpdateSession() {
+        pendingAppcastItem = nil
+        hasPendingUpdate = false
+    }
+}
+
+private extension UpdateService {
+    func tryRaisePendingFlag() {
+        if canSurfaceGentleReminder() {
+            hasPendingUpdate = true
+            return
+        }
+        // Try again in 30s. Cheap timer — the only state being polled is
+        // a couple of Bool/Date reads.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+            self?.tryRaisePendingFlag()
+        }
+    }
+}
