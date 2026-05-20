@@ -45,9 +45,15 @@ final class DictationActivityMonitorTests: XCTestCase {
         monitor.observe(status: .recording, at: t0)
         monitor.observe(status: .idle, at: t0.addingTimeInterval(1))
 
+        // 119s after the .idle transition: still deferring.
         XCTAssertTrue(monitor.isWithinDeferralWindow(
             now: t0.addingTimeInterval(1 + 119)
         ))
+        // Exactly 120s: predicate is strict-less-than, so the window has just closed.
+        XCTAssertFalse(monitor.isWithinDeferralWindow(
+            now: t0.addingTimeInterval(1 + 120)
+        ))
+        // 121s: still outside.
         XCTAssertFalse(monitor.isWithinDeferralWindow(
             now: t0.addingTimeInterval(1 + 121)
         ))

@@ -24,8 +24,10 @@ final class UpdateService: NSObject {
 
     private let dictationActivity: DictationActivityMonitor
 
-    /// Cached most-recent appcast item Sparkle wants to show on the
-    /// scheduled path, used so a menu click can re-enter Sparkle's modal.
+    /// Live-session sentinel. Set when Sparkle wants us to show a scheduled
+    /// update, cleared when Sparkle finishes (install or skip). Used by
+    /// `tryRaisePendingFlag` to suppress polling-loop callbacks that
+    /// outlive the Sparkle session they were scheduled for.
     fileprivate var pendingAppcastItem: SUAppcastItem?
 
     private var updaterController: SPUStandardUpdaterController!
@@ -109,6 +111,12 @@ extension UpdateService: SPUStandardUserDriverDelegate {
 
 private extension UpdateService {
     func tryRaisePendingFlag() {
+        // Guard: a previously-scheduled poll can fire after Sparkle's
+        // session has already ended (user clicked Install Update or skipped
+        // the version). `pendingAppcastItem` is the live-session sentinel —
+        // willFinishUpdateSession nils it. Bail out so we don't resurrect
+        // the badge after the update is already gone.
+        guard pendingAppcastItem != nil else { return }
         if canSurfaceGentleReminder() {
             hasPendingUpdate = true
             return
