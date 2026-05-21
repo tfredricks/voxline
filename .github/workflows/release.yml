@@ -115,6 +115,24 @@ jobs:
           printf '%s' "$NOTARY_KEY" > "$RUNNER_TEMP/notary/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/notary/AuthKey.p8"
 
+      - name: Install Developer ID provisioning profile
+        id: profile
+        env:
+          PROFILE_B64: ${{ secrets.DEVELOPER_ID_PROFILE }}
+        run: |
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR"
+          PROFILE_PATH="$PROFILES_DIR/voxline_developer_id.provisionprofile"
+          echo "$PROFILE_B64" | base64 --decode > "$PROFILE_PATH"
+          # The profile is CMS-wrapped; decode to read its Name and UUID.
+          DECODED="$RUNNER_TEMP/profile.plist"
+          security cms -D -i "$PROFILE_PATH" > "$DECODED"
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" "$DECODED")
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$DECODED")
+          echo "Installed profile: $PROFILE_NAME ($PROFILE_UUID)"
+          echo "name=$PROFILE_NAME" >> "$GITHUB_OUTPUT"
+          echo "uuid=$PROFILE_UUID" >> "$GITHUB_OUTPUT"
+
       - name: Resolve Swift packages
         run: |
           xcodebuild -resolvePackageDependencies \
@@ -142,10 +160,12 @@ jobs:
 
       - name: Export signed .app
         env:
-          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          PROFILE_NAME: ${{ steps.profile.outputs.name }}
         run: |
-          cat > "$RUNNER_TEMP/exportOptions.plist" <<'EOF'
+          # Manual signing: avoids Apple's cloud-signing path, which fails
+          # for locally-issued Developer ID certs whose private key Apple
+          # doesn't hold.
+          cat > "$RUNNER_TEMP/exportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -153,9 +173,16 @@ jobs:
             <key>method</key>
             <string>developer-id</string>
             <key>signingStyle</key>
-            <string>automatic</string>
+            <string>manual</string>
             <key>teamID</key>
             <string>2B5FBFV6CF</string>
+            <key>signingCertificate</key>
+            <string>Developer ID Application</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.voxline.app</key>
+              <string>${PROFILE_NAME}</string>
+            </dict>
           </dict>
           </plist>
           EOF
@@ -163,11 +190,7 @@ jobs:
             -exportArchive \
             -archivePath "$RUNNER_TEMP/voxline.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist "$RUNNER_TEMP/exportOptions.plist" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/notary/AuthKey.p8" \
-            -authenticationKeyID "$NOTARY_KEY_ID" \
-            -authenticationKeyIssuerID "$NOTARY_ISSUER_ID" | xcbeautify
+            -exportOptionsPlist "$RUNNER_TEMP/exportOptions.plist" | xcbeautify
           ls -la "$RUNNER_TEMP/export"
 
       - name: Notarize and staple
