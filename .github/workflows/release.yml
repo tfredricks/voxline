@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run: skip gh-pages push and release upload; emit artifacts only'
+        type: boolean
+        default: true
 
 permissions:
   contents: write  # to upload the DMG to the release and push to gh-pages
@@ -20,6 +26,9 @@ jobs:
     env:
       KEYCHAIN_NAME: voxline-release.keychain
       KEYCHAIN_PASSWORD: ${{ github.run_id }}
+      # true only when manually dispatched with the dry_run input ticked;
+      # tag pushes always evaluate to 'false'.
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -37,11 +46,16 @@ jobs:
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
 
-      - name: Read version from tag
+      - name: Determine version
         id: ver
         run: |
-          TAG="${GITHUB_REF##*/}"      # v1.0.1
-          VERSION="${TAG#v}"            # 1.0.1
+          if [[ "$DRY_RUN" == "true" ]]; then
+            TAG="v0.0.0-dryrun.${{ github.run_number }}"
+            VERSION="0.0.0-dryrun.${{ github.run_number }}"
+          else
+            TAG="${GITHUB_REF##*/}"      # v1.0.1
+            VERSION="${TAG#v}"            # 1.0.1
+          fi
           BUILD="$(git rev-list --count HEAD)"
           {
             echo "tag=$TAG"
@@ -179,6 +193,7 @@ jobs:
           ls "$SPARKLE_FRAMEWORK/Resources" | grep -E 'sign_update|generate_appcast' || true
 
       - name: Checkout gh-pages
+        if: env.DRY_RUN != 'true'
         uses: actions/checkout@v6
         with:
           ref: gh-pages
@@ -191,8 +206,13 @@ jobs:
           mkdir -p "$STAGE"
           cp "$RUNNER_TEMP/voxline-${{ steps.ver.outputs.version }}.dmg" "$STAGE/"
           NOTES_HTML="$RUNNER_TEMP/release-notes.html"
-          git for-each-ref refs/tags/${{ steps.ver.outputs.tag }} \
-            --format='%(contents)' > "$RUNNER_TEMP/release-notes.md"
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "Dry-run build from ${GITHUB_SHA:0:8} on $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              > "$RUNNER_TEMP/release-notes.md"
+          else
+            git for-each-ref refs/tags/${{ steps.ver.outputs.tag }} \
+              --format='%(contents)' > "$RUNNER_TEMP/release-notes.md"
+          fi
           python3 -c "import markdown,sys; print(markdown.markdown(open('$RUNNER_TEMP/release-notes.md').read()))" \
             > "$NOTES_HTML" 2>/dev/null || cp "$RUNNER_TEMP/release-notes.md" "$NOTES_HTML"
           echo "${{ secrets.SPARKLE_ED_PRIVATE_KEY }}" > "$RUNNER_TEMP/ed_key.pem"
@@ -208,11 +228,14 @@ jobs:
           grep -q 'sparkle:edSignature="..*"' "$RUNNER_TEMP/new-appcast.xml" \
             || { echo "appcast missing edSignature" >&2; exit 1; }
 
-          cp "$RUNNER_TEMP/new-appcast.xml" gh-pages/appcast.xml
-          mkdir -p "gh-pages/notes"
-          cp "$NOTES_HTML" "gh-pages/notes/${{ steps.ver.outputs.version }}.html"
+          if [[ "$DRY_RUN" != "true" ]]; then
+            cp "$RUNNER_TEMP/new-appcast.xml" gh-pages/appcast.xml
+            mkdir -p "gh-pages/notes"
+            cp "$NOTES_HTML" "gh-pages/notes/${{ steps.ver.outputs.version }}.html"
+          fi
 
       - name: Publish appcast to gh-pages
+        if: env.DRY_RUN != 'true'
         run: |
           cd gh-pages
           git config user.name  "github-actions[bot]"
@@ -226,6 +249,7 @@ jobs:
           fi
 
       - name: Upload DMG to the GitHub Release
+        if: env.DRY_RUN != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
@@ -233,6 +257,18 @@ jobs:
             ${{ runner.temp }}/voxline-${{ steps.ver.outputs.version }}.dmg
           body_path: ${{ runner.temp }}/release-notes.md
           fail_on_unmatched_files: true
+
+      - name: Upload dry-run artifacts
+        if: env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: voxline-dryrun-${{ steps.ver.outputs.version }}
+          path: |
+            ${{ runner.temp }}/voxline-${{ steps.ver.outputs.version }}.dmg
+            ${{ runner.temp }}/new-appcast.xml
+            ${{ runner.temp }}/release-notes.md
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Clean up keychain
         if: always()
