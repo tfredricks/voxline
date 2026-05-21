@@ -1,9 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-  <channel>
-    <title>voxline</title>
-    <link>https://tfredricks.github.io/voxline/appcast.xml</link>
-    <description>voxline release feed</description>
-    <language>en</language>
-  </channel>
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>voxline</title>
+        <item>
+            <title>0.1.0</title>
+            <pubDate>Thu, 21 May 2026 19:46:34 +0000</pubDate>
+            <sparkle:version>428</sparkle:version>
+            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/tfredricks/voxline/releases/download/v0.1.0/voxline-0.1.0.dmg" length="3951676" type="application/octet-stream" sparkle:edSignature="2c2XbsA5cDdstejJ5Z4RP9aPdW2GvkNhUQqHm3uw2HMKVjjnsi18STYl+ivZz8ivqxcOJEmhZeesAXMbXY+eCg=="/>
+        </item>
+    </channel>
 </rss>
