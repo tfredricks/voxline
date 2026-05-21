@@ -18,6 +18,12 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+defaults:
+  run:
+    # 'bash' here means `bash --noprofile --norc -eo pipefail` so that
+    # `xcodebuild ... | xcbeautify` propagates xcodebuild's exit code.
+    shell: bash
+
 jobs:
   build-and-publish:
     name: Build, sign, notarize, publish
@@ -116,6 +122,9 @@ jobs:
             -project voxline.xcodeproj
 
       - name: Archive Release build
+        env:
+          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
         run: |
           xcodebuild \
             -project voxline.xcodeproj \
@@ -123,11 +132,18 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=macOS' \
             -archivePath "$RUNNER_TEMP/voxline.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/notary/AuthKey.p8" \
+            -authenticationKeyID "$NOTARY_KEY_ID" \
+            -authenticationKeyIssuerID "$NOTARY_ISSUER_ID" \
             CURRENT_PROJECT_VERSION="${{ steps.ver.outputs.build }}" \
             MARKETING_VERSION="${{ steps.ver.outputs.version }}" \
             archive | xcbeautify
 
       - name: Export signed .app
+        env:
+          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
         run: |
           cat > "$RUNNER_TEMP/exportOptions.plist" <<'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
@@ -147,7 +163,11 @@ jobs:
             -exportArchive \
             -archivePath "$RUNNER_TEMP/voxline.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist "$RUNNER_TEMP/exportOptions.plist" | xcbeautify
+            -exportOptionsPlist "$RUNNER_TEMP/exportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/notary/AuthKey.p8" \
+            -authenticationKeyID "$NOTARY_KEY_ID" \
+            -authenticationKeyIssuerID "$NOTARY_ISSUER_ID" | xcbeautify
           ls -la "$RUNNER_TEMP/export"
 
       - name: Notarize and staple
