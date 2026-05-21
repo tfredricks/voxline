@@ -220,20 +220,19 @@ jobs:
             "$APP"
           ls -la "$DMG"
 
-      - name: Locate Sparkle tools
-        id: sparkle
+      - name: Install Sparkle CLI tools
         run: |
-          SPARKLE_FRAMEWORK="$(find ~/Library/Developer/Xcode/DerivedData -type d -name 'Sparkle.framework' -path '*Build/Products/Release*' 2>/dev/null | head -1)"
-          if [[ -z "$SPARKLE_FRAMEWORK" ]]; then
-            SPARKLE_FRAMEWORK="$(find ~/Library/Developer/Xcode/DerivedData -type d -name 'Sparkle.framework' 2>/dev/null | head -1)"
-          fi
-          if [[ -z "$SPARKLE_FRAMEWORK" ]]; then
-            echo "Sparkle.framework not found in DerivedData" >&2
-            exit 1
-          fi
-          echo "framework=$SPARKLE_FRAMEWORK" >> "$GITHUB_OUTPUT"
-          # shellcheck disable=SC2010
-          ls "$SPARKLE_FRAMEWORK/Resources" | grep -E 'sign_update|generate_appcast' || true
+          # Pinned to match the Sparkle SPM dependency version. The
+          # SPM-distributed Sparkle.framework doesn't bundle generate_appcast
+          # / sign_update, so we fetch them from the official tarball.
+          SPARKLE_VERSION=2.9.2
+          DEST="$RUNNER_TEMP/sparkle"
+          mkdir -p "$DEST"
+          curl -sSL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" \
+            | tar -xJ -C "$DEST"
+          test -x "$DEST/bin/generate_appcast"
+          test -x "$DEST/bin/sign_update"
+          echo "$DEST/bin" >> "$GITHUB_PATH"
 
       - name: Checkout gh-pages
         if: env.DRY_RUN != 'true'
@@ -244,7 +243,7 @@ jobs:
 
       - name: Regenerate appcast
         run: |
-          GEN="${{ steps.sparkle.outputs.framework }}/Resources/generate_appcast"
+          GEN="$(command -v generate_appcast)"
           STAGE="$RUNNER_TEMP/appcast-stage"
           mkdir -p "$STAGE"
           cp "$RUNNER_TEMP/voxline-${{ steps.ver.outputs.version }}.dmg" "$STAGE/"
