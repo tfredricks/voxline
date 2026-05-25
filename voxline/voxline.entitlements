@@ -11,6 +11,8 @@
 	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
 	<array>
 		<string>com.apple.audioanalyticsd</string>
+		<string>com.voxline.app-spks</string>
+		<string>com.voxline.app-spki</string>
 	</array>
 	<key>com.apple.security.exception.mach-lookup.global-name</key>
 	<array>
