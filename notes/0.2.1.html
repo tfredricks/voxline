@@ -1,0 +1,13 @@
+Fix Sparkle auto-update on machines with a previous dev build
+
+**Bug fix:** Auto-update failed with "An error occurred while launching
+the installer" on machines that had a development build of voxline
+previously installed. The app sandbox was missing the required
+mach-lookup entitlements (`-spks` and `-spki`) for Sparkle's installer
+XPC service, which caused the connection to be denied when stale XPC
+authorization state from the dev build was present.
+
+**If your update button is stuck:** Delete voxline from Applications
+and reinstall from the latest DMG. Auto-updates will work normally
+after a fresh install.
+
