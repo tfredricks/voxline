@@ -34,6 +34,8 @@
 	<string>https://tfredricks.github.io/voxline/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>dMHHNe9jbEgypyonK0h2S72tkkPU+gcS29gJTchxGeM=</string>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUScheduledCheckInterval</key>
