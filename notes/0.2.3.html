@@ -1,0 +1,16 @@
+fix(updates): enable SUEnableInstallerLauncherService for sandboxed auto-install
+
+Without this Info.plist key, Sparkle ran its installer launcher directly
+inside the sandboxed process and called SMJobSubmit from there. The sandbox
+blocked that mach call so the installer never launched, causing every
+auto-update installation to silently fail.
+
+With SUEnableInstallerLauncherService = YES, Sparkle uses the bundled
+Installer.xpc which runs outside the sandbox and can submit the launchd
+job correctly. The mach-lookup exceptions added in v0.2.1 remain needed
+for the sandboxed app to connect to the installer once it is running.
+
+Also bumps MARKETING_VERSION to 0.2.3.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
