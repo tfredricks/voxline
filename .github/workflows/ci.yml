@@ -17,7 +17,7 @@ jobs:
     name: Build (macOS)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # need full history so commit-count build number is monotonic
 
