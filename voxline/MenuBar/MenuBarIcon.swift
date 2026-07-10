@@ -10,7 +10,11 @@ enum MenuBarIcon {
         case .thinking:         return "ellipsis.circle"
         case .downloadingModel: return "arrow.down.circle"
         case .preparingModel:   return "gearshape.circle"
-        case .error, .permissionsError: return "mic.slash"
+        // A permissions problem is distinct from a generic mic/pipeline error:
+        // it's user-fixable in System Settings, so it gets its own warning
+        // badge rather than sharing the mic.slash symbol.
+        case .permissionsError: return "exclamationmark.triangle.fill"
+        case .error:            return "mic.slash"
         case .idle:             return paused ? "pause.circle" : "mic"
         }
     }

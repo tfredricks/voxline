@@ -8,11 +8,15 @@ struct MenuBarContent: View {
 
     var openAboutWindow: () -> Void = {}
     var openHistoryWindow: () -> Void = {}
+    var openPermissionsWindow: () -> Void = {}
 
     var body: some View {
         if let message = state.status.errorMessage {
             Text(message)
                 .foregroundStyle(.red)
+            if case .permissionsError = state.status {
+                Button("Fix permissions…") { openPermissionsWindow() }
+            }
             Divider()
         }
 
@@ -44,6 +48,8 @@ struct MenuBarContent: View {
             openSettings()
         }
         .keyboardShortcut(",")
+
+        Button("Check Permissions…") { openPermissionsWindow() }
 
         Divider()
 

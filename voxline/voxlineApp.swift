@@ -36,6 +36,10 @@ struct voxlineApp: App {
                         store: delegate.historyStore,
                         state: delegate.appState
                     )
+                },
+                openPermissionsWindow: {
+                    NSApp.activate(ignoringOtherApps: true)
+                    delegate.coordinator.showPermissionsWindow()
                 }
             )
         } label: {
@@ -147,6 +151,17 @@ final class AppCoordinator {
     /// against each other over the same eventTap.
     private var permissionPollTimer: Timer?
     private var firstRunWindow: FirstRunWindowController?
+    private let permissionsWindow = PermissionsWindowController()
+    /// Tracks the required-permission state across reconcile ticks so we can
+    /// raise the permissions window on a granted→missing transition (runtime
+    /// revocation) without re-raising it every tick while it stays missing.
+    private var lastRequiredGranted: Bool?
+
+    /// Raise the standalone permissions panel. Called from the menu-bar
+    /// "Fix permissions…" item and from the startup / revocation guards.
+    func showPermissionsWindow() {
+        permissionsWindow.show()
+    }
 
     func startIfNeeded(state: AppState, historyStore: DictationHistoryStore) {
         guard !didStart else { return }
@@ -338,6 +353,16 @@ final class AppCoordinator {
         observeToastChanges(state: state)
         observeReviewSessionChanges(state: state)
         startPermissionAndStateLoop(state: state)
+
+        // Startup guard: if a required permission (Accessibility / Microphone)
+        // is missing, raise the permissions panel so the user gets a clear,
+        // actionable prompt instead of a silently non-functional hotkey. The
+        // panel polls and closes itself once the required set is granted.
+        let summary = perms.summary()
+        lastRequiredGranted = summary.requiredGranted
+        if !summary.requiredGranted {
+            permissionsWindow.show()
+        }
     }
 
     /// Single source of truth for "should the tap be installed right now?".
@@ -360,6 +385,16 @@ final class AppCoordinator {
     private func reconcileTapWithPermissionsAndEnabled(state: AppState) {
         let perms = PermissionsService()
         let ax = perms.accessibilityStatus
+
+        // Raise the permissions panel on a granted→missing transition (runtime
+        // revocation). Gated on the previous tick's state so it isn't re-raised
+        // every second while permissions stay missing — which would fight a
+        // user who deliberately closed it.
+        let requiredGranted = (ax == .granted && perms.microphoneStatus == .granted)
+        if lastRequiredGranted == true && !requiredGranted {
+            permissionsWindow.show()
+        }
+        lastRequiredGranted = requiredGranted
 
         guard let monitor = hotkeyMonitor else { return }
         // Accessibility is the hard gate. Input Monitoring is informational

@@ -9,6 +9,23 @@ enum PermissionStatus: Equatable {
     case notDetermined
 }
 
+/// Immutable snapshot of the three permission states plus the required-set
+/// predicate. A pure value type so the "which are required" policy is
+/// unit-testable without touching live system APIs.
+struct PermissionsSummary: Equatable {
+    let microphone: PermissionStatus
+    let accessibility: PermissionStatus
+    let inputMonitoring: PermissionStatus
+
+    /// Accessibility (global hotkey tap + paste) and Microphone (recording)
+    /// are hard requirements — the app can't function without them. Input
+    /// Monitoring is recommended for hotkey reliability on some Macs but is
+    /// not required to run.
+    var requiredGranted: Bool {
+        accessibility == .granted && microphone == .granted
+    }
+}
+
 struct PermissionsService {
 
     var microphoneStatus: PermissionStatus {
@@ -62,5 +79,14 @@ struct PermissionsService {
     func promptAccessibility() {
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         _ = AXIsProcessTrustedWithOptions(opts as CFDictionary)
+    }
+
+    /// Live snapshot of all three permission states.
+    func summary() -> PermissionsSummary {
+        PermissionsSummary(
+            microphone: microphoneStatus,
+            accessibility: accessibilityStatus,
+            inputMonitoring: inputMonitoringStatus
+        )
     }
 }
