@@ -155,9 +155,53 @@ protocol LLMServing: Sendable {
 }
 ```
 
-- [ ] **Step 5: Add the transform preamble and method to `LLMService`**
+- [ ] **Step 5: Add the transform preamble and method to `LLMService` (sharing client resolution with `cleanup`)**
 
-In `voxline/LLM/LLMService.swift`, add this static constant right after the `transcriptionPreamble` declaration (after line 61):
+First, extract the provider/key/client resolution shared by `cleanup` and `transform` into a private helper, so `transform` does not duplicate it. Add this method inside `LLMService` (e.g. after `cleanup`):
+
+```swift
+    /// Resolve the configured provider's API key from the Keychain and return a
+    /// ready client. Shared by `cleanup` and `transform`.
+    private func resolveClient() throws -> any LLMClient {
+        let provider = settings.llmProvider
+        let account: String
+        switch provider {
+        case .anthropic: account = KeychainAccount.anthropic
+        case .openai:    account = KeychainAccount.openai
+        }
+        guard
+            let key = try keychain.string(forKey: account),
+            !key.isEmpty
+        else {
+            AppLog.llm.error("\(provider.rawValue): no API key configured")
+            throw LLMError.missingAPIKey
+        }
+        switch provider {
+        case .anthropic: return AnthropicClient(apiKey: key, http: http)
+        case .openai:    return OpenAIClient(apiKey: key, http: http)
+        }
+    }
+```
+
+Then update `cleanup` to use it. Replace the account/key-guard block (lines 87-99) — i.e. from `let provider = settings.llmProvider` down through the `throw LLMError.missingAPIKey` guard's closing `}` — with nothing (delete it); the `let model = mode.model ?? settings.llmModel` line (101) onward stays. Replace the client-resolution switch (lines 110-114):
+
+```swift
+        let client: any LLMClient
+        switch provider {
+        case .anthropic: client = AnthropicClient(apiKey: key, http: http)
+        case .openai:    client = OpenAIClient(apiKey: key, http: http)
+        }
+```
+
+with:
+
+```swift
+        let client = try resolveClient()
+```
+
+Because the `provider` local is now gone, fix its one remaining reference in the `#if DEBUG` trace (line 133): change `provider=\(provider)` to `provider=\(settings.llmProvider)`. After these edits, `cleanup`'s body is: empty-transcript guard → `let model` → `let userPrompt` → `let request` → `#if DEBUG` trace → `let client = try resolveClient()` → `return try await client.cleanup(request)`.
+
+Now add this static constant right after the `transcriptionPreamble` declaration (after line 61):
 
 ```swift
     /// System prompt for the "transform selection by voice" path. Unlike
@@ -192,23 +236,6 @@ Then add the `transform` method after `cleanup` (after line 163, before the clos
             return selection
         }
 
-        // Provider/key/client resolution mirrors `cleanup`. Kept inline rather
-        // than shared to avoid disturbing cleanup's DEBUG trace, which needs
-        // the provider/model locals.
-        let provider = settings.llmProvider
-        let account: String
-        switch provider {
-        case .anthropic: account = KeychainAccount.anthropic
-        case .openai:    account = KeychainAccount.openai
-        }
-        guard
-            let key = try keychain.string(forKey: account),
-            !key.isEmpty
-        else {
-            AppLog.llm.error("\(provider.rawValue): no API key configured")
-            throw LLMError.missingAPIKey
-        }
-
         let model = mode.model ?? settings.llmModel
         let userPrompt = "Instruction: \(instruction)\n\nText:\n\(selection)"
         let request = LLMRequest(
@@ -218,12 +245,7 @@ Then add the `transform` method after `cleanup` (after line 163, before the clos
             temperature: mode.temperature,
             maxOutputTokens: 4096
         )
-
-        let client: any LLMClient
-        switch provider {
-        case .anthropic: client = AnthropicClient(apiKey: key, http: http)
-        case .openai:    client = OpenAIClient(apiKey: key, http: http)
-        }
+        let client = try resolveClient()
         return try await client.cleanup(request)
     }
 ```
