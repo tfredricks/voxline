@@ -679,6 +679,25 @@ import Foundation
         if case .idle = state.status {} else { Issue.record("expected .idle after transform") }
     }
 
+    @Test func refine_onTransformSession_usesTransformOnCurrentText() async {
+        let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        #expect(state.reviewSession?.kind == .transform)
+
+        llm.transformResult = .success("tighter")
+        await pipe.refine(.terser)
+
+        #expect(llm.transformCalls.last?.instruction == RefinementDirective.terser.promptText)
+        #expect(llm.transformCalls.last?.selection == "transformed")   // acts on current inserted text, not the command
+        #expect(llm.calls.isEmpty)                                     // cleanup never used for a transform session
+        #expect(injector.replaceCalls.last?.old == "transformed")
+        #expect(injector.replaceCalls.last?.new == "tighter")
+        #expect(state.reviewSession?.insertedText == "tighter")
+        #expect(history.items.count == 1)
+        #expect(history.items.first?.cleanedText == "tighter")
+        if case .idle = state.status {} else { Issue.record("expected .idle after transform refine") }
+    }
+
     @Test func finalize_withSelection_unchangedResult_showsToastNoWrite() async {
         let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
         llm.transformResult = .success("original text")   // model declined → returned selection verbatim

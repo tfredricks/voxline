@@ -301,10 +301,20 @@ final class CapturePipeline {
 
         let cleaned: String
         do {
-            cleaned = try await llm.cleanup(
-                transcript: session.transcript, mode: session.mode,
-                context: session.context, refinement: directive
-            )
+            switch session.kind {
+            case .dictation:
+                cleaned = try await llm.cleanup(
+                    transcript: session.transcript, mode: session.mode,
+                    context: session.context, refinement: directive
+                )
+            case .transform:
+                // Chain on the current text, applying the directive as the
+                // instruction — not a re-run of the original spoken command.
+                cleaned = try await llm.transform(
+                    instruction: directive.promptText,
+                    selection: session.insertedText, mode: session.mode
+                )
+            }
         } catch let e as LLMError {
             state.status = .idle
             showToast(e.errorDescription ?? "Refinement failed.")
