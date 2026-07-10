@@ -22,6 +22,13 @@ final class HotkeyStateMachine {
     enum Output: Equatable {
         case startRecording
         case finalizeRecording
+        /// One chord modifier just went down (entered .armed). The caller
+        /// should warm up the audio engine so a completed chord captures
+        /// from the first syllable.
+        case beginPrewarm
+        /// The armed modifier was released without completing the chord;
+        /// tear down the warmed engine.
+        case cancelPrewarm
     }
 
     private(set) var state: State = .idle
@@ -58,16 +65,17 @@ final class HotkeyStateMachine {
     }
 
     private func reactToFlags(modA: Bool, modB: Bool) -> [Output] {
+        let previous = state
         switch (modA, modB) {
         case (true, true):
             state = .recording
             return [.startRecording]
         case (true, false), (false, true):
             state = .armed
-            return []
+            return previous == .armed ? [] : [.beginPrewarm]
         case (false, false):
             state = .idle
-            return []
+            return previous == .armed ? [.cancelPrewarm] : []
         }
     }
 }

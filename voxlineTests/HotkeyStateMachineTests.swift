@@ -29,17 +29,40 @@ import Foundation
 
     // MARK: - Single modifier transitions
 
-    @Test func leftCtrlDownAlone_armsButDoesNotRecord() {
+    @Test func leftCtrlDownAlone_armsAndBeginsPrewarm() {
         let m = machine()
         let outputs = m.handle(leftCtrl(true))
         #expect(m.state == .armed)
-        #expect(outputs.isEmpty, "no recording outputs while only one modifier is held")
+        #expect(outputs == [.beginPrewarm], "one modifier down should warm the engine, not record")
     }
 
-    @Test func leftCtrlReleasedFromArmed_returnsToIdle() {
+    @Test func leftCtrlReleasedFromArmed_returnsToIdleAndCancelsPrewarm() {
         let m = machine()
         _ = m.handle(leftCtrl(true))
         let outputs = m.handle(leftCtrl(false))
+        #expect(m.state == .idle)
+        #expect(outputs == [.cancelPrewarm])
+    }
+
+    @Test func armedReasserted_doesNotRePrewarm() {
+        let m = machine()
+        _ = m.handle(leftCtrl(true))
+        // Same single modifier re-asserted (e.g. key-repeat flags event).
+        let outputs = m.handle(leftCtrl(true))
+        #expect(m.state == .armed)
+        #expect(outputs.isEmpty, "armed → armed must not emit a second beginPrewarm")
+    }
+
+    @Test func chordCompletionFromArmed_emitsOnlyStartRecording() {
+        let m = machine()
+        _ = m.handle(leftCtrl(true))
+        let outputs = m.handle(chord(true, true))
+        #expect(outputs == [.startRecording], "start() owns the engine; no cancelPrewarm on chord completion")
+    }
+
+    @Test func fullReleaseFromIdle_emitsNothing() {
+        let m = machine()
+        let outputs = m.handle(chord(false, false))
         #expect(m.state == .idle)
         #expect(outputs.isEmpty)
     }

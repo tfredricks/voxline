@@ -12,6 +12,10 @@ final class HotkeyMonitor {
     /// Runs on the main actor.
     var onStartRecording: (() -> Void)?
     var onFinalizeRecording: (() -> Void)?
+    /// One chord modifier went down — warm the audio engine. Runs on the main actor.
+    var onBeginPrewarm: (() -> Void)?
+    /// The armed modifier was released without completing the chord.
+    var onCancelPrewarm: (() -> Void)?
 
     var isTapInstalled: Bool { eventTap != nil }
 
@@ -124,6 +128,10 @@ final class HotkeyMonitor {
             case .finalizeRecording:
                 cancelMaxDurationTimer()
                 onFinalizeRecording?()
+            case .beginPrewarm:
+                onBeginPrewarm?()
+            case .cancelPrewarm:
+                onCancelPrewarm?()
             }
         }
     }
