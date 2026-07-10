@@ -1,100 +1,187 @@
-# Voice Dictation App Comparison
+# AI Dictation / Voice-to-Text Feature Comparison Framework
 
-Last updated: 2026-07-09
+## Voice Input
 
-Use this document to compare AI voice-dictation products as the market changes. It separates verified product capabilities from subjective testing so that new apps can be added without rewriting the evaluation criteria.
+| Feature | Why it Matters |
+|---------|----------------|
+| Wake hotkey | Fast access without interrupting workflow |
+| Push-to-talk vs toggle | Supports different dictation styles |
+| Always listening | Enables hands-free workflows |
+| Auto language detection | Useful for multilingual users |
+| Offline transcription | Privacy and travel support |
+| Streaming transcription | Low perceived latency |
+| Speaker adaptation | Learns your voice over time |
+| Accent support | Better accuracy across regions |
 
-## Status key
+---
 
-- **Yes** — publicly documented as available
-- **Partial** — available with a meaningful platform, plan, or workflow limitation
-- **No** — explicitly unavailable
-- **Unclear** — not confirmed by a reliable current source
-- **Planned** — announced but not generally available
+## Transcription Quality
 
-## Summary
+| Feature | Why it Matters |
+|---------|----------------|
+| Punctuation | Produces readable text |
+| Grammar correction | Creates polished output |
+| Filler removal | Removes "um", "uh", etc. |
+| Sentence restructuring | Converts speech into natural writing |
+| Custom vocabulary | Handles company names and jargon |
+| Acronym expansion | Improves industry-specific accuracy |
 
-| Product                                | Best fit                                                    | Main advantage                                                                    | Main limitation                           | Pro price              |
-| -------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------- |
-| [Wispr Flow](https://wisprflow.ai/)    | Cross-platform users, developers, and managed teams         | Broad platform support, advanced editing, coding support, and enterprise controls | Dictation requires an internet connection | $15/month or $144/year |
-| [Monologue](https://www.monologue.to/) | Apple users who value local transcription and extensibility | Offline transcription plus MCP, CLI, and API access to Notes                      | Windows and Android are not yet available | $144/year              |
-| Voxline                            |                                                             |                                                                                   |                                           |                        |
+---
 
-Prices are list prices observed on 2026-07-09 and may exclude taxes, promotions, or enterprise pricing.
+## Context Awareness
 
-## Feature matrix
+| Feature | Why it Matters |
+|---------|----------------|
+| Detect current application | Adjusts behavior for email, Slack, docs, etc. |
+| Read screen context | Improves output using surrounding information |
+| Cursor awareness | Continues paragraphs naturally |
+| Selection rewriting | Rewrites selected text intelligently |
+| Form awareness | Behaves differently in forms vs. documents |
 
-### Dictation quality and behavior
+---
 
-| Capability                               | Wispr Flow                           | Monologue   | Voxline |
-| ---------------------------------------- | ------------------------------------ | ----------- | ----------- |
-| Dictation into any text field            | Yes                                  | Yes         |             |
-| Automatic punctuation and capitalization | Yes                                  | Yes         |             |
-| Filler-word removal                      | Yes                                  | Yes         |             |
-| Automatic formatting                     | Yes                                  | Yes         |             |
-| Context-aware output                     | Yes                                  | Yes         |             |
-| App-specific tone or writing behavior    | Yes — Styles                         | Yes — Modes |             |
-| Spoken corrections or backtracking       | Yes                                  | Unclear     |             |
-| Voice editing commands                   | Yes — Command Mode                   | Unclear     |             |
-| Transform selected or recent text        | Yes — built-in and custom Transforms | Unclear     |             |
-| Diff before accepting transformed text   | Yes                                  | Unclear     |             |
-| Push-to-talk                             | Yes                                  | Yes         |             |
-| Hands-free dictation                     | Yes                                  | Yes         |             |
-| Maximum desktop dictation session        | 20 minutes                           | Unclear     |             |
-| Recovery after failed transcription      | Yes                                  | Unclear     |             |
+## Writing Intelligence
 
-### Personalization
+| Feature | Why it Matters |
+|---------|----------------|
+| Tone control | Professional, casual, concise, etc. |
+| Writing modes | Email, notes, messaging, coding |
+| Prompt templates | Repeatable workflows |
+| AI rewrite after dictation | Improves content rather than simply transcribing |
+| Multiple rewrite options | Lets users choose the best version |
+| Length control | Expand or shorten output |
 
-| Capability                     | Wispr Flow                             | Monologue                    | Voxline |
-| ------------------------------ | -------------------------------------- | ---------------------------- | ----------- |
-| Personal dictionary            | Yes — automatic and manual             | Yes — automatic and manual   |             |
-| Dictionary sync across devices | Yes                                    | Yes across supported devices |             |
-| Reusable text snippets         | Yes                                    | Unclear                      |             |
-| Per-app writing style          | Yes                                    | Yes                          |             |
-| Custom behavior profiles       | Partial — custom Transforms and Styles | Yes — Modes                  |             |
-| Personalized speech model      | Partial — requires Private Cloud Sync  | Unclear                      |             |
+---
 
-### Languages and speech handling
+## Commands & Automation
 
-| Capability                   | Wispr Flow | Monologue                           | Voxline |
-| ---------------------------- | ---------- | ----------------------------------- | ----------- |
-| 100+ languages               | Yes        | Yes                                 |             |
-| Automatic language detection | Yes        | Unclear                             |             |
-| Mixed-language speech        | Yes        | Yes                                 |             |
-| Whispered or quiet speech    | Yes        | Unclear                             |             |
-| Technical vocabulary         | Yes        | Yes — customizable dictionary/modes |             |
+| Feature | Why it Matters |
+|---------|----------------|
+| Voice commands | "Delete previous sentence", "Start bullet list", etc. |
+| Custom commands | User-defined automations |
+| Snippets | Insert common text |
+| Variable placeholders | Dynamic templates |
+| Workflow automation | Trigger actions from voice |
 
-Language count alone does not establish transcription quality. Test each required language, accent, and mixed-language workflow separately.
+---
 
-### Platforms
+## Developer Features
 
-| Platform                   | Wispr Flow                                     | Monologue                                      | Voxline |
-| -------------------------- | ---------------------------------------------- | ---------------------------------------------- | ----------- |
-| macOS                      | Yes                                            | Yes                                            |             |
-| Windows                    | Yes                                            | Planned                                        |             |
-| iPhone                     | Yes                                            | Yes                                            |             |
-| iPad                       | Unclear                                        | Yes                                            |             |
-| Android                    | Yes                                            | Planned                                        |             |
-| Apple Watch                | Unclear                                        | Yes — Notes                                    |             |
-| Browser extension          | Not required for system-wide desktop dictation | Not required for system-wide desktop dictation |             |
-| Cross-device settings sync | Yes                                            | Yes across supported devices                   |             |
+| Feature | Why it Matters |
+|---------|----------------|
+| Code mode | Preserves programming syntax |
+| IDE awareness | Understands current language/project |
+| Markdown mode | Better documentation workflows |
+| Terminal support | Dictate shell commands |
+| CamelCase / snake_case handling | Easier coding by voice |
 
-### Offline operation and privacy
+---
 
-| Capability                          | Wispr Flow                                    | Monologue                                                              | Voxline |
-| ----------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------- | ----------- |
-| Offline dictation                   | No                                            | Yes                                                                    |             |
-| Local transcription model           | No                                            | Yes                                                                    |             |
-| Local note access                   | Yes                                           | Yes                                                                    |             |
-| Prevent product-training use        | Yes — Privacy Mode                            | Yes — sharing is opt-in                                                |             |
-| Disable server storage              | Yes — disable Private Cloud Sync              | Yes — vendor states audio and transcripts are not saved on its servers |             |
-| Zero-retention LLM processing       | Unclear                                       | Yes — vendor claim                                                     |             |
-| Dictionary and modes stored locally | Partial — depends on feature and sync setting | Yes                                                                    |             |
-| Context from the active screen      | Yes                                           | Yes — Deep Context                                                     |             |
-| Disable contextual screen access    | Yes                                           | Unclear                                                                |             |
+## Performance
 
-Privacy claims should be checked against the current privacy policy, data-processing agreement, and application behavior before using either product with sensitive information.
+| Feature | Why it Matters |
+|---------|----------------|
+| Startup time | Fast launch |
+| End-to-end latency | Time from speaking to finished text |
+| Accuracy | Core value metric |
+| CPU / battery impact | Laptop and mobile usability |
 
-### Notes and meeting capture
+---
 
-| Capability | Wispr Flow | Monologue | Voxline |
+## Integrations
+
+- Microsoft Office
+- VS Code
+- Webex
+- Zoom
+- Chrome
+- Jira
+
+---
+
+## Personalization
+
+| Feature | Why it Matters |
+|---------|----------------|
+| Learns writing style | Adapts over time |
+| Learns corrections | Avoids repeated mistakes |
+| Multiple personas | Different styles for work and personal use |
+| Team style guides | Consistent organizational voice |
+
+---
+
+## Accessibility
+
+| Feature | Why it Matters |
+|---------|----------------|
+| Keyboard-free operation | Hands-free usage |
+| Voice-only editing | Minimal keyboard dependence |
+| Accessibility APIs | Better OS integration |
+
+---
+
+## Reliability
+
+| Feature | Why it Matters |
+|---------|----------------|
+| Works offline | Reliable without connectivity |
+| Automatic retries | Handles network interruptions |
+| Version history | Recover previous dictations |
+| Undo support | Easy mistake recovery |
+
+---
+
+# Key Differentiators
+
+These are the capabilities I'd pay the most attention to when evaluating products in this category.
+
+## Context Awareness
+Does it understand **what you're doing**, not just **what you're saying**?
+
+## Workflow Automation
+Can speech trigger actions instead of simply producing text?
+
+## Personalization
+Does it learn your writing style, preferred phrasing, and terminology?
+
+## Developer Experience
+Is it genuinely useful for software development?
+
+## Privacy Flexibility
+Can users choose between local, cloud, or hybrid processing?
+
+## Enterprise Readiness
+Does it support centralized management, compliance, and shared resources?
+
+---
+
+# Next-Generation Opportunities
+
+If I were advising a new entrant, I'd look beyond matching competitors and build capabilities like these:
+
+- **Conversation memory** – Remember recurring names, projects, and terminology across sessions.
+- **Intent detection** – Automatically determine whether the user is writing an email, creating a task, taking notes, coding, or chatting.
+- **Voice macros** – Turn spoken commands into multi-step workflows.
+- **Real-time coaching** – Suggest clearer wording while dictating.
+- **Meeting continuity** – Seamlessly move from meeting capture to summaries, action items, and follow-up drafts.
+- **Model choice** – Let users select AI models based on speed, quality, privacy, or cost.
+- **Knowledge grounding** – Use company documents, CRM data, or project context when rewriting.
+- **Cross-device continuity** – Continue dictation sessions across desktop and mobile.
+- **Adaptive UI** – Surface controls and suggestions based on the current application and task.
+
+---
+
+# Evaluation Scorecard
+
+| Category | Weight | Score (1–5) | Notes |
+|----------|-------:|------------:|------|
+| Voice Input | 10% | | |
+| Transcription Quality | 20% | | |
+| Context Awareness | 15% | | |
+| Writing Intelligence | 15% | | |
+| Automation | 10% | | |
+| Developer Features | 5% | | |
+| Integrations | 5% | | |
+| Personalization | 10% | | |
+
+**Total Weighted Score:** _____ / 100
