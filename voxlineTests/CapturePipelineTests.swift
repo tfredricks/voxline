@@ -9,7 +9,11 @@ import Foundation
         var onTapCallback: ((Int) -> Void)?
         var startCallCount = 0
         var stopCallCount = 0
+        var prewarmCallCount = 0
+        var stopPrewarmCallCount = 0
         var pendingSamples: [Float] = [0.1, 0.2, 0.3]
+        func prewarm() { prewarmCallCount += 1 }
+        func stopPrewarm() { stopPrewarmCallCount += 1 }
         func start() throws { startCallCount += 1 }
         func stop() { stopCallCount += 1 }
         func takeSamples() -> [Float] { defer { pendingSamples = [] }; return pendingSamples }
@@ -372,6 +376,49 @@ import Foundation
         await startAndFinalize(pipe, state: state)
 
         #expect(llm.calls.first?.context == CapturedContext.empty)
+    }
+
+    // MARK: - Prewarm gating
+
+    @Test func prewarmCapture_forwardsWhenIdle() {
+        let (pipe, _, capture, _, _, _, _, _, _) = makePipeline()
+        pipe.prewarmCapture()
+        #expect(capture.prewarmCallCount == 1)
+    }
+
+    @Test func prewarmCapture_forwardsWhenInClearableError() {
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
+        state.status = .error("previous dictation failed")
+        pipe.prewarmCapture()
+        #expect(capture.prewarmCallCount == 1)
+    }
+
+    @Test func prewarmCapture_refusedWhileThinking() {
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
+        state.status = .thinking
+        pipe.prewarmCapture()
+        #expect(capture.prewarmCallCount == 0, "prewarm must not light the mic while the pipeline can't record")
+    }
+
+    @Test func prewarmCapture_refusedDuringModelDownload() {
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
+        state.status = .downloadingModel(progress: 0.5)
+        pipe.prewarmCapture()
+        #expect(capture.prewarmCallCount == 0)
+    }
+
+    @Test func cancelCapturePrewarm_forwardsUnconditionally() {
+        let (pipe, _, capture, _, _, _, _, _, _) = makePipeline()
+        pipe.cancelCapturePrewarm()
+        #expect(capture.stopPrewarmCallCount == 1)
+    }
+
+    @Test func startRecording_whenRefused_stopsAnyPrewarm() {
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
+        state.status = .thinking
+        pipe.startRecording()
+        #expect(capture.startCallCount == 0)
+        #expect(capture.stopPrewarmCallCount == 1, "a prewarmed engine must not be left running when recording is refused")
     }
 
 }

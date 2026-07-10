@@ -5,6 +5,13 @@ import Foundation
 protocol AudioCapturing: AnyObject {
     var onLevel: ((Float) -> Void)? { get set }
     var onTapCallback: ((Int) -> Void)? { get set }
+    /// Best-effort: spin the audio engine up before the chord completes so
+    /// start() captures from the first tap buffer. Must be cheap and safe
+    /// to call repeatedly; errors are deferred to start().
+    func prewarm()
+    /// Tear down a prewarmed-but-unused engine (chord never completed, or
+    /// recording was refused). Must be a no-op while a capture is running.
+    func stopPrewarm()
     func start() throws
     func stop()
     func takeSamples() -> [Float]

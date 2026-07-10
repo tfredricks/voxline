@@ -34,6 +34,10 @@ final class AudioCaptureService {
     /// themselves, so they can't prefix the next recording with leftover audio.
     private var currentEpoch: UInt64 = 0
 
+    /// Implemented for real in the prewarm task; stubs keep AudioCapturing satisfied.
+    func prewarm() {}
+    func stopPrewarm() {}
+
     /// Begin capture. Throws if the input device is unavailable or sample-rate
     /// negotiation fails.
     func start() throws {

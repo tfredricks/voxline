@@ -64,6 +64,9 @@ final class CapturePipeline {
         // modelPrep errors are clearable by the user retrying.
         switch state.status {
         case .recording, .thinking, .downloadingModel, .preparingModel, .permissionsError:
+            // A prewarmed engine must not be left running when recording is
+            // refused — stopPrewarm is a no-op unless the engine is idling warm.
+            capture.stopPrewarm()
             return
         case .idle, .error:
             break
@@ -89,6 +92,25 @@ final class CapturePipeline {
         contextTask = Task.detached(priority: .userInitiated) {
             await captor.capture()
         }
+    }
+
+    /// Called when one chord modifier goes down (the "armed" edge). Warms the
+    /// audio engine so a completed chord records from the first syllable.
+    /// Gated on the same states startRecording accepts, so a prewarm can't
+    /// light the mic indicator while recording would be refused anyway
+    /// (model download, permissions error, pipeline in flight).
+    func prewarmCapture() {
+        switch state.status {
+        case .idle, .error:
+            capture.prewarm()
+        default:
+            break
+        }
+    }
+
+    /// Called when the armed modifier is released without completing the chord.
+    func cancelCapturePrewarm() {
+        capture.stopPrewarm()
     }
 
     /// Stop capture, transcribe, run LLM cleanup against the active mode's
