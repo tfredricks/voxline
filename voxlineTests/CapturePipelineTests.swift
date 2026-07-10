@@ -35,8 +35,13 @@ import Foundation
     final class FakeLLM: LLMServing, @unchecked Sendable {
         var nextResult: Result<String, Error> = .success("cleaned")
         var calls: [(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?)] = []
+        /// Invoked during `cleanup`, after the call is recorded and before the
+        /// result is returned — lets tests simulate MainActor reentrancy (e.g.
+        /// the review session being dismissed while cleanup is in flight).
+        var onCleanup: (() -> Void)? = nil
         func cleanup(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?) async throws -> String {
             calls.append((transcript, mode, context, refinement))
+            onCleanup?()
             return try nextResult.get()
         }
     }
@@ -580,6 +585,34 @@ import Foundation
         #expect(state.reviewSession == nil)
         await pipe.refine(.terser)
         #expect(llm.calls.isEmpty)
+    }
+
+    @Test func refine_wrongStatus_isNoOp() async {
+        let (pipe, state, llm, injector, _) = makeRefinePipeline()
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        #expect(state.reviewSession != nil)
+
+        state.status = .recording
+        let callCountBefore = llm.calls.count
+        await pipe.refine(.terser)
+
+        #expect(llm.calls.count == callCountBefore)
+        #expect(injector.replaceCalls.isEmpty)
+    }
+
+    @Test func refine_sessionDismissedDuringCleanup_doesNotPaste() async {
+        let (pipe, state, llm, injector, _) = makeRefinePipeline()
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        #expect(state.reviewSession != nil)
+
+        llm.onCleanup = { pipe.dismissReview() }
+        llm.nextResult = .success("tighter")
+
+        await pipe.refine(.terser)
+
+        #expect(state.reviewSession == nil)
+        #expect(injector.replaceCalls.isEmpty)
+        if case .idle = state.status {} else { Issue.record("expected .idle after refine on dismissed session") }
     }
 
 }

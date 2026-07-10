@@ -260,6 +260,14 @@ final class CapturePipeline {
             return
         }
 
+        // The session may have been dismissed/scrubbed during the await
+        // (MainActor reentrancy). Don't paste or record against a session
+        // the user has already dismissed.
+        guard state.reviewSession != nil else {
+            state.status = .idle
+            return
+        }
+
         let outcome = await injector.replace(session.insertedText, with: cleaned)
         state.status = .idle
         historyStore.updateMostRecent(cleanedText: cleaned)
