@@ -6,14 +6,16 @@ import SwiftUI
 final class RecordingPillWindow {
     private var panel: NSPanel?
     private var hostingView: NSHostingView<RecordingPillView>?
+    private var actions = PillReviewActions()
 
-    func show(state: AppState) {
+    func show(state: AppState, actions: PillReviewActions = PillReviewActions()) {
+        self.actions = actions
         if panel != nil {
             updateVisibility(state: state)
             return
         }
 
-        let view = RecordingPillView(state: state)
+        let view = RecordingPillView(state: state, actions: actions)
         let host = NSHostingView(rootView: view)
         hostingView = host
 
@@ -46,8 +48,21 @@ final class RecordingPillWindow {
             default: return false
             }
         }()
+        let inReview = (state.reviewSession != nil)
         let hasToast = (state.toastMessage != nil)
-        if recordingOrThinking || hasToast {
+
+        // The review pill must be clickable; every other state is click-through.
+        panel.ignoresMouseEvents = !inReview
+
+        // Review needs room for three buttons + dismiss; other states are compact.
+        let width: CGFloat = inReview ? 300 : 140
+        if panel.frame.width != width {
+            var frame = panel.frame
+            frame.size.width = width
+            panel.setFrame(frame, display: false)
+        }
+
+        if recordingOrThinking || inReview || hasToast {
             if !panel.isVisible {
                 repositionNearMouse(panel: panel)
                 panel.orderFrontRegardless()
