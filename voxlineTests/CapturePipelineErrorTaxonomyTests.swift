@@ -29,7 +29,8 @@ import Foundation
             fieldInspector: FakeFieldInspector(),
             injector: FakeInjector(handler: inject),
             historyStore: DictationHistoryStore(defaults: defaults),
-            contextCapture: FakeContextCapture()
+            contextCapture: FakeContextCapture(),
+            selectionSnapshot: FakeSelectionSnapshot()
         )
         return (p, state, capture)
     }
@@ -119,7 +120,8 @@ import Foundation
             fieldInspector: FakeFieldInspector(),
             injector: FakeInjector(handler: { _ in TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified) }),
             historyStore: DictationHistoryStore(defaults: defaults),
-            contextCapture: FakeContextCapture()
+            contextCapture: FakeContextCapture(),
+            selectionSnapshot: FakeSelectionSnapshot()
         )
         p.startRecording()
         // Do NOT set lastPeakLevel above 0 — simulating a silent mic where the
@@ -176,6 +178,12 @@ private struct FakeFrontmost: FrontmostAppProviding {
 
 private struct FakeFieldInspector: FocusedFieldInspecting {
     func inspect() -> FocusedField? { nil }
+}
+
+/// Always "no selection" so these dictation-error-taxonomy tests take the
+/// dictation path (and never post a real synthetic Cmd+C via the default).
+private struct FakeSelectionSnapshot: SelectionSnapshotting {
+    func readSelection() async -> String? { nil }
 }
 
 @MainActor

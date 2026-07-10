@@ -81,7 +81,7 @@ import Foundation
 
     final class FakeSelectionSnapshot: SelectionSnapshotting, @unchecked Sendable {
         var selection: String?
-        func readSelection() -> String? { selection }
+        func readSelection() async -> String? { selection }
     }
 
     /// Start recording then finalize, simulating the production `onLevel`

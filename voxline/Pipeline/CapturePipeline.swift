@@ -129,7 +129,7 @@ final class CapturePipeline {
         }
         let snapshotter = selectionSnapshot
         selectionTask = Task.detached(priority: .userInitiated) {
-            snapshotter.readSelection()
+            await snapshotter.readSelection()
         }
     }
 
@@ -278,7 +278,7 @@ final class CapturePipeline {
         // selection no longer matches what we transformed, don't overwrite
         // the wrong target — leave the result on the clipboard for a manual
         // paste instead.
-        guard selectionSnapshot.readSelection() == selection else {
+        guard await selectionSnapshot.readSelection() == selection else {
             transcriptFallback(transformed)
             resetIdle()
             showToast("Copied — ⌘V to replace")
