@@ -61,7 +61,7 @@ private struct ReviewControls: View {
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: 6) {
-                button("Terser") { actions.refine(.terser) }
+                button("Shorter") { actions.refine(.terser) }
                 button("Longer") { actions.refine(.longer) }
                 button("Clearer") { actions.refine(.clearer) }
                 Button(action: { actions.dismiss() }) {

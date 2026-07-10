@@ -26,8 +26,54 @@ import AppKit
         }
     }
 
+    /// Records synthetic key posts and simulates a well-behaved editor's
+    /// Cmd+C: writing the current "selection" onto the pasteboard. `@unchecked
+    /// Sendable` because `postKey` is a `@Sendable` closure; all access is from
+    /// the test's MainActor.
+    final class KeyRecorder: @unchecked Sendable {
+        let board: NSPasteboard
+        /// What a Cmd+C copies onto the board — i.e. what the keystroke
+        /// selection actually grabbed. Nil simulates a copy that puts nothing
+        /// new on the board (e.g. no selection).
+        let copyText: String?
+        var keys: [(CGKeyCode, CGEventFlags)] = []
+
+        init(board: NSPasteboard, copyText: String?) {
+            self.board = board
+            self.copyText = copyText
+        }
+
+        func post(_ keyCode: CGKeyCode, _ flags: CGEventFlags) {
+            keys.append((keyCode, flags))
+            if keyCode == ClipboardInjector.kVirtualKeyC, flags.contains(.maskCommand),
+               let copyText {
+                board.clearContents()
+                board.setString(copyText, forType: .string)
+            }
+        }
+
+        var shiftLefts: Int {
+            keys.filter { $0.0 == ClipboardInjector.kVirtualKeyLeftArrow && $0.1.contains(.maskShift) }.count
+        }
+    }
+
     private func makeBoard() -> NSPasteboard {
         NSPasteboard(name: NSPasteboard.Name(rawValue: "voxline-replace-\(UUID().uuidString)"))
+    }
+
+    @MainActor
+    private func makeKeystrokeInjector(board: NSPasteboard, focused: Focused, recorder: KeyRecorder) -> ClipboardInjector {
+        ClipboardInjector(
+            pasteboard: board,
+            focusedTextSystem: focused,
+            chordIsHeld: { false },
+            postKey: { recorder.post($0, $1) },
+            typeText: { _ in },
+            isAccessibilityTrusted: { true },
+            pasteWriteSettleDelay: .zero,
+            restoreDelay: .zero,
+            verificationDelay: .zero
+        )
     }
 
     @MainActor
@@ -101,6 +147,53 @@ import AppKit
 
         #expect(outcome == .fallbackClipboard)
         #expect(board.string(forType: .string) == "new")
+    }
+
+    // MARK: - Keystroke-selection fallback (AX-hostile editors, e.g. Obsidian)
+
+    @Test @MainActor func axSelectionUnavailable_keystrokeSelectsVerifiesAndReplaces() async {
+        let board = makeBoard(); board.clearContents(); board.setString("USER-CLIP", forType: .string)
+        let focused = Focused(); focused.selectResult = .some(nil) // AX selected-range unavailable
+        let recorder = KeyRecorder(board: board, copyText: "old text") // Cmd+C grabs exactly the prior insertion
+        let injector = makeKeystrokeInjector(board: board, focused: focused, recorder: recorder)
+
+        let outcome = await injector.replace("old text", with: "new text")
+
+        if case .replaced = outcome {} else { Issue.record("expected .replaced, got \(outcome)") }
+        // One Shift+Left per grapheme of the prior insertion.
+        #expect(recorder.shiftLefts == "old text".count)
+        // The user's clipboard is restored after the swap.
+        #expect(board.string(forType: .string) == "USER-CLIP")
+    }
+
+    @Test @MainActor func keystrokeSelectionMismatch_fallsBackAndRestoresClipboard() async {
+        let board = makeBoard(); board.clearContents(); board.setString("USER-CLIP", forType: .string)
+        let focused = Focused(); focused.selectResult = .some(nil)
+        // Cmd+C grabs something other than the prior insertion (caret moved / user typed).
+        let recorder = KeyRecorder(board: board, copyText: "unexpected selection")
+        let injector = makeKeystrokeInjector(board: board, focused: focused, recorder: recorder)
+
+        let outcome = await injector.replace("old text", with: "new text")
+
+        #expect(outcome == .fallbackClipboard)
+        // Mismatch must NOT overwrite: new text is left on the clipboard for manual paste.
+        #expect(board.string(forType: .string) == "new text")
+        // On mismatch we deselect (Right arrow) rather than paste over the selection.
+        #expect(recorder.keys.contains { $0.0 == ClipboardInjector.kVirtualKeyRightArrow })
+    }
+
+    @Test @MainActor func keystrokeCopyDoesNothing_fallsBack() async {
+        let board = makeBoard(); board.clearContents(); board.setString("USER-CLIP", forType: .string)
+        let focused = Focused(); focused.selectResult = .some(nil)
+        // Cmd+C changes nothing (no selection was made). Must not treat the
+        // user's stale clipboard as a verified selection.
+        let recorder = KeyRecorder(board: board, copyText: nil)
+        let injector = makeKeystrokeInjector(board: board, focused: focused, recorder: recorder)
+
+        let outcome = await injector.replace("USER-CLIP", with: "new text")
+
+        #expect(outcome == .fallbackClipboard)
+        #expect(board.string(forType: .string) == "new text")
     }
 
     @Test @MainActor func noAccessibility_fallsBack() async {
