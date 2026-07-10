@@ -17,6 +17,9 @@ final class CapturePipeline {
     private let historyStore: DictationHistoryStore
     private let contextCapture: ContextCapturing
     private var contextTask: Task<CapturedContext, Never>?
+    private var reviewExpiryTask: Task<Void, Never>?
+    private let reviewLingerDuration: TimeInterval
+    private let now: @Sendable () -> Date
 
     /// Invoked with the raw transcript when LLM cleanup fails, so the user's
     /// words survive a provider outage instead of being discarded. The default
@@ -42,7 +45,9 @@ final class CapturePipeline {
         fieldInspector: FocusedFieldInspecting,
         injector: ClipboardInjecting,
         historyStore: DictationHistoryStore,
-        contextCapture: ContextCapturing
+        contextCapture: ContextCapturing,
+        reviewLingerDuration: TimeInterval = 7,
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.state = state
         self.capture = capture
@@ -54,6 +59,8 @@ final class CapturePipeline {
         self.injector = injector
         self.historyStore = historyStore
         self.contextCapture = contextCapture
+        self.reviewLingerDuration = reviewLingerDuration
+        self.now = now
 
         capture.onLevel = { [weak self] level in
             Task { @MainActor in
@@ -86,6 +93,8 @@ final class CapturePipeline {
         case .idle, .error:
             break
         }
+        // A new dictation supersedes any pending refinement offer.
+        clearReviewSession()
         do {
             try capture.start()
         } catch {
@@ -219,7 +228,101 @@ final class CapturePipeline {
             return setError("Text insertion failed: \(error.localizedDescription)")
         }
 
+        // Offer quick refinements: keep the pill alive for a few seconds.
+        startReviewSession(transcript: transcript, mode: mode, context: context, insertedText: cleaned)
         resetIdle()
+    }
+
+    /// Re-run cleanup on the current review session's transcript with a
+    /// refinement directive, then swap the result in place. No-op unless a
+    /// session is open and we're idle. On failure the session and the pasted
+    /// text are left untouched so the click is retryable.
+    func refine(_ directive: RefinementDirective) async {
+        guard let session = state.reviewSession, case .idle = state.status else { return }
+        pauseReviewExpiry()
+        state.status = .thinking
+
+        let cleaned: String
+        do {
+            cleaned = try await llm.cleanup(
+                transcript: session.transcript, mode: session.mode,
+                context: session.context, refinement: directive
+            )
+        } catch let e as LLMError {
+            state.status = .idle
+            showToast(e.errorDescription ?? "Refinement failed.")
+            resumeReviewExpiry()
+            return
+        } catch {
+            state.status = .idle
+            showToast("Refinement failed: \(error.localizedDescription)")
+            resumeReviewExpiry()
+            return
+        }
+
+        let outcome = await injector.replace(session.insertedText, with: cleaned)
+        state.status = .idle
+        historyStore.updateMostRecent(cleanedText: cleaned)
+        state.reviewSession?.insertedText = cleaned
+        if case .fallbackClipboard = outcome {
+            showToast("Copied — ⌘V to replace")
+        }
+        resumeReviewExpiry()
+    }
+
+    /// Dismiss the refinement offer (pill × button).
+    func dismissReview() { expireReview() }
+
+    /// Scrub the session and its expiry timer. Idempotent.
+    func expireReview() {
+        reviewExpiryTask?.cancel()
+        reviewExpiryTask = nil
+        state.reviewSession = nil
+    }
+
+    /// Suspend the expiry countdown (pill hover-in) so a session isn't scrubbed
+    /// out from under the pointer.
+    func pauseReviewExpiry() {
+        reviewExpiryTask?.cancel()
+        reviewExpiryTask = nil
+    }
+
+    /// Resume the countdown from a full window (pill hover-out, or after a
+    /// refine completes). No-op if no session is open.
+    func resumeReviewExpiry() {
+        guard state.reviewSession != nil else { return }
+        state.reviewSession?.expiresAt = now().addingTimeInterval(reviewLingerDuration)
+        scheduleReviewExpiry()
+    }
+
+    private func startReviewSession(transcript: String, mode: Mode, context: CapturedContext, insertedText: String) {
+        state.reviewSession = ReviewSession(
+            transcript: transcript, mode: mode, context: context,
+            insertedText: insertedText, expiresAt: now().addingTimeInterval(reviewLingerDuration)
+        )
+        scheduleReviewExpiry()
+    }
+
+    private func clearReviewSession() { expireReview() }
+
+    private func scheduleReviewExpiry() {
+        reviewExpiryTask?.cancel()
+        let duration = reviewLingerDuration
+        // Created in a @MainActor context, so the closure hops back to MainActor.
+        reviewExpiryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled else { return }
+            self?.expireReview()
+        }
+    }
+
+    private func showToast(_ message: String) {
+        state.toastMessage = message
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self else { return }
+            if self.state.toastMessage == message { self.state.toastMessage = nil }
+        }
     }
 
     private func cancelContextTask() {

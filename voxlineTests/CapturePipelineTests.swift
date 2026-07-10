@@ -471,6 +471,117 @@ import Foundation
         #expect(fallbackCalls == 0)
     }
 
+    // MARK: - Review session + refine
+
+    private func makeRefinePipeline(
+        now: Date = Date(timeIntervalSince1970: 10_000),
+        linger: TimeInterval = 7
+    ) -> (CapturePipeline, AppState, FakeLLM, FakeInjector, DictationHistoryStore) {
+        let state = AppState()
+        let capture = FakeCapture()
+        let transcriber = FakeTranscriber()
+        let llm = FakeLLM()
+        let front = FakeFrontmost(); front.bundleID = "com.tinyspeck.slackmacgap"
+        let inspector = FakeFieldInspector()
+        let injector = FakeInjector()
+        let router = ModeRouter(modes: [
+            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil, category: .chat),
+            Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil, category: .general)
+        ])
+        let name = "voxline-test-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        let history = DictationHistoryStore(defaults: defaults)
+        let pipe = CapturePipeline(
+            state: state, capture: capture, transcriber: transcriber,
+            llm: llm, modes: router, frontmost: front,
+            fieldInspector: inspector, injector: injector,
+            historyStore: history, contextCapture: FakeContextCapture(),
+            reviewLingerDuration: linger, now: { now }
+        )
+        return (pipe, state, llm, injector, history)
+    }
+
+    @Test func finalize_success_opensReviewSessionWithExpiry() async {
+        let now = Date(timeIntervalSince1970: 10_000)
+        let (pipe, state, _, _, _) = makeRefinePipeline(now: now, linger: 7)
+        pipe.startRecording()
+        state.lastPeakLevel = 0.5
+        await pipe.finalizeRecording()
+
+        let session = state.reviewSession
+        #expect(session != nil)
+        #expect(session?.transcript == "hello world")   // FakeTranscriber default
+        #expect(session?.insertedText == "cleaned")      // FakeLLM default
+        #expect(session?.expiresAt == now.addingTimeInterval(7))
+    }
+
+    @Test func startRecording_clearsAnyReviewSession() async {
+        let (pipe, state, _, _, _) = makeRefinePipeline()
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        #expect(state.reviewSession != nil)
+        pipe.startRecording()
+        #expect(state.reviewSession == nil)
+    }
+
+    @Test func expireReview_scrubsSession() async {
+        let (pipe, state, _, _, _) = makeRefinePipeline()
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        pipe.expireReview()
+        #expect(state.reviewSession == nil)
+    }
+
+    @Test func refine_success_replacesUpdatesHistoryAndKeepsSession() async {
+        let (pipe, state, llm, injector, history) = makeRefinePipeline()
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        #expect(history.items.first?.cleanedText == "cleaned")
+
+        llm.nextResult = .success("tighter")
+        await pipe.refine(.terser)
+
+        #expect(llm.calls.last?.refinement == .terser)
+        #expect(llm.calls.last?.transcript == "hello world")   // from transcript, not cleaned output
+        #expect(injector.replaceCalls.last?.old == "cleaned")
+        #expect(injector.replaceCalls.last?.new == "tighter")
+        #expect(state.reviewSession?.insertedText == "tighter")
+        #expect(history.items.count == 1)
+        #expect(history.items.first?.cleanedText == "tighter")
+        if case .idle = state.status {} else { Issue.record("expected .idle after refine") }
+    }
+
+    @Test func refine_fallbackClipboard_setsToastAndUpdatesText() async {
+        let (pipe, state, llm, injector, _) = makeRefinePipeline()
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        injector.replaceOutcome = .fallbackClipboard
+        llm.nextResult = .success("tighter")
+
+        await pipe.refine(.terser)
+
+        #expect(state.reviewSession?.insertedText == "tighter")
+        #expect(state.toastMessage == "Copied — ⌘V to replace")
+    }
+
+    @Test func refine_llmError_keepsSessionAndSurfacesToast() async {
+        let (pipe, state, llm, injector, _) = makeRefinePipeline()
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        llm.nextResult = .failure(LLMError.missingAPIKey)
+
+        await pipe.refine(.longer)
+
+        #expect(state.reviewSession != nil)
+        #expect(state.reviewSession?.insertedText == "cleaned")  // unchanged
+        #expect(injector.replaceCalls.isEmpty)
+        #expect(state.toastMessage != nil)
+        if case .idle = state.status {} else { Issue.record("expected .idle after refine error") }
+    }
+
+    @Test func refine_noSession_isNoOp() async {
+        let (pipe, state, llm, _, _) = makeRefinePipeline()
+        #expect(state.reviewSession == nil)
+        await pipe.refine(.terser)
+        #expect(llm.calls.isEmpty)
+    }
+
 }
 
 final class FakeContextCapture: ContextCapturing, @unchecked Sendable {
