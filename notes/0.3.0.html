@@ -1,0 +1,6 @@
+**A standalone permissions panel.** voxline now has a dedicated window that shows exactly which permissions it uses and their current state — Accessibility and Microphone (required to run) and Input Monitoring (recommended for hotkey reliability) — each with a plain-language explanation and a button that jumps straight to the right System Settings pane.
+
+It appears on its own at launch if a required permission is missing, so a fresh install or a revoked permission never leaves the hotkey silently non-functional. If a required permission is revoked while voxline is running, the panel comes back automatically. It polls live and closes itself the moment the required permissions are granted. You can also open it any time from the new **Check Permissions…** item in the menu bar.
+
+Permissions problems now show a distinct warning badge in the menu bar (instead of sharing the generic microphone-error icon), with a **Fix permissions…** shortcut — a clear signal that the issue is yours to fix in System Settings, not a bug.
+
