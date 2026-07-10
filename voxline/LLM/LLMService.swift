@@ -64,7 +64,7 @@ struct LLMService: LLMServing {
     let keychain: any KeychainStorage
     let http: HTTPClient
 
-    init(settings: AppSettings, keychain: any KeychainStorage = DataProtectionKeychain(), http: HTTPClient = URLSessionHTTPClient()) {
+    init(settings: AppSettings, keychain: any KeychainStorage = DataProtectionKeychain(), http: HTTPClient = RetryingHTTPClient(wrapped: URLSessionHTTPClient())) {
         self.settings = settings
         self.keychain = keychain
         self.http = http
