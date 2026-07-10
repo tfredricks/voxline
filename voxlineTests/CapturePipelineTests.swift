@@ -34,9 +34,9 @@ import Foundation
 
     final class FakeLLM: LLMServing, @unchecked Sendable {
         var nextResult: Result<String, Error> = .success("cleaned")
-        var calls: [(transcript: String, mode: Mode, context: CapturedContext)] = []
-        func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String {
-            calls.append((transcript, mode, context))
+        var calls: [(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?)] = []
+        func cleanup(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?) async throws -> String {
+            calls.append((transcript, mode, context, refinement))
             return try nextResult.get()
         }
     }

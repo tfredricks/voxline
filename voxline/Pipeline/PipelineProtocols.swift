@@ -34,7 +34,10 @@ protocol FocusedFieldInspecting: Sendable {
 }
 
 protocol LLMServing: Sendable {
-    func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String
+    /// - Parameter refinement: nil for a normal first-pass cleanup (prompt is
+    ///   byte-identical to before this parameter existed); a directive for a
+    ///   post-dictation refine pass.
+    func cleanup(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?) async throws -> String
 }
 
 @MainActor

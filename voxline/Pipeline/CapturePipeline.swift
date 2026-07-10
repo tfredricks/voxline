@@ -198,7 +198,7 @@ final class CapturePipeline {
         let cleaned: String
         let cleanupStart = Date()
         do {
-            cleaned = try await llm.cleanup(transcript: transcript, mode: mode, context: context)
+            cleaned = try await llm.cleanup(transcript: transcript, mode: mode, context: context, refinement: nil)
         } catch let e as LLMError {
             transcriptFallback(transcript)
             return setError("\(e.errorDescription ?? "LLM cleanup failed.") Raw transcript copied to the clipboard — paste to recover it.")

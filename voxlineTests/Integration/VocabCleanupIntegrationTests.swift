@@ -76,7 +76,7 @@ struct VocabCleanupIntegrationTests {
             temperature: 0.0,
             fieldKind: nil
         )
-        let cleaned = try await llm.cleanup(transcript: transcript, mode: mode, context: context)
+        let cleaned = try await llm.cleanup(transcript: transcript, mode: mode, context: context, refinement: nil)
         print("[integration] cleaned=\(cleaned)")
 
         // 3. The cleanup preamble (LLMService.transcriptionPreamble) instructs

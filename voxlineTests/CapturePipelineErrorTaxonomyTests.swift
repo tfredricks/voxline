@@ -162,7 +162,7 @@ private final class FakeTranscriber: Transcribing {
 private final class FakeLLM: LLMServing, @unchecked Sendable {
     let handler: (String, Mode, CapturedContext) async throws -> String
     init(handler: @escaping (String, Mode, CapturedContext) async throws -> String) { self.handler = handler }
-    func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String {
+    func cleanup(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?) async throws -> String {
         try await handler(transcript, mode, context)
     }
 }

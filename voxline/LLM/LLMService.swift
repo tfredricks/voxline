@@ -60,6 +60,15 @@ struct LLMService: LLMServing {
     Style guidance for this dictation:
     """
 
+    /// Assemble the system prompt: fixed preamble + the mode's style guidance,
+    /// plus an optional one-off refinement directive for a refine pass. Pure
+    /// function so prompt assembly is unit-testable without an HTTP round-trip.
+    static func systemPrompt(mode: Mode, refinement: RefinementDirective?) -> String {
+        let base = transcriptionPreamble + "\n" + mode.prompt
+        guard let refinement else { return base }
+        return base + "\n\nThe user asked for this specific adjustment to the rewrite: " + refinement.promptText
+    }
+
     let settings: AppSettings
     let keychain: any KeychainStorage
     let http: HTTPClient
@@ -70,7 +79,7 @@ struct LLMService: LLMServing {
         self.http = http
     }
 
-    func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String {
+    func cleanup(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?) async throws -> String {
         // No transcript → no work. Empty input would otherwise generate a
         // surprise greeting from some models.
         guard !transcript.isEmpty else { return "" }
@@ -93,7 +102,7 @@ struct LLMService: LLMServing {
         let userPrompt = ContextBlockFormatter.format(transcript: transcript, context: context)
         let request = LLMRequest(
             model: model,
-            systemPrompt: Self.transcriptionPreamble + "\n" + mode.prompt,
+            systemPrompt: Self.systemPrompt(mode: mode, refinement: refinement),
             userPrompt: userPrompt,
             temperature: mode.temperature
         )

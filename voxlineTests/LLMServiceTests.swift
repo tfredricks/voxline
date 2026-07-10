@@ -32,7 +32,7 @@ import Foundation
 
         let mode = Mode(bundleID: "*", displayName: "default", prompt: "S", model: nil, temperature: nil)
         do {
-            _ = try await service.cleanup(transcript: "hi", mode: mode, context: .empty)
+            _ = try await service.cleanup(transcript: "hi", mode: mode, context: .empty, refinement: nil)
             Issue.record("expected throw")
         } catch let e as LLMError {
             #expect(e == .missingAPIKey)
@@ -53,7 +53,7 @@ import Foundation
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
 
-        let out = try await service.cleanup(transcript: "u", mode: mode, context: .empty)
+        let out = try await service.cleanup(transcript: "u", mode: mode, context: .empty, refinement: nil)
         #expect(out == "clean")
         #expect(mock.capturedRequest?.url?.host == "api.anthropic.com")
     }
@@ -72,7 +72,7 @@ import Foundation
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
 
-        let out = try await service.cleanup(transcript: "u", mode: mode, context: .empty)
+        let out = try await service.cleanup(transcript: "u", mode: mode, context: .empty, refinement: nil)
         #expect(out == "clean")
         #expect(mock.capturedRequest?.url?.host == "api.openai.com")
     }
@@ -91,7 +91,7 @@ import Foundation
 
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: "claude-3-5-sonnet-latest", temperature: 0.7)
-        _ = try await service.cleanup(transcript: "u", mode: mode, context: .empty)
+        _ = try await service.cleanup(transcript: "u", mode: mode, context: .empty, refinement: nil)
 
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         #expect(body["model"] as? String == "claude-3-5-sonnet-latest")
@@ -117,7 +117,7 @@ import Foundation
             model: nil,
             temperature: nil
         )
-        _ = try await service.cleanup(transcript: "what's the score?", mode: mode, context: .empty)
+        _ = try await service.cleanup(transcript: "what's the score?", mode: mode, context: .empty, refinement: nil)
 
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         let system = try #require(body["system"] as? String)
@@ -140,7 +140,7 @@ import Foundation
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
 
-        let out = try await service.cleanup(transcript: "", mode: mode, context: .empty)
+        let out = try await service.cleanup(transcript: "", mode: mode, context: .empty, refinement: nil)
         #expect(out == "")
         #expect(mock.capturedRequest == nil)
     }
@@ -163,7 +163,7 @@ import Foundation
         ctx.bundleID = "com.tinyspeck.slackmacgap"
         ctx.windowTitle = "#sales"
 
-        _ = try await service.cleanup(transcript: "hi", mode: mode, context: ctx)
+        _ = try await service.cleanup(transcript: "hi", mode: mode, context: ctx, refinement: nil)
 
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         let messages = try #require(body["messages"] as? [[String: Any]])
@@ -193,7 +193,7 @@ import Foundation
         let service = LLMService(settings: settings, keychain: kc, http: mock)
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
 
-        _ = try await service.cleanup(transcript: "hi", mode: mode, context: .empty)
+        _ = try await service.cleanup(transcript: "hi", mode: mode, context: .empty, refinement: nil)
 
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         let messages = try #require(body["messages"] as? [[String: Any]])
@@ -219,5 +219,22 @@ import Foundation
         #expect(preamble.contains("Strip fillers"))
         #expect(preamble.contains("Resolve self-corrections"))
         #expect(preamble.contains("Preserve proper nouns"))
+    }
+
+    @Test func systemPrompt_withoutRefinement_isPreambleAndModePrompt() {
+        let mode = Mode(bundleID: "*", displayName: "d", prompt: "MODE_STYLE", model: nil, temperature: nil)
+        let prompt = LLMService.systemPrompt(mode: mode, refinement: nil)
+        #expect(prompt == LLMService.transcriptionPreamble + "\n" + "MODE_STYLE")
+    }
+
+    @Test func systemPrompt_withRefinement_appendsDirectiveOnce() {
+        let mode = Mode(bundleID: "*", displayName: "d", prompt: "MODE_STYLE", model: nil, temperature: nil)
+        let prompt = LLMService.systemPrompt(mode: mode, refinement: .terser)
+        let expected = LLMService.transcriptionPreamble + "\n" + "MODE_STYLE"
+            + "\n\nThe user asked for this specific adjustment to the rewrite: "
+            + RefinementDirective.terser.promptText
+        #expect(prompt == expected)
+        // Directive text must appear exactly once.
+        #expect(prompt.components(separatedBy: RefinementDirective.terser.promptText).count == 2)
     }
 }
