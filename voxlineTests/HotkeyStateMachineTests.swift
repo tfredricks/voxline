@@ -195,6 +195,27 @@ import Foundation
         #expect(outputs.isEmpty)
     }
 
+    @Test func maxDurationElapsed_doesNotAutoRestartFromStaleFlags() {
+        // The fail-safe fires precisely when the release event may have been
+        // lost — remembered flags can't be trusted, so recordingFinished must
+        // go idle, not loop into another recording.
+        let m = machine()
+        _ = m.handle(chord(true, true))
+        _ = m.handle(.maxDurationElapsed)
+        let outputs = m.handle(.recordingFinished)
+        #expect(m.state == .idle)
+        #expect(outputs.isEmpty)
+    }
+
+    @Test func tapDisabled_doesNotAutoRestartFromStaleFlags() {
+        let m = machine()
+        _ = m.handle(chord(true, true))
+        _ = m.handle(.tapDisabled)
+        let outputs = m.handle(.recordingFinished)
+        #expect(m.state == .idle)
+        #expect(outputs.isEmpty)
+    }
+
     @Test func recordingFinished_isNoOpIfNotFinalizing() {
         let m = machine()
         let outputs = m.handle(.recordingFinished)

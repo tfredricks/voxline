@@ -58,8 +58,16 @@ final class HotkeyStateMachine {
             state = .finalizing
             return [.finalizeRecording]
 
+        // These inputs fire precisely when a chord-release flagsChanged event
+        // may have been LOST (tap disabled) or the hold is implausibly long
+        // (fail-safe). Either way lastFlags can't be trusted, so the
+        // resume-on-recordingFinished path below must not fire from stale
+        // data — reset it and make the user re-press. A fresh flagsChanged
+        // arriving during finalizing (the user re-pressing) updates lastFlags
+        // again and resume works as normal; that case is unaffected.
         case (.recording, .maxDurationElapsed),
              (.recording, .tapDisabled):
+            lastFlags = (false, false)
             state = .finalizing
             return [.finalizeRecording]
 
