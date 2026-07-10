@@ -10,7 +10,16 @@ import Foundation
 /// Clearing the session is also the memory scrub: the transcript copy dies with
 /// it, bounding how long spoken secrets linger in process memory (~7s idle,
 /// reset on interaction) rather than "until the next dictation".
+
+/// Whether the active review was produced by dictation or by transforming a
+/// selection — determines what the Shorter/Longer/Clearer buttons act on.
+enum ReviewKind: Equatable, Sendable {
+    case dictation
+    case transform
+}
+
 struct ReviewSession: Equatable, Sendable {
+    let kind: ReviewKind
     let transcript: String
     let mode: Mode
     let context: CapturedContext

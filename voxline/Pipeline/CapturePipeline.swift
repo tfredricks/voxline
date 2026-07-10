@@ -17,6 +17,8 @@ final class CapturePipeline {
     private let historyStore: DictationHistoryStore
     private let contextCapture: ContextCapturing
     private var contextTask: Task<CapturedContext, Never>?
+    private let selectionSnapshot: SelectionSnapshotting
+    private var selectionTask: Task<String?, Never>?
     private var reviewExpiryTask: Task<Void, Never>?
     private let reviewLingerDuration: TimeInterval
     private let now: @Sendable () -> Date
@@ -46,6 +48,7 @@ final class CapturePipeline {
         injector: ClipboardInjecting,
         historyStore: DictationHistoryStore,
         contextCapture: ContextCapturing,
+        selectionSnapshot: SelectionSnapshotting = DefaultSelectionSnapshot(),
         reviewLingerDuration: TimeInterval = 7,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -59,6 +62,7 @@ final class CapturePipeline {
         self.injector = injector
         self.historyStore = historyStore
         self.contextCapture = contextCapture
+        self.selectionSnapshot = selectionSnapshot
         self.reviewLingerDuration = reviewLingerDuration
         self.now = now
 
@@ -122,6 +126,10 @@ final class CapturePipeline {
         let captor = contextCapture
         contextTask = Task.detached(priority: .userInitiated) {
             await captor.capture()
+        }
+        let snapshotter = selectionSnapshot
+        selectionTask = Task.detached(priority: .userInitiated) {
+            snapshotter.readSelection()
         }
     }
 
@@ -201,6 +209,14 @@ final class CapturePipeline {
         // 3. LLM cleanup.
         let context = await contextTask?.value ?? .empty
         contextTask = nil
+        let selection = await selectionTask?.value ?? nil
+        selectionTask = nil
+        // If text was selected when recording started, treat the speech as a
+        // command to transform that selection instead of as dictation.
+        if let selection, !selection.isEmpty {
+            await performTransform(command: transcript, selection: selection, mode: mode, context: context)
+            return
+        }
         if !context.captureNotes.isEmpty {
             AppLog.context.info("context partial: notes=\(context.captureNotes.joined(separator: ",")) durationMs=\(context.captureDurationMs)")
         }
@@ -229,7 +245,48 @@ final class CapturePipeline {
         }
 
         // Offer quick refinements: keep the pill alive for a few seconds.
-        startReviewSession(transcript: transcript, mode: mode, context: context, insertedText: cleaned)
+        startReviewSession(kind: .dictation, transcript: transcript, mode: mode, context: context, insertedText: cleaned)
+        resetIdle()
+    }
+
+    /// Rewrite the user's selection according to the spoken command, paste it
+    /// over the (still-live) selection, and open a transform review session.
+    /// Owns its terminal state — callers must not call `resetIdle` afterward.
+    private func performTransform(command: String, selection: String, mode: Mode, context: CapturedContext) async {
+        let transformed: String
+        do {
+            transformed = try await llm.transform(instruction: command, selection: selection, mode: mode)
+        } catch let e as LLMError {
+            return setError("\(e.errorDescription ?? "Transform failed.") Your selection was left unchanged.")
+        } catch {
+            return setError("Transform failed: \(error.localizedDescription) Your selection was left unchanged.")
+        }
+
+        // The transform prompt returns the selection verbatim when the command
+        // can't be applied as a rewrite/restructure (e.g. a translate request).
+        // Treat that as a no-op rather than re-pasting identical text.
+        guard !transformed.isEmpty, transformed != selection else {
+            resetIdle()
+            showToast("Couldn't apply that")
+            return
+        }
+
+        historyStore.record(cleanedText: transformed, mode: mode, context: context)
+
+        do {
+            // Selection is live, so a paste lands over it — no re-selection needed.
+            _ = try await injector.inject(transformed)
+        } catch {
+            // Any insertion failure: leave the result on the clipboard so ⌘V
+            // still replaces the selection.
+            transcriptFallback(transformed)
+            startReviewSession(kind: .transform, transcript: command, mode: mode, context: context, insertedText: transformed)
+            resetIdle()
+            showToast("Copied — ⌘V to replace")
+            return
+        }
+
+        startReviewSession(kind: .transform, transcript: command, mode: mode, context: context, insertedText: transformed)
         resetIdle()
     }
 
@@ -303,9 +360,9 @@ final class CapturePipeline {
         scheduleReviewExpiry()
     }
 
-    private func startReviewSession(transcript: String, mode: Mode, context: CapturedContext, insertedText: String) {
+    private func startReviewSession(kind: ReviewKind, transcript: String, mode: Mode, context: CapturedContext, insertedText: String) {
         state.reviewSession = ReviewSession(
-            transcript: transcript, mode: mode, context: context,
+            kind: kind, transcript: transcript, mode: mode, context: context,
             insertedText: insertedText, expiresAt: now().addingTimeInterval(reviewLingerDuration)
         )
         scheduleReviewExpiry()
@@ -336,6 +393,8 @@ final class CapturePipeline {
     private func cancelContextTask() {
         contextTask?.cancel()
         contextTask = nil
+        selectionTask?.cancel()
+        selectionTask = nil
     }
 
     private func resetIdle() {

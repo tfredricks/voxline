@@ -79,6 +79,11 @@ import Foundation
         }
     }
 
+    final class FakeSelectionSnapshot: SelectionSnapshotting, @unchecked Sendable {
+        var selection: String?
+        func readSelection() -> String? { selection }
+    }
+
     /// Start recording then finalize, simulating the production `onLevel`
     /// callback firing so the silent-capture detector doesn't fire.
     private func startAndFinalize(_ pipe: CapturePipeline, state: AppState) async {
@@ -111,7 +116,8 @@ import Foundation
             state: state, capture: capture, transcriber: transcriber,
             llm: llm, modes: router, frontmost: front,
             fieldInspector: inspector, injector: injector,
-            historyStore: history, contextCapture: FakeContextCapture()
+            historyStore: history, contextCapture: FakeContextCapture(),
+            selectionSnapshot: FakeSelectionSnapshot()
         )
         return (pipe, state, capture, transcriber, llm, front, inspector, injector, history)
     }
@@ -133,7 +139,8 @@ import Foundation
             state: state, capture: capture, transcriber: transcriber,
             llm: llm, modes: router, frontmost: front,
             fieldInspector: inspector, injector: injector,
-            historyStore: history, contextCapture: ctx
+            historyStore: history, contextCapture: ctx,
+            selectionSnapshot: FakeSelectionSnapshot()
         )
         return (pipe, state, capture, transcriber, llm, front, inspector, injector, history, ctx)
     }
@@ -509,6 +516,39 @@ import Foundation
             llm: llm, modes: router, frontmost: front,
             fieldInspector: inspector, injector: injector,
             historyStore: history, contextCapture: FakeContextCapture(),
+            selectionSnapshot: FakeSelectionSnapshot(),
+            reviewLingerDuration: linger, now: { now }
+        )
+        return (pipe, state, llm, injector, history)
+    }
+
+    private func makeTransformPipeline(
+        selection: String,
+        now: Date = Date(timeIntervalSince1970: 10_000),
+        linger: TimeInterval = 7
+    ) -> (CapturePipeline, AppState, FakeLLM, FakeInjector, DictationHistoryStore) {
+        let state = AppState()
+        let capture = FakeCapture()
+        let transcriber = FakeTranscriber()
+        let llm = FakeLLM()
+        let front = FakeFrontmost(); front.bundleID = "com.tinyspeck.slackmacgap"
+        let inspector = FakeFieldInspector()
+        let injector = FakeInjector()
+        let snap = FakeSelectionSnapshot(); snap.selection = selection
+        let router = ModeRouter(modes: [
+            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil, category: .chat),
+            Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil, category: .general)
+        ])
+        let name = "voxline-test-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        let history = DictationHistoryStore(defaults: defaults)
+        let pipe = CapturePipeline(
+            state: state, capture: capture, transcriber: transcriber,
+            llm: llm, modes: router, frontmost: front,
+            fieldInspector: inspector, injector: injector,
+            historyStore: history, contextCapture: FakeContextCapture(),
+            selectionSnapshot: snap,
             reviewLingerDuration: linger, now: { now }
         )
         return (pipe, state, llm, injector, history)
@@ -620,6 +660,68 @@ import Foundation
         #expect(state.reviewSession == nil)
         #expect(injector.replaceCalls.isEmpty)
         if case .idle = state.status {} else { Issue.record("expected .idle after refine on dismissed session") }
+    }
+
+    // MARK: - Selection detection + transform
+
+    @Test func finalize_withSelection_transformsAndOpensTransformReview() async {
+        let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+
+        #expect(llm.transformCalls.last?.selection == "original text")
+        #expect(llm.transformCalls.last?.instruction == "hello world")   // the spoken command
+        #expect(llm.calls.isEmpty)                                       // dictation cleanup NOT called
+        #expect(injector.injected.last == "transformed")                 // pasted over the live selection
+        #expect(injector.replaceCalls.isEmpty)                           // initial transform uses inject, not replace
+        #expect(history.items.first?.cleanedText == "transformed")
+        #expect(state.reviewSession?.kind == .transform)
+        #expect(state.reviewSession?.insertedText == "transformed")
+        if case .idle = state.status {} else { Issue.record("expected .idle after transform") }
+    }
+
+    @Test func finalize_withSelection_unchangedResult_showsToastNoWrite() async {
+        let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
+        llm.transformResult = .success("original text")   // model declined → returned selection verbatim
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+
+        #expect(injector.injected.isEmpty)
+        #expect(history.items.isEmpty)
+        #expect(state.reviewSession == nil)
+        #expect(state.toastMessage == "Couldn't apply that")
+        if case .idle = state.status {} else { Issue.record("expected .idle") }
+    }
+
+    @Test func finalize_withSelection_llmError_setsError() async {
+        let (pipe, state, llm, injector, _) = makeTransformPipeline(selection: "original text")
+        llm.transformResult = .failure(LLMError.missingAPIKey)
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+
+        #expect(injector.injected.isEmpty)
+        #expect(state.reviewSession == nil)
+        if case .error = state.status {} else { Issue.record("expected .error status") }
+    }
+
+    @Test func finalize_withSelection_injectFails_fallsBackToClipboard() async {
+        let (pipe, state, _, injector, _) = makeTransformPipeline(selection: "original text")
+        injector.nextError = TextInsertionError.pasteVerificationFailed
+        var fallbackText: String?
+        pipe.transcriptFallback = { fallbackText = $0 }   // capture instead of touching NSPasteboard.general
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+
+        #expect(fallbackText == "transformed")
+        #expect(state.toastMessage == "Copied — ⌘V to replace")
+        #expect(state.reviewSession?.kind == .transform)
+        #expect(state.reviewSession?.insertedText == "transformed")
+    }
+
+    @Test func finalize_withEmptySelection_usesDictationPath() async {
+        let (pipe, state, llm, injector, _) = makeTransformPipeline(selection: "")
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+
+        #expect(llm.transformCalls.isEmpty)
+        #expect(llm.calls.count == 1)                    // dictation cleanup called
+        #expect(injector.injected.last == "cleaned")
+        #expect(state.reviewSession?.kind == .dictation)
     }
 
 }

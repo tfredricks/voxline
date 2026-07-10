@@ -65,6 +65,7 @@ import Foundation
 
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "p", model: nil, temperature: nil)
         let session = ReviewSession(
+            kind: .dictation,
             transcript: "raw words",
             mode: mode,
             context: .empty,
