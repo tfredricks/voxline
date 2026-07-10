@@ -276,6 +276,12 @@ final class AppCoordinator {
                 if let state { self?.pillWindow?.updateVisibility(state: state) }
             }
         }
+        monitor.onBeginPrewarm = { [weak self] in
+            self?.pipeline?.prewarmCapture()
+        }
+        monitor.onCancelPrewarm = { [weak self] in
+            self?.pipeline?.cancelCapturePrewarm()
+        }
         // Accessibility is the hard requirement for our session-level
         // CGEventTap with .listenOnly on .flagsChanged. Input Monitoring is
         // best-effort: some macOS configurations make the tap more reliable

@@ -34,32 +34,68 @@ final class AudioCaptureService {
     /// themselves, so they can't prefix the next recording with leftover audio.
     private var currentEpoch: UInt64 = 0
 
-    /// Implemented for real in the prewarm task; stubs keep AudioCapturing satisfied.
-    func prewarm() {}
-    func stopPrewarm() {}
+    /// True between a successful start() and the matching stop(). Guards
+    /// stopPrewarm() so a disarm edge can never kill a live recording.
+    private var isCapturing = false
+
+    /// Route the engine's input AU to the preferred device, when set and still
+    /// present. Falls through silently to the system default otherwise.
+    private func applyPreferredDevice() {
+        guard let uid = preferredInputDeviceUID,
+              let deviceID = AudioDeviceEnumerator.deviceID(forUID: uid),
+              let au = engine.inputNode.audioUnit else { return }
+        var mutableID = deviceID
+        _ = AudioUnitSetProperty(
+            au,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &mutableID,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
+    }
+
+    /// Best-effort engine spin-up on the chord's armed edge (one modifier
+    /// down). Starting AVAudioEngine is the expensive part of start() —
+    /// hundreds of ms on Bluetooth inputs — so paying it before the second
+    /// modifier lands means the recording captures from the first syllable.
+    /// No tap is installed and the sample buffer is untouched. Errors are
+    /// swallowed here and surface properly from start() if the user completes
+    /// the chord.
+    func prewarm() {
+        guard !engine.isRunning else { return }
+        applyPreferredDevice()
+        // Touch the input format so the engine builds its input graph before
+        // start — an engine started with no configured input does not open
+        // the microphone and would prewarm nothing.
+        let hwFormat = engine.inputNode.inputFormat(forBus: 0)
+        guard hwFormat.sampleRate > 0, hwFormat.channelCount > 0 else { return }
+        do {
+            try engine.start()
+        } catch {
+            AppLog.audio.debug("prewarm failed; start() will retry: \(error.localizedDescription)")
+        }
+    }
+
+    /// Stop an engine that was prewarmed but never used (armed edge released
+    /// without completing the chord, or recording was refused). No-op while a
+    /// real capture is running.
+    func stopPrewarm() {
+        guard !isCapturing else { return }
+        engine.stop()
+    }
 
     /// Begin capture. Throws if the input device is unavailable or sample-rate
     /// negotiation fails.
     func start() throws {
-        engine.stop()
         let input = engine.inputNode
         input.removeTap(onBus: 0)
 
-        // Apply the preferred device. If the UID no longer resolves (mic unplugged
-        // since Settings save) or AudioUnitSetProperty fails, fall through to the
-        // system default — don't throw.
-        if let uid = preferredInputDeviceUID,
-           let deviceID = AudioDeviceEnumerator.deviceID(forUID: uid),
-           let au = engine.inputNode.audioUnit {
-            var mutableID = deviceID
-            _ = AudioUnitSetProperty(
-                au,
-                kAudioOutputUnitProperty_CurrentDevice,
-                kAudioUnitScope_Global,
-                0,
-                &mutableID,
-                UInt32(MemoryLayout<AudioDeviceID>.size)
-            )
+        // When prewarm already has the engine running, the preferred device was
+        // applied on the armed edge milliseconds ago — don't reconfigure a
+        // running engine. Cold path applies it as before.
+        if !engine.isRunning {
+            applyPreferredDevice()
         }
 
         // Use inputFormat(forBus:), not outputFormat. On macOS 26.x,
@@ -103,24 +139,28 @@ final class AudioCaptureService {
             self.handleInputNonisolated(buffer: buffer, converter: convLocal, target: targetFmt, epoch: epoch)
         }
 
-        do {
-            try engine.start()
-        } catch {
-            input.removeTap(onBus: 0)
-            throw error
+        if !engine.isRunning {
+            do {
+                try engine.start()
+            } catch {
+                input.removeTap(onBus: 0)
+                throw error
+            }
         }
+        isCapturing = true
 
-        let deviceName = resolvedInputDeviceName()
-        AppLog.audio.info("capture started: device='\(deviceName)', \(Int(hwFormat.sampleRate))Hz → \(Int(AudioFormat.whisperSampleRate))Hz")
-    }
-
-    private func resolvedInputDeviceName() -> String {
-        let inputs = AudioDeviceEnumerator.inputDevices()
-        if let uid = preferredInputDeviceUID,
-           let match = inputs.first(where: { $0.uid == uid }) {
-            return match.name
+        // Device-name resolution enumerates every CoreAudio device (an IPC
+        // round trip per device) — that cost does not belong between keypress
+        // and first captured sample. Log from a background task instead.
+        let uid = preferredInputDeviceUID
+        let hwRate = Int(hwFormat.sampleRate)
+        Task.detached(priority: .utility) {
+            let inputs = AudioDeviceEnumerator.inputDevices()
+            let name = uid.flatMap { u in inputs.first(where: { $0.uid == u })?.name }
+                ?? inputs.first(where: { $0.isDefault })?.name
+                ?? "(unknown)"
+            AppLog.audio.info("capture started: device='\(name)', \(hwRate)Hz → \(Int(AudioFormat.whisperSampleRate))Hz")
         }
-        return inputs.first(where: { $0.isDefault })?.name ?? "(unknown)"
     }
 
     /// Stop capture. Removes the tap and stops the engine so the system mic
@@ -128,6 +168,7 @@ final class AudioCaptureService {
     func stop() {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        isCapturing = false
         // Invalidate any tap-callback Tasks that have not yet hopped to
         // MainActor — they would otherwise append into the buffer the next
         // recording is about to use.
