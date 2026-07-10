@@ -159,4 +159,30 @@ import Foundation
         #expect(first.appName == nil)
         #expect(first.appBundleID == nil)
     }
+
+    @Test func updateMostRecent_replacesNewestText_preservingIdentity() {
+        let store = DictationHistoryStore(defaults: makeDefaults())
+        let mode = Mode(bundleID: "*", displayName: "d", prompt: "p", model: nil, temperature: nil, category: .general)
+        store.record(cleanedText: "first version", mode: mode, context: .empty)
+        let id = store.items.first!.id
+        let ts = store.items.first!.timestamp
+
+        store.updateMostRecent(cleanedText: "refined version")
+
+        #expect(store.items.count == 1)
+        #expect(store.items.first?.cleanedText == "refined version")
+        #expect(store.items.first?.id == id)          // same row, not a new one
+        #expect(store.items.first?.timestamp == ts)
+    }
+
+    @Test func updateMostRecent_ignoresBlank_andEmptyHistory() {
+        let store = DictationHistoryStore(defaults: makeDefaults())
+        store.updateMostRecent(cleanedText: "nothing to update")   // empty history: no-op
+        #expect(store.items.isEmpty)
+
+        let mode = Mode(bundleID: "*", displayName: "d", prompt: "p", model: nil, temperature: nil, category: .general)
+        store.record(cleanedText: "keep me", mode: mode, context: .empty)
+        store.updateMostRecent(cleanedText: "   ")                 // blank: no-op
+        #expect(store.items.first?.cleanedText == "keep me")
+    }
 }

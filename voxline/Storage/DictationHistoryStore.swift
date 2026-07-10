@@ -60,6 +60,25 @@ final class DictationHistoryStore {
         persist()
     }
 
+    /// Replace the text of the newest entry — the one `record` just added for
+    /// the current dictation — when a refine pass produces a better version.
+    /// Keeps the same id/timestamp/app/mode so chained refines don't spam
+    /// history. Blank text or empty history is a no-op (the refine flow only
+    /// calls this right after a successful `record`, so the empty case is
+    /// purely defensive).
+    func updateMostRecent(cleanedText: String) {
+        guard !cleanedText.isBlank, let current = items.first else { return }
+        items[0] = DictationHistoryItem(
+            id: current.id,
+            timestamp: current.timestamp,
+            cleanedText: cleanedText,
+            modeCategoryName: current.modeCategoryName,
+            appName: current.appName,
+            appBundleID: current.appBundleID
+        )
+        persist()
+    }
+
     /// Wipe the list and persist the empty state.
     func clear() {
         items = []
