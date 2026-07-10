@@ -38,6 +38,7 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 - **Works in any text field** — browser, email, IDE, terminal, Slack, Notes, Cursor, ChatGPT, anything that accepts a paste.
 - **On-device transcription** — Whisper runs locally on Apple Neural Engine. Audio never leaves your Mac.
 - **AI cleanup, not raw dump** — fillers, false starts, and rambling are smoothed out. Punctuation and capitalization are added automatically.
+- **Transform selected text by voice** — highlight text anywhere, hold your hotkey, and say how to change it: *"make this a bullet list"*, *"make this cleaner"*, *"make this shorter"*. voxline rewrites the selection in place and leaves it as a normal ⌘Z-undoable edit. No selection? It just dictates, as usual.
 - **Context-aware per-app formatting** — voxline detects the frontmost app and tunes the output for it: terse Slack messages, structured email replies, code-comment style in your IDE, search-box one-liners. Ships with sensible defaults for 28 common apps out of the box.
 - **Dictation history** — the last 25 cleaned dictations live in a menu-bar submenu; click any row to copy it back to the clipboard.
 - **Bring your own LLM key** — Anthropic or OpenAI, your account, your model, your costs. Keys live in macOS Keychain.
@@ -102,7 +103,9 @@ Apple Silicon is non-negotiable: voxline runs Whisper on the Apple Neural Engine
 
 ## Getting started
 
-voxline doesn't ship a signed release yet. Build from source:
+**Download a signed build** from [Releases](https://github.com/tfredricks/voxline/releases) — the DMG is notarized by Apple, and the app checks for updates automatically via Sparkle.
+
+Or build from source:
 
 ```bash
 git clone https://github.com/tfredricks/voxline.git
@@ -110,7 +113,9 @@ cd voxline
 open voxline.xcodeproj
 ```
 
-Build and run from Xcode (⌘R). On first launch:
+Build and run from Xcode (⌘R), or use `./scripts/build-local.sh` to build Release and install straight to `/Applications`.
+
+On first launch:
 
 1. Grant **Microphone** and **Accessibility** when prompted (the app will guide you).
 2. Pick your hotkey, mic, and Whisper model in the Settings window (⌘,). The default hotkey is **Right Cmd + Right Option** — change it if you'd rather use something else.

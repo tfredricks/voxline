@@ -8,7 +8,23 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
-voxline is pre-release. The first tagged version will appear here once the
-app stabilises enough to ship a signed build.
+## [0.2.5] - 2026-07-10
 
-[Unreleased]: https://github.com/tfredricks/voxline/commits/main
+### Added
+
+- **Transform selected text by voice.** Highlight text in any app, press the
+  dictation hotkey, and speak a rewrite/restructure command — "make this a
+  bullet list", "make this cleaner", "make this shorter". voxline rewrites the
+  selection in place and leaves it as a normal ⌘Z-undoable edit. When no text
+  is selected, the hotkey dictates as before. Transforms open the same
+  post-dictation refinement pill for quick follow-ups.
+
+### Fixed
+
+- Text insertion now prefers ⌘V clipboard paste over synthetic typing, so
+  dictation and transforms land reliably in apps (such as Notes) that ignore
+  synthetic keystrokes. Under the App Sandbox the previous AX-based
+  paste-eligibility check always failed and forced the unreliable typing path.
+
+[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/tfredricks/voxline/releases/tag/v0.2.5
