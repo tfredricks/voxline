@@ -10,7 +10,19 @@ protocol HTTPClient: Sendable {
 struct URLSessionHTTPClient: HTTPClient {
     let session: URLSession
 
-    init(session: URLSession = .shared) {
+    /// Dedicated session, not .shared: a hung provider must not freeze a
+    /// dictation for the 60s system default (the pipeline blocks new
+    /// recordings the whole time). 15s idle / 30s total is generous for a
+    /// few hundred tokens of cleanup. .ephemeral keeps transcripts and API
+    /// responses out of any on-disk URL cache.
+    static func makeSession() -> URLSession {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        return URLSession(configuration: config)
+    }
+
+    init(session: URLSession = URLSessionHTTPClient.makeSession()) {
         self.session = session
     }
 
