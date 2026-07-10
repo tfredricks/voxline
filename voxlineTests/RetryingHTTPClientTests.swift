@@ -48,6 +48,14 @@ import Foundation
         #expect(inner.callCount == 2)
     }
 
+    @Test func retriesOnceOn504ThenSucceeds() async throws {
+        let inner = SequencedHTTPClient([(Data(), 504), (Data("ok".utf8), 200)])
+        let (data, response) = try await makeClient(inner).send(request())
+        #expect(response.statusCode == 200)
+        #expect(data == Data("ok".utf8))
+        #expect(inner.callCount == 2)
+    }
+
     @Test func retriesOnceOn529ThenReturnsTheSecondFailure() async throws {
         let inner = SequencedHTTPClient([(Data(), 529), (Data(), 529)])
         let (_, response) = try await makeClient(inner).send(request())

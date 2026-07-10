@@ -15,7 +15,7 @@ struct RetryingHTTPClient: HTTPClient {
     /// Injectable so tests don't sleep for real.
     var sleeper: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
 
-    static let transientStatuses: Set<Int> = [429, 500, 502, 503, 529]
+    static let transientStatuses: Set<Int> = [429, 500, 502, 503, 504, 529]
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let first = try await wrapped.send(request)
