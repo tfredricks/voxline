@@ -44,6 +44,7 @@ import Foundation
 
     @Test func missing_api_key_surfaces_actionable_error() async {
         let (p, state, _) = pipeline(cleanup: { _, _, _ in throw LLMError.missingAPIKey })
+        p.transcriptFallback = { _ in } // avoid touching the real pasteboard in tests
         await runOnce(p, state)
         guard case .error(let msg) = state.status else {
             Issue.record("Expected .error status, got \(state.status)"); return
@@ -53,6 +54,7 @@ import Foundation
 
     @Test func invalid_api_key_says_so() async {
         let (p, state, _) = pipeline(cleanup: { _, _, _ in throw LLMError.invalidAPIKey })
+        p.transcriptFallback = { _ in } // avoid touching the real pasteboard in tests
         await runOnce(p, state)
         guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("rejected"))
@@ -61,6 +63,7 @@ import Foundation
     @Test func network_error_includes_network_word() async {
         struct NetErr: Error {}
         let (p, state, _) = pipeline(cleanup: { _, _, _ in throw LLMError.network(NetErr()) })
+        p.transcriptFallback = { _ in } // avoid touching the real pasteboard in tests
         await runOnce(p, state)
         guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("network"))
@@ -93,6 +96,7 @@ import Foundation
 
     @Test func error_path_clears_recording_state() async {
         let (p, state, _) = pipeline(cleanup: { _, _, _ in throw LLMError.missingAPIKey })
+        p.transcriptFallback = { _ in } // avoid touching the real pasteboard in tests
         await runOnce(p, state)
         #expect(state.recordingStartedAt == nil)
         #expect(state.audioLevel == 0)

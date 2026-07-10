@@ -185,6 +185,7 @@ import Foundation
     @Test func llm_missingAPIKey_surfacesActionableErrorMessage() async throws {
         let (pipe, state, _, _, llm, _, _, _, _) = makePipeline()
         llm.nextResult = .failure(LLMError.missingAPIKey)
+        pipe.transcriptFallback = { _ in } // avoid touching the real pasteboard in tests
         await startAndFinalize(pipe, state: state)
         if case .error(let msg) = state.status {
             #expect(msg.contains("Settings"))
@@ -419,6 +420,35 @@ import Foundation
         pipe.startRecording()
         #expect(capture.startCallCount == 0)
         #expect(capture.stopPrewarmCallCount == 1, "a prewarmed engine must not be left running when recording is refused")
+    }
+
+    // MARK: - Raw-transcript fallback
+
+    @Test func llmFailure_handsRawTranscriptToFallbackAndSaysSo() async {
+        let (pipe, state, _, _, llm, _, _, injector, _) = makePipeline()
+        llm.nextResult = .failure(LLMError.rateLimited)
+        var fallbackTranscripts: [String] = []
+        pipe.transcriptFallback = { fallbackTranscripts.append($0) }
+
+        await startAndFinalize(pipe, state: state)
+
+        #expect(fallbackTranscripts == ["hello world"], "the raw transcript must survive the cleanup failure")
+        #expect(injector.injected.isEmpty, "nothing gets pasted on failure")
+        if case .error(let message) = state.status {
+            #expect(message.contains("clipboard"), "the error must tell the user where their words went")
+        } else {
+            Issue.record("expected .error status, got \(state.status)")
+        }
+    }
+
+    @Test func successfulCleanup_doesNotInvokeFallback() async {
+        let (pipe, state, _, _, _, _, _, _, _) = makePipeline()
+        var fallbackCalls = 0
+        pipe.transcriptFallback = { _ in fallbackCalls += 1 }
+
+        await startAndFinalize(pipe, state: state)
+
+        #expect(fallbackCalls == 0)
     }
 
 }
