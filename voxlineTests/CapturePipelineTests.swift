@@ -12,9 +12,13 @@ import Foundation
         var prewarmCallCount = 0
         var stopPrewarmCallCount = 0
         var pendingSamples: [Float] = [0.1, 0.2, 0.3]
+        var startError: Error?
         func prewarm() { prewarmCallCount += 1 }
         func stopPrewarm() { stopPrewarmCallCount += 1 }
-        func start() throws { startCallCount += 1 }
+        func start() throws {
+            startCallCount += 1
+            if let startError { throw startError }
+        }
         func stop() { stopCallCount += 1 }
         func takeSamples() -> [Float] { defer { pendingSamples = [] }; return pendingSamples }
     }
@@ -122,6 +126,15 @@ import Foundation
         #expect(state.status == .recording)
         #expect(state.recordingStartedAt != nil)
         #expect(capture.startCallCount == 1)
+    }
+
+    @Test func startRecording_whenCaptureStartThrows_stopsAnyPrewarm() {
+        let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
+        struct Boom: Error {}
+        capture.startError = Boom()
+        pipe.startRecording()
+        #expect(capture.stopPrewarmCallCount == 1, "a failed start must not strand a prewarmed engine")
+        if case .error = state.status {} else { Issue.record("expected .error, got \(state.status)") }
     }
 
     @Test func finalizeRecording_routesViaModeAndCallsLLMAndPastes() async throws {

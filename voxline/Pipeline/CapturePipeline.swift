@@ -89,6 +89,13 @@ final class CapturePipeline {
         do {
             try capture.start()
         } catch {
+            // A failed start must not strand a prewarmed engine — stopPrewarm
+            // is a no-op unless the engine is idling warm. On the warm path,
+            // AudioCaptureService.start() can throw AFTER the
+            // engine-is-running check (noInputDevice / targetFormatUnavailable
+            // / cannotConvertFormat), leaving the engine running with nothing
+            // left to stop it.
+            capture.stopPrewarm()
             setError("Audio capture failed: \(error.localizedDescription)")
             return
         }
