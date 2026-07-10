@@ -58,4 +58,21 @@ import Foundation
         #expect(!AppStatus.error("oops").blocksRecording)
         #expect(!AppStatus.permissionsError("oops").blocksRecording)
     }
+
+    @Test func reviewSession_defaultsToNil_andRoundTrips() {
+        let state = AppState()
+        #expect(state.reviewSession == nil)
+
+        let mode = Mode(bundleID: "*", displayName: "d", prompt: "p", model: nil, temperature: nil)
+        let session = ReviewSession(
+            transcript: "raw words",
+            mode: mode,
+            context: .empty,
+            insertedText: "Cleaned words.",
+            expiresAt: Date(timeIntervalSince1970: 1000)
+        )
+        state.reviewSession = session
+        #expect(state.reviewSession == session)
+        #expect(state.reviewSession?.insertedText == "Cleaned words.")
+    }
 }
