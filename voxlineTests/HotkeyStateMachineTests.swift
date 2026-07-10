@@ -120,10 +120,47 @@ import Foundation
 
     // MARK: - Finalizing → idle
 
-    @Test func recordingFinished_returnsToIdle() {
+    @Test func recordingFinished_reArmsWhenOneModifierStillHeld() {
         let m = machine()
         _ = m.handle(chord(true, true))
-        _ = m.handle(leftCtrl(true))  // -> finalizing
+        _ = m.handle(leftCtrl(true))  // opt released -> finalizing, ctrl still down
+        let outputs = m.handle(.recordingFinished)
+        #expect(m.state == .armed, "user never released ctrl; machine should re-arm, not go idle")
+        #expect(outputs == [.beginPrewarm])
+    }
+
+    @Test func recordingFinished_returnsToIdleAfterFullRelease() {
+        let m = machine()
+        _ = m.handle(chord(true, true))
+        _ = m.handle(chord(false, false))  // full release -> finalizing
+        let outputs = m.handle(.recordingFinished)
+        #expect(m.state == .idle)
+        #expect(outputs.isEmpty)
+    }
+
+    @Test func chordRePressedDuringFinalizing_startsNewRecordingWhenPipelineFinishes() {
+        // The user finishes one dictation, then re-presses and HOLDS the chord
+        // while transcription/cleanup is still running. Previously this speech
+        // was silently dropped; now recording starts the moment the pipeline
+        // frees up (the start sound doubles as the "talk now" cue).
+        let m = machine()
+        _ = m.handle(chord(true, true))
+        _ = m.handle(chord(false, false))       // release -> finalizing
+        _ = m.handle(chord(true, true))         // re-press during processing: ignored now...
+        #expect(m.state == .finalizing)
+        let outputs = m.handle(.recordingFinished)
+        #expect(m.state == .recording, "...but honored as soon as the pipeline finishes")
+        #expect(outputs == [.startRecording])
+    }
+
+    @Test func chordPressedAndReleasedDuringFinalizing_endsIdle() {
+        // Press AND release entirely within the processing window: nothing to
+        // resume — flags at recordingFinished are (false, false).
+        let m = machine()
+        _ = m.handle(chord(true, true))
+        _ = m.handle(chord(false, false))
+        _ = m.handle(chord(true, true))
+        _ = m.handle(chord(false, false))
         let outputs = m.handle(.recordingFinished)
         #expect(m.state == .idle)
         #expect(outputs.isEmpty)

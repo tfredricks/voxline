@@ -33,9 +33,19 @@ final class HotkeyStateMachine {
 
     private(set) var state: State = .idle
 
+    /// Latest absolute modifier flags seen, INCLUDING events that arrive while
+    /// `.finalizing` (which the switch below otherwise ignores). When the
+    /// pipeline reports `recordingFinished`, these flags are re-evaluated so a
+    /// chord held or re-pressed during processing starts the next recording
+    /// instead of being silently dropped.
+    private var lastFlags: (modA: Bool, modB: Bool) = (false, false)
+
     /// Process an input. Returns zero or more effect outputs the caller should perform.
     @discardableResult
     func handle(_ input: Input) -> [Output] {
+        if case .flagsChanged(let modA, let modB) = input {
+            lastFlags = (modA, modB)
+        }
         switch (state, input) {
 
         // From idle / armed, modifier flag changes drive entry into recording.
@@ -53,10 +63,11 @@ final class HotkeyStateMachine {
             state = .finalizing
             return [.finalizeRecording]
 
-        // Recording finished signal moves us back to idle.
+        // Recording finished: re-evaluate the flags the user is holding RIGHT NOW.
+        // Both held -> start the next dictation immediately (the start sound tells
+        // the user the mic is live). One held -> re-arm (and prewarm). None -> idle.
         case (.finalizing, .recordingFinished):
-            state = .idle
-            return []
+            return reactToFlags(modA: lastFlags.modA, modB: lastFlags.modB)
 
         // Any other input in any other state is a no-op.
         default:
