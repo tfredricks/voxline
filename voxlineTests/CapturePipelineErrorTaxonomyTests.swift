@@ -165,6 +165,9 @@ private final class FakeLLM: LLMServing, @unchecked Sendable {
     func cleanup(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?) async throws -> String {
         try await handler(transcript, mode, context)
     }
+    func transform(instruction: String, selection: String, mode: Mode) async throws -> String {
+        selection
+    }
 }
 
 private struct FakeFrontmost: FrontmostAppProviding {

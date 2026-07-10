@@ -237,4 +237,63 @@ import Foundation
         // Directive text must appear exactly once.
         #expect(prompt.components(separatedBy: RefinementDirective.terser.promptText).count == 2)
     }
+
+    @Test func transform_routes_to_anthropic_with_instruction_and_higher_max_tokens() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"content":[{"type":"text","text":"rewritten"}]}"#.data(using: .utf8)!,
+            status: 200
+        )
+        var settings = AppSettings(defaults: defaultsSuite())
+        settings.llmProvider = .anthropic
+        let kc = InMemoryKeychain()
+        try kc.set("sk-ant", forKey: KeychainAccount.anthropic)
+
+        let service = LLMService(settings: settings, keychain: kc, http: mock)
+        let mode = Mode(bundleID: "*", displayName: "d", prompt: "ignored-for-transform", model: nil, temperature: nil)
+
+        let out = try await service.transform(instruction: "make it formal", selection: "hey whats up", mode: mode)
+        #expect(out == "rewritten")
+        #expect(mock.capturedRequest?.url?.host == "api.anthropic.com")
+
+        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
+        // Transform uses its own preamble, NOT the transcription post-processor prompt.
+        let system = try #require(body["system"] as? String)
+        #expect(system.contains(LLMService.transformPreamble))
+        #expect(!system.contains(LLMService.transcriptionPreamble))
+        // The spoken command and the selection both reach the model.
+        let bodyString = String(data: try #require(mock.capturedRequest?.httpBody), encoding: .utf8) ?? ""
+        #expect(bodyString.contains("make it formal"))
+        #expect(bodyString.contains("hey whats up"))
+        // Larger output budget than the 1024 cleanup default.
+        #expect((body["max_tokens"] as? Int) == 4096)
+    }
+
+    @Test func transform_with_no_key_throws_missingAPIKey() async throws {
+        let mock = MockHTTPClient()
+        var settings = AppSettings(defaults: defaultsSuite())
+        settings.llmProvider = .anthropic
+        let service = LLMService(settings: settings, keychain: InMemoryKeychain(), http: mock)
+        let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
+        do {
+            _ = try await service.transform(instruction: "make it formal", selection: "hi", mode: mode)
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .missingAPIKey)
+        }
+    }
+
+    @Test func transform_blank_selection_short_circuits_without_http() async throws {
+        let mock = MockHTTPClient()
+        var settings = AppSettings(defaults: defaultsSuite())
+        settings.llmProvider = .anthropic
+        let kc = InMemoryKeychain()
+        try kc.set("k", forKey: KeychainAccount.anthropic)
+        let service = LLMService(settings: settings, keychain: kc, http: mock)
+        let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
+
+        let out = try await service.transform(instruction: "make it formal", selection: "   \n ", mode: mode)
+        #expect(out == "   \n ")
+        #expect(mock.capturedRequest == nil)
+    }
 }

@@ -35,14 +35,21 @@ import Foundation
     final class FakeLLM: LLMServing, @unchecked Sendable {
         var nextResult: Result<String, Error> = .success("cleaned")
         var calls: [(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?)] = []
-        /// Invoked during `cleanup`, after the call is recorded and before the
-        /// result is returned — lets tests simulate MainActor reentrancy (e.g.
-        /// the review session being dismissed while cleanup is in flight).
+        var transformResult: Result<String, Error> = .success("transformed")
+        var transformCalls: [(instruction: String, selection: String, mode: Mode)] = []
+        /// Invoked during `cleanup`/`transform`, after the call is recorded and
+        /// before the result is returned — lets tests simulate MainActor
+        /// reentrancy (e.g. the review session being dismissed mid-flight).
         var onCleanup: (() -> Void)? = nil
         func cleanup(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?) async throws -> String {
             calls.append((transcript, mode, context, refinement))
             onCleanup?()
             return try nextResult.get()
+        }
+        func transform(instruction: String, selection: String, mode: Mode) async throws -> String {
+            transformCalls.append((instruction, selection, mode))
+            onCleanup?()
+            return try transformResult.get()
         }
     }
 

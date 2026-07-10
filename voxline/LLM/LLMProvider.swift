@@ -32,7 +32,7 @@ struct LLMRequest: Equatable {
     /// Default max output tokens for cleanup-style use. Cleaned text is
     /// almost never longer than the input transcript by much; 1024 is a
     /// generous ceiling without paying for cap-stretching latency.
-    let maxOutputTokens: Int = 1024
+    var maxOutputTokens: Int = 1024
 }
 
 enum LLMError: Error, LocalizedError {

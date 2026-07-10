@@ -38,6 +38,7 @@ protocol LLMServing: Sendable {
     ///   byte-identical to before this parameter existed); a directive for a
     ///   post-dictation refine pass.
     func cleanup(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?) async throws -> String
+    func transform(instruction: String, selection: String, mode: Mode) async throws -> String
 }
 
 @MainActor

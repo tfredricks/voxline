@@ -60,6 +60,27 @@ struct LLMService: LLMServing {
     Style guidance for this dictation:
     """
 
+    /// System prompt for the "transform selection by voice" path. Unlike
+    /// `transcriptionPreamble` — which forbids acting on the input — this
+    /// prompt is meant to OBEY the user's spoken instruction, constrained to
+    /// rewriting and restructuring the provided text.
+    static let transformPreamble = """
+    You are a text-editing assistant. The user selected a passage of text and \
+    spoke an instruction for changing it. Apply the instruction and return only \
+    the resulting text — no greeting, preface, commentary, quotes, or markdown \
+    fences.
+
+    Rules:
+    - Rewrite and restructure only. You may change wording, tone, length, \
+    grammar, and formatting (for example, turn prose into bullet points or a \
+    numbered list).
+    - Preserve the original meaning and every fact. Add no new information.
+    - Do not translate the text into another language.
+    - If the instruction cannot be carried out as a rewrite or restructuring of \
+    the provided text (for example: translate it, summarize with new content, \
+    or answer a question it poses), return the original text unchanged.
+    """
+
     /// Assemble the system prompt: fixed preamble + the mode's style guidance,
     /// plus an optional one-off refinement directive for a refine pass. Pure
     /// function so prompt assembly is unit-testable without an HTTP round-trip.
@@ -84,20 +105,6 @@ struct LLMService: LLMServing {
         // surprise greeting from some models.
         guard !transcript.isEmpty else { return "" }
 
-        let provider = settings.llmProvider
-        let account: String
-        switch provider {
-        case .anthropic: account = KeychainAccount.anthropic
-        case .openai:    account = KeychainAccount.openai
-        }
-        guard
-            let key = try keychain.string(forKey: account),
-            !key.isEmpty
-        else {
-            AppLog.llm.error("\(provider.rawValue): no API key configured")
-            throw LLMError.missingAPIKey
-        }
-
         let model = mode.model ?? settings.llmModel
         let userPrompt = ContextBlockFormatter.format(transcript: transcript, context: context)
         let request = LLMRequest(
@@ -107,11 +114,7 @@ struct LLMService: LLMServing {
             temperature: mode.temperature
         )
 
-        let client: any LLMClient
-        switch provider {
-        case .anthropic: client = AnthropicClient(apiKey: key, http: http)
-        case .openai:    client = OpenAIClient(apiKey: key, http: http)
-        }
+        let client = try resolveClient()
 
         #if DEBUG
         if ProcessInfo.processInfo.environment["VOXLINE_TRACE_LLM"] == "1" {
@@ -130,7 +133,7 @@ struct LLMService: LLMServing {
             print("""
 
             ╔══════════════════════════════════════════════════════════════════╗
-            ║ VOXLINE LLM REQUEST  provider=\(provider)  model=\(model)
+            ║ VOXLINE LLM REQUEST  provider=\(settings.llmProvider)  model=\(model)
             ╠══════════════════════════════════════════════════════════════════╣
             ║ CAPTURED CONTEXT (raw)
             ╚══════════════════════════════════════════════════════════════════╝
@@ -159,6 +162,48 @@ struct LLMService: LLMServing {
         }
         #endif
 
+        return try await client.cleanup(request)
+    }
+
+    /// Resolve the configured provider's API key from the Keychain and return a
+    /// ready client. Shared by `cleanup` and `transform`.
+    private func resolveClient() throws -> any LLMClient {
+        let provider = settings.llmProvider
+        let account: String
+        switch provider {
+        case .anthropic: account = KeychainAccount.anthropic
+        case .openai:    account = KeychainAccount.openai
+        }
+        guard
+            let key = try keychain.string(forKey: account),
+            !key.isEmpty
+        else {
+            AppLog.llm.error("\(provider.rawValue): no API key configured")
+            throw LLMError.missingAPIKey
+        }
+        switch provider {
+        case .anthropic: return AnthropicClient(apiKey: key, http: http)
+        case .openai:    return OpenAIClient(apiKey: key, http: http)
+        }
+    }
+
+    func transform(instruction: String, selection: String, mode: Mode) async throws -> String {
+        // Blank selection → nothing to transform. Return it verbatim so callers
+        // can detect "unchanged" without a network round-trip.
+        guard !selection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return selection
+        }
+
+        let model = mode.model ?? settings.llmModel
+        let userPrompt = "Instruction: \(instruction)\n\nText:\n\(selection)"
+        let request = LLMRequest(
+            model: model,
+            systemPrompt: Self.transformPreamble,
+            userPrompt: userPrompt,
+            temperature: mode.temperature,
+            maxOutputTokens: 4096
+        )
+        let client = try resolveClient()
         return try await client.cleanup(request)
     }
 }
