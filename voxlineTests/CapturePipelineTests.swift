@@ -340,6 +340,7 @@ import Foundation
     @Test func llmFailure_doesNotRecordInHistory() async throws {
         let (pipe, state, _, _, llm, _, _, _, history) = makePipeline()
         llm.nextResult = .failure(LLMError.missingAPIKey)
+        pipe.transcriptFallback = { _ in } // avoid touching the real pasteboard in tests
         await startAndFinalize(pipe, state: state)
         #expect(history.items.isEmpty)
     }
