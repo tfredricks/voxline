@@ -8,6 +8,29 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-10
+
+### Added
+
+- **Standalone permissions panel.** A dedicated window now surfaces the state
+  of the three permissions voxline uses — Accessibility and Microphone
+  (required) and Input Monitoring (recommended) — with per-item explanations
+  and buttons that jump straight to the right System Settings pane. It appears
+  automatically at launch when a required permission is missing, and can be
+  opened any time from the new **Check Permissions…** menu-bar item. It polls
+  live and closes itself once the required permissions are granted.
+- **Runtime-revocation guard.** If a required permission is revoked while
+  voxline is running, the panel re-appears on the granted→missing transition so
+  the app never sits silently non-functional.
+
+### Changed
+
+- Permissions errors now show a distinct warning badge
+  (`exclamationmark.triangle.fill`) in the menu bar instead of sharing the
+  generic `mic.slash` error icon, and the menu adds a **Fix permissions…**
+  shortcut when a permissions error is active — signalling that the problem is
+  user-fixable in System Settings.
+
 ## [0.2.5] - 2026-07-10
 
 ### Added
@@ -26,5 +49,6 @@ once it reaches its first tagged release.
   synthetic keystrokes. Under the App Sandbox the previous AX-based
   paste-eligibility check always failed and forced the unreliable typing path.
 
-[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/tfredricks/voxline/releases/tag/v0.3.0
 [0.2.5]: https://github.com/tfredricks/voxline/releases/tag/v0.2.5
