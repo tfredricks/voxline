@@ -53,6 +53,15 @@ final class LockedBox<T>: @unchecked Sendable {
             }
             return currentIdentity
         }
+
+        // Selection modeling for replace() tests.
+        var selectReturns: String??      // outer nil = not stubbed; inner nil = failure
+        var selectCalls: [Int] = []
+        func selectTextEndingAtCaret(utf16Length: Int) -> String? {
+            selectCalls.append(utf16Length)
+            if case let .some(value) = selectReturns { return value }
+            return nil
+        }
     }
 
     /// Snapshotter that always throws — used to force the inject() fallback

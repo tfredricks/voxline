@@ -54,10 +54,16 @@ import Foundation
     final class FakeInjector: ClipboardInjecting {
         var injected: [String] = []
         var nextError: Error?
+        var replaceCalls: [(old: String, new: String)] = []
+        var replaceOutcome: ReplaceOutcome = .replaced(TextInsertionOutcome(strategy: .clipboardPaste, verification: .confirmed))
         func inject(_ text: String) async throws -> TextInsertionOutcome {
             if let nextError { throw nextError }
             injected.append(text)
             return TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
+        }
+        func replace(_ old: String, with new: String) async -> ReplaceOutcome {
+            replaceCalls.append((old, new))
+            return replaceOutcome
         }
     }
 

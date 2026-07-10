@@ -180,4 +180,5 @@ private final class FakeInjector: ClipboardInjecting {
     let handler: (String) async throws -> TextInsertionOutcome
     init(handler: @escaping (String) async throws -> TextInsertionOutcome) { self.handler = handler }
     func inject(_ text: String) async throws -> TextInsertionOutcome { try await handler(text) }
+    func replace(_ old: String, with new: String) async -> ReplaceOutcome { .fallbackClipboard }
 }

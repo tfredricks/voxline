@@ -44,6 +44,10 @@ protocol LLMServing: Sendable {
 protocol ClipboardInjecting: AnyObject {
     @discardableResult
     func inject(_ text: String) async throws -> TextInsertionOutcome
+    /// Replace an exact prior insertion in place. Degrades to leaving `new` on
+    /// the clipboard (returning `.fallbackClipboard`) when the swap can't be
+    /// verified — never throws, never mangles the field.
+    func replace(_ old: String, with new: String) async -> ReplaceOutcome
 }
 
 protocol FrontmostAppProviding: Sendable {
