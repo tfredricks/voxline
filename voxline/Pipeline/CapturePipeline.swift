@@ -253,6 +253,18 @@ final class CapturePipeline {
     /// over the (still-live) selection, and open a transform review session.
     /// Owns its terminal state — callers must not call `resetIdle` afterward.
     private func performTransform(command: String, selection: String, mode: Mode, context: CapturedContext) async {
+        // The AX reader returns the FULL live selection (no truncation), and
+        // `injector.inject` below pastes back over that same full live
+        // selection. If we let an over-long selection through, the LLM would
+        // only see/rewrite the first `selectionMax` characters while the
+        // paste still overwrites the entire selection — silently dropping
+        // the untransformed tail. Refuse instead of desyncing read/write.
+        guard selection.count <= DefaultSelectionSnapshot.selectionMax else {
+            resetIdle()
+            showToast("Selection too long to transform")
+            return
+        }
+
         let transformed: String
         do {
             transformed = try await llm.transform(instruction: command, selection: selection, mode: mode)
@@ -260,6 +272,17 @@ final class CapturePipeline {
             return setError("\(e.errorDescription ?? "Transform failed.") Your selection was left unchanged.")
         } catch {
             return setError("Transform failed: \(error.localizedDescription) Your selection was left unchanged.")
+        }
+
+        // Focus/selection may have moved during the LLM await. If the live
+        // selection no longer matches what we transformed, don't overwrite
+        // the wrong target — leave the result on the clipboard for a manual
+        // paste instead.
+        guard selectionSnapshot.readSelection() == selection else {
+            transcriptFallback(transformed)
+            resetIdle()
+            showToast("Copied — ⌘V to replace")
+            return
         }
 
         // The transform prompt returns the selection verbatim when the command

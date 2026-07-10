@@ -743,6 +743,60 @@ import Foundation
         #expect(state.reviewSession?.kind == .dictation)
     }
 
+    @Test func finalize_withSelection_overLimit_refusesWithToast() async {
+        let overLimit = String(repeating: "a", count: DefaultSelectionSnapshot.selectionMax + 1)
+        let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: overLimit)
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+
+        #expect(llm.transformCalls.isEmpty)
+        #expect(injector.injected.isEmpty)
+        #expect(history.items.isEmpty)
+        #expect(state.reviewSession == nil)
+        #expect(state.toastMessage == "Selection too long to transform")
+        if case .idle = state.status {} else { Issue.record("expected .idle after over-limit refusal") }
+    }
+
+    @Test func finalize_withSelection_focusMovedDuringLLM_fallsBackToClipboard() async {
+        let state = AppState()
+        let capture = FakeCapture()
+        let transcriber = FakeTranscriber()
+        let llm = FakeLLM()
+        let front = FakeFrontmost(); front.bundleID = "com.tinyspeck.slackmacgap"
+        let inspector = FakeFieldInspector()
+        let injector = FakeInjector()
+        let snap = FakeSelectionSnapshot(); snap.selection = "original text"
+        let router = ModeRouter(modes: [
+            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil, category: .chat),
+            Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil, category: .general)
+        ])
+        let name = "voxline-test-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        let history = DictationHistoryStore(defaults: defaults)
+        let pipe = CapturePipeline(
+            state: state, capture: capture, transcriber: transcriber,
+            llm: llm, modes: router, frontmost: front,
+            fieldInspector: inspector, injector: injector,
+            historyStore: history, contextCapture: FakeContextCapture(),
+            selectionSnapshot: snap,
+            reviewLingerDuration: 7, now: { Date(timeIntervalSince1970: 10_000) }
+        )
+        // Focus/selection moves mid-await: flip the snapshot from inside
+        // `transform` (which fires `onCleanup` before returning).
+        llm.onCleanup = { snap.selection = "different text" }
+        var fallbackText: String?
+        pipe.transcriptFallback = { fallbackText = $0 }
+
+        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+
+        #expect(injector.injected.isEmpty)          // did NOT paste over the wrong target
+        #expect(fallbackText == "transformed")       // result left on clipboard
+        #expect(state.toastMessage == "Copied — ⌘V to replace")
+        #expect(state.reviewSession == nil)
+        #expect(history.items.isEmpty)               // focus guard is before history.record
+        if case .idle = state.status {} else { Issue.record("expected .idle after focus-moved fallback") }
+    }
+
 }
 
 final class FakeContextCapture: ContextCapturing, @unchecked Sendable {
