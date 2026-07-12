@@ -65,6 +65,20 @@ struct SettingsView: View {
 
                     Section("Hotkey") {
                         ChordRecorderView(chord: $generalVM.chord)
+                        Picker("Command modifier", selection: $generalVM.commandModifier) {
+                            Text("Off").tag(HotkeyChord.Modifier?.none)
+                            ForEach(HotkeyChord.Modifier.allCases, id: \.self) { m in
+                                Text(m.displayName).tag(HotkeyChord.Modifier?.some(m))
+                            }
+                        }
+                        if let warning = generalVM.commandModifierWarning {
+                            Text(warning)
+                                .foregroundStyle(.orange)
+                                .font(.callout)
+                        }
+                        Text("Hold the command modifier together with your hotkey to transform the selected text by voice instead of dictating. Set to Off for pure dictation — voxline then never touches the clipboard.")
+                            .foregroundStyle(.secondary)
+                            .font(.callout)
                     }
                     .id(SettingsAnchor.hotkey)
 
