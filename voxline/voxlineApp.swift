@@ -579,7 +579,7 @@ extension AppCoordinator {
         // snapshot.provider is consumed by LLMService at the next dictation;
         // no per-snapshot action needed here.
         hotkeyMonitor?.chord = snapshot.chord
-        hotkeyMonitor?.commandModifier = AppSettings().commandModifier   // Task 6 switches to snapshot.commandModifier
+        hotkeyMonitor?.commandModifier = snapshot.commandModifier
 
         // AudioCaptureService applies preferredInputDeviceUID at next start();
         // CapturePipeline restarts the engine on every chord, so the new device

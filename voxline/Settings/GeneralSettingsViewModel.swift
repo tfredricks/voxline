@@ -4,6 +4,7 @@ import Observation
 /// Snapshot the General settings VM hands to the coordinator on save.
 struct GeneralSettingsSnapshot: Equatable {
     let chord: HotkeyChord
+    let commandModifier: HotkeyChord.Modifier?
     let audioInputDeviceUID: String?
     let whisperModel: WhisperModel
     let playHotkeySounds: Bool
@@ -21,6 +22,7 @@ struct AudioDeviceRow: Identifiable, Equatable {
 final class GeneralSettingsViewModel {
 
     var chord: HotkeyChord { didSet { if loaded { commit() } } }
+    var commandModifier: HotkeyChord.Modifier? { didSet { if loaded { commit() } } }
     var audioInputDeviceUID: String? { didSet { if loaded { commit() } } }
     var whisperModel: WhisperModel { didSet { if loaded { commit() } } }
     var playHotkeySounds: Bool { didSet { if loaded { commit() } } }
@@ -75,6 +77,7 @@ final class GeneralSettingsViewModel {
         self.loginItemService = loginItemService
         self.vocabulary = vocabulary
         self.chord = settings.hotkeyChord
+        self.commandModifier = settings.commandModifier
         self.audioInputDeviceUID = settings.audioInputDeviceUID
         self.whisperModel = settings.whisperModel
         self.playHotkeySounds = settings.playHotkeySounds
@@ -99,6 +102,11 @@ final class GeneralSettingsViewModel {
             rows.append(AudioDeviceRow(uid: uid, label: "(disconnected) previously selected"))
         }
         return rows
+    }
+
+    /// Soft warning for the current command-modifier choice, or nil when clean.
+    var commandModifierWarning: String? {
+        HotkeyChord.commandModifierConflictWarning(command: commandModifier, chord: chord)
     }
 
     func refreshDevices() {
@@ -126,6 +134,7 @@ final class GeneralSettingsViewModel {
     func refreshFromUserDefaults() {
         withoutCommitting {
             chord = settings.hotkeyChord
+            commandModifier = settings.commandModifier
             audioInputDeviceUID = settings.audioInputDeviceUID
             whisperModel = settings.whisperModel
             playHotkeySounds = settings.playHotkeySounds
@@ -141,6 +150,7 @@ final class GeneralSettingsViewModel {
     func resetToDefaults() {
         withoutCommitting {
             chord = .default
+            commandModifier = AppSettings.defaultCommandModifier
             audioInputDeviceUID = nil
             whisperModel = .default
             playHotkeySounds = true
@@ -160,6 +170,7 @@ final class GeneralSettingsViewModel {
     private func commit() {
         var s = settings
         s.hotkeyChord = chord
+        s.commandModifier = commandModifier
         s.audioInputDeviceUID = audioInputDeviceUID
         s.whisperModel = whisperModel
         s.playHotkeySounds = playHotkeySounds
@@ -167,6 +178,7 @@ final class GeneralSettingsViewModel {
         settings = s
         onApply(GeneralSettingsSnapshot(
             chord: chord,
+            commandModifier: commandModifier,
             audioInputDeviceUID: audioInputDeviceUID,
             whisperModel: whisperModel,
             playHotkeySounds: playHotkeySounds,

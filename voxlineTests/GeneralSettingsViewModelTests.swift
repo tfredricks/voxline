@@ -228,6 +228,60 @@ import Foundation
         #expect(vm.launchAtLogin == true)
     }
 
+    @Test func loads_command_modifier_on_init() {
+        var settings = AppSettings(defaults: defaults())
+        settings.commandModifier = .rightShift
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
+        #expect(vm.commandModifier == .rightShift)
+    }
+
+    @Test func command_modifier_mutation_persists_and_applies() {
+        let d = defaults()
+        let settings = AppSettings(defaults: d)
+        let recorder = ApplyRecorder()
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: { recorder.record($0) })
+
+        vm.commandModifier = .rightControl
+        #expect(recorder.applied?.commandModifier == .rightControl)
+        #expect(AppSettings(defaults: d).commandModifier == .rightControl)
+
+        vm.commandModifier = nil   // "Off"
+        #expect(recorder.applied?.commandModifier == nil)
+        #expect(AppSettings(defaults: d).commandModifier == nil)
+    }
+
+    @Test func command_modifier_warning_fires_when_equal_to_chord_key() {
+        let settings = AppSettings(defaults: defaults())
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
+        vm.chord = HotkeyChord(modifierA: .leftShift, modifierB: .leftControl)
+        vm.commandModifier = .leftShift
+        #expect(vm.commandModifierWarning != nil)
+    }
+
+    @Test func command_modifier_warning_nil_for_clean_default() {
+        let settings = AppSettings(defaults: defaults())
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
+        vm.chord = HotkeyChord(modifierA: .leftShift, modifierB: .leftControl)
+        vm.commandModifier = .leftCommand
+        #expect(vm.commandModifierWarning == nil)
+    }
+
+    @Test func reset_restores_default_command_modifier() {
+        let d = defaults()
+        var settings = AppSettings(defaults: d)
+        settings.commandModifier = .rightShift
+        let recorder = ApplyRecorder()
+        let vm = GeneralSettingsViewModel(
+            settings: settings,
+            onApply: { recorder.record($0) },
+            loginItemService: LoginItemService(),
+            vocabulary: CustomVocabularyStore(defaults: d)
+        )
+        vm.resetToDefaults()
+        #expect(vm.commandModifier == AppSettings.defaultCommandModifier)
+        #expect(recorder.applied?.commandModifier == AppSettings.defaultCommandModifier)
+    }
+
 }
 
 private let noopApply: (GeneralSettingsSnapshot) -> Void = { _ in }
