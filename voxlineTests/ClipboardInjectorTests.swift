@@ -411,6 +411,23 @@ final class LockedBox<T>: @unchecked Sendable {
         #expect(predicateWhenEmpty == false)
     }
 
+    @Test func chord_or_command_held_predicate_includes_command_modifier() {
+        let chord = HotkeyChord(modifierA: .leftShift, modifierB: .leftControl)
+
+        let optionFlags = CGEventFlags(rawValue: HotkeyChord.Modifier.leftOption.deviceMaskBit)
+        let shiftFlags  = CGEventFlags(rawValue: HotkeyChord.Modifier.leftShift.deviceMaskBit)
+        let none        = CGEventFlags(rawValue: 0)
+
+        // Command modifier alone (Left Option) counts as "held".
+        #expect(ClipboardInjector.chordOrCommandIsHeld(in: optionFlags, chord: chord, command: .leftOption) == true)
+        // Chord key alone still counts.
+        #expect(ClipboardInjector.chordOrCommandIsHeld(in: shiftFlags, chord: chord, command: .leftOption) == true)
+        // Nothing held.
+        #expect(ClipboardInjector.chordOrCommandIsHeld(in: none, chord: chord, command: .leftOption) == false)
+        // Command mode off: Left Option no longer gates the paste.
+        #expect(ClipboardInjector.chordOrCommandIsHeld(in: optionFlags, chord: chord, command: nil) == false)
+    }
+
     /// Pins the invariant: cancellation between postKey and the AX verification read must restore the clipboard.
     @Test func paste_path_restores_clipboard_when_cancelled_after_postkey() async throws {
         let board = makeBoard()

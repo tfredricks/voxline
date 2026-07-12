@@ -349,15 +349,29 @@ final class ClipboardInjector {
         return flags.contains(bitA) || flags.contains(bitB)
     }
 
-    /// Late-binds the chord so Settings updates take effect without rebuilding the injector.
-    nonisolated static func makeChordIsHeld(chord: @escaping @Sendable () -> HotkeyChord) -> @Sendable () -> Bool {
+    /// Like `chordIsHeld`, but also returns true when the optional command
+    /// modifier is held. Gating the paste on this prevents a transform paste
+    /// from merging a still-held command modifier (e.g. Left Option) into the
+    /// synthetic Cmd+V (→ Cmd+Option+V).
+    nonisolated static func chordOrCommandIsHeld(in flags: CGEventFlags, chord: HotkeyChord, command: HotkeyChord.Modifier?) -> Bool {
+        if chordIsHeld(in: flags, chord: chord) { return true }
+        if let command { return command.isHeld(in: flags) }
+        return false
+    }
+
+    /// Late-binds the chord and command modifier so Settings updates take effect
+    /// without rebuilding the injector.
+    nonisolated static func makeChordIsHeld(
+        chord: @escaping @Sendable () -> HotkeyChord,
+        command: @escaping @Sendable () -> HotkeyChord.Modifier?
+    ) -> @Sendable () -> Bool {
         {
             let flags = CGEventSource.flagsState(.combinedSessionState)
-            return chordIsHeld(in: flags, chord: chord())
+            return chordOrCommandIsHeld(in: flags, chord: chord(), command: command())
         }
     }
 
-    /// Safe fallback; production wiring overrides via `makeChordIsHeld(chord:)`.
+    /// Safe fallback; production wiring overrides via `makeChordIsHeld(chord:command:)`.
     nonisolated static let defaultChordIsHeld: @Sendable () -> Bool = { false }
 
     nonisolated static let defaultForceClearChord: @Sendable () -> Void = {

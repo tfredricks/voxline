@@ -241,6 +241,7 @@ final class AppCoordinator {
         // Output
         let focusedTextSystem = AXFocusedTextSystem()
         let chordProvider: @Sendable () -> HotkeyChord = { AppSettings().hotkeyChord }
+        let commandModifierProvider: @Sendable () -> HotkeyChord.Modifier? = { AppSettings().commandModifier }
         // Paste eligibility must fail OPEN under the App Sandbox. The
         // DefaultPasteEligibility pre-flight decides "is this a paste target?"
         // purely from cross-app AX reads (menu-bar Paste item + focused-field
@@ -253,7 +254,7 @@ final class AppCoordinator {
         let injector = ClipboardInjector(
             focusedTextSystem: focusedTextSystem,
             pasteEligibility: AlwaysPasteEligible(),
-            chordIsHeld: ClipboardInjector.makeChordIsHeld(chord: chordProvider)
+            chordIsHeld: ClipboardInjector.makeChordIsHeld(chord: chordProvider, command: commandModifierProvider)
         )
         let frontmost = FrontmostApp()
         let fieldInspector = AXFocusedFieldInspector()
