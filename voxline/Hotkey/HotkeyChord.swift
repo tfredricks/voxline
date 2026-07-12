@@ -44,6 +44,12 @@ struct HotkeyChord: Codable, Equatable {
             case .rightShift:   return "Right Shift"
             }
         }
+
+        /// True when this modifier's device-mask bit is set in `flags`.
+        /// Bit-equivalent to the chord matching in `HotkeyMonitor`'s tap callback.
+        func isHeld(in flags: CGEventFlags) -> Bool {
+            flags.contains(CGEventFlags(rawValue: deviceMaskBit))
+        }
     }
 
     let modifierA: Modifier
@@ -62,6 +68,27 @@ struct HotkeyChord: Codable, Equatable {
         let isCtrlOpt = (isControl(a) && isOption(b)) || (isOption(a) && isControl(b))
         if isCtrlOpt {
             return "This hotkey matches the VoiceOver modifier (Ctrl+Option). If VoiceOver is on, hold-to-talk may conflict."
+        }
+        return nil
+    }
+
+    /// Soft warning for a chosen command modifier. Returns nil when command
+    /// mode is off (`command == nil`) or the choice is clean. Two known problems:
+    ///   1. The command modifier equals one of the two chord keys — command mode
+    ///      would then be "always on" (dictation impossible). Rejected upstream
+    ///      in `HotkeyMonitor`, but warn here so the user understands.
+    ///   2. Holding the command modifier together with the chord forms Ctrl+Option,
+    ///      the VoiceOver modifier.
+    static func commandModifierConflictWarning(command: Modifier?, chord: HotkeyChord) -> String? {
+        guard let command else { return nil }
+        if command == chord.modifierA || command == chord.modifierB {
+            return "The command modifier can't be one of your two hotkey keys. Pick a different key or set it to Off."
+        }
+        let all = [chord.modifierA, chord.modifierB, command]
+        let isControl: (Modifier) -> Bool = { $0 == .leftControl || $0 == .rightControl }
+        let isOption:  (Modifier) -> Bool = { $0 == .leftOption  || $0 == .rightOption }
+        if all.contains(where: isControl) && all.contains(where: isOption) {
+            return "Holding this together with your hotkey forms Ctrl+Option, the VoiceOver modifier. If VoiceOver is on, command mode may conflict."
         }
         return nil
     }
