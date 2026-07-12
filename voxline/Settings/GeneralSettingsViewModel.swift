@@ -133,7 +133,7 @@ final class GeneralSettingsViewModel {
         }
     }
 
-    /// Restore Spec defaults: hotkey to Left Ctrl + Left Option, system-default
+    /// Restore Spec defaults: hotkey to Left Shift + Left Control, system-default
     /// mic, large-v3-turbo, sounds on. Performs one batched commit so the
     /// applier sees a single coherent snapshot rather than four partial ones.
     /// Launch-at-Login is intentionally left untouched — Reset is for pipeline

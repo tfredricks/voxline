@@ -5,14 +5,14 @@ import Foundation
 
 @Suite struct HotkeyChordTests {
 
-    @Test func default_is_right_cmd_plus_right_option() {
+    @Test func default_is_left_shift_plus_left_control() {
         let c = HotkeyChord.default
-        #expect(c.modifierA == .rightCommand)
-        #expect(c.modifierB == .rightOption)
+        #expect(c.modifierA == .leftShift)
+        #expect(c.modifierB == .leftControl)
     }
 
     @Test func display_name_lists_both_modifiers_in_order() {
-        #expect(HotkeyChord.default.displayName == "Right Cmd + Right Option")
+        #expect(HotkeyChord.default.displayName == "Left Shift + Left Ctrl")
         let c = HotkeyChord(modifierA: .leftCommand, modifierB: .leftShift)
         #expect(c.displayName == "Left Cmd + Left Shift")
     }

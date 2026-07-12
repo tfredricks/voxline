@@ -49,7 +49,7 @@ struct HotkeyChord: Codable, Equatable {
     let modifierA: Modifier
     let modifierB: Modifier
 
-    static let `default` = HotkeyChord(modifierA: .rightCommand, modifierB: .rightOption)
+    static let `default` = HotkeyChord(modifierA: .leftShift, modifierB: .leftControl)
 
     var displayName: String { "\(modifierA.displayName) + \(modifierB.displayName)" }
 
