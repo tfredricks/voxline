@@ -8,9 +8,10 @@ import IOKit.hidsystem
 @MainActor
 final class HotkeyMonitor {
 
-    /// Observer notified when the state machine produces effects.
-    /// Runs on the main actor.
-    var onStartRecording: (() -> Void)?
+    /// Observer notified when the state machine produces `startRecording`.
+    /// The `Bool` is whether the command modifier was held at recording start
+    /// (command gesture) vs plain dictation. Runs on the main actor.
+    var onStartRecording: ((Bool) -> Void)?
     var onFinalizeRecording: (() -> Void)?
     /// One chord modifier went down — warm the audio engine. Runs on the main actor.
     var onBeginPrewarm: (() -> Void)?
@@ -26,10 +27,32 @@ final class HotkeyMonitor {
     /// Defaults to .default; AppCoordinator overrides from AppSettings on launch.
     var chord: HotkeyChord = .default
 
+    /// Command modifier sampled at recording start. `nil` = command mode off.
+    /// Defaults to `.leftOption`; AppCoordinator overrides from AppSettings on
+    /// launch and on every settings change.
+    var commandModifier: HotkeyChord.Modifier? = .leftOption
+
+    /// Latest observed command-modifier state, updated on EVERY flagsChanged
+    /// (mirroring `HotkeyStateMachine.lastFlags`) so the resume-on-
+    /// `recordingFinished` path — which emits `startRecording` with no live
+    /// event — samples the current value.
+    private var lastCommandFlag = false
+
     private let machine = HotkeyStateMachine()
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var maxDurationTimer: Timer?
+
+    /// Pure sampling predicate — testable without a CGEventTap. Whether the
+    /// command modifier is held in `flags`. A modifier that collides with a
+    /// chord key (or `nil`) is treated as "not a command", so command mode can
+    /// never make plain dictation impossible.
+    nonisolated static func commandIsHeld(in flags: CGEventFlags, chord: HotkeyChord, commandModifier: HotkeyChord.Modifier?) -> Bool {
+        guard let cmd = commandModifier,
+              cmd != chord.modifierA,
+              cmd != chord.modifierB else { return false }
+        return cmd.isHeld(in: flags)
+    }
 
     // MARK: - Lifecycle
 
@@ -99,6 +122,9 @@ final class HotkeyMonitor {
                 let chord = monitor.chord
                 let modA = flags.contains(CGEventFlags(rawValue: chord.modifierA.deviceMaskBit))
                 let modB = flags.contains(CGEventFlags(rawValue: chord.modifierB.deviceMaskBit))
+                monitor.lastCommandFlag = HotkeyMonitor.commandIsHeld(
+                    in: flags, chord: chord, commandModifier: monitor.commandModifier
+                )
                 monitor.feed(.flagsChanged(modAFlag: modA, modBFlag: modB))
             }
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
@@ -124,7 +150,7 @@ final class HotkeyMonitor {
             switch output {
             case .startRecording:
                 scheduleMaxDurationTimer()
-                onStartRecording?()
+                onStartRecording?(lastCommandFlag)
             case .finalizeRecording:
                 cancelMaxDurationTimer()
                 onFinalizeRecording?()

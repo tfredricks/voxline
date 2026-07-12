@@ -297,9 +297,10 @@ final class AppCoordinator {
     private func installHotkey(state: AppState, settings: AppSettings) {
         let monitor = HotkeyMonitor()
         monitor.chord = settings.hotkeyChord
-        monitor.onStartRecording = { [weak self, weak state] in
+        monitor.commandModifier = settings.commandModifier
+        monitor.onStartRecording = { [weak self, weak state] command in
             self?.soundPlayer?.playStart()
-            self?.pipeline?.startRecording()
+            self?.pipeline?.startRecording(command: command)
             if let state { self?.pillWindow?.updateVisibility(state: state) }
         }
         monitor.onFinalizeRecording = { [weak self, weak state] in
@@ -578,6 +579,7 @@ extension AppCoordinator {
         // snapshot.provider is consumed by LLMService at the next dictation;
         // no per-snapshot action needed here.
         hotkeyMonitor?.chord = snapshot.chord
+        hotkeyMonitor?.commandModifier = AppSettings().commandModifier   // Task 6 switches to snapshot.commandModifier
 
         // AudioCaptureService applies preferredInputDeviceUID at next start();
         // CapturePipeline restarts the engine on every chord, so the new device
