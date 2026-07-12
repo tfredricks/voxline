@@ -19,8 +19,9 @@ once it reaches its first tagged release.
 ### Changed
 
 - **Default dictation hotkey is now Left Shift + Left Control** (was Right Cmd +
-  Right Option). Existing users who customized their hotkey keep their choice;
-  only the untouched default moves.
+  Right Option). Settings are persisted as a whole, so anyone who has changed
+  any setting on a prior build keeps their existing hotkey; only a fresh install
+  (or a never-modified configuration) picks up the new default.
 - **Plain dictation never touches the clipboard.** The previous release
   auto-detected a selection by posting a synthetic Cmd+C on every recording,
   which misfired in editors that copy the whole line on an empty selection
