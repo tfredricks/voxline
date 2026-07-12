@@ -12,6 +12,11 @@ struct RecordingPillView: View {
             case .recording:
                 HStack(spacing: 10) {
                     WaveformBars(level: state.audioLevel)
+                    if state.recordingIsCommand {
+                        Text("Command")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
                     Text(elapsed)
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .monospacedDigit()
