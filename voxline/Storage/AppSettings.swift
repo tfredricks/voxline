@@ -8,6 +8,7 @@ struct AppSettings {
         static let provider = "voxline.llm.provider"
         static let model = "voxline.llm.model"
         static let hotkeyChord = "voxline.hotkey.chord"
+        static let commandModifier = "voxline.hotkey.commandModifier"
         static let audioInputDeviceUID = "voxline.audio.inputDeviceUID"
         static let whisperModel = "voxline.whisper.model"
         static let hasCompletedFirstRun = "voxline.firstRun.completed"
@@ -15,6 +16,10 @@ struct AppSettings {
     }
 
     let defaults: UserDefaults
+
+    /// Command modifier applied when the defaults key is unset. `nil` here would
+    /// mean "off by default"; we ship command mode ON with Left Option.
+    static let defaultCommandModifier: HotkeyChord.Modifier? = .leftOption
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -67,6 +72,27 @@ struct AppSettings {
         set {
             let data = try? JSONEncoder().encode(newValue)
             defaults.set(data, forKey: Key.hotkeyChord)
+        }
+    }
+
+    /// Optional modifier held together with the dictation chord to mean "this
+    /// utterance is a command." Absent key → `defaultCommandModifier`
+    /// (`.leftOption`). The sentinel string `"off"` → `nil` (command mode off:
+    /// pure dictation, clipboard never touched).
+    var commandModifier: HotkeyChord.Modifier? {
+        get {
+            guard let raw = defaults.string(forKey: Key.commandModifier) else {
+                return AppSettings.defaultCommandModifier
+            }
+            if raw == "off" { return nil }
+            return HotkeyChord.Modifier(rawValue: raw) ?? AppSettings.defaultCommandModifier
+        }
+        set {
+            if let newValue {
+                defaults.set(newValue.rawValue, forKey: Key.commandModifier)
+            } else {
+                defaults.set("off", forKey: Key.commandModifier)
+            }
         }
     }
 

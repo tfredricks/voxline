@@ -129,4 +129,23 @@ import Foundation
         s.playHotkeySounds = true
         #expect(AppSettings(defaults: d).playHotkeySounds == true)
     }
+
+    @Test func unset_command_modifier_defaults_to_left_option() {
+        let d = makeDefaults()
+        #expect(AppSettings(defaults: d).commandModifier == .leftOption)
+    }
+
+    @Test func command_modifier_round_trips_a_modifier() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.commandModifier = .rightShift
+        #expect(AppSettings(defaults: d).commandModifier == .rightShift)
+    }
+
+    @Test func command_modifier_off_round_trips_as_nil() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.commandModifier = nil   // explicit "off"
+        #expect(AppSettings(defaults: d).commandModifier == nil)
+    }
 }
