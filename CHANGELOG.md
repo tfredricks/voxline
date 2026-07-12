@@ -8,6 +8,8 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-12
+
 ### Added
 
 - **Command mode via a command modifier.** Hold an optional command modifier
@@ -69,6 +71,7 @@ once it reaches its first tagged release.
   synthetic keystrokes. Under the App Sandbox the previous AX-based
   paste-eligibility check always failed and forced the unreliable typing path.
 
-[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/tfredricks/voxline/releases/tag/v0.3.1
 [0.3.0]: https://github.com/tfredricks/voxline/releases/tag/v0.3.0
 [0.2.5]: https://github.com/tfredricks/voxline/releases/tag/v0.2.5
