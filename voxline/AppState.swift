@@ -66,6 +66,11 @@ final class AppState {
     /// Used for the pill's elapsed-time display and for the max-duration fail-safe.
     var recordingStartedAt: Date?
 
+    /// True while the current recording is a command gesture (command modifier
+    /// held at start). Read by the recording pill to show a "Command" cue.
+    /// Set at `startRecording`; only meaningful while `status == .recording`.
+    var recordingIsCommand: Bool = false
+
     /// Peak audio level observed during the most recent recording. Stays
     /// at 0 if the mic was muted/denied or the input device produced silence.
     /// Read by CapturePipeline's silent-capture detector.

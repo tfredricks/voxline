@@ -78,7 +78,11 @@ final class CapturePipeline {
     }
 
     /// Begin a new recording. Caller must ensure we're not already recording.
-    func startRecording() {
+    /// `command` reflects whether the command modifier was held at chord
+    /// completion; when true this is a transform gesture and the selection is
+    /// probed once, here at start. When false (plain dictation) the clipboard
+    /// is never touched.
+    func startRecording(command: Bool = false) {
         // Reject re-entry while a recording or its post-recording pipeline
         // (transcribe → LLM → paste) is still in flight. `.thinking` covers
         // the entire await chain in finalizeRecording — `state.status` is set
@@ -122,14 +126,22 @@ final class CapturePipeline {
         state.lastCleanedText = nil
         state.lastTranscribeDuration = nil
         state.lastCleanupDuration = nil
+        state.recordingIsCommand = command
         state.status = .recording
         let captor = contextCapture
         contextTask = Task.detached(priority: .userInitiated) {
             await captor.capture()
         }
-        let snapshotter = selectionSnapshot
-        selectionTask = Task.detached(priority: .userInitiated) {
-            await snapshotter.readSelection()
+        // Selection probe runs ONLY in command mode. In dictation the clipboard
+        // is never touched — this is the fix for VS Code's line-copy false
+        // positive (empty-selection Cmd+C copies the whole line).
+        if command {
+            let snapshotter = selectionSnapshot
+            selectionTask = Task.detached(priority: .userInitiated) {
+                await snapshotter.readSelection()
+            }
+        } else {
+            selectionTask = nil
         }
     }
 
@@ -206,17 +218,24 @@ final class CapturePipeline {
             return setError("No mode for app '\(bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes.")
         }
 
-        // 3. LLM cleanup.
+        // 3. Route by mode. `recordingIsCommand` was latched at recording start.
         let context = await contextTask?.value ?? .empty
         contextTask = nil
-        let selection = await selectionTask?.value ?? nil
-        selectionTask = nil
-        // If text was selected when recording started, treat the speech as a
-        // command to transform that selection instead of as dictation.
-        if let selection, !selection.isEmpty {
+        if state.recordingIsCommand {
+            let selection = await selectionTask?.value ?? nil
+            selectionTask = nil
+            guard let selection, !selection.isEmpty else {
+                // Command gesture but nothing selected: keep the mode boundary
+                // crisp — no dictation fallback, no clipboard-probe surprise.
+                resetIdle()
+                showToast("Select text to transform")
+                return
+            }
             await performTransform(command: transcript, selection: selection, mode: mode, context: context)
             return
         }
+        // Dictation path: selectionTask was never spawned, so the clipboard was
+        // never touched.
         if !context.captureNotes.isEmpty {
             AppLog.context.info("context partial: notes=\(context.captureNotes.joined(separator: ",")) durationMs=\(context.captureDurationMs)")
         }

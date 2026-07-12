@@ -81,13 +81,14 @@ import Foundation
 
     final class FakeSelectionSnapshot: SelectionSnapshotting, @unchecked Sendable {
         var selection: String?
-        func readSelection() async -> String? { selection }
+        private(set) var readCount = 0
+        func readSelection() async -> String? { readCount += 1; return selection }
     }
 
     /// Start recording then finalize, simulating the production `onLevel`
     /// callback firing so the silent-capture detector doesn't fire.
-    private func startAndFinalize(_ pipe: CapturePipeline, state: AppState) async {
-        pipe.startRecording()
+    private func startAndFinalize(_ pipe: CapturePipeline, state: AppState, command: Bool = false) async {
+        pipe.startRecording(command: command)
         state.lastPeakLevel = 0.5
         await pipe.finalizeRecording()
     }
@@ -666,7 +667,7 @@ import Foundation
 
     @Test func finalize_withSelection_transformsAndOpensTransformReview() async {
         let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
 
         #expect(llm.transformCalls.last?.selection == "original text")
         #expect(llm.transformCalls.last?.instruction == "hello world")   // the spoken command
@@ -681,7 +682,7 @@ import Foundation
 
     @Test func refine_onTransformSession_usesTransformOnCurrentText() async {
         let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
         #expect(state.reviewSession?.kind == .transform)
 
         llm.transformResult = .success("tighter")
@@ -701,7 +702,7 @@ import Foundation
     @Test func finalize_withSelection_unchangedResult_showsToastNoWrite() async {
         let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
         llm.transformResult = .success("original text")   // model declined → returned selection verbatim
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
 
         #expect(injector.injected.isEmpty)
         #expect(history.items.isEmpty)
@@ -713,7 +714,7 @@ import Foundation
     @Test func finalize_withSelection_llmError_setsError() async {
         let (pipe, state, llm, injector, _) = makeTransformPipeline(selection: "original text")
         llm.transformResult = .failure(LLMError.missingAPIKey)
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
 
         #expect(injector.injected.isEmpty)
         #expect(state.reviewSession == nil)
@@ -725,7 +726,7 @@ import Foundation
         injector.nextError = TextInsertionError.pasteVerificationFailed
         var fallbackText: String?
         pipe.transcriptFallback = { fallbackText = $0 }   // capture instead of touching NSPasteboard.general
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
 
         #expect(fallbackText == "transformed")
         #expect(state.toastMessage == "Copied — ⌘V to replace")
@@ -746,7 +747,7 @@ import Foundation
     @Test func finalize_withSelection_overLimit_refusesWithToast() async {
         let overLimit = String(repeating: "a", count: DefaultSelectionSnapshot.selectionMax + 1)
         let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: overLimit)
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
 
         #expect(llm.transformCalls.isEmpty)
         #expect(injector.injected.isEmpty)
@@ -787,7 +788,7 @@ import Foundation
         var fallbackText: String?
         pipe.transcriptFallback = { fallbackText = $0 }
 
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+        pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
 
         #expect(injector.injected.isEmpty)          // did NOT paste over the wrong target
         #expect(fallbackText == "transformed")       // result left on clipboard
@@ -795,6 +796,59 @@ import Foundation
         #expect(state.reviewSession == nil)
         #expect(history.items.isEmpty)               // focus guard is before history.record
         if case .idle = state.status {} else { Issue.record("expected .idle after focus-moved fallback") }
+    }
+
+    @Test func finalize_commandMode_emptySelection_showsSelectToast() async {
+        let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "")
+        pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+
+        #expect(llm.transformCalls.isEmpty)      // no transform attempted
+        #expect(llm.calls.isEmpty)               // no dictation cleanup either
+        #expect(injector.injected.isEmpty)
+        #expect(history.items.isEmpty)
+        #expect(state.reviewSession == nil)
+        #expect(state.toastMessage == "Select text to transform")
+        if case .idle = state.status {} else { Issue.record("expected .idle") }
+    }
+
+    @Test func finalize_dictationMode_neverSpawnsSelectionProbe() async {
+        let state = AppState()
+        let capture = FakeCapture()
+        let transcriber = FakeTranscriber()
+        let llm = FakeLLM()
+        let front = FakeFrontmost(); front.bundleID = "com.tinyspeck.slackmacgap"
+        let inspector = FakeFieldInspector()
+        let injector = FakeInjector()
+        let snap = FakeSelectionSnapshot(); snap.selection = "user had something selected"
+        let router = ModeRouter(modes: [
+            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil, category: .chat),
+            Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil, category: .general)
+        ])
+        let name = "voxline-test-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        let history = DictationHistoryStore(defaults: defaults)
+        let pipe = CapturePipeline(
+            state: state, capture: capture, transcriber: transcriber,
+            llm: llm, modes: router, frontmost: front,
+            fieldInspector: inspector, injector: injector,
+            historyStore: history, contextCapture: FakeContextCapture(),
+            selectionSnapshot: snap
+        )
+
+        pipe.startRecording(command: false); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+
+        #expect(snap.readCount == 0)             // THE FIX: dictation never touches the selection
+        #expect(llm.transformCalls.isEmpty)
+        #expect(llm.calls.count == 1)            // dictation cleanup ran
+        #expect(injector.injected.last == "cleaned")
+        #expect(state.reviewSession?.kind == .dictation)
+    }
+
+    @Test func startRecording_command_sets_recordingIsCommand_flag() {
+        let (pipe, state, _, _, _, _, _, _, _) = makePipeline()
+        pipe.startRecording(command: true)
+        #expect(state.recordingIsCommand == true)
     }
 
 }
