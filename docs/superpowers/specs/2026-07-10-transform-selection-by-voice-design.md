@@ -36,6 +36,14 @@ LLM prompt path.
 
 **Auto-detect selection.** No new hotkey or gesture.
 
+> **Superseded (2026-07-12).** Auto-detecting a selection via a synthetic Cmd+C
+> is unreliable in editors with `editor.emptySelectionClipboard` (VS Code
+> default), where an empty-selection Cmd+C copies the whole line and misroutes
+> dictation into the transform path. Replaced by an explicit **command modifier**
+> held with the dictation chord. See
+> `docs/superpowers/specs/2026-07-12-command-mode-hotkey-design.md` and
+> `docs/superpowers/plans/2026-07-12-command-mode-hotkey.md`.
+
 ```
 Press dictation hotkey
   ├─ selection is non-empty?  → TRANSFORM MODE

@@ -8,6 +8,25 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
+### Added
+
+- **Command mode via a command modifier.** Hold an optional command modifier
+  (default **Left Option**) together with the dictation hotkey and speak a
+  command to transform the selected text. A "Command" cue appears in the pill
+  while recording; the modifier is configurable (or set to **Off**) in
+  Settings → Hotkey.
+
+### Changed
+
+- **Default dictation hotkey is now Left Shift + Left Control** (was Right Cmd +
+  Right Option). Existing users who customized their hotkey keep their choice;
+  only the untouched default moves.
+- **Plain dictation never touches the clipboard.** The previous release
+  auto-detected a selection by posting a synthetic Cmd+C on every recording,
+  which misfired in editors that copy the whole line on an empty selection
+  (VS Code default) and misrouted dictation into the transform path. Transform
+  is now an explicit gesture and the selection is only read in command mode.
+
 ## [0.3.0] - 2026-07-10
 
 ### Added

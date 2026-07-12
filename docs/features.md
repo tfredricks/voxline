@@ -35,7 +35,7 @@
 | Detect current application | Adjusts behavior for email, Slack, docs, etc. |
 | Read screen context | Improves output using surrounding information |
 | Cursor awareness | Continues paragraphs naturally |
-| Selection rewriting | Rewrites selected text intelligently |
+| Selection rewriting | Rewrites selected text intelligently — hold the command modifier (default Left Option) with the hotkey and speak a command |
 | Form awareness | Behaves differently in forms vs. documents |
 
 ---
