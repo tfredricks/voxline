@@ -45,10 +45,17 @@ final class AppCoordinator {
         permissionsWindow.show()
     }
 
-    func startIfNeeded(state: AppState, historyStore: DictationHistoryStore) {
+    func startIfNeeded(state: AppState, historyStore: DictationHistoryStore, migration: ContainerMigration.Report? = nil) {
         guard !didStart else { return }
         didStart = true
         self.appState = state
+
+        if let migration {
+            AppLog.pipeline.info("container migration: prefs=\(migration.preferencesCopied) modes=\(migration.movedModes) models=\(migration.movedModelCache) ane=\(migration.movedANECache)")
+            for failure in migration.failures {
+                AppLog.pipeline.error("container migration failed: \(failure, privacy: .public)")
+            }
+        }
 
         let settings = AppSettings()
         logLaunchTrace(settings: settings)
@@ -56,6 +63,18 @@ final class AppCoordinator {
             startWizardThenApp(state: state, settings: settings, historyStore: historyStore)
         } else {
             startApp(state: state, settings: settings, historyStore: historyStore)
+        }
+
+        if let migration, !migration.failures.isEmpty {
+            flashToast("Some data couldn't be moved from the previous version. See the log.", state: state)
+        }
+    }
+
+    private func flashToast(_ message: String, state: AppState) {
+        state.toastMessage = message
+        Task { @MainActor [weak state] in
+            try? await Task.sleep(for: .seconds(4))
+            if state?.toastMessage == message { state?.toastMessage = nil }
         }
     }
 

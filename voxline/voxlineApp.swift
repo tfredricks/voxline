@@ -80,7 +80,7 @@ private struct MenuBarLabel: View {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
-    let historyStore = DictationHistoryStore()
+    lazy var historyStore = DictationHistoryStore()
     let coordinator = AppCoordinator()
     let aboutWindow = AboutWindowController()
     let historyWindow = HistoryWindowController()
@@ -89,8 +89,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var updateService = UpdateService(dictationActivity: dictationActivity)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let migration = ContainerMigration.standard()?.runIfNeeded()
         windowVisibility.start()
-        coordinator.startIfNeeded(state: appState, historyStore: historyStore)
+        coordinator.startIfNeeded(state: appState, historyStore: historyStore, migration: migration)
         _ = updateService // force-init so Sparkle's scheduler starts
         observeStatusForUpdates()
     }
