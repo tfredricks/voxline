@@ -244,10 +244,9 @@ final class AppCoordinator {
                 if let state { self?.pillWindow?.updateVisibility(state: state) }
             },
             onPreset: { [weak self] id in
-                guard let self, let preset = self.presetStore.load().first(where: { $0.id == id }) else { return }
-                // The hotkey tap never sees a swallowed key, so a preset's held
-                // modifier can leave a chord armed with the mic prewarmed.
-                self.pipeline?.cancelCapturePrewarm()
+                guard let self else { return }
+                self.hotkeyMonitor?.noteSwallowedKeyDown()
+                guard let preset = self.presetStore.load().first(where: { $0.id == id }) else { return }
                 Task { await self.pipeline?.runPreset(preset) }
             }
         )

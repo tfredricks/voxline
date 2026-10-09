@@ -2,7 +2,8 @@ import Carbon.HIToolbox
 import Foundation
 
 /// Pure checks for a recorded preset shortcut. Rejections stop the recording;
-/// the typed-character warning lets the combo through so the user can decide.
+/// the app-shortcut and typed-character warnings let the combo through so the
+/// user can decide.
 enum KeyComboValidator {
 
     enum Verdict: Equatable {
@@ -34,11 +35,18 @@ enum KeyComboValidator {
             let owner = kind == .dictation ? "dictation" : "command"
             return .rejected("\(chordSymbols(chord)) is your \(owner) hotkey")
         }
+        if appShortcutModifiers.contains(combo.modifiers) {
+            return .warning("\(combo.displayName) is a common app shortcut. Voxline will capture it everywhere.")
+        }
         if let typed = translate(combo.keyCode, combo.modifiers), typesVisibleCharacter(typed) {
             return .warning("\(combo.displayName) types “\(typed)” on your keyboard. Voxline will capture it everywhere.")
         }
         return .ok
     }
+
+    /// Modifier sets that apps use for their own menu shortcuts (⌘C, ⇧⌘4).
+    /// Allowed, with a warning, since the preset takes them over everywhere.
+    private static let appShortcutModifiers: [ModifierFamilies] = [.command, [.command, .shift]]
 
     private static let invisible = CharacterSet.whitespacesAndNewlines.union(.controlCharacters)
 

@@ -308,6 +308,70 @@ import CoreGraphics
         #expect(log.events.isEmpty)
     }
 
+    // MARK: - Keys the key interceptor swallowed
+
+    @Test func swallowed_key_while_armed_blocks_and_cancels_the_prewarm() {
+        let (monitor, timers, log) = makeMonitor()
+        press(monitor, [.leftOption], keyCode: 58)
+        #expect(monitor.state == .armed)
+        timers.fire(HotkeyMonitor.prewarmDelay)
+
+        monitor.noteSwallowedKeyDown()
+
+        #expect(monitor.state == .blocked)
+        #expect(log.events == ["prewarm", "cancelPrewarm"])
+        press(monitor, c, keyCode: 56)
+        #expect(monitor.state == .blocked)
+        press(monitor, [], keyCode: 58)
+        #expect(monitor.state == .idle)
+        #expect(log.events == ["prewarm", "cancelPrewarm"])
+    }
+
+    @Test func swallowed_key_before_the_delay_never_prewarms() {
+        let (monitor, timers, log) = makeMonitor()
+        press(monitor, [.leftOption], keyCode: 58)
+        monitor.noteSwallowedKeyDown()
+        #expect(monitor.state == .blocked)
+        #expect(timers.pending.isEmpty)
+        #expect(log.events.isEmpty)
+    }
+
+    @Test func swallowed_key_inside_the_window_discards() {
+        let (monitor, timers, log) = makeMonitor()
+        press(monitor, d)
+        monitor.noteSwallowedKeyDown()
+        #expect(log.events == ["start:dictation", "discard:dictation"])
+        #expect(monitor.state == .blocked)
+        #expect(timers.pending.isEmpty)
+    }
+
+    @Test func swallowed_key_after_the_window_keeps_the_recording() {
+        let (monitor, timers, log) = makeMonitor()
+        press(monitor, d)
+        timers.fire(HotkeyMonitor.shortcutWindow)
+        monitor.noteSwallowedKeyDown()
+        #expect(monitor.state == .recording(.dictation))
+        #expect(log.events == ["start:dictation"])
+    }
+
+    @Test func swallowed_key_while_idle_changes_nothing() {
+        let (monitor, timers, log) = makeMonitor()
+        monitor.noteSwallowedKeyDown()
+        #expect(monitor.state == .idle)
+        #expect(timers.pending.isEmpty)
+        #expect(log.events.isEmpty)
+        press(monitor, d)
+        #expect(log.events == ["start:dictation"])
+    }
+
+    @Test func swallowed_key_is_ignored_while_suspended() {
+        let (monitor, _, log) = makeMonitor()
+        monitor.suspend()
+        monitor.noteSwallowedKeyDown()
+        #expect(monitor.state == .idle)
+        #expect(log.events.isEmpty)
+    }
+
     // MARK: - Suspend and resume
 
     @Test func suspend_and_resume_toggle_is_suspended() {

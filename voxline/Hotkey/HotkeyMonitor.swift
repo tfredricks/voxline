@@ -198,6 +198,14 @@ final class HotkeyMonitor {
         resyncWithHeldKeys()
     }
 
+    /// The key interceptor swallowed a keyDown, which this tap therefore never
+    /// saw. The machine gets the same `.keyDown` a shortcut key would give
+    /// it, so a modifier held for a preset blocks instead of staying armed.
+    func noteSwallowedKeyDown() {
+        guard !isSuspended else { return }
+        feed(.keyDown)
+    }
+
     /// External signal that transcription has finished and we can return to idle.
     func recordingFinished() {
         feed(.recordingFinished)

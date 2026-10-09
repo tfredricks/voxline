@@ -83,6 +83,37 @@ import Testing
         #expect(verdict == .warning("⌥2 types “™” on your keyboard. Voxline will capture it everywhere."))
     }
 
+    @Test func command_only_combo_warns_as_a_common_app_shortcut() {
+        #expect(validate(KeyCombo(keyCode: 8, modifiers: .command))
+                == .warning("⌘C is a common app shortcut. Voxline will capture it everywhere."))
+    }
+
+    @Test func command_shift_combo_warns_with_its_own_display_string() {
+        #expect(validate(KeyCombo(keyCode: 21, modifiers: [.command, .shift]))
+                == .warning("⇧⌘4 is a common app shortcut. Voxline will capture it everywhere."))
+    }
+
+    @Test(arguments: [
+        ModifierFamilies([.command, .option]),
+        [.command, .control],
+        [.command, .option, .control],
+        .option,
+        .control,
+    ])
+    func combos_with_option_or_control_are_not_app_shortcut_warnings(modifiers: ModifierFamilies) {
+        #expect(validate(KeyCombo(keyCode: 8, modifiers: modifiers)) == .ok)
+    }
+
+    @Test func app_shortcut_warning_wins_over_a_typed_character() {
+        #expect(validate(KeyCombo(keyCode: 8, modifiers: .command), translate: { _, _ in "c" })
+                == .warning("⌘C is a common app shortcut. Voxline will capture it everywhere."))
+    }
+
+    @Test func rejection_wins_over_the_app_shortcut_warning() {
+        let combo = KeyCombo(keyCode: 8, modifiers: .command)
+        #expect(validate(combo, others: [combo]) == .rejected("Another preset already uses this shortcut."))
+    }
+
     @Test func translator_receives_the_combo() {
         let seen = CallBox<(UInt16, ModifierFamilies)?>(nil)
         _ = validate(KeyCombo(keyCode: 19, modifiers: [.option, .command]), translate: { code, mods in
