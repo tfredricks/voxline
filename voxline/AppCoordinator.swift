@@ -496,13 +496,14 @@ final class AppCoordinator {
         let controller = MeetingController(
             store: store,
             settings: settings,
-            makeRecorder: { directory in
+            makeRecorder: { directory, observer in
                 let current = AppSettings()
                 return MeetingRecorder(
                     mic: MicMeetingSource(preferredInputDeviceUID: current.audioInputDeviceUID),
                     system: SystemAudioTap(),
                     directory: directory,
-                    cap: current.meetingCapSeconds.map { .seconds($0) } ?? MeetingRecorder.defaultCap
+                    cap: current.meetingCapSeconds.map { .seconds($0) } ?? MeetingRecorder.defaultCap,
+                    observer: observer
                 )
             },
             pipeline: pipeline,

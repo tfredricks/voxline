@@ -14,6 +14,8 @@ final class MeetingController {
     }
 
     private(set) var phase: Phase = .idle
+    /// The live transcript for the recording in progress; nil otherwise.
+    private(set) var liveTranscript: (any LiveMeetingTranscribing)?
     private(set) var lastFailedMeeting: UUID?
     /// Cached so the menu doesn't read every `meta.json` on each redraw;
     /// refreshed when processing finishes, after retention, and after a
@@ -23,7 +25,8 @@ final class MeetingController {
 
     @ObservationIgnored private let store: MeetingStore
     @ObservationIgnored private var settings: AppSettings
-    @ObservationIgnored private let makeRecorder: @MainActor (MeetingDirectory) -> MeetingRecording
+    @ObservationIgnored private let makeRecorder: @MainActor (MeetingDirectory, MeetingSampleObserver?) -> MeetingRecording
+    @ObservationIgnored private let makeLiveTranscript: @MainActor () -> (any LiveMeetingTranscribing)?
     @ObservationIgnored private let pipeline: MeetingProcessing
     @ObservationIgnored private let notifier: MeetingNotifying
     @ObservationIgnored private let prompts: MeetingPrompting
@@ -35,7 +38,8 @@ final class MeetingController {
     init(
         store: MeetingStore,
         settings: AppSettings,
-        makeRecorder: @escaping @MainActor (MeetingDirectory) -> MeetingRecording,
+        makeRecorder: @escaping @MainActor (MeetingDirectory, MeetingSampleObserver?) -> MeetingRecording,
+        makeLiveTranscript: @escaping @MainActor () -> (any LiveMeetingTranscribing)? = { nil },
         pipeline: MeetingProcessing,
         notifier: MeetingNotifying,
         prompts: MeetingPrompting,
@@ -44,6 +48,7 @@ final class MeetingController {
         self.store = store
         self.settings = settings
         self.makeRecorder = makeRecorder
+        self.makeLiveTranscript = makeLiveTranscript
         self.pipeline = pipeline
         self.notifier = notifier
         self.prompts = prompts
@@ -79,10 +84,14 @@ final class MeetingController {
             prompts.showError("Couldn't create the meeting folder: \(error.localizedDescription)")
             return
         }
-        let recorder = makeRecorder(store.directory(for: meta.id))
+        let live = makeLiveTranscript()
+        let recorder = makeRecorder(store.directory(for: meta.id), live)
         recorder.onWarning = { [weak self] in self?.notifier.post(.capWarning) }
         recorder.onStopped = { [weak self] reason in self?.recordingStopped(meta.id, reason: reason) }
-        recorder.onSystemTrackLost = { [weak self] in self?.notifier.post(.systemAudioLost) }
+        recorder.onSystemTrackLost = { [weak self] in
+            self?.liveTranscript?.trackLost(.system)
+            self?.notifier.post(.systemAudioLost)
+        }
         do {
             try recorder.start()
         } catch {
@@ -99,7 +108,9 @@ final class MeetingController {
             settings.meetingSilentSystemNoticeShown = true
             notifier.post(.systemAudioUnavailable)
         }
+        live?.start(tracks: recorder.systemTapStarted ? [.mic, .system] : [.mic])
         self.recorder = recorder
+        liveTranscript = live
         activeRecordingID = meta.id
         phase = .recording(startedAt: meta.startedAt)
     }
@@ -149,6 +160,8 @@ final class MeetingController {
     }
 
     private func recordingStopped(_ id: UUID, reason: MeetingStopReason) {
+        liveTranscript?.stop()
+        liveTranscript = nil
         recorder = nil
         activeRecordingID = nil
         do {

@@ -69,6 +69,20 @@ final class FakePrompts: MeetingPrompting {
 }
 
 @MainActor
+final class FakeLiveTranscript: LiveMeetingTranscribing {
+    var transcript = LiveTranscript()
+    var availability: LiveAvailability = .preparing
+    var showsLabels = false
+    private(set) var startedTracks: Set<MeetingRecorder.Track>?
+    private(set) var lostTracks: [MeetingRecorder.Track] = []
+    private(set) var stopCount = 0
+    func start(tracks: Set<MeetingRecorder.Track>) { startedTracks = tracks }
+    func trackLost(_ track: MeetingRecorder.Track) { lostTracks.append(track) }
+    func stop() { stopCount += 1 }
+    nonisolated func samples(_ samples: [Float], track: MeetingRecorder.Track) {}
+}
+
+@MainActor
 @Suite struct MeetingControllerTests {
 
     private let store = MeetingStore(root: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString))
@@ -77,14 +91,71 @@ final class FakePrompts: MeetingPrompting {
     private let notifier = FakeNotifier()
     private let prompts = FakePrompts()
     private let recorder = FakeRecorder()
+    private let live = FakeLiveTranscript()
+    private let observers = LockedBox<[MeetingSampleObserver?]>([])
 
-    private func makeController(now: Date = Date(timeIntervalSince1970: 1_000)) -> MeetingController {
+    private func makeController(now: Date = Date(timeIntervalSince1970: 1_000), live: FakeLiveTranscript? = nil) -> MeetingController {
         let recorder = recorder
+        let observers = observers
         return MeetingController(
             store: store, settings: AppSettings(defaults: defaults),
-            makeRecorder: { _ in recorder }, pipeline: processing, notifier: notifier, prompts: prompts,
+            makeRecorder: { _, observer in
+                observers.mutate { $0.append(observer) }
+                return recorder
+            },
+            makeLiveTranscript: { live },
+            pipeline: processing, notifier: notifier, prompts: prompts,
             now: { now }
         )
+    }
+
+    @Test func live_transcript_starts_after_the_recorder_with_both_tracks() {
+        let controller = makeController(live: live)
+        controller.start()
+        #expect(live.startedTracks == [.mic, .system])
+        #expect(controller.liveTranscript === live)
+        #expect(observers.read().count == 1)
+        #expect(observers.read()[0] === live)
+    }
+
+    @Test func live_transcript_gets_mic_only_when_the_tap_did_not_start() {
+        recorder.systemTapStarted = false
+        let controller = makeController(live: live)
+        controller.start()
+        #expect(live.startedTracks == [.mic])
+    }
+
+    @Test func live_transcript_is_not_started_when_the_recorder_fails() {
+        recorder.startError = NSError(domain: "t", code: 1)
+        let controller = makeController(live: live)
+        controller.start()
+        #expect(live.startedTracks == nil)
+        #expect(controller.liveTranscript == nil)
+    }
+
+    @Test func live_transcript_stops_and_clears_on_stop() async throws {
+        let controller = makeController(live: live)
+        controller.start()
+        controller.stop()
+        #expect(live.stopCount == 1)
+        #expect(controller.liveTranscript == nil)
+        await controller.processingTask?.value
+    }
+
+    @Test func lost_system_track_reaches_the_live_transcript() {
+        let controller = makeController(live: live)
+        controller.start()
+        recorder.onSystemTrackLost?()
+        #expect(live.lostTracks == [.system])
+        #expect(notifier.notices == [.systemAudioLost])
+    }
+
+    @Test func no_live_transcript_when_the_factory_returns_nil() {
+        let controller = makeController()
+        controller.start()
+        #expect(controller.liveTranscript == nil)
+        #expect(observers.read().count == 1)
+        #expect(observers.read()[0] == nil)
     }
 
     @Test func start_asks_consent_once_and_records() async throws {
