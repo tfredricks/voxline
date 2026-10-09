@@ -43,3 +43,10 @@ final class FireOnce: @unchecked Sendable {
         }
     }
 }
+
+/// Receives each track's batches after the track's writer has them, on the
+/// source's background thread. Must not block; silence padding is not
+/// forwarded.
+protocol MeetingSampleObserver: AnyObject, Sendable {
+    func samples(_ samples: [Float], track: MeetingRecorder.Track)
+}

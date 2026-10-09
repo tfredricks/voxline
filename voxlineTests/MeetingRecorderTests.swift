@@ -21,6 +21,19 @@ final class FakeMeetingSource: MeetingAudioSource {
     func fail() { onFailure?(.configurationChanged) }
 }
 
+final class FakeSampleObserver: MeetingSampleObserver, @unchecked Sendable {
+    private let lock = NSLock()
+    private var received: [(MeetingRecorder.Track, [Float])] = []
+
+    func samples(_ samples: [Float], track: MeetingRecorder.Track) {
+        lock.withLock { received.append((track, samples)) }
+    }
+
+    func batches(_ track: MeetingRecorder.Track) -> [[Float]] {
+        lock.withLock { received.filter { $0.0 == track }.map(\.1) }
+    }
+}
+
 @MainActor
 @Suite struct MeetingRecorderTests {
 
@@ -39,12 +52,17 @@ final class FakeMeetingSource: MeetingAudioSource {
     /// their sleeps) before the clock moves.
     private func settle() async { await clock.advance(by: .zero) }
 
-    private func makeRecorder(cap: Duration = MeetingRecorder.defaultCap, system: FakeMeetingSource? = nil) -> MeetingRecorder {
+    private func makeRecorder(
+        cap: Duration = MeetingRecorder.defaultCap,
+        system: FakeMeetingSource? = nil,
+        observer: MeetingSampleObserver? = nil
+    ) -> MeetingRecorder {
         let clock = clock
         return MeetingRecorder(
             mic: mic, system: system ?? self.system, directory: directory, cap: cap,
             sleep: { @MainActor in try await clock.sleep($0) },
-            clock: { clock.now }
+            clock: { clock.now },
+            observer: observer
         )
     }
 
@@ -236,5 +254,77 @@ final class FakeMeetingSource: MeetingAudioSource {
         system.emit([Float](repeating: 0.1, count: 100))
         recorder.stop()
         #expect(PCMTrackReader.sampleCount(at: directory.systemPCM) == 100)
+    }
+
+    @Test func observer_receives_each_batch_per_track_after_the_writer() async throws {
+        let observer = FakeSampleObserver()
+        let recorder = makeRecorder(observer: observer)
+        try recorder.start()
+        mic.emit([0.5, 0.5])
+        system.emit([0.25])
+        mic.emit([0.1])
+        recorder.stop()
+        #expect(observer.batches(.mic) == [[0.5, 0.5], [0.1]])
+        #expect(observer.batches(.system) == [[0.25]])
+        #expect(PCMTrackReader.sampleCount(at: directory.micPCM) == 3)
+    }
+
+    @Test func observer_does_not_receive_silence_padding() async throws {
+        let observer = FakeSampleObserver()
+        let recorder = makeRecorder(observer: observer)
+        try recorder.start()
+        await settle()
+        await clock.advance(by: .seconds(3))
+        system.emit([Float](repeating: 0.1, count: 1_600))
+        recorder.stop()
+        #expect(PCMTrackReader.sampleCount(at: directory.systemPCM) == 48_000)
+        #expect(observer.batches(.system).map(\.count) == [1_600])
+    }
+
+    @Test func restart_keeps_feeding_the_same_observer() async throws {
+        let observer = FakeSampleObserver()
+        let recorder = makeRecorder(observer: observer)
+        try recorder.start()
+        await settle()
+        mic.emit([0.2])
+        mic.fail()
+        await settle()
+        await clock.advance(by: .milliseconds(500))
+        #expect(mic.startCount == 2)
+        mic.emit([0.3])
+        recorder.stop()
+        #expect(observer.batches(.mic) == [[0.2], [0.3]])
+    }
+
+    @Test func nothing_reaches_the_observer_after_stop() async throws {
+        let observer = FakeSampleObserver()
+        let recorder = makeRecorder(observer: observer)
+        try recorder.start()
+        recorder.stop()
+        mic.emit([0.9])
+        #expect(observer.batches(.mic).isEmpty)
+    }
+
+    @Test func tracks_are_identical_with_and_without_an_observer() async throws {
+        let other = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        let otherDirectory = MeetingDirectory(url: other)
+        let plainMic = FakeMeetingSource(), plainSystem = FakeMeetingSource()
+        let clock = clock
+        let plain = MeetingRecorder(
+            mic: plainMic, system: plainSystem, directory: otherDirectory,
+            sleep: { @MainActor in try await clock.sleep($0) }, clock: { clock.now }
+        )
+        let observed = makeRecorder(observer: FakeSampleObserver())
+        try plain.start()
+        try observed.start()
+        for batch in [[0.1, 0.2], [0.3], [0.4, 0.5, 0.6]] as [[Float]] {
+            plainMic.emit(batch); mic.emit(batch)
+            plainSystem.emit(batch); system.emit(batch)
+        }
+        plain.stop()
+        observed.stop()
+        #expect(try Data(contentsOf: otherDirectory.micPCM) == Data(contentsOf: directory.micPCM))
+        #expect(try Data(contentsOf: otherDirectory.systemPCM) == Data(contentsOf: directory.systemPCM))
     }
 }

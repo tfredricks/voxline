@@ -56,6 +56,8 @@ final class MeetingRecorder: MeetingRecording {
     private let cap: Duration
     private let sleep: @MainActor (Duration) async throws -> Void
     private let clock: @Sendable () -> Duration
+    private let observer: MeetingSampleObserver?
+    private let live = LiveFlag()
     private var startedAt: Duration = .zero
     private var isRecording = false
     private var writers: [Track: PCMTrackWriter] = [:]
@@ -70,7 +72,8 @@ final class MeetingRecorder: MeetingRecording {
         directory: MeetingDirectory,
         cap: Duration = MeetingRecorder.defaultCap,
         sleep: @escaping @MainActor (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-        clock: @escaping @Sendable () -> Duration = MeetingRecorder.wallClock()
+        clock: @escaping @Sendable () -> Duration = MeetingRecorder.wallClock(),
+        observer: MeetingSampleObserver? = nil
     ) {
         self.mic = mic
         self.system = system
@@ -78,6 +81,7 @@ final class MeetingRecorder: MeetingRecording {
         self.cap = cap
         self.sleep = sleep
         self.clock = clock
+        self.observer = observer
     }
 
     nonisolated static func wallClock() -> @Sendable () -> Duration {
@@ -103,6 +107,7 @@ final class MeetingRecorder: MeetingRecording {
             throw error
         }
         isRecording = true
+        live.set(true)
         if system != nil {
             do {
                 try startSource(.system)
@@ -131,6 +136,7 @@ final class MeetingRecorder: MeetingRecording {
     private func stop(reason: MeetingStopReason) {
         guard isRecording else { return }
         isRecording = false
+        live.set(false)
         capTask?.cancel()
         restartTasks.forEach { $0.cancel() }
         restartTasks = []
@@ -149,6 +155,8 @@ final class MeetingRecorder: MeetingRecording {
         guard let source = source(track), let writer = writers[track] else { return }
         let clock = clock
         let startedAt = startedAt
+        let observer = observer
+        let live = live
         try source.start(
             onSamples: { batch in
                 let expected = Self.expectedSamples(after: clock() - startedAt)
@@ -156,6 +164,7 @@ final class MeetingRecorder: MeetingRecording {
                     writer.padSilence(toSampleCount: expected - batch.count)
                 }
                 writer.append(batch)
+                if live.value { observer?.samples(batch, track: track) }
             },
             onFailure: { [weak self] _ in Task { @MainActor in self?.handleFailure(track) } }
         )
@@ -211,4 +220,12 @@ final class MeetingRecorder: MeetingRecording {
 extension MeetingRecorder.Track {
     /// The live transcript's speaker label for this track.
     var liveLabel: String { self == .mic ? "Me" : "Them" }
+}
+
+/// Whether the recording is live, readable from the audio thread.
+private final class LiveFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+    var value: Bool { lock.withLock { flag } }
+    func set(_ newValue: Bool) { lock.withLock { flag = newValue } }
 }
