@@ -117,7 +117,10 @@ rows".
 | `recording(k)`, window open | `keyDown`, or `h` gains a modifier outside `chord(k)` | blocked | `discardRecording(k)` |
 | `recording(k)`, window closed | `keyDown` or extra modifiers | unchanged | none |
 | `recording(k)` | `maxDurationElapsed`, `inputLost` | `finalizing(k)`, last-held set cleared | `finalizeRecording(k)` |
-| `finalizing(k)` | `modifiersChanged(h)` / `recordingFinished` | stores `h` as last held / evaluates the last-held set | as evaluated |
+| `finalizing(k)` | `modifiersChanged(h)` | stores `h` as last held; an empty `h` drops a pending block | none |
+| `finalizing(k)` | `resync(h)` | stores `h` as last held; a non-empty `h` sets a pending block | none |
+| `finalizing(k)` | `inputLost` | last-held set and pending block cleared | none |
+| `finalizing(k)` | `recordingFinished` | blocked if a block is pending, else evaluates the last-held set | as evaluated |
 | idle, armed, blocked | `inputLost` / `resync(h)` | idle / idle if `h` is empty, else blocked | `cancelPrewarm` if coming from armed |
 
 An input with no row leaves the state unchanged. A release is checked before
@@ -132,9 +135,11 @@ chord. The monitor runs `beginPrewarm` 150 ms late and drops it if
   else is read from it. The tap stays listen-only on the main run loop, so it
   stays ordered with `flagsChanged` and can never delay typing.
 - **Modifiers and callbacks.** `flagsChanged` goes through `ModifierTracker`.
-  `chords: ChordSet` replaces `chord` and `commandModifier`, and setting it
-  feeds `.resync`. The start, finalize, and discard callbacks take a
-  `CaptureKind`. `commandIsHeld` and `lastCommandFlag` go.
+  `chords: ChordSet` replaces `chord` and `commandModifier`. Setting a
+  different value feeds `.inputLost` first when the recording's own chord
+  changed or was removed, so that recording finalizes, then `.resync`;
+  setting the same value does nothing. The start, finalize, and discard
+  callbacks take a `CaptureKind`. `commandIsHeld` and `lastCommandFlag` go.
 - **Timers (issue 20).** The 300 s fail-safe, the 1 s shortcut window, the
   150 ms prewarm delay, and the coordinator's reconcile timer all run on
   `RunLoop.main` in `.common` mode.
