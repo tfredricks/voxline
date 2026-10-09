@@ -47,6 +47,7 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 - **Dictation history** — the last 25 dictations, cleaned text and raw transcript side by side, in a History window; click any row to copy it back to the clipboard.
 - **Bring your own LLM key** — Anthropic or OpenAI, your account, your model, your costs. Keys live in macOS Keychain.
 - **Menu-bar native** — no Dock icon, no clutter. Configurable hotkey, mic, speech engine, and provider.
+- **Meeting notes** — record a meeting of up to an hour (your mic plus your Mac's sound output), and get a Markdown file with a summary, decisions, action items, and a speaker-labeled transcript. Transcription and speaker separation run on your Mac; meetings use the Whisper small.en model (English) for speed.
 - **Privacy-aware feedback** — clipboard is restored after paste; the system mic indicator turns off the moment you let go.
 
 ## How it works
@@ -182,11 +183,13 @@ Input Monitoring is **not** required — Accessibility alone is enough for the g
 
 What stays local:
 
-- 🎙 **Audio capture** — held in memory only and dropped as soon as the transcript exists. It is not written to disk (the one exception is a hidden developer flag, below).
+- 🎙 **Audio capture** — held in memory only and dropped as soon as the transcript exists. It is not written to disk (the exceptions are meeting recordings and a hidden developer flag, below).
 - 🧠 **Speech-to-text with Apple Speech or Whisper** — both run on your Mac (Whisper on the Apple Neural Engine via WhisperKit). With either engine, no audio is sent anywhere.
 - 🔑 **API keys** — stored in macOS Keychain. Not logged, not synced, not visible to other apps.
 - 📜 **History** — the last 25 dictations, including raw transcripts, are stored in the app's preferences on your Mac. Clear them any time from the History window. For a command or preset, History keeps the instruction (or preset name) and the text that was inserted, never the field's contents; a rewrite keeps only the changed part.
 - ⌨️ **Key presses** — to tell your hotkey from OS shortcuts such as ⌘⇧4, the hotkey listener also notices that a non-modifier key went down, never which character. The listener for Esc and your preset shortcuts compares each key press only against those shortcuts and passes every other key through untouched.
+
+- 🗓 **Meetings** — audio is recorded only after you choose Start Meeting Recording (or press your meeting shortcut), stays on this Mac, and is deleted after the retention period you pick (14 days by default). Transcription and speaker separation run on-device. The transcript and your custom vocabulary are sent to your LLM provider to write the notes, as dictation transcripts are. Many places require telling participants they're being recorded; Voxline doesn't announce anything into the call. Headphones give the cleanest call transcripts.
 
 What goes to OpenAI, only if you select the OpenAI speech engine:
 

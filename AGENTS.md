@@ -18,7 +18,8 @@ The second (command) chord runs the same capture, but the transcript is an instr
 
 ## Directory map
 
-- `voxline/Audio`, `Context`, `Diagnostics`, `Hotkey`, `LLM`, `MenuBar`, `Modes`, `Output`, `Permissions`, `Pipeline`, `Settings`, `Storage`, `Transcription`, `UI`, `Updates`, `Util`, `Wizard` — app source, one folder per concern.
+- `voxline/Audio`, `Context`, `Diagnostics`, `Hotkey`, `LLM`, `Meetings`, `MenuBar`, `Modes`, `Output`, `Permissions`, `Pipeline`, `Settings`, `Storage`, `Transcription`, `UI`, `Updates`, `Util`, `Wizard` — app source, one folder per concern.
+- `voxline/Meetings/` — meeting recording (mic + Core Audio process tap) and post-stop processing (`MeetingPipeline`: WhisperKit, SpeakerKit, LLM notes, Markdown). Separate from the dictation pipeline.
 - `voxline/Modes/ModeStore.swift` — the per-app prompt table (28 bundle IDs currently: Slack, Zoom, Teams, Messages, Discord, Mail, Outlook, Spark, Word, Pages, Notes, Excel, PowerPoint, Keynote, Numbers, Terminal, iTerm, VS Code, Cursor, Xcode, and others). Add new apps here.
 - `voxline/Transcription/Engines/` — one adapter per speech engine, each behind the `TranscriptionEngine` / `TranscriptionSession` protocols in `Transcription/TranscriptionEngine.swift`. `Transcription/TranscriptionEngines.swift` owns the instances and the selection; `TranscriptionService.swift` is WhisperKit's model manager.
 - `voxline/Hotkey/` — two chords share one machine (`ChordSet`, `HotkeyStateMachine`, `ModifierTracker`); `CommandChordMigration` turns the removed `commandModifier` setting into the command chord on upgrade. `KeyInterceptor.swift` is the active tap that swallows Esc while voxline is busy and fires the preset shortcuts (`KeyCombo`, `KeyComboValidator`; the presets themselves live in `Storage/PresetStore.swift`). Every `CGEvent` voxline posts goes through `Output/SyntheticKeys` and carries a tag that both taps ignore — never call `CGEvent.post` anywhere else.

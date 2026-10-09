@@ -8,6 +8,9 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
+### Added
+- Meeting recording and notes: up to 60 minutes of mic + system audio, on-device transcription (WhisperKit) and speaker separation (SpeakerKit), LLM notes written as Markdown to a folder you choose. Start/stop from the menu or a shortcut; recovery after a quit or crash; Regenerate Notes; audio retention setting.
+
 ## [0.6.0] - 2026-10-09
 
 0.4.0 and 0.5.0 were never released on their own; this release includes

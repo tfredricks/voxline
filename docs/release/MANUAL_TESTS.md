@@ -617,3 +617,27 @@ joins the paste-first list before release.
       `replace_selection` on under 1,000 characters (≤ 2,500 ms); preset
       `totalMs` on the same selection size (≤ 1,800 ms). Record the numbers
       even where a target is missed.
+
+## Meetings (0.7.0)
+
+Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meetingCapSeconds -int 120` shortens the cap to 2 minutes (warning at 1:00). Delete it afterwards.
+
+- [ ] Run `TEST_RUNNER_VOXLINE_SYSTEM_TAP_SMOKE=1 xcodebuild test … -only-testing:voxlineTests/SystemAudioTapSmokeTests` once (first run shows the System Audio Recording prompt; allow, rerun).
+- [ ] First Start Meeting Recording shows the consent alert once; Cancel records nothing.
+- [ ] First recording shows macOS's System Audio Recording prompt. **Allow** → a Zoom/Meet/Teams call with 2+ remote speakers produces Me + Speaker 1…N, and action items name the right labels.
+- [ ] **Deny** (or revoke in System Settings → Privacy & Security → Screen & System Audio Recording) → notes are processed as in-person and carry the "System audio was silent" warning.
+- [ ] In-person meeting (no call) produces Speaker 1…N from the mic.
+- [ ] Call on speakers vs. headphones: on speakers, remote speech does not also appear as "Me" (echo suppression); note any leaks.
+- [ ] Headset with a mic (AirPods or USB) as the default output: system track contains the call audio, not your mic; note whether AirPods switch to the low-quality call profile when recording starts.
+- [ ] Tap with no sound playing for 10 s, then play audio: recording continues, transcript timestamps line up between Me and call speakers.
+- [ ] Warning notification at the cap minus the lead; automatic stop at the cap; notes still written.
+- [ ] Unplug headphones / switch input device mid-meeting: recording continues; transcript has a gap at most.
+- [ ] Quit during recording → confirmation; relaunch → "Process unfinished meeting…?" → Process writes notes for the recorded part.
+- [ ] `kill -9` voxline mid-recording → relaunch → recovery works the same.
+- [ ] Hold the dictation hotkey during a meeting: dictation works as in 0.6.0.
+- [ ] No API key: file has the transcript and "Notes not generated…"; add a key; Regenerate Notes writes a "(regenerated)" file.
+- [ ] Offline first run with no SpeakerKit model: notes say speakers couldn't be separated; call audio labeled "Them".
+- [ ] Settings → Meetings: folder picker, shortcut (rejects a preset's combo and the dictation chord), notes model placeholder, retention, timer toggle.
+- [ ] Meeting shortcut starts and stops a recording from any app.
+- [ ] Retention "Don't keep": no `.pcm`/`.m4a` remain in `~/Library/Application Support/voxline/meetings/<id>/` after notes are written.
+- [ ] One-hour real meeting: note the time from Stop to "Meeting notes ready" (spike target ≤ 4 min on synthetic audio with small.en; record the real number).

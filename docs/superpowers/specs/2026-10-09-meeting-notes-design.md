@@ -1,7 +1,7 @@
 # Phase 4 — Meetings (0.7.0)
 
 **Date:** 2026-10-09
-**Status:** Approved in brainstorming with Todd, section by section.
+**Status:** Approved; implemented in 0.7.0 (see plan 2026-10-09-meetings.md).
 **Roadmap:** Phase 4 of `2026-10-08-voxline-roadmap-design.md`, scheduled ahead
 of Learning (now phase 5, 0.8.0).
 
