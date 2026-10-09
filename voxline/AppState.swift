@@ -120,4 +120,22 @@ final class AppState {
     func endShortcutCapture() {
         shortcutCaptureDepth = max(0, shortcutCaptureDepth - 1)
     }
+
+    /// The recorder whose capture is open, or nil. A recorder that starts
+    /// takes the capture over from any other, so recorders together hold at
+    /// most one level of `shortcutCaptureDepth`, and a recorder that is no
+    /// longer active must ignore key events.
+    private(set) var activeShortcutRecorder: UUID?
+
+    func beginShortcutCapture(recorder: UUID) {
+        if activeShortcutRecorder == nil { beginShortcutCapture() }
+        activeShortcutRecorder = recorder
+    }
+
+    /// Does nothing unless `recorder` holds the capture.
+    func endShortcutCapture(recorder: UUID) {
+        guard activeShortcutRecorder == recorder else { return }
+        activeShortcutRecorder = nil
+        endShortcutCapture()
+    }
 }

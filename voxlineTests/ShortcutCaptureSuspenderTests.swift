@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import voxline
 
@@ -90,5 +91,24 @@ import Testing
         await settle { !monitor.isSuspended }
         #expect(!monitor.isSuspended)
         withExtendedLifetime(suspender) {}
+    }
+
+    @Test func handing_the_capture_between_recorders_never_resumes() {
+        let state = AppState()
+        let calls = Calls()
+        let suspender = make(state, calls)
+        let a = UUID(), b = UUID()
+
+        state.beginShortcutCapture(recorder: a)
+        suspender.sync()
+        state.beginShortcutCapture(recorder: b)
+        suspender.sync()
+        state.endShortcutCapture(recorder: a)
+        suspender.sync()
+        #expect(calls.log == ["suspend"])
+
+        state.endShortcutCapture(recorder: b)
+        suspender.sync()
+        #expect(calls.log == ["suspend", "resume"])
     }
 }

@@ -83,4 +83,43 @@ import Foundation
         state.endShortcutCapture()
         #expect(state.shortcutCaptureDepth == 0)
     }
+
+    @Test func a_recorder_holds_one_level_of_capture() {
+        let state = AppState()
+        let a = UUID()
+        state.beginShortcutCapture(recorder: a)
+        state.beginShortcutCapture(recorder: a)
+        #expect(state.shortcutCaptureDepth == 1)
+        #expect(state.activeShortcutRecorder == a)
+        state.endShortcutCapture(recorder: a)
+        #expect(state.shortcutCaptureDepth == 0)
+        #expect(state.activeShortcutRecorder == nil)
+    }
+
+    @Test func starting_another_recorder_takes_the_capture_over() {
+        let state = AppState()
+        let a = UUID(), b = UUID()
+        state.beginShortcutCapture(recorder: a)
+        state.beginShortcutCapture(recorder: b)
+        #expect(state.shortcutCaptureDepth == 1)
+        #expect(state.activeShortcutRecorder == b)
+
+        state.endShortcutCapture(recorder: a)
+        #expect(state.shortcutCaptureDepth == 1)
+        #expect(state.activeShortcutRecorder == b)
+
+        state.endShortcutCapture(recorder: b)
+        #expect(state.shortcutCaptureDepth == 0)
+    }
+
+    @Test func stopping_a_recorder_twice_lowers_the_depth_once() {
+        let state = AppState()
+        let a = UUID()
+        state.beginShortcutCapture()
+        state.beginShortcutCapture(recorder: a)
+        #expect(state.shortcutCaptureDepth == 2)
+        state.endShortcutCapture(recorder: a)
+        state.endShortcutCapture(recorder: a)
+        #expect(state.shortcutCaptureDepth == 1)
+    }
 }

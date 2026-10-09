@@ -5,9 +5,11 @@ import IOKit.hidsystem
 import SwiftUI
 
 /// Records a two-modifier chord. While recording, hotkey input is suspended
-/// through `AppState.beginShortcutCapture()`, ended exactly once by `stop()`
-/// or disappearing. A chord `validate` rejects shows its message and keeps
-/// waiting for a different second modifier.
+/// through `AppState.beginShortcutCapture(recorder:)`. Recording stops on
+/// Cancel, Esc, a completed chord, disappearing, the window resigning key,
+/// the app deactivating, or another recorder starting. A chord `validate`
+/// rejects shows its message and keeps waiting for a different second
+/// modifier.
 struct ChordRecorderView: View {
 
     @Environment(AppState.self) private var appState
@@ -16,6 +18,7 @@ struct ChordRecorderView: View {
     let title: String
     let validate: @MainActor (HotkeyChord) -> String?
 
+    @State private var recorderID = UUID()
     @State private var isRecording = false
     @State private var flagsMonitor: Any?
     @State private var keyMonitor: Any?
@@ -59,7 +62,14 @@ struct ChordRecorderView: View {
             }
         }
         .onDisappear { stop() }
+        .onChange(of: appState.activeShortcutRecorder) { _, active in
+            if active != recorderID { stop() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in stop() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in stop() }
     }
+
+    private var ownsCapture: Bool { appState.activeShortcutRecorder == recorderID }
 
     private func start() {
         guard !isRecording else { return }
@@ -67,12 +77,13 @@ struct ChordRecorderView: View {
         unsupportedHint = nil
         rejection = nil
         isRecording = true
-        appState.beginShortcutCapture()
+        appState.beginShortcutCapture(recorder: recorderID)
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             handle(event)
             return event
         }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard ownsCapture else { return event }
             // Esc cancels recording; consume the event so it doesn't propagate.
             if event.keyCode == UInt16(kVK_Escape) {
                 stop()
@@ -92,11 +103,11 @@ struct ChordRecorderView: View {
         rejection = nil
         guard isRecording else { return }
         isRecording = false
-        appState.endShortcutCapture()
+        appState.endShortcutCapture(recorder: recorderID)
     }
 
     private func handle(_ event: NSEvent) {
-        guard event.type == .flagsChanged else { return }
+        guard event.type == .flagsChanged, ownsCapture else { return }
 
         if let pressed = modifier(from: event) {
             let bit = pressed.deviceMaskBit

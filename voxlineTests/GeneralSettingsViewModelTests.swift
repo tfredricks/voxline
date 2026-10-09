@@ -366,16 +366,19 @@ import Foundation
         #expect(vm.launchAtLogin == true)
     }
 
-    private func resettableVM(
-        _ d: UserDefaults,
-        settings: AppSettings,
-        recorder: ApplyRecorder
+    /// Never reads the keychain, the real audio devices, or the standard
+    /// defaults' vocabulary.
+    private func hermeticVM(
+        _ settings: AppSettings,
+        onApply: @escaping (GeneralSettingsSnapshot) -> Void = noopApply
     ) -> GeneralSettingsViewModel {
         GeneralSettingsViewModel(
             settings: settings,
-            onApply: { recorder.record($0) },
+            onApply: onApply,
+            deviceEnumerator: { [] },
             loginItemService: LoginItemService(),
-            vocabulary: CustomVocabularyStore(defaults: d)
+            vocabulary: CustomVocabularyStore(defaults: settings.defaults),
+            hasOpenAIKey: { false }
         )
     }
 
@@ -384,21 +387,21 @@ import Foundation
         let command = HotkeyChord(modifierA: .rightCommand, modifierB: .rightOption)
         settings.commandChord = command
         settings.commandModel = "claude-opus-5-5"
-        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
+        let vm = hermeticVM(settings)
         #expect(vm.commandChord == command)
         #expect(vm.commandModel == "claude-opus-5-5")
         #expect(vm.commandModeEnabled)
     }
 
     @Test func absent_command_model_loads_as_empty_text() {
-        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: defaults()), onApply: noopApply)
+        let vm = hermeticVM(AppSettings(defaults: defaults()))
         #expect(vm.commandModel == "")
     }
 
     @Test func snapshot_carries_the_command_chord_and_model() {
         let d = defaults()
         let recorder = ApplyRecorder()
-        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: d), onApply: { recorder.record($0) })
+        let vm = hermeticVM(AppSettings(defaults: d), onApply: { recorder.record($0) })
 
         let command = HotkeyChord(modifierA: .rightCommand, modifierB: .rightOption)
         vm.commandChord = command
@@ -416,7 +419,7 @@ import Foundation
 
     @Test func command_chord_refreshes_from_writes_made_elsewhere() {
         let d = defaults()
-        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: d), onApply: noopApply)
+        let vm = hermeticVM(AppSettings(defaults: d))
         var elsewhere = AppSettings(defaults: d)
         elsewhere.commandChord = nil
         elsewhere.commandModel = "gpt-5"
@@ -426,27 +429,27 @@ import Foundation
     }
 
     @Test func command_recorder_rejects_the_dictation_chord() {
-        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: defaults()), onApply: noopApply)
+        let vm = hermeticVM(AppSettings(defaults: defaults()))
         #expect(vm.validateCommandChord(vm.chord) == "That's your dictation hotkey")
         let reversed = HotkeyChord(modifierA: vm.chord.modifierB, modifierB: vm.chord.modifierA)
         #expect(vm.validateCommandChord(reversed) == "That's your dictation hotkey")
     }
 
     @Test func dictation_recorder_rejects_the_command_chord() throws {
-        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: defaults()), onApply: noopApply)
+        let vm = hermeticVM(AppSettings(defaults: defaults()))
         let command = try #require(vm.commandChord)
         #expect(vm.validateDictationChord(command) == "That's your command hotkey")
     }
 
     @Test func recorders_accept_chords_that_share_only_one_key() {
-        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: defaults()), onApply: noopApply)
+        let vm = hermeticVM(AppSettings(defaults: defaults()))
         let distinct = HotkeyChord(modifierA: .leftShift, modifierB: .rightCommand)
         #expect(vm.validateCommandChord(distinct) == nil)
         #expect(vm.validateDictationChord(distinct) == nil)
     }
 
     @Test func dictation_recorder_accepts_anything_while_command_mode_is_off() {
-        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: defaults()), onApply: noopApply)
+        let vm = hermeticVM(AppSettings(defaults: defaults()))
         vm.commandModeEnabled = false
         #expect(vm.validateDictationChord(.defaultCommand) == nil)
         #expect(vm.validateDictationChord(.default) == nil)
@@ -455,7 +458,7 @@ import Foundation
     @Test func turning_command_mode_off_applies_a_nil_command_chord() {
         let d = defaults()
         let recorder = ApplyRecorder()
-        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: d), onApply: { recorder.record($0) })
+        let vm = hermeticVM(AppSettings(defaults: d), onApply: { recorder.record($0) })
         vm.commandModeEnabled = false
         #expect(vm.commandChord == nil)
         #expect(recorder.applied?.commandChord == nil)
@@ -469,7 +472,7 @@ import Foundation
         var settings = AppSettings(defaults: d)
         settings.commandChord = nil
         let recorder = ApplyRecorder()
-        let vm = GeneralSettingsViewModel(settings: settings, onApply: { recorder.record($0) })
+        let vm = hermeticVM(settings, onApply: { recorder.record($0) })
         vm.commandModeEnabled = true
         #expect(vm.commandChord == .defaultCommand)
         #expect(recorder.applied?.commandChord == .defaultCommand)
@@ -480,7 +483,7 @@ import Foundation
         var settings = AppSettings(defaults: d)
         settings.hotkeyChord = HotkeyChord(modifierA: .leftShift, modifierB: .leftOption)
         settings.commandChord = nil
-        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
+        let vm = hermeticVM(settings)
         vm.commandModeEnabled = true
         let command = try #require(vm.commandChord)
         #expect(command.keys != vm.chord.keys)
@@ -494,7 +497,7 @@ import Foundation
         settings.llmProvider = .anthropic
         settings.commandModel = "claude-opus-5-5"
         let recorder = ApplyRecorder()
-        let vm = GeneralSettingsViewModel(settings: settings, onApply: { recorder.record($0) })
+        let vm = hermeticVM(settings, onApply: { recorder.record($0) })
         vm.provider = .openai
         #expect(vm.commandModel == "")
         #expect(recorder.applied?.commandModel == nil)
@@ -505,7 +508,7 @@ import Foundation
         let d = defaults()
         var settings = AppSettings(defaults: d)
         settings.commandModel = "claude-opus-5-5"
-        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
+        let vm = hermeticVM(settings)
         vm.playHotkeySounds = false
         #expect(AppSettings(defaults: d).commandModel == "claude-opus-5-5")
     }
@@ -517,7 +520,7 @@ import Foundation
         settings.commandChord = nil
         settings.commandModel = "claude-opus-5-5"
         let recorder = ApplyRecorder()
-        let vm = resettableVM(d, settings: settings, recorder: recorder)
+        let vm = hermeticVM(settings, onApply: { recorder.record($0) })
 
         vm.resetToDefaults()
 
@@ -540,7 +543,7 @@ import Foundation
             instruction: "Make it louder."
         )]
         PresetStore(defaults: d).save(custom)
-        let vm = resettableVM(d, settings: AppSettings(defaults: d), recorder: ApplyRecorder())
+        let vm = hermeticVM(AppSettings(defaults: d))
 
         vm.resetToDefaults()
 

@@ -177,9 +177,7 @@ final class AppCoordinator {
         let focusedTextSystem = AXFocusedTextSystem()
         let injector = ClipboardInjector(
             focusedTextSystem: focusedTextSystem,
-            chordIsHeld: {
-                ModifierReleaseGate.isHeld(AppSettings().chords.families, in: CGEventSource.flagsState(.combinedSessionState))
-            }
+            chordIsHeld: ModifierReleaseGate.chordsHeld { AppSettings().chords }
         )
         let frontmost = FrontmostApp()
         let fieldInspector = AXFocusedFieldInspector()
