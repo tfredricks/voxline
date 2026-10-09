@@ -56,8 +56,9 @@ once it reaches its first tagged release.
   cursor, so replies and continuations follow what is already there. Selections
   over 8,000 characters are refused, and password fields are never read.
   In a terminal, selected output is never edited in place: the result is
-  copied for you to paste with ⌘V, and only a draft with nothing selected
-  goes straight to the prompt.
+  copied for you to paste with ⌘V, and only a one-line draft with nothing
+  selected goes straight to the prompt; a draft of several lines is copied,
+  so a shell can't run it line by line.
   With ⇧⌥ as the command chord, typing a ⇧⌥ character such as an em dash
   briefly starts and discards a recording (you hear the start sound and see
   the microphone indicator), and a slowly pressed ⌥-digit preset can light the

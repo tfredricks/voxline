@@ -376,7 +376,10 @@ Left Control.
       (the characters you typed are all that is there), and ⌘V pastes the
       result. Repeat in iTerm2. Then clear the prompt, select nothing, and
       say "write a command that lists the files here": it is pasted at the
-      prompt, as a dictation would be.
+      prompt, as a dictation would be. Then say "write a short script that
+      makes a folder and lists it, one command per line": nothing runs, the
+      toast reads "Several lines — copied, ⌘V to paste", and ⌘V pastes the
+      lines.
 - [ ] VS Code, nothing selected, cursor on a non-empty line: run a command that
       inserts text ("add a TODO comment"). The cursor's line is not replaced
       or deleted. The built-in untrusted-field list for VS Code and Cursor is

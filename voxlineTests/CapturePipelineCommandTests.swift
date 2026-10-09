@@ -833,6 +833,23 @@ import Testing
         #expect(try #require(h.pipe.metrics.items.first).insertStrategy == .paste)
     }
 
+    @Test(arguments: [
+        CapturePipelineCommandTests.terminalContext(),
+        CapturePipelineCommandTests.terminalLiveContext(selection: nil),
+    ])
+    func a_multiline_insert_in_a_terminal_is_copied_never_run_line_by_line(context: EditContext) async throws {
+        let h = makeHarness(reader: reader(context))
+        answer(h, .insert, "git add .\ngit commit")
+        await runCommand(h)
+
+        #expect(h.inserter.calls.isEmpty)
+        #expect(h.copied.read() == ["git add .\ngit commit"])
+        #expect(h.state.toastMessage == "Several lines — copied, ⌘V to paste")
+        #expect(h.state.status == .idle)
+        #expect(h.history.items.first?.cleanedText == "git add .\ngit commit")
+        #expect(try #require(h.pipe.metrics.items.first).insertStrategy == .copy)
+    }
+
     // MARK: - Cancel
 
     @Test func esc_while_editing_drops_the_result() async {

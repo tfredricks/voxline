@@ -58,6 +58,8 @@ extension CapturePipeline {
     /// land once the app recovers.
     static let unconfirmedDeletionToast = "Couldn't confirm the deletion — check the field"
 
+    static let severalLinesToast = "Several lines — copied, ⌘V to paste"
+
     // MARK: - Presets
 
     /// Runs `preset` against the selection, with no recording and no sounds.
@@ -250,12 +252,22 @@ extension CapturePipeline {
         var editsTerminalOutput: Bool {
             InsertionPlan.isTerminal(context.bundleID) && (context.selection != nil || fullRewrite != nil)
         }
+
+        /// A shell without bracketed paste runs each pasted line as a command,
+        /// so several lines are never pasted at a terminal prompt.
+        func pastesLinesAtPrompt(_ text: String) -> Bool {
+            InsertionPlan.isTerminal(context.bundleID) && text.contains(where: \.isNewline)
+        }
     }
 
     private func act(_ plan: PlannedEdit, _ edit: PerformedEdit, generation: UInt64) async {
         if let text = plan.insertedText, edit.editsTerminalOutput {
             AppLog.pipeline.info("command: terminal output isn't editable; copying instead")
             return copyInstead(text, edit, toast: Self.toast(for: .cannotTarget))
+        }
+        if let text = plan.insertedText, edit.pastesLinesAtPrompt(text) {
+            AppLog.pipeline.info("command: several lines for a terminal prompt; copying instead")
+            return copyInstead(text, edit, toast: Self.severalLinesToast)
         }
         switch plan {
         case .nothing(let message):
