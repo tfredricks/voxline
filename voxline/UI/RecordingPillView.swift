@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Floating pill showing the recording state with the live transcript, the
-/// post-recording phase, or a transient toast.
+/// post-recording phase, a transient toast, or an error with Retry.
 struct RecordingPillView: View {
     @Bindable var state: AppState
     /// Invoked by the pill's Retry button; nil while nothing can be retried.
@@ -10,13 +10,14 @@ struct RecordingPillView: View {
     var retryVisible: Bool = false
 
     var body: some View {
-        let content = PillLayout.content(status: state.status, hasToast: state.toastMessage != nil)
+        let content = PillLayout.content(status: state.status, hasToast: state.toastMessage != nil, retryOffered: retryVisible)
         let showsText = PillLayout.showsText(content: content, hasText: transcript != nil)
         Group {
             switch content {
             case .recording: recordingView
             case .thinking:  thinkingView
             case .toast:     toastView
+            case .retry:     retryView
             case .hidden:    EmptyView()
             }
         }
@@ -75,6 +76,27 @@ struct RecordingPillView: View {
             Text(toast)
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .lineLimit(1)
+        }
+    }
+
+    private var retryView: some View {
+        HStack(spacing: PillLayout.retrySpacing) {
+            Text(PillLayout.firstSentence(state.status.errorMessage ?? ""))
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Button {
+                onRetry?()
+            } label: {
+                Text("Retry")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(width: PillLayout.retryButtonWidth, height: 20)
+                    .background(Capsule().fill(Color.accentColor))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .layoutPriority(1)
         }
     }
 

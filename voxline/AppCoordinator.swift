@@ -16,6 +16,7 @@ final class AppCoordinator {
     var soundPlayer: HotkeySoundPlayer?
 
     private var pillWindow: RecordingPillWindow?
+    private var escapeInterceptor: EscapeKeyInterceptor?
     private var downloadWindow: ModelDownloadWindow?
     private var modelPrepTask: Task<Void, Never>?
     /// Monotonic identity for the current modelPrepTask. The inner Task
@@ -56,6 +57,12 @@ final class AppCoordinator {
     /// "Fix permissions…" item and from the startup / revocation guards.
     func showPermissionsWindow() {
         permissionsWindow.show()
+    }
+
+    /// Called from the menu-bar item and the pill's Retry button.
+    func retryLastDictation() {
+        guard let pipeline else { return }
+        Task { await pipeline.retryLastDictation() }
     }
 
     func startIfNeeded(state: AppState, historyStore: DictationHistoryStore, migration: ContainerMigration.Report? = nil) {
@@ -212,7 +219,9 @@ final class AppCoordinator {
             if let state { self?.pillWindow?.updateVisibility(state: state) }
         }
         monitor.onFinalizeRecording = { [weak self, weak state] in
-            self?.soundPlayer?.playStop()
+            if self?.pipeline?.wasCancelled != true {
+                self?.soundPlayer?.playStop()
+            }
             Task { @MainActor in
                 await self?.pipeline?.finalizeRecording()
                 self?.hotkeyMonitor?.recordingFinished()
@@ -225,6 +234,15 @@ final class AppCoordinator {
         monitor.onCancelPrewarm = { [weak self] in
             self?.pipeline?.cancelCapturePrewarm()
         }
+        monitor.onMaxDurationReached = { [weak self, weak state] in
+            guard state?.status == .recording else { return }
+            self?.pipeline?.capHit = true
+        }
+        escapeInterceptor = EscapeKeyInterceptor(onEscape: { [weak self, weak state] in
+            self?.pipeline?.cancel()
+            if let state { self?.pillWindow?.updateVisibility(state: state) }
+        })
+        pillWindow?.onRetry = { [weak self] in self?.retryLastDictation() }
         // Accessibility is the hard requirement for our session-level
         // CGEventTap with .listenOnly on .flagsChanged. Input Monitoring is
         // best-effort: some macOS configurations make the tap more reliable
@@ -258,6 +276,8 @@ final class AppCoordinator {
             // restart the app.
             state.status = .permissionsError("Hotkey monitoring requires Accessibility permission. Grant it in System Settings → Privacy & Security — Voxline will pick it up automatically.")
         }
+        reconcileEscapeInterceptor(state: state)
+        observeCancellableChanges(state: state)
 
         startPermissionAndStateLoop(state: state)
 
@@ -330,6 +350,32 @@ final class AppCoordinator {
                 state.status = .permissionsError("Accessibility permission was revoked. Re-grant it in System Settings → Privacy & Security; Voxline will recover automatically.")
             }
         }
+        reconcileEscapeInterceptor(state: state)
+    }
+
+    /// Keeps the Esc tap installed exactly while the hotkey tap is. A tap
+    /// that can't be created leaves Esc cancel unavailable and is retried on
+    /// the next tick.
+    private func reconcileEscapeInterceptor(state: AppState) {
+        guard let interceptor = escapeInterceptor, let monitor = hotkeyMonitor else { return }
+        if monitor.isTapInstalled && !interceptor.isInstalled {
+            if interceptor.install() {
+                syncEscapeInterceptor(state: state)
+            }
+        } else if !monitor.isTapInstalled && interceptor.isInstalled {
+            interceptor.uninstall()
+        }
+    }
+
+    /// Arms Esc while the pipeline can cancel, letting it through with the
+    /// hotkey's own modifiers held, since the chord is down while recording.
+    private func syncEscapeInterceptor(state: AppState) {
+        guard let interceptor = escapeInterceptor else { return }
+        if let monitor = hotkeyMonitor {
+            let held = [monitor.chord.modifierA, monitor.chord.modifierB] + [monitor.commandModifier].compactMap { $0 }
+            interceptor.hotkeyModifiers = EscapeKeyInterceptor.modifierFlags(of: held)
+        }
+        interceptor.isArmed = state.isCancellable
     }
 
     /// Re-arms `withObservationTracking` after each change so we keep getting
@@ -359,6 +405,18 @@ final class AppCoordinator {
                 guard let self, let state else { return }
                 self.pillWindow?.updateVisibility(state: state)
                 self.observeToastChanges(state: state)
+            }
+        }
+    }
+
+    private func observeCancellableChanges(state: AppState) {
+        withObservationTracking {
+            _ = state.isCancellable
+        } onChange: { [weak self, weak state] in
+            Task { @MainActor in
+                guard let self, let state else { return }
+                self.syncEscapeInterceptor(state: state)
+                self.observeCancellableChanges(state: state)
             }
         }
     }

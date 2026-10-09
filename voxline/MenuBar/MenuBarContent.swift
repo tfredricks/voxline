@@ -9,6 +9,7 @@ struct MenuBarContent: View {
     var openAboutWindow: () -> Void = {}
     var openHistoryWindow: () -> Void = {}
     var openPermissionsWindow: () -> Void = {}
+    var retryLastDictation: () -> Void = {}
 
     var body: some View {
         if let message = state.status.errorMessage {
@@ -38,6 +39,9 @@ struct MenuBarContent: View {
         }
 
         Divider()
+
+        Button("Retry last dictation") { retryLastDictation() }
+            .disabled(state.retryTranscript == nil || state.status == .recording || state.status == .thinking)
 
         Button("Show history…") { openHistoryWindow() }
 

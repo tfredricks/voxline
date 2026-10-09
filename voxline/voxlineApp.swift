@@ -40,6 +40,9 @@ struct voxlineApp: App {
                 openPermissionsWindow: {
                     NSApp.activate(ignoringOtherApps: true)
                     delegate.coordinator.showPermissionsWindow()
+                },
+                retryLastDictation: {
+                    delegate.coordinator.retryLastDictation()
                 }
             )
         } label: {

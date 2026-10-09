@@ -7,6 +7,10 @@ import CoreGraphics
 
     private let chord = HotkeyChord(modifierA: .leftShift, modifierB: .leftControl)
 
+    @Test func recording_cap_defaults_to_five_minutes() {
+        #expect(HotkeyMonitor().maxRecordingDuration == 300)
+    }
+
     @Test func command_held_true_when_command_modifier_bit_set() {
         let flags = CGEventFlags(rawValue: HotkeyChord.Modifier.leftOption.deviceMaskBit)
         #expect(HotkeyMonitor.commandIsHeld(in: flags, chord: chord, commandModifier: .leftOption) == true)

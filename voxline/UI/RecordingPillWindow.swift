@@ -3,11 +3,21 @@ import SwiftUI
 
 /// Hosts RecordingPillView in a click-through, non-activating NSPanel anchored
 /// bottom-center on the screen that held the mouse when the pill appeared.
+/// The panel takes clicks only while it offers Retry after an error.
 @MainActor
 final class RecordingPillWindow {
     private var panel: NSPanel?
-    private var hostingView: NSHostingView<RecordingPillView>?
+    private var hostingView: PillHostingView?
     private var anchorScreen: NSScreen?
+    private var retryTimer: Timer?
+    private var observedStatus: AppStatus?
+
+    /// Invoked by the pill's Retry button.
+    var onRetry: (() -> Void)?
+
+    /// When the current error stops offering Retry; nil while none is offered.
+    /// Any status change withdraws the offer.
+    private(set) var retryUntil: Date?
 
     func show(state: AppState) {
         if panel != nil {
@@ -16,7 +26,7 @@ final class RecordingPillWindow {
         }
 
         let view = RecordingPillView(state: state)
-        let host = NSHostingView(rootView: view)
+        let host = PillHostingView(rootView: view)
         host.sizingOptions = []
         hostingView = host
 
@@ -41,7 +51,10 @@ final class RecordingPillWindow {
 
     func updateVisibility(state: AppState) {
         guard let panel else { return }
-        let content = PillLayout.content(status: state.status, hasToast: state.toastMessage != nil)
+        updateRetryOffer(state: state)
+        let content = PillLayout.content(status: state.status, hasToast: state.toastMessage != nil, retryOffered: retryUntil != nil)
+        panel.ignoresMouseEvents = content != .retry
+        updateRootView(state: state, retryVisible: content == .retry)
         guard content != .hidden else {
             if panel.isVisible {
                 panel.orderOut(nil)
@@ -51,8 +64,17 @@ final class RecordingPillWindow {
         }
 
         let showsText = PillLayout.showsText(content: content, hasText: state.liveTranscript?.isEmpty == false)
-        let toastWidth = content == .toast ? state.toastMessage.map(Self.toastTextWidth) : nil
-        let size = PillLayout.size(showsText: showsText, toastWidth: toastWidth)
+        let compactWidth: CGFloat?
+        switch content {
+        case .toast:
+            compactWidth = state.toastMessage.map(Self.toastTextWidth)
+        case .retry:
+            let message = PillLayout.firstSentence(state.status.errorMessage ?? "")
+            compactWidth = Self.toastTextWidth(message) + PillLayout.retrySpacing + PillLayout.retryButtonWidth
+        case .recording, .thinking, .hidden:
+            compactWidth = nil
+        }
+        let size = PillLayout.size(showsText: showsText, toastWidth: compactWidth)
 
         if !panel.isVisible {
             anchorScreen = Self.screenUnderMouse()
@@ -64,10 +86,44 @@ final class RecordingPillWindow {
     }
 
     func close() {
+        retryTimer?.invalidate()
+        retryTimer = nil
+        retryUntil = nil
         panel?.orderOut(nil)
         panel = nil
         hostingView = nil
         anchorScreen = nil
+    }
+
+    /// Starts an offer when status becomes an error with a retryable
+    /// transcript; withdraws it on any other status change or when it expires.
+    private func updateRetryOffer(state: AppState) {
+        if let retryUntil, Date() >= retryUntil {
+            withdrawRetryOffer()
+        }
+        guard state.status != observedStatus else { return }
+        observedStatus = state.status
+        withdrawRetryOffer()
+        guard case .error = state.status, state.retryTranscript != nil else { return }
+        retryUntil = Date().addingTimeInterval(PillLayout.retryDuration)
+        retryTimer = Timer.scheduledTimer(withTimeInterval: PillLayout.retryDuration, repeats: false) { [weak self, weak state] _ in
+            MainActor.assumeIsolated {
+                guard let self, let state else { return }
+                self.withdrawRetryOffer()
+                self.updateVisibility(state: state)
+            }
+        }
+    }
+
+    private func withdrawRetryOffer() {
+        retryTimer?.invalidate()
+        retryTimer = nil
+        retryUntil = nil
+    }
+
+    private func updateRootView(state: AppState, retryVisible: Bool) {
+        guard let hostingView, hostingView.rootView.retryVisible != retryVisible else { return }
+        hostingView.rootView = RecordingPillView(state: state, onRetry: onRetry, retryVisible: retryVisible)
     }
 
     private func anchor(_ panel: NSPanel, size: CGSize) {
@@ -95,4 +151,10 @@ final class RecordingPillWindow {
         let width = NSAttributedString(string: toast, attributes: [.font: font]).size().width
         return ceil(width) + toastWidthSlack
     }
+}
+
+/// Delivers the first click to the Retry button even though the
+/// non-activating panel never becomes key.
+private final class PillHostingView: NSHostingView<RecordingPillView> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

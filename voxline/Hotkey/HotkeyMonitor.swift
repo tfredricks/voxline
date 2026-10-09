@@ -20,8 +20,10 @@ final class HotkeyMonitor {
 
     var isTapInstalled: Bool { eventTap != nil }
 
-    /// Maximum recording duration fail-safe. Configurable.
-    var maxRecordingDuration: TimeInterval = 60.0
+    /// Recording cap: a recording stops here even while the chord is held.
+    var maxRecordingDuration: TimeInterval = 300
+    /// Fires on the main actor just before the cap stops a recording.
+    var onMaxDurationReached: (() -> Void)?
 
     /// Active chord. Read by the tap callback to test the right device-mask bits.
     /// Defaults to .default; AppCoordinator overrides from AppSettings on launch.
@@ -170,6 +172,7 @@ final class HotkeyMonitor {
             // .maxDurationElapsed signal ordered with subsequent flagsChanged
             // events from the tap.
             MainActor.assumeIsolated {
+                self?.onMaxDurationReached?()
                 self?.feed(.maxDurationElapsed)
             }
         }

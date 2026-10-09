@@ -12,6 +12,7 @@ extension CapturePipeline {
         private var startedAt: ContinuousClock.Instant?
         private var firstPartialAt: ContinuousClock.Instant?
         private var sessionTask: Task<any TranscriptionSession, Error>?
+        private var openedSession: (any TranscriptionSession)?
         private var partialsTask: Task<Void, Never>?
         private var isClosed = false
 
@@ -37,7 +38,12 @@ extension CapturePipeline {
             let router = router
             sessionTask = Task { [weak self] in
                 let session = try await engine.openSession(SessionConfig(vocabularyHints: vocabulary()))
+                guard !Task.isCancelled else {
+                    session.cancel()
+                    throw CancellationError()
+                }
                 router.attach(session)
+                self?.openedSession = session
                 self?.observe(session, onPartial: onPartial)
                 return session
             }
@@ -51,6 +57,14 @@ extension CapturePipeline {
         /// Waits for the open to settle, then cancels the session if it opened.
         func cancel() async {
             (try? await session())?.cancel()
+        }
+
+        /// Cancels the session now, or as soon as it opens, without waiting,
+        /// then closes.
+        func discard() {
+            sessionTask?.cancel()
+            openedSession?.cancel()
+            close()
         }
 
         /// Stops feeding and observing the session. The session itself must

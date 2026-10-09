@@ -36,14 +36,20 @@ import Foundation
         /// before the result is returned — lets tests simulate MainActor
         /// reentrancy (e.g. the selection changing mid-flight).
         var onCleanup: (() -> Void)? = nil
+        /// When true, `cleanup` and `transform` suspend until `releaseCleanup()`.
+        var holdCleanup = false
+        let cleanupGate = TestGate()
+        func releaseCleanup() { cleanupGate.open() }
         func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String {
             calls.append((transcript, mode, context))
             onCleanup?()
+            if holdCleanup { await cleanupGate.wait() }
             return try nextResult.get()
         }
         func transform(instruction: String, selection: String, mode: Mode) async throws -> String {
             transformCalls.append((instruction, selection, mode))
             onCleanup?()
+            if holdCleanup { await cleanupGate.wait() }
             return try transformResult.get()
         }
     }
@@ -61,7 +67,12 @@ import Foundation
     final class FakeInjector: ClipboardInjecting {
         var injected: [String] = []
         var nextError: Error?
+        /// When true, `inject` suspends until `releaseInject()`.
+        var holdInject = false
+        let injectGate = TestGate()
+        func releaseInject() { injectGate.open() }
         func inject(_ text: String) async throws -> TextInsertionOutcome {
+            if holdInject { await injectGate.wait() }
             if let nextError { throw nextError }
             injected.append(text)
             return TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
@@ -773,5 +784,35 @@ final class FakeContextCapture: ContextCapturing, @unchecked Sendable {
     func capture() async -> CapturedContext {
         captureCallCount += 1
         return nextContext
+    }
+}
+
+/// Holds callers in `wait()` until `open()`; stays open afterwards.
+/// `waiting` counts callers currently held.
+final class TestGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    var waiting: Int { lock.withLock { waiters.count } }
+
+    func wait() async {
+        await withCheckedContinuation { (k: CheckedContinuation<Void, Never>) in
+            let resumeNow = lock.withLock { () -> Bool in
+                if isOpen { return true }
+                waiters.append(k)
+                return false
+            }
+            if resumeNow { k.resume() }
+        }
+    }
+
+    func open() {
+        let held = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            isOpen = true
+            defer { waiters.removeAll() }
+            return waiters
+        }
+        held.forEach { $0.resume() }
     }
 }

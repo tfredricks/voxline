@@ -98,6 +98,41 @@ import CoreGraphics
         #expect(PillLayout.content(status: status, hasToast: false) == .hidden)
     }
 
+    @Test func retry_shows_for_an_error_while_offered() {
+        #expect(PillLayout.content(status: .error("boom"), hasToast: false, retryOffered: true) == .retry)
+        #expect(PillLayout.content(status: .error("boom"), hasToast: false, retryOffered: false) == .hidden)
+    }
+
+    @Test func toast_wins_over_retry() {
+        #expect(PillLayout.content(status: .error("boom"), hasToast: true, retryOffered: true) == .toast)
+    }
+
+    @Test(arguments: [
+        (AppStatus.idle, PillContent.hidden),
+        (.permissionsError("nope"), .hidden),
+        (.recording, .recording),
+        (.thinking, .thinking),
+        (.preparingModel, .hidden),
+    ])
+    func retry_needs_an_error_status(status: AppStatus, expected: PillContent) {
+        #expect(PillLayout.content(status: status, hasToast: false, retryOffered: true) == expected)
+    }
+
+    @Test func retry_never_shows_transcript_text() {
+        #expect(!PillLayout.showsText(content: .retry, hasText: true))
+    }
+
+    @Test(arguments: [
+        ("Couldn't reach Anthropic. Raw transcript copied to the clipboard — paste to recover it.", "Couldn't reach Anthropic."),
+        ("LLM cleanup failed: v1.2 timed out. Raw transcript copied.", "LLM cleanup failed: v1.2 timed out."),
+        ("Text insertion failed.", "Text insertion failed."),
+        ("No period here", "No period here"),
+        ("", ""),
+    ])
+    func first_sentence_ends_at_the_first_period_space(message: String, expected: String) {
+        #expect(PillLayout.firstSentence(message) == expected)
+    }
+
     @Test func text_shows_only_for_recording_and_thinking_with_a_transcript() {
         #expect(PillLayout.showsText(content: .recording, hasText: true))
         #expect(PillLayout.showsText(content: .thinking, hasText: true))

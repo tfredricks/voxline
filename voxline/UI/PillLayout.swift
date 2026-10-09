@@ -2,12 +2,14 @@ import CoreGraphics
 import Foundation
 
 /// What the recording pill shows. While recording, the recording view wins;
-/// otherwise a pending toast wins (even while thinking); otherwise thinking.
+/// otherwise a pending toast wins (even while thinking); otherwise thinking,
+/// or an error's Retry offer while it lasts.
 enum PillContent: Equatable {
     case hidden
     case recording
     case thinking
     case toast
+    case retry
 }
 
 enum PillLayout {
@@ -19,20 +21,31 @@ enum PillLayout {
     static let edgeInset: CGFloat = 8
     static let toastMinimumWidth: CGFloat = 120
     static let toastHorizontalPadding: CGFloat = 24
+    static let retryButtonWidth: CGFloat = 48
+    static let retrySpacing: CGFloat = 8
+    /// How long an error keeps offering Retry in the pill.
+    static let retryDuration: TimeInterval = 8
 
-    static func content(status: AppStatus, hasToast: Bool) -> PillContent {
+    static func content(status: AppStatus, hasToast: Bool, retryOffered: Bool = false) -> PillContent {
         switch status {
         case .recording: return .recording
         case .thinking:  return hasToast ? .toast : .thinking
+        case .error:     return hasToast ? .toast : (retryOffered ? .retry : .hidden)
         default:         return hasToast ? .toast : .hidden
         }
     }
 
     static func showsText(content: PillContent, hasText: Bool) -> Bool {
         switch content {
-        case .recording, .thinking: return hasText
-        case .toast, .hidden:       return false
+        case .recording, .thinking:   return hasText
+        case .toast, .retry, .hidden: return false
         }
+    }
+
+    /// `message` up to and including the period of its first ". ", or all of it.
+    static func firstSentence(_ message: String) -> String {
+        guard let end = message.range(of: ". ") else { return message }
+        return String(message[..<end.lowerBound]) + "."
     }
 
     static func size(showsText: Bool, toastWidth: CGFloat?) -> CGSize {

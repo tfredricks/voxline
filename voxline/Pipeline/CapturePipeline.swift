@@ -26,12 +26,28 @@ final class CapturePipeline {
     private let vocabulary: @Sendable () -> [String]
     private let skipShortUtterances: @Sendable () -> Bool
 
-    /// Identifies the current recording. Work resuming after an `await`
-    /// compares it with the value it captured and drops its result when a
-    /// newer recording has taken over.
+    /// Identifies the current recording or retry; `cancel()` bumps it too.
+    /// Work resuming after an `await` compares it with the value it captured
+    /// and drops its result when a cancel or a newer run has taken over.
     private var generation: UInt64 = 0
     private var live: LiveSession?
     private var startTasks: StartTasks?
+    /// The finalize or retry in flight, and the signal its caller awaits.
+    /// `cancel()` cancels the one and fires the other, so the caller returns
+    /// at once even when the engine or the provider ignores cancellation.
+    private var finalizeWork: Task<Void, Never>?
+    private var finalizeDone: OneShotSignal?
+    /// Mode and context of the dictation being cleaned up, which `cancel()`
+    /// files the raw transcript under.
+    private var cancellableDictation: (mode: Mode, context: CapturedContext)?
+
+    /// True from `cancel()` until the next `startRecording`, so the chord
+    /// release that follows an Esc can skip the stop sound.
+    private(set) var wasCancelled = false
+
+    /// Set when the recording cap stopped the current recording. The finalize
+    /// that follows says so once it ends, unless it showed a toast of its own.
+    var capHit = false
 
     /// Invoked with the raw transcript when LLM cleanup fails, so the user's
     /// words survive a provider outage instead of being discarded. The default
@@ -95,6 +111,7 @@ final class CapturePipeline {
     /// probed once, here at start. When false (plain dictation) the clipboard
     /// is never touched.
     func startRecording(command: Bool = false) {
+        wasCancelled = false
         // Reject re-entry while a recording or its post-recording pipeline
         // (transcribe → LLM → paste) is still in flight. `.thinking` covers
         // the entire await chain in finalizeRecording — `state.status` is set
@@ -114,6 +131,7 @@ final class CapturePipeline {
             break
         }
         generation &+= 1
+        capHit = false
         let live = LiveSession(engine: engines.current)
         capture.onSamples = { [router = live.router] in router.append($0) }
         do {
@@ -151,14 +169,7 @@ final class CapturePipeline {
             self.state.liveTranscript = partial
         }
 
-        let captor = contextCapture
-        let frontmost = frontmost
-        let fieldInspector = fieldInspector
-        let snapshotTask = Task.detached(priority: .userInitiated) {
-            let bundleID = frontmost.frontmostBundleID()
-            let field = fieldInspector.inspect()
-            return StartSnapshot(context: await captor.capture(), bundleID: bundleID, field: field)
-        }
+        let snapshotTask = snapshotFocus()
         // Selection probe runs ONLY in command mode. In dictation the clipboard
         // is never touched — this is the fix for VS Code's line-copy false
         // positive (empty-selection Cmd+C copies the whole line).
@@ -197,11 +208,16 @@ final class CapturePipeline {
     func handleCaptureInterrupted() {
         guard case .recording = state.status else { return }
         showToast("Microphone disconnected — stopped recording")
-        Task { [weak self] in await self?.finalizeRecording() }
+        let generation = self.generation
+        Task { [weak self] in
+            guard let self, self.generation == generation else { return }
+            await self.finalizeRecording()
+        }
     }
 
     /// Stop capture, finish the transcription session, run LLM cleanup against
     /// the active mode's prompt, and paste the result into the focused field.
+    /// Returns as soon as `cancel()` abandons the work.
     func finalizeRecording() async {
         // Only valid entry state is `.recording`. A spurious finalize while
         // we're already in `.thinking` (an earlier finalize is mid-flight) or
@@ -210,18 +226,95 @@ final class CapturePipeline {
         let generation = self.generation
         let startTasks = self.startTasks
         self.startTasks = nil
-        let router = live.router
         let release = ContinuousClock.now
         capture.stop()
         let captureTailMs = Self.milliseconds(release.duration(to: .now))
         state.status = .thinking
         state.pipelinePhase = .transcribing
-        state.lastRecordingDuration = router.audioDuration
+        state.lastRecordingDuration = live.router.audioDuration
+        let recording = ReleasedRecording(live: live, startTasks: startTasks, release: release, captureTailMs: captureTailMs)
+        await runCancellable { [weak self] in
+            await self?.runFinalize(generation: generation, recording: recording)
+            self?.announceCapIfHit(generation: generation)
+        }
+    }
+
+    /// Esc. While recording, discards the recording. While transcribing or
+    /// cleaning up, abandons the work and returns to idle at once: a
+    /// dictation's raw transcript goes to history and stays retryable, and
+    /// any late result is dropped. Ignored once insert has begun, and when
+    /// nothing is running.
+    func cancel() {
+        switch state.status {
+        case .recording:
+            generation &+= 1
+            capture.stop()
+            live?.discard()
+            startTasks?.cancel()
+            startTasks = nil
+        case .thinking where state.isCancellable:
+            generation &+= 1
+            finalizeWork?.cancel()
+            finalizeWork = nil
+            live?.discard()
+            if let dictation = cancellableDictation, let transcript = state.lastTranscript, !transcript.isEmpty {
+                historyStore.record(cleanedText: transcript, rawTranscript: transcript, mode: dictation.mode, context: dictation.context)
+            }
+        default:
+            return
+        }
+        wasCancelled = true
+        capHit = false
+        resetIdle()
+        showToast("Cancelled")
+        finalizeDone?.fire()
+        finalizeDone = nil
+    }
+
+    /// Cleans up and inserts the last dictation's raw transcript again, for
+    /// the app focused now. Records history but no metrics, and keeps
+    /// `retryTranscript`, so a paste into the wrong field can be retried again.
+    func retryLastDictation() async {
+        guard let transcript = state.retryTranscript else { return }
+        switch state.status {
+        case .idle, .error:
+            break
+        default:
+            return
+        }
+        generation &+= 1
+        let generation = self.generation
+        state.status = .thinking
+        state.pipelinePhase = .cleaning
+        state.isCancellable = true
+        state.liveTranscript = TranscriptPartial(stable: transcript)
+        await runCancellable { [weak self] in
+            await self?.runRetry(transcript: transcript, generation: generation)
+        }
+    }
+
+    /// Runs `work` as the job `cancel()` can abandon. Returns when the work
+    /// ends, or at once when it is cancelled.
+    private func runCancellable(_ work: @escaping @MainActor () async -> Void) async {
+        let done = OneShotSignal()
+        finalizeDone = done
+        finalizeWork = Task {
+            await work()
+            done.fire()
+        }
+        await done.wait()
+    }
+
+    private func runFinalize(generation: UInt64, recording: ReleasedRecording) async {
+        let live = recording.live
+        let startTasks = recording.startTasks
+        defer { startTasks?.cancel() }
+        guard generation == self.generation else { return }
+        let router = live.router
 
         if router.sampleCount == 0 || router.audioDuration < Self.minimumAudioDuration {
             await live.cancel()
             guard generation == self.generation else { return }
-            startTasks?.cancel()
             resetIdle()
             return
         }
@@ -232,7 +325,6 @@ final class CapturePipeline {
         if router.peak == 0 {
             await live.cancel()
             guard generation == self.generation else { return }
-            startTasks?.cancel()
             return setError("No audio captured. Check that Microphone permission is granted and the input device isn't muted.")
         }
 
@@ -241,7 +333,6 @@ final class CapturePipeline {
             session = try await live.session()
         } catch {
             guard generation == self.generation else { return }
-            startTasks?.cancel()
             return setError("Couldn't start \(live.engine.id.shortName): \(error.localizedDescription)")
         }
         guard generation == self.generation else { return }
@@ -252,7 +343,6 @@ final class CapturePipeline {
             transcript = try await session.finish()
         } catch {
             guard generation == self.generation else { return }
-            startTasks?.cancel()
             return setError("Transcription failed. Try again or pick a different engine in Settings → General.")
         }
         guard generation == self.generation else { return }
@@ -266,7 +356,6 @@ final class CapturePipeline {
 
         if transcript.isEmpty {
             // Nothing to clean / paste — quietly idle out.
-            startTasks?.cancel()
             resetIdle()
             return
         }
@@ -277,12 +366,11 @@ final class CapturePipeline {
         let snapshot = await startTasks?.snapshot.value ?? .empty
         guard generation == self.generation else { return }
         guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
-            startTasks?.cancel()
-            return setError("No mode for app '\(snapshot.bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes.")
+            return setError(Self.noModeMessage(bundleID: snapshot.bundleID))
         }
         let timing = PipelineTiming(
-            release: release,
-            captureTailMs: captureTailMs,
+            release: recording.release,
+            captureTailMs: recording.captureTailMs,
             transcribeMs: Self.milliseconds(transcribeDuration),
             engineID: live.engine.metricsID,
             firstPartialMs: live.timeToFirstPartial.map(Self.milliseconds)
@@ -304,12 +392,33 @@ final class CapturePipeline {
         }
         // Dictation path: no selection probe was spawned, so the clipboard was
         // never touched.
+        cancellableDictation = (mode, snapshot.context)
         await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: timing, generation: generation)
     }
 
+    private func runRetry(transcript: String, generation: UInt64) async {
+        let snapshot = await snapshotFocus().value
+        guard generation == self.generation else { return }
+        guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
+            return setError(Self.noModeMessage(bundleID: snapshot.bundleID))
+        }
+        await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: nil, generation: generation)
+    }
+
+    private func announceCapIfHit(generation: UInt64) {
+        guard capHit, generation == self.generation else { return }
+        capHit = false
+        guard state.toastMessage == nil else { return }
+        showToast("Stopped at 5 minutes")
+    }
+
+    private static func noModeMessage(bundleID: String?) -> String {
+        "No mode for app '\(bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes."
+    }
+
     /// Clean up the transcript (or pass it through on the fast path) and
-    /// paste it. Owns its terminal state.
-    private func performDictation(transcript: String, mode: Mode, snapshot: StartSnapshot, timing: PipelineTiming, generation: UInt64) async {
+    /// paste it. Owns its terminal state. Records metrics only with `timing`.
+    private func performDictation(transcript: String, mode: Mode, snapshot: StartSnapshot, timing: PipelineTiming?, generation: UInt64) async {
         let context = snapshot.context
         state.pipelinePhase = .cleaning
         if !context.captureNotes.isEmpty {
@@ -456,6 +565,18 @@ final class CapturePipeline {
 
     // MARK: - Snapshot and metrics
 
+    /// Frontmost app, focused field, and context, read off the main actor.
+    private func snapshotFocus() -> Task<StartSnapshot, Never> {
+        let captor = contextCapture
+        let frontmost = frontmost
+        let fieldInspector = fieldInspector
+        return Task.detached(priority: .userInitiated) {
+            let bundleID = frontmost.frontmostBundleID()
+            let field = fieldInspector.inspect()
+            return StartSnapshot(context: await captor.capture(), bundleID: bundleID, field: field)
+        }
+    }
+
     /// Work started alongside a recording. Finalize takes ownership before its
     /// first await, so it can never cancel or clear a later recording's tasks.
     private struct StartTasks {
@@ -466,6 +587,15 @@ final class CapturePipeline {
             snapshot.cancel()
             selection?.cancel()
         }
+    }
+
+    /// A recording whose capture has stopped, handed from `finalizeRecording`
+    /// to its work task together with ownership of the start tasks.
+    private struct ReleasedRecording {
+        let live: LiveSession
+        let startTasks: StartTasks?
+        let release: ContinuousClock.Instant
+        let captureTailMs: Int
     }
 
     private struct StartSnapshot: Sendable {
@@ -484,7 +614,8 @@ final class CapturePipeline {
         let firstPartialMs: Int?
     }
 
-    private func recordMetrics(kind: DictationMetrics.Kind, timing: PipelineTiming, cleanupMs: Int, insertMs: Int, skippedCleanup: Bool = false, mode: Mode, text: String) {
+    private func recordMetrics(kind: DictationMetrics.Kind, timing: PipelineTiming?, cleanupMs: Int, insertMs: Int, skippedCleanup: Bool = false, mode: Mode, text: String) {
+        guard let timing else { return }
         metrics.record(DictationMetrics(
             timestamp: now(),
             kind: kind,
@@ -548,5 +679,6 @@ final class CapturePipeline {
         state.liveTranscript = nil
         state.pipelinePhase = nil
         state.isCancellable = false
+        cancellableDictation = nil
     }
 }

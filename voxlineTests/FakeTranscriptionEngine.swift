@@ -12,6 +12,9 @@ final class FakeTranscriptionSession: TranscriptionSession, @unchecked Sendable 
     /// When true, finish() and cancel() leave `partials` open, like a
     /// misbehaving engine, so later `emit` calls still reach any listener.
     var keepsPartialsOpen = false
+    /// When true, `cancel()` neither releases a held `finish()` nor makes it
+    /// throw, like an engine that ignores cancellation.
+    var ignoresCancel = false
     private var finishWaiter: CheckedContinuation<Void, Never>?
     private var released = false
     private var _cancelCount = 0
@@ -44,7 +47,7 @@ final class FakeTranscriptionSession: TranscriptionSession, @unchecked Sendable 
                 if alreadyReleased { k.resume() }
             }
         }
-        if lock.withLock({ _cancelCount > 0 }) { throw CancellationError() }
+        if !ignoresCancel, lock.withLock({ _cancelCount > 0 }) { throw CancellationError() }
         if !keepsPartialsOpen { continuation?.finish() }
         return try finishResult.get()
     }
@@ -61,7 +64,7 @@ final class FakeTranscriptionSession: TranscriptionSession, @unchecked Sendable 
     func cancel() {
         lock.withLock { _cancelCount += 1 }
         if !keepsPartialsOpen { continuation?.finish() }
-        releaseFinish()
+        if !ignoresCancel { releaseFinish() }
     }
 }
 
