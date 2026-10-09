@@ -22,6 +22,22 @@ enum SegmentConfirmation {
         let unconfirmed = Array(pending.dropFirst(confirmCount))
         return (confirmed, unconfirmed, confirmed.last?.end ?? confirmedEnd)
     }
+
+    /// The confirmed segments a final pass keeps verbatim. Trailing segments
+    /// are released until at least `minimumSpan` seconds of audio follow the
+    /// last kept one; the final pass re-transcribes the released segments
+    /// from that point, so each stretch of audio is transcribed exactly once.
+    static func splitForFinalPass(
+        _ confirmed: [TimedText],
+        audioDuration: Float,
+        minimumSpan: Float
+    ) -> (kept: [TimedText], released: [TimedText]) {
+        var keptCount = confirmed.count
+        while keptCount > 0, audioDuration - confirmed[keptCount - 1].end < minimumSpan {
+            keptCount -= 1
+        }
+        return (Array(confirmed.prefix(keptCount)), Array(confirmed.dropFirst(keptCount)))
+    }
 }
 
 enum WhisperSegmentText {
@@ -76,6 +92,10 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
     static let samplesPerPass = 16_000
     static let pollInterval: Duration = .milliseconds(100)
     static let keepUnconfirmed = 2
+    /// WhisperKit starts no decode window when `windowClipTime` (1.0 s) or
+    /// less of audio follows the clip start, so the final pass always starts
+    /// at least this many seconds before the end of the audio.
+    static let minimumFinalSpan: Float = 1.5
 
     let partials: AsyncStream<TranscriptPartial>
     private let continuation: AsyncStream<TranscriptPartial>.Continuation
@@ -85,6 +105,7 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
     private var lastPassSampleCount = 0
     private var confirmed: [TimedText] = []
     private var confirmedEnd: Float = 0
+    private var lastUnconfirmed: [TimedText] = []
     private var finishing = false
     private var cancelled = false
     private var loopTask: Task<Void, Never>?
@@ -126,6 +147,10 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
         }
     }
 
+    /// Final text = kept confirmed text, then the final pass's segments.
+    /// When the final pass finds nothing past its clip start, the released
+    /// segments and the last rolling pass's unconfirmed segments stand in,
+    /// so words already shown as partials are never dropped.
     func finish() async throws -> String {
         try await withTaskCancellationHandler {
             try await finishPasses()
@@ -153,23 +178,45 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
         loop?.cancel()
         await loop?.value
 
-        let (samples, clipStart, stable) = try lock.withLock {
+        let input = try lock.withLock {
             if cancelled { throw CancellationError() }
-            return (copyOfBuffer(), confirmedEnd, Self.joined(confirmed))
+            let samples = copyOfBuffer()
+            let split = SegmentConfirmation.splitForFinalPass(
+                confirmed,
+                audioDuration: Float(samples.count) / Float(AudioFormat.whisperSampleRate),
+                minimumSpan: Self.minimumFinalSpan
+            )
+            return (
+                samples: samples,
+                clipStart: split.kept.last?.end ?? 0,
+                keptText: Self.joined(split.kept),
+                fallbackText: Self.joined(split.released + lastUnconfirmed)
+            )
         }
-        guard !samples.isEmpty else { return "" }
+        guard !input.samples.isEmpty else { return "" }
 
-        let finalPass = Task { [transcribe] in try await transcribe(samples, clipStart) }
+        let finalPass = Task { [transcribe] in try await transcribe(input.samples, input.clipStart) }
         let cancelledMeanwhile = lock.withLock {
             finalPassTask = finalPass
             return cancelled
         }
         if cancelledMeanwhile { finalPass.cancel() }
-        let tail = try await finalPass.value
+        let tail: [TimedText]
+        do {
+            tail = try await finalPass.value
+        } catch {
+            try throwIfCancelled()
+            throw error
+        }
+        try throwIfCancelled()
+        let tailText = Self.joined(tail.filter { $0.end > input.clipStart })
+        return TranscriptPartial.join(input.keptText, tailText.isEmpty ? input.fallbackText : tailText)
+    }
+
+    private func throwIfCancelled() throws {
         try lock.withLock {
             if cancelled { throw CancellationError() }
         }
-        return TranscriptPartial.join(stable, Self.joined(tail.filter { $0.end > clipStart }))
     }
 
     private func passIfDue() async {
@@ -195,6 +242,7 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
             let split = SegmentConfirmation.split(segments, keepUnconfirmed: Self.keepUnconfirmed, after: confirmedEnd)
             confirmed.append(contentsOf: split.confirmed)
             confirmedEnd = split.newConfirmedEnd
+            lastUnconfirmed = split.unconfirmed
             return TranscriptPartial(stable: Self.joined(confirmed), volatile: Self.joined(split.unconfirmed))
         }
         if let partial { continuation.yield(partial) }
@@ -211,6 +259,9 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
     }
 }
 
+/// One transcribe at a time per kit: a session's passes never overlap, and
+/// across sessions this relies on the pipeline running one dictation at a
+/// time.
 private final class WhisperKitHandle: @unchecked Sendable {
     let kit: WhisperKit
     init(kit: WhisperKit) { self.kit = kit }

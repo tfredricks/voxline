@@ -1,6 +1,5 @@
 import Testing
 import Foundation
-@preconcurrency import AVFoundation
 @testable import voxline
 
 private func seg(_ text: String, _ start: Float, _ end: Float) -> TimedText {
@@ -31,6 +30,27 @@ private func seg(_ text: String, _ start: Float, _ end: Float) -> TimedText {
         #expect(split.confirmed == [seg("a", 2, 3)])
         #expect(split.unconfirmed == [seg("b", 3, 4), seg("c", 4, 5)])
         #expect(split.newConfirmedEnd == 3)
+    }
+
+    @Test func final_pass_keeps_every_confirmed_segment_when_enough_audio_follows() {
+        let confirmed = [seg("a", 0, 1), seg("b", 1, 2)]
+        let split = SegmentConfirmation.splitForFinalPass(confirmed, audioDuration: 4, minimumSpan: 1.5)
+        #expect(split.kept == confirmed)
+        #expect(split.released.isEmpty)
+    }
+
+    @Test func final_pass_releases_trailing_segments_until_the_minimum_span_follows() {
+        let confirmed = [seg("a", 0, 0.5), seg("b", 0.5, 1.0), seg("c", 1.0, 1.6)]
+        let split = SegmentConfirmation.splitForFinalPass(confirmed, audioDuration: 2, minimumSpan: 1.5)
+        #expect(split.kept == [seg("a", 0, 0.5)])
+        #expect(split.released == [seg("b", 0.5, 1.0), seg("c", 1.0, 1.6)])
+    }
+
+    @Test func final_pass_can_release_every_confirmed_segment() {
+        let confirmed = [seg("a", 0, 0.4), seg("b", 0.4, 0.8)]
+        let split = SegmentConfirmation.splitForFinalPass(confirmed, audioDuration: 1.2, minimumSpan: 1.5)
+        #expect(split.kept.isEmpty)
+        #expect(split.released == confirmed)
     }
 
     @Test func segment_text_strips_whisper_special_tokens() {
@@ -70,7 +90,7 @@ private func seg(_ text: String, _ start: Float, _ end: Float) -> TimedText {
     }
 }
 
-final class FakeWhisperPass: @unchecked Sendable {
+private final class FakeWhisperPass: @unchecked Sendable {
     struct Call: Equatable {
         let sampleCount: Int
         let clipStart: Float
@@ -81,11 +101,24 @@ final class FakeWhisperPass: @unchecked Sendable {
     private var inFlight = 0
     private var _maxInFlight = 0
     private var _cancelledCount = 0
+    private var released = false
+    private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
     private let delay: Duration
+    private let gated: Bool
+    private let cancellationError: (any Error)?
     private let respond: @Sendable (Call) throws -> [TimedText]
 
-    init(delay: Duration = .zero, respond: @escaping @Sendable (Call) throws -> [TimedText] = { _ in [] }) {
+    /// `gated` passes ignore cancellation and wait for `release()`.
+    /// `cancellationError` replaces the `CancellationError` a cancelled delay throws.
+    init(
+        delay: Duration = .zero,
+        gated: Bool = false,
+        cancellationError: (any Error)? = nil,
+        respond: @escaping @Sendable (Call) throws -> [TimedText] = { _ in [] }
+    ) {
         self.delay = delay
+        self.gated = gated
+        self.cancellationError = cancellationError
         self.respond = respond
     }
 
@@ -101,19 +134,57 @@ final class FakeWhisperPass: @unchecked Sendable {
             _maxInFlight = max(_maxInFlight, inFlight)
         }
         defer { lock.withLock { inFlight -= 1 } }
-        do {
-            try await Task.sleep(for: delay)
-        } catch {
-            lock.withLock { _cancelledCount += 1 }
-            throw error
+        if gated {
+            await waitForRelease()
+        } else {
+            do {
+                try await Task.sleep(for: delay)
+            } catch {
+                lock.withLock { _cancelledCount += 1 }
+                throw cancellationError ?? error
+            }
         }
         return try respond(call)
+    }
+
+    func release() {
+        let waiters = lock.withLock {
+            released = true
+            defer { releaseWaiters.removeAll() }
+            return releaseWaiters
+        }
+        for waiter in waiters { waiter.resume() }
     }
 
     func session() -> WhisperKitStreamingSession {
         WhisperKitStreamingSession(transcribe: { try await self.run($0, $1) })
     }
+
+    private func waitForRelease() async {
+        await withCheckedContinuation { (waiter: CheckedContinuation<Void, Never>) in
+            let resumeNow = lock.withLock {
+                if released { return true }
+                releaseWaiters.append(waiter)
+                return false
+            }
+            if resumeNow { waiter.resume() }
+        }
+    }
 }
+
+/// Mimics WhisperKit over a fixed timeline: no decode window starts when
+/// 1.0 s or less of audio follows the clip start (`windowClipTime`).
+private func whisperLike(_ timeline: [TimedText]) -> @Sendable (FakeWhisperPass.Call) -> [TimedText] {
+    { call in
+        let duration = Float(call.sampleCount) / 16_000
+        guard duration - call.clipStart > 1.0 else { return [] }
+        return timeline.filter { $0.end > call.clipStart && $0.start < duration }
+    }
+}
+
+private let tailTimeline = [
+    seg(" one", 0, 0.5), seg(" two", 0.5, 1.0), seg(" three", 1.0, 1.6), seg(" four", 1.6, 1.8), seg(" five", 1.8, 2.0),
+]
 
 private func silence(_ count: Int) -> [Float] {
     [Float](repeating: 0, count: count)
@@ -160,15 +231,15 @@ struct WhisperKitStreamingSessionTests {
         }
         let session = fake.session()
         var partials = session.partials.makeAsyncIterator()
-        session.append(silence(16_000))
+        session.append(silence(48_000))
         let first = await partials.next()
         #expect(first == TranscriptPartial(stable: "one", volatile: "two three"))
 
         let text = try await session.finish()
         #expect(text == "one two three four")
         #expect(fake.calls == [
-            .init(sampleCount: 16_000, clipStart: 0),
-            .init(sampleCount: 16_000, clipStart: 0.3),
+            .init(sampleCount: 48_000, clipStart: 0),
+            .init(sampleCount: 48_000, clipStart: 0.3),
         ])
         #expect(await partials.next() == nil)
     }
@@ -231,30 +302,88 @@ struct WhisperKitStreamingSessionTests {
         await #expect(throws: PassFailed.self) { try await session.finish() }
         for await _ in session.partials {}
     }
+
+    @Test func cancelled_finish_throws_cancellation_whatever_the_final_pass_throws() async throws {
+        let fake = FakeWhisperPass(delay: .seconds(30), cancellationError: PassFailed())
+        let session = fake.session()
+        session.append(silence(8_000))
+        let finishing = Task { try await session.finish() }
+        #expect(await eventually { fake.calls.count == 1 })
+        session.cancel()
+        await #expect(throws: CancellationError.self) { try await finishing.value }
+    }
+
+    @Test func cancel_during_a_rolling_pass_ends_partials_and_stops_passes() async throws {
+        let fake = FakeWhisperPass(delay: .seconds(30))
+        let session = fake.session()
+        session.append(silence(16_000))
+        #expect(await eventually { fake.calls.count == 1 })
+        session.cancel()
+        for await _ in session.partials {}
+        #expect(await eventually { fake.cancelledCount == 1 })
+        session.append(silence(32_000))
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(fake.calls.count == 1)
+    }
+
+    @Test func cancel_while_finish_waits_on_a_rolling_pass_skips_the_final_pass() async throws {
+        let fake = FakeWhisperPass(gated: true) { _ in [seg("late", 0, 0.5)] }
+        let session = fake.session()
+        session.append(silence(16_000))
+        #expect(await eventually { fake.calls.count == 1 })
+        let finishing = Task { try await session.finish() }
+        try await Task.sleep(for: .milliseconds(100))
+        session.cancel()
+        fake.release()
+        await #expect(throws: CancellationError.self) { try await finishing.value }
+        #expect(fake.calls.count == 1)
+        for await _ in session.partials {}
+    }
+
+    @Test func final_pass_reaches_back_when_little_audio_follows_the_confirmed_end() async throws {
+        let fake = FakeWhisperPass(respond: whisperLike(tailTimeline))
+        let session = fake.session()
+        var partials = session.partials.makeAsyncIterator()
+        session.append(silence(32_000))
+        let first = await partials.next()
+        #expect(first == TranscriptPartial(stable: "one two three", volatile: "four five"))
+
+        let text = try await session.finish()
+        #expect(text.hasSuffix("three four five"))
+        let finalClipStart = try #require(fake.calls.last?.clipStart)
+        #expect(2.0 - finalClipStart > 1.0)
+    }
+
+    @Test func re_transcribed_segments_are_not_duplicated_at_the_seam() async throws {
+        let fake = FakeWhisperPass(respond: whisperLike(tailTimeline))
+        let session = fake.session()
+        var partials = session.partials.makeAsyncIterator()
+        session.append(silence(32_000))
+        _ = await partials.next()
+
+        let text = try await session.finish()
+        #expect(text == "one two three four five")
+        for word in ["one", "two", "three", "four", "five"] {
+            #expect(text.split(separator: " ").filter { $0 == word }.count == 1)
+        }
+    }
+
+    @Test func an_empty_final_pass_keeps_the_last_rolling_text() async throws {
+        let rolling = whisperLike(tailTimeline)
+        let fake = FakeWhisperPass { call in call.clipStart == 0 ? rolling(call) : [] }
+        let session = fake.session()
+        var partials = session.partials.makeAsyncIterator()
+        session.append(silence(32_000))
+        _ = await partials.next()
+
+        let text = try await session.finish()
+        #expect(text == "one two three four five")
+        #expect(fake.calls.count == 2)
+    }
 }
 
 private enum SpokenClip {
     static let sentence = "The quick brown fox jumps over the lazy dog near the river bank"
-
-    static func samples(_ text: String) throws -> [Float] {
-        let url = FileManager.default.temporaryDirectory
-            .appending(path: "voxline-whisperkit-\(UUID().uuidString).wav")
-        defer { try? FileManager.default.removeItem(at: url) }
-        let say = Process()
-        say.executableURL = URL(filePath: "/usr/bin/say")
-        say.arguments = ["-o", url.path, "--data-format=LEF32@16000", text]
-        try say.run()
-        say.waitUntilExit()
-        try #require(say.terminationStatus == 0)
-
-        let file = try AVAudioFile(forReading: url)
-        try #require(file.processingFormat.sampleRate == 16_000)
-        try #require(file.processingFormat.channelCount == 1)
-        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)))
-        try file.read(into: buffer)
-        let channel = try #require(buffer.floatChannelData)
-        return Array(UnsafeBufferPointer(start: channel[0], count: Int(buffer.frameLength)))
-    }
 
     static func feed(_ samples: [Float], to session: any TranscriptionSession, realtime: Bool) async throws {
         for start in stride(from: 0, to: samples.count, by: 1_600) {
@@ -287,7 +416,7 @@ struct WhisperKitEngineIntegrationTests {
     }
 
     @Test func transcribes_a_spoken_sentence() async throws {
-        let samples = try SpokenClip.samples(SpokenClip.sentence)
+        let samples = try SpeechClipFixture.synthesize(SpokenClip.sentence)
         let session = try await Self.readyEngine().openSession(SessionConfig())
         try await SpokenClip.feed(samples, to: session, realtime: true)
         let start = ContinuousClock.now
@@ -297,7 +426,7 @@ struct WhisperKitEngineIntegrationTests {
     }
 
     @Test func streams_partials_during_a_long_clip() async throws {
-        let samples = try SpokenClip.samples(Array(repeating: SpokenClip.sentence, count: 3).joined(separator: ". "))
+        let samples = try SpeechClipFixture.synthesize(Array(repeating: SpokenClip.sentence, count: 3).joined(separator: ". "))
         let session = try await Self.readyEngine().openSession(SessionConfig())
         let collector = Task {
             var seen: [TranscriptPartial] = []
@@ -315,7 +444,7 @@ struct WhisperKitEngineIntegrationTests {
     }
 
     @Test func vocabulary_hints_are_ignored() async throws {
-        let samples = try SpokenClip.samples(SpokenClip.sentence)
+        let samples = try SpeechClipFixture.synthesize(SpokenClip.sentence)
         let engine = try await Self.readyEngine()
 
         let plain = try await engine.openSession(SessionConfig())
