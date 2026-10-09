@@ -94,10 +94,21 @@ enum EnginePrep {
     }
 
     /// Whether a prepare task resets `current` to idle once its plan is known.
-    /// A warm plan means the selected engine runs, so a missing-key error left
-    /// from OpenAI is stale; a settings switch warms silently and would
-    /// otherwise leave it showing. Every other status stays.
-    static func clearsStaleMissingKeyError(plan: Plan, current: AppStatus) -> Bool {
-        plan == .warm && isMissingOpenAIKeyError(current)
+    /// A warm plan means the selected engine runs, so an error a previous
+    /// prepare task wrote (`lastPrepError`) is stale, and so is OpenAI's
+    /// missing-key error, which the pipeline and a key change write too. A
+    /// settings switch warms silently and would otherwise leave them showing.
+    /// Every other status stays: a pipeline error keeps the pill's Retry.
+    static func clearsStaleError(plan: Plan, current: AppStatus, lastPrepError: String?) -> Bool {
+        guard plan == .warm, case .error(let message) = current else { return false }
+        return message == lastPrepError || isMissingOpenAIKeyError(current)
+    }
+
+    /// The error a prepare task wrote, while `current` still shows it; nil
+    /// once the status has moved on, so the same text written later by
+    /// someone else isn't taken for it.
+    static func prepErrorStillShowing(_ last: String?, current: AppStatus?) -> String? {
+        guard let last, current == .error(last) else { return nil }
+        return last
     }
 }

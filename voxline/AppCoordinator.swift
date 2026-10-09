@@ -37,6 +37,10 @@ final class AppCoordinator {
     /// for launch; for a settings switch, only while it reports a download).
     /// A switch in that time takes the status over.
     private var modelPrepDrivesStatus = false
+    /// The `.error` message a prep task last wrote, while it may still be
+    /// showing. A later prep whose engine is ready clears exactly this error
+    /// (see `EnginePrep.clearsStaleError`), never a pipeline error.
+    private var lastPrepError: String?
     /// The engine selection last prepared for; `apply(_:)` re-prepares only
     /// when the selection changes.
     private var appliedEngine: EngineID?
@@ -442,9 +446,8 @@ final class AppCoordinator {
     }
 
     /// Re-runs `pillWindow.updateVisibility` whenever `state.toastMessage`
-    /// changes, so a history-row click that sets a "Copied" toast pops the
-    /// pill open (and clears it on the next change, which is the auto-nil
-    /// after 1.2s).
+    /// changes, so a toast (such as "Copied" after a history-row click) pops
+    /// the pill open, and the pill hides again when `flashToast` clears it.
     private func observeToastChanges(state: AppState) {
         withObservationTracking {
             _ = state.toastMessage
@@ -545,17 +548,20 @@ final class AppCoordinator {
         if let state, audience.ownsStatusFromStart {
             state.status = .preparingModel
         }
+        lastPrepError = EnginePrep.prepErrorStillShowing(lastPrepError, current: state?.status)
         modelPrepTask = Task { @MainActor [weak self, weak state] in
             var reporter: AppState?
             do {
                 let plan = EnginePrep.plan(for: await engine.readiness())
                 try Task.checkCancellation()
-                if let state, EnginePrep.clearsStaleMissingKeyError(plan: plan, current: state.status) {
+                if let state, EnginePrep.clearsStaleError(plan: plan, current: state.status, lastPrepError: self?.lastPrepError) {
                     state.status = .idle
+                    self?.lastPrepError = nil
                 }
                 if let state, let status = EnginePrep.status(for: plan, audience: audience, current: state.status) {
                     state.status = status
                     reporter = state
+                    self?.lastPrepError = status.errorMessage
                 }
                 self?.modelPrepDrivesStatus = reporter != nil
                 if case .fail(let reason) = plan {
@@ -579,6 +585,7 @@ final class AppCoordinator {
                     }
                 }
                 try Task.checkCancellation()
+                self?.lastPrepError = nil
                 if let reporter, reporter.status.blocksRecording {
                     reporter.status = .idle
                 }
@@ -595,7 +602,9 @@ final class AppCoordinator {
                 guard self?.isCurrentPrepTask(myToken, cancelled: Task.isCancelled) == true else { return }
                 AppLog.pipeline.error("engine \(engine.id.rawValue, privacy: .public) prep failed: \(error.localizedDescription)")
                 if let reporter {
-                    reporter.status = .error("Model setup failed: \(error.localizedDescription). Try Retry or relaunch Voxline.")
+                    let message = "Model setup failed: \(error.localizedDescription). Try Retry or relaunch Voxline."
+                    reporter.status = .error(message)
+                    self?.lastPrepError = message
                 }
                 if managesDownloadWindow {
                     self?.closeDownloadWindow()

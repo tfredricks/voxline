@@ -41,7 +41,7 @@ struct MenuBarContent: View {
         Divider()
 
         Button("Retry last dictation") { retryLastDictation() }
-            .disabled(state.retryTranscript == nil || state.status == .recording || state.status == .thinking)
+            .disabled(!state.canRetryLastDictation)
 
         Button("Show history…") { openHistoryWindow() }
 

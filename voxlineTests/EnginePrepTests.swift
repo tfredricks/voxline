@@ -84,28 +84,73 @@ import Testing
         #expect(!EnginePrep.isMissingOpenAIKeyError(.thinking))
     }
 
-    // MARK: Stale missing-key error
+    // MARK: Stale engine error
+
+    private static let pipelineError = "Transcription failed. Try again or pick a different engine in Settings → General."
+    private static let setupFailed = "Model setup failed: The Internet connection appears to be offline.. Try Retry or relaunch Voxline."
 
     /// Switching from OpenAI without a key to an engine that only needs
     /// warming is silent, so without the clear the old error would stay.
-    @Test func a_warm_plan_clears_the_missing_key_error() {
-        #expect(EnginePrep.clearsStaleMissingKeyError(plan: .warm, current: .error(OpenAIRealtimeEngine.missingKeyReason)))
+    /// The pipeline and a key change write this error too, so it is cleared
+    /// whoever wrote it.
+    @Test(arguments: [nil, setupFailed])
+    func a_warm_plan_clears_the_missing_key_error(lastPrepError: String?) {
+        #expect(EnginePrep.clearsStaleError(plan: .warm, current: .error(OpenAIRealtimeEngine.missingKeyReason), lastPrepError: lastPrepError))
     }
 
-    @Test func a_warm_plan_keeps_every_other_status() {
-        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .warm, current: .error("Transcription failed. Try again or pick a different engine in Settings → General.")))
-        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .warm, current: .error(Self.reason)))
-        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .warm, current: .permissionsError("Grant Accessibility.")))
-        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .warm, current: .idle))
-        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .warm, current: .thinking))
+    /// An offline launch with an uncached Whisper model, then a switch to
+    /// Apple Speech; or Apple Speech on an unsupported language, then a
+    /// switch to Whisper.
+    @Test(arguments: [setupFailed, reason])
+    func a_warm_plan_clears_the_error_the_last_prep_wrote(message: String) {
+        #expect(EnginePrep.clearsStaleError(plan: .warm, current: .error(message), lastPrepError: message))
+    }
+
+    /// A pipeline error keeps the pill's Retry, so a switch never clears it.
+    @Test(arguments: [nil, setupFailed])
+    func a_warm_plan_keeps_a_pipeline_error(lastPrepError: String?) {
+        #expect(!EnginePrep.clearsStaleError(plan: .warm, current: .error(Self.pipelineError), lastPrepError: lastPrepError))
+    }
+
+    /// An engine's reason that no prep task wrote (the pipeline showed it).
+    @Test func a_warm_plan_keeps_an_error_no_prep_wrote() {
+        #expect(!EnginePrep.clearsStaleError(plan: .warm, current: .error(Self.reason), lastPrepError: nil))
+    }
+
+    @Test(arguments: [AppStatus.permissionsError(setupFailed), .idle, .thinking, .recording])
+    func a_warm_plan_keeps_every_other_status(current: AppStatus) {
+        #expect(!EnginePrep.clearsStaleError(plan: .warm, current: current, lastPrepError: Self.setupFailed))
     }
 
     /// A download or a failure reports its own status over the error.
-    @Test func only_a_warm_plan_clears_the_missing_key_error() {
+    @Test func only_a_warm_plan_clears_a_stale_error() {
         let missingKey = AppStatus.error(OpenAIRealtimeEngine.missingKeyReason)
-        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .download, current: missingKey))
-        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .fail(OpenAIRealtimeEngine.missingKeyReason), current: missingKey))
-        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .fail(Self.reason), current: missingKey))
+        #expect(!EnginePrep.clearsStaleError(plan: .download, current: missingKey, lastPrepError: nil))
+        #expect(!EnginePrep.clearsStaleError(plan: .fail(OpenAIRealtimeEngine.missingKeyReason), current: missingKey, lastPrepError: nil))
+        #expect(!EnginePrep.clearsStaleError(plan: .fail(Self.reason), current: missingKey, lastPrepError: nil))
+        #expect(!EnginePrep.clearsStaleError(plan: .download, current: .error(Self.setupFailed), lastPrepError: Self.setupFailed))
+        #expect(!EnginePrep.clearsStaleError(plan: .fail(Self.reason), current: .error(Self.setupFailed), lastPrepError: Self.setupFailed))
+    }
+
+    // MARK: Remembered prep error
+
+    @Test func the_prep_error_is_remembered_while_it_shows() {
+        #expect(EnginePrep.prepErrorStillShowing(Self.setupFailed, current: .error(Self.setupFailed)) == Self.setupFailed)
+    }
+
+    /// Once the status moved on, the same text written later by someone
+    /// else isn't the prep's error.
+    @Test(arguments: [AppStatus.idle, .recording, .thinking, .preparingModel, .error(pipelineError), .permissionsError(setupFailed)])
+    func the_prep_error_is_forgotten_once_the_status_moves_on(current: AppStatus) {
+        #expect(EnginePrep.prepErrorStillShowing(Self.setupFailed, current: current) == nil)
+    }
+
+    @Test func no_prep_error_stays_none() {
+        #expect(EnginePrep.prepErrorStillShowing(nil, current: .error(Self.setupFailed)) == nil)
+    }
+
+    @Test func the_prep_error_is_forgotten_without_a_state() {
+        #expect(EnginePrep.prepErrorStillShowing(Self.setupFailed, current: nil) == nil)
     }
 
     // MARK: Superseded tasks

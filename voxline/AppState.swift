@@ -111,6 +111,16 @@ final class AppState {
     /// starts.
     var retryTranscript: String?
 
+    /// Whether `CapturePipeline.retryLastDictation` would run now: a
+    /// transcript is kept and the pipeline is idle or showing an error.
+    var canRetryLastDictation: Bool {
+        guard retryTranscript != nil else { return false }
+        switch status {
+        case .idle, .error: return true
+        default:            return false
+        }
+    }
+
     /// True while Esc may cancel: recording, and thinking until insert begins.
     var isCancellable: Bool = false
 

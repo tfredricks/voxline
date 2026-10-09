@@ -162,4 +162,31 @@ import Foundation
         #expect(state.recordingKind == nil)
         #expect(state.activityLabel == nil)
     }
+
+    // MARK: - Retry last dictation
+
+    @Test(arguments: [AppStatus.idle, .error("LLM cleanup failed.")])
+    func retry_is_available_with_a_transcript_when_idle_or_failed(status: AppStatus) {
+        let state = AppState()
+        state.retryTranscript = "hello"
+        state.status = status
+        #expect(state.canRetryLastDictation)
+    }
+
+    /// The menu item stays disabled wherever the pipeline would refuse the
+    /// retry: busy, a model being fetched or compiled, or a permissions error.
+    @Test(arguments: [AppStatus.recording, .thinking, .downloadingModel(progress: 0.4), .preparingModel, .permissionsError("Grant Accessibility.")])
+    func retry_is_unavailable_while_the_pipeline_would_refuse_it(status: AppStatus) {
+        let state = AppState()
+        state.retryTranscript = "hello"
+        state.status = status
+        #expect(!state.canRetryLastDictation)
+    }
+
+    @Test func retry_is_unavailable_without_a_transcript() {
+        let state = AppState()
+        #expect(!state.canRetryLastDictation)
+        state.status = .error("LLM cleanup failed.")
+        #expect(!state.canRetryLastDictation)
+    }
 }

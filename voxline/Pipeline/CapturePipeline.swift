@@ -330,13 +330,7 @@ final class CapturePipeline {
     /// the app focused now. Records history but no metrics, and keeps
     /// `retryTranscript`, so a paste into the wrong field can be retried again.
     func retryLastDictation() async {
-        guard let transcript = state.retryTranscript else { return }
-        switch state.status {
-        case .idle, .error:
-            break
-        default:
-            return
-        }
+        guard state.canRetryLastDictation, let transcript = state.retryTranscript else { return }
         let generation = beginRun()
         state.status = .thinking
         state.pipelinePhase = .cleaning
