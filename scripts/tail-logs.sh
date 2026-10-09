@@ -10,7 +10,7 @@
 #   scripts/tail-logs.sh --raw                 # disable reformatting/colors (raw `log` output)
 #
 # Known categories (see voxline/Diagnostics/AppLog.swift):
-#   pipeline, hotkey, audio, whisper, llm, paste, context, permissions, keychain, metrics, updates
+#   pipeline, hotkey, audio, whisper, llm, paste, context, permissions, keychain, metrics, updates, meetings, learning
 #
 # Notes:
 #   - `log stream` requires admin/dev privileges for the --level flag; macOS will

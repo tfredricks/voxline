@@ -26,6 +26,8 @@ struct AppSettings {
         static let meetingConsentNoticeShown = "voxline.meetings.consentNoticeShown"
         static let meetingSilentSystemNoticeShown = "voxline.meetings.silentSystemNoticeShown"
         static let meetingCapSeconds = "voxline.debug.meetingCapSeconds"
+        static let learnWords = "voxline.learning.words"
+        static let learnStyle = "voxline.learning.style"
     }
 
     /// Stored under `Key.commandChord` for "command mode off". The legacy
@@ -203,6 +205,20 @@ struct AppSettings {
     var saveBakeoffClips: Bool {
         get { defaults.bool(forKey: Key.saveBakeoffClips) }
         set { defaults.set(newValue, forKey: Key.saveBakeoffClips) }
+    }
+
+    /// Settings → Learning: add words the user fixes after a dictation to
+    /// the custom vocabulary. Absent reads as on.
+    var learnWords: Bool {
+        get { defaults.object(forKey: Key.learnWords) == nil ? true : defaults.bool(forKey: Key.learnWords) }
+        set { defaults.set(newValue, forKey: Key.learnWords) }
+    }
+
+    /// Settings → Learning: keep recent dictations and edits per category
+    /// and send a learned style note with cleanup. Absent reads as on.
+    var learnStyle: Bool {
+        get { defaults.object(forKey: Key.learnStyle) == nil ? true : defaults.bool(forKey: Key.learnStyle) }
+        set { defaults.set(newValue, forKey: Key.learnStyle) }
     }
 
     /// Where meeting notes files are written.

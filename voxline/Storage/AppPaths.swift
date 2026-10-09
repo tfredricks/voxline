@@ -53,6 +53,15 @@ enum AppPaths {
         appDirectory.appending(path: "meetings", directoryHint: .isDirectory)
     }
 
+    /// Learning's style notes, recent texts, correction pairs, and rejected words.
+    static func learningFile() throws -> URL {
+        learningFile(inAppDirectory: try applicationSupportDirectory())
+    }
+
+    static func learningFile(inAppDirectory appDirectory: URL) -> URL {
+        appDirectory.appending(path: "learning.json")
+    }
+
     /// The model cache root if it already exists; nil otherwise. Never
     /// creates a directory, so cache checks leave the disk untouched.
     static func modelCacheDirectoryIfPresent() -> URL? {
