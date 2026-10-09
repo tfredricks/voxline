@@ -147,6 +147,8 @@ private final class FakeCapture: AudioCapturing {
     var canned: [Float] = []
     var onLevel: ((Float) -> Void)?
     var onTapCallback: ((Int) -> Void)?
+    var onSamples: (@Sendable ([Float]) -> Void)?
+    var onInterrupted: (() -> Void)?
     func prewarm() {}
     func stopPrewarm() {}
     func start() throws {}

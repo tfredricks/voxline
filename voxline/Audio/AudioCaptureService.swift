@@ -4,10 +4,12 @@ import CoreAudio
 import Foundation
 
 /// Captures audio from the system input device, resamples to Whisper's format
-/// (16 kHz mono Float32), and accumulates the converted samples in memory.
+/// (16 kHz mono Float32), and hands each converted chunk to `onSamples` on the
+/// audio thread as it arrives. stop() flushes the resampler's tail through the
+/// same path before it returns.
 ///
-/// Audio is *never* written to disk. Buffers are released when stop() is called
-/// after the consumer has drained them via takeSamples().
+/// Audio is *never* written to disk. Converted samples are also held in memory
+/// until the consumer drains them via takeSamples().
 @MainActor
 final class AudioCaptureService {
 
@@ -25,18 +27,49 @@ final class AudioCaptureService {
     /// is dropping samples".
     var onTapCallback: ((Int) -> Void)?
 
-    private let engine = AVAudioEngine()
-    private var converter: AVAudioConverter?
-    private var samples: [Float] = []
+    /// Receives every converted 16 kHz chunk, synchronously and in order, on
+    /// the audio tap thread; the flushed tail arrives on the main actor inside
+    /// stop(). Read once per start(). Must be cheap and must never wait on the
+    /// main actor, because stop() waits for an in-flight delivery to finish.
+    var onSamples: (@Sendable ([Float]) -> Void)?
 
-    /// Bumped on every start() and stop(). Tap-callback Tasks that arrive on
-    /// MainActor after a stop+takeSamples cycle see a stale epoch and discard
-    /// themselves, so they can't prefix the next recording with leftover audio.
+    /// Fires on the main actor when the engine's input configuration changes
+    /// while capturing (device unplugged, Bluetooth mic dropped, sample rate
+    /// switched). The engine has stopped itself by then; the tap delivers no
+    /// more audio until the next start().
+    var onInterrupted: (() -> Void)?
+
+    private let engine = AVAudioEngine()
+    private var delivery: SampleDelivery?
+    private var configurationObserver: (any NSObjectProtocol)?
+
+    /// Bumped on every start() and stop(). Level and tap-callback hops that
+    /// reach the main actor after stop() see a stale epoch and discard
+    /// themselves, so a finished recording can't move the next one's meter.
     private var currentEpoch: UInt64 = 0
 
     /// True between a successful start() and the matching stop(). Guards
     /// stopPrewarm() so a disarm edge can never kill a live recording.
     private var isCapturing = false
+
+    init() {
+        configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: nil
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor [weak self] in
+                self?.handleConfigurationChange()
+            }
+        }
+    }
+
+    deinit {
+        if let configurationObserver {
+            NotificationCenter.default.removeObserver(configurationObserver)
+        }
+    }
 
     /// Route the engine's input AU to the preferred device, when set and still
     /// present. Falls through silently to the system default otherwise.
@@ -106,37 +139,31 @@ final class AudioCaptureService {
             throw AudioCaptureError.noInputDevice
         }
 
-        // Whisper target format (16 kHz mono Float32).
-        guard let target = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: AudioFormat.whisperSampleRate,
-            channels: AudioFormat.whisperChannelCount,
-            interleaved: false
-        ) else {
-            throw AudioCaptureError.targetFormatUnavailable
-        }
-        guard let conv = AVAudioConverter(from: hwFormat, to: target) else {
-            throw AudioCaptureError.cannotConvertFormat
-        }
-        converter = conv
-
-        samples.removeAll(keepingCapacity: true)
+        let delivery = SampleDelivery(
+            converter: try CaptureConverter(inputFormat: hwFormat),
+            onSamples: onSamples
+        )
+        self.delivery = delivery
         currentEpoch &+= 1
         let epoch = currentEpoch
 
         // ~20 ms buffer at the hardware sample rate (e.g. 960 frames at 48 kHz).
         let bufferSize = max(1, AVAudioFrameCount(hwFormat.sampleRate * 0.02))
 
-        let convLocal = conv
-        let targetFmt = target
         input.installTap(onBus: 0, bufferSize: bufferSize, format: hwFormat) { [weak self] buffer, _ in
-            guard let self else { return }
             let frames = Int(buffer.frameLength)
+            let chunk = delivery.deliver(buffer)
+            let level = chunk.isEmpty
+                ? nil
+                : AudioFormat.displayLevel(fromPeak: AudioFormat.peakLevel(samples: chunk))
+            guard let self else { return }
             Task { @MainActor [weak self] in
                 guard let self, self.currentEpoch == epoch else { return }
                 self.onTapCallback?(frames)
+                if let level {
+                    self.onLevel?(level)
+                }
             }
-            self.handleInputNonisolated(buffer: buffer, converter: convLocal, target: targetFmt, epoch: epoch)
         }
 
         if !engine.isRunning {
@@ -163,71 +190,67 @@ final class AudioCaptureService {
         }
     }
 
-    /// Stop capture. Removes the tap and stops the engine so the system mic
-    /// indicator turns off.
+    /// Stop capture. Removes the tap, flushes the resampler's tail to
+    /// `onSamples`, then stops the engine so the system mic indicator turns
+    /// off. Every converted sample has been delivered when this returns.
     func stop() {
         engine.inputNode.removeTap(onBus: 0)
+        delivery?.deliverTail()
         engine.stop()
         isCapturing = false
-        // Invalidate any tap-callback Tasks that have not yet hopped to
-        // MainActor — they would otherwise append into the buffer the next
-        // recording is about to use.
         currentEpoch &+= 1
     }
 
     /// Drain and return the converted samples buffered so far. Subsequent calls return [].
     func takeSamples() -> [Float] {
-        defer { samples.removeAll(keepingCapacity: false) }
-        return samples
+        delivery?.takeSamples() ?? []
     }
 
     // MARK: - Private
 
-    nonisolated private func handleInputNonisolated(
-        buffer: AVAudioPCMBuffer,
-        converter: AVAudioConverter,
-        target: AVAudioFormat,
-        epoch: UInt64
-    ) {
-        // Allocate a scratch buffer big enough for any reasonable conversion result.
-        // 16k * (hardware/target ratio) — pad generously.
-        let ratio = target.sampleRate / buffer.format.sampleRate
-        let estimatedFrames = AVAudioFrameCount(Double(buffer.frameLength) * ratio + 1024)
+    private func handleConfigurationChange() {
+        guard isCapturing else { return }
+        AppLog.audio.error("input configuration changed during capture")
+        onInterrupted?()
+    }
+}
 
-        guard let outBuffer = AVAudioPCMBuffer(
-            pcmFormat: target,
-            frameCapacity: estimatedFrames
-        ) else { return }
+/// Serializes conversion with delivery for one capture. A single lock spans
+/// convert-then-deliver on the tap thread and flush-then-deliver in stop(), so
+/// the tail always reaches `onSamples` after the last tap chunk, and nothing is
+/// delivered once the converter is closed.
+private final class SampleDelivery: @unchecked Sendable {
 
-        var error: NSError?
-        var consumed = false
-        let status = converter.convert(to: outBuffer, error: &error) { _, statusOut in
-            if consumed {
-                // Must be .noDataNow, never .endOfStream. .endOfStream
-                // permanently terminates the converter's stream and every
-                // subsequent convert() call (i.e. every later tap buffer)
-                // silently fails.
-                statusOut.pointee = .noDataNow
-                return nil
-            }
-            consumed = true
-            statusOut.pointee = .haveData
-            return buffer
+    private let lock = NSLock()
+    private let converter: CaptureConverter
+    private let onSamples: (@Sendable ([Float]) -> Void)?
+    private var samples: [Float] = []
+
+    init(converter: CaptureConverter, onSamples: (@Sendable ([Float]) -> Void)?) {
+        self.converter = converter
+        self.onSamples = onSamples
+    }
+
+    func deliver(_ buffer: AVAudioPCMBuffer) -> [Float] {
+        lock.withLock { publish(converter.convert(buffer)) }
+    }
+
+    func deliverTail() {
+        lock.withLock { _ = publish(converter.flushAndClose()) }
+    }
+
+    func takeSamples() -> [Float] {
+        lock.withLock {
+            defer { samples = [] }
+            return samples
         }
+    }
 
-        guard status != .error, let channel = outBuffer.floatChannelData?[0] else {
-            return
-        }
-
-        let count = Int(outBuffer.frameLength)
-        let chunk = Array(UnsafeBufferPointer(start: channel, count: count))
-
-        Task { @MainActor [weak self] in
-            guard let self, self.currentEpoch == epoch else { return }
-            self.samples.append(contentsOf: chunk)
-            let level = AudioFormat.displayLevel(fromPeak: AudioFormat.peakLevel(samples: chunk))
-            self.onLevel?(level)
-        }
+    private func publish(_ chunk: [Float]) -> [Float] {
+        guard !chunk.isEmpty else { return chunk }
+        onSamples?(chunk)
+        samples.append(contentsOf: chunk)
+        return chunk
     }
 }
 
