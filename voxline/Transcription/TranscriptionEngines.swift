@@ -7,11 +7,13 @@ final class TranscriptionEngines: TranscriptionEngineProviding {
     private let settings: AppSettings
     private let apple: AppleSpeechEngine
     let whisperKit: WhisperKitEngine
+    private let openAI: OpenAIRealtimeEngine
 
-    init(settings: AppSettings, apple: AppleSpeechEngine, whisperKit: WhisperKitEngine) {
+    init(settings: AppSettings, apple: AppleSpeechEngine, whisperKit: WhisperKitEngine, openAI: OpenAIRealtimeEngine) {
         self.settings = settings
         self.apple = apple
         self.whisperKit = whisperKit
+        self.openAI = openAI
     }
 
     var current: any TranscriptionEngine { engine(for: settings.transcriptionEngine) }
@@ -20,7 +22,7 @@ final class TranscriptionEngines: TranscriptionEngineProviding {
         switch id {
         case .apple:          return apple
         case .whisperKit:     return whisperKit
-        case .openAIRealtime: return engine(for: .onDeviceDefault)
+        case .openAIRealtime: return openAI
         }
     }
 }

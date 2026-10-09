@@ -48,23 +48,7 @@ struct CleanupSection: View {
                 onTest: { Task { await keys.testConnection(.anthropic) } }
             )
         case .openai:
-            APIKeyRow(
-                title: "OpenAI",
-                provider: .openai,
-                key: $keys.openaiKey,
-                revealed: $revealed,
-                getKeyURL: URL(string: "https://platform.openai.com/api-keys")!,
-                expectedPrefix: "sk-",
-                isPersisted: keys.isPersisted(.openai),
-                testing: keys.testing,
-                testResult: keys.testResult,
-                lastError: keys.lastError,
-                onCommit: {
-                    keys.commitOpenAI()
-                    general.openAIKeyDidChange()
-                },
-                onTest: { Task { await keys.testConnection(.openai) } }
-            )
+            OpenAIKeyRow(general: general, keys: keys, revealed: $revealed)
         }
     }
 }

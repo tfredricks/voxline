@@ -246,6 +246,34 @@ import Foundation
         #expect(!vm.showsOpenAIKeyWarning)
     }
 
+    @Test func recognition_shows_the_openai_key_row_only_when_cleanup_does_not() {
+        let vm = openAIEngineVM(hasOpenAIKey: { false })
+        vm.provider = .anthropic
+        #expect(vm.showsOpenAIKeyInRecognition)
+        vm.provider = .openai
+        #expect(!vm.showsOpenAIKeyInRecognition)
+        vm.provider = .anthropic
+        vm.engine = .whisperKit
+        #expect(!vm.showsOpenAIKeyInRecognition)
+    }
+
+    @Test func missing_key_warning_points_below_when_recognition_shows_the_key_row() {
+        let vm = openAIEngineVM(hasOpenAIKey: { false })
+        vm.openAIKeyDidChange()
+        vm.provider = .anthropic
+        #expect(vm.openAIKeyWarning == "Add an OpenAI API key below to use this engine.")
+        vm.provider = .openai
+        #expect(vm.openAIKeyWarning == "Add an OpenAI API key to use this engine.")
+    }
+
+    @Test func no_key_warning_once_a_key_is_stored() {
+        let vm = openAIEngineVM(hasOpenAIKey: { true })
+        vm.openAIKeyDidChange()
+        #expect(vm.openAIKeyWarning == nil)
+        vm.engine = .apple
+        #expect(vm.openAIKeyWarning == nil)
+    }
+
     @Test func provider_change_persists_and_calls_applier() {
         let d = defaults()
         let settings = AppSettings(defaults: d)

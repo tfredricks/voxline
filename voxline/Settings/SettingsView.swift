@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var levelMonitor = MicLevelMonitor()
     @State private var status: SettingsStatusViewModel
     @State private var vocabularyVM: CustomVocabularyListViewModel
+    @State private var recognitionKeyRevealed = false
 
     /// `engineReadiness` reports the readiness of the engine that runs for
     /// an `EngineID`, or nil before the app's engines exist.
@@ -128,8 +129,8 @@ struct SettingsView: View {
                             Text("Audio is sent to OpenAI and transcribed with your OpenAI API key.")
                                 .foregroundStyle(.secondary)
                                 .font(.callout)
-                            if generalVM.showsOpenAIKeyWarning {
-                                Text("Add an OpenAI API key to use this engine.")
+                            if let warning = generalVM.openAIKeyWarning {
+                                Text(warning)
                                     .foregroundStyle(.orange)
                                     .font(.callout)
                             }
@@ -138,6 +139,10 @@ struct SettingsView: View {
                         }
                     }
                     .id(SettingsAnchor.recognition)
+
+                    if generalVM.showsOpenAIKeyInRecognition {
+                        OpenAIKeyRow(general: generalVM, keys: apiKeysVM, revealed: $recognitionKeyRevealed)
+                    }
 
                     CleanupSection(general: generalVM, keys: apiKeysVM)
                         .id(SettingsAnchor.cleanup)

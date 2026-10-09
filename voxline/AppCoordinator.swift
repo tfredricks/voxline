@@ -149,7 +149,8 @@ final class AppCoordinator {
         let engines = TranscriptionEngines(
             settings: settings,
             apple: AppleSpeechEngine(),
-            whisperKit: WhisperKitEngine(service: transcriber)
+            whisperKit: WhisperKitEngine(service: transcriber),
+            openAI: OpenAIRealtimeEngine(keychain: DataProtectionKeychain())
         )
         self.engines = engines
         self.appliedEngine = settings.transcriptionEngine

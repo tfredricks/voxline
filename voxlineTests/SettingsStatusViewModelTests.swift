@@ -119,6 +119,36 @@ import Foundation
         #expect(f.status.engineChipShowsCheck == false)
     }
 
+    @Test func saving_an_openai_key_rechecks_the_openai_engine() async throws {
+        var keySaved = false
+        let f = try makeFixtures(engine: .openAIRealtime, readiness: { _ in
+            keySaved ? .ready : .unavailable("Add an OpenAI API key in Settings → General → Recognition to use OpenAI transcription.")
+        })
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.engineChipShowsCheck == false)
+        let before = f.status.readinessKey
+
+        f.keys.openaiKey = "sk-openai-new"
+        f.keys.commitOpenAI()
+        keySaved = true
+        #expect(f.status.readinessKey != before)
+        #expect(f.status.engineUnavailableReason == nil)
+
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.engineChipShowsCheck == true)
+    }
+
+    @Test func saving_an_openai_key_keeps_an_on_device_check() async throws {
+        let f = try makeFixtures(engine: .whisperKit)
+        await f.status.refreshEngineReadiness()
+        let before = f.status.readinessKey
+
+        f.keys.openaiKey = "sk-openai-new"
+        f.keys.commitOpenAI()
+        #expect(f.status.readinessKey == before)
+        #expect(f.status.engineChipShowsCheck == true)
+    }
+
     @Test func a_superseded_check_does_not_overwrite_a_newer_one() async throws {
         let gate = ReadinessGate()
         let f = try makeFixtures(engine: .apple, readiness: { id in

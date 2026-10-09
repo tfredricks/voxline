@@ -109,6 +109,12 @@ final class APIKeysSettingsViewModel {
         persistedKey(for: provider) == liveKey(for: provider).trimmed
     }
 
+    /// True when a non-empty key for `provider` was loaded or last committed.
+    /// Unsaved edits don't count.
+    func hasSavedKey(_ provider: LLMProvider) -> Bool {
+        !persistedKey(for: provider).isEmpty
+    }
+
     private func liveKey(for provider: LLMProvider) -> String {
         switch provider {
         case .anthropic: return anthropicKey

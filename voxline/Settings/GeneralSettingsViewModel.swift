@@ -119,6 +119,20 @@ final class GeneralSettingsViewModel {
         engine == .openAIRealtime && openAIKeyStored == false
     }
 
+    /// True when OpenAI transcribes but another provider cleans up, so the
+    /// Cleanup section shows no OpenAI key row and Recognition shows one.
+    var showsOpenAIKeyInRecognition: Bool {
+        engine == .openAIRealtime && provider != .openai
+    }
+
+    /// Recognition's missing-key warning for the OpenAI engine, or nil.
+    var openAIKeyWarning: String? {
+        guard showsOpenAIKeyWarning else { return nil }
+        return showsOpenAIKeyInRecognition
+            ? "Add an OpenAI API key below to use this engine."
+            : "Add an OpenAI API key to use this engine."
+    }
+
     /// Re-reads whether an OpenAI key is stored. Call after the stored key
     /// may have changed; `refreshFromUserDefaults()` calls it too.
     func openAIKeyDidChange() {

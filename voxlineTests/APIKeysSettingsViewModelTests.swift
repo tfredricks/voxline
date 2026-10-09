@@ -35,6 +35,24 @@ import Foundation
         #expect(try kc.string(forKey: KeychainAccount.anthropic) == nil)
     }
 
+    @Test func has_saved_key_follows_commits_not_typing() throws {
+        let kc = keychain()
+        try kc.set("sk-openai-saved", forKey: KeychainAccount.openai)
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        #expect(vm.hasSavedKey(.openai))
+        #expect(!vm.hasSavedKey(.anthropic))
+
+        vm.openaiKey = ""
+        #expect(vm.hasSavedKey(.openai))
+        vm.commitOpenAI()
+        #expect(!vm.hasSavedKey(.openai))
+
+        vm.anthropicKey = "sk-ant-new"
+        #expect(!vm.hasSavedKey(.anthropic))
+        vm.commitAnthropic()
+        #expect(vm.hasSavedKey(.anthropic))
+    }
+
     @Test func test_result_resets_when_relevant_key_changes() {
         let vm = APIKeysSettingsViewModel(keychain: keychain())
         vm.testResult = .success(.anthropic)

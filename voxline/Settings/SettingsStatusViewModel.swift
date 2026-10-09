@@ -13,6 +13,9 @@ final class SettingsStatusViewModel {
     struct ReadinessKey: Equatable {
         let engine: EngineID
         let whisperModel: WhisperModel
+        /// Whether an OpenAI key is saved; tracked only for the OpenAI
+        /// engine, whose readiness depends on it.
+        let openAIKeySaved: Bool?
     }
 
     private let general: GeneralSettingsViewModel
@@ -34,7 +37,11 @@ final class SettingsStatusViewModel {
     }
 
     var readinessKey: ReadinessKey {
-        ReadinessKey(engine: general.engine, whisperModel: general.whisperModel)
+        ReadinessKey(
+            engine: general.engine,
+            whisperModel: general.whisperModel,
+            openAIKeySaved: general.engine == .openAIRealtime ? keys.hasSavedKey(.openai) : nil
+        )
     }
 
     /// Checks the selected engine. A check that finishes after a newer one

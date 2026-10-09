@@ -8,7 +8,9 @@ import Foundation
 ///
 /// Opt-in: runs only with `VOXLINE_BAKEOFF=1` and fixtures present. Optional
 /// env: `VOXLINE_BAKEOFF_DIR` (fixtures), `VOXLINE_BAKEOFF_SPEED` (pacing
-/// multiplier; keep 1 for numbers that feed the decision rule). Pass them to
+/// multiplier; keep 1 for numbers that feed the decision rule), and
+/// `VOXLINE_BAKEOFF_CLOUD=1` to add OpenAI (sends the clips to OpenAI with
+/// the saved key; never eligible to win). Pass them to
 /// `xcodebuild` as `TEST_RUNNER_<name>`:
 /// `TEST_RUNNER_VOXLINE_BAKEOFF=1 xcodebuild test ... -only-testing:voxlineTests/EngineBakeoffTests`
 @Suite(.serialized, .enabled(if: BakeoffFixtures.isEnabled, "Set VOXLINE_BAKEOFF=1 with bake-off fixtures present"))
@@ -42,6 +44,9 @@ struct EngineBakeoffTests {
         var engines: [any TranscriptionEngine] = [AppleSpeechEngine()]
         if TranscriptionService.isModelCached(.largeV3Turbo) {
             engines.append(WhisperKitEngine(service: TranscriptionService(model: .largeV3Turbo)))
+        }
+        if ProcessInfo.processInfo.environment["VOXLINE_BAKEOFF_CLOUD"] == "1" {
+            engines.append(OpenAIRealtimeEngine(keychain: DataProtectionKeychain()))
         }
 
         var runs: [EngineRun] = []
