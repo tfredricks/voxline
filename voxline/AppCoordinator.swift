@@ -71,7 +71,8 @@ final class AppCoordinator {
     }
 
     /// Starts a meeting recording, or raises the permissions window instead
-    /// when the microphone isn't allowed.
+    /// when the microphone isn't allowed. The notification permission prompt
+    /// waits for the first recording that actually starts.
     func startMeetingRecording() {
         guard let meetings = appState?.meetings else { return }
         guard PermissionsService().microphoneStatus == .granted else {
@@ -80,6 +81,9 @@ final class AppCoordinator {
             return
         }
         meetings.start()
+        if meetings.phase.isRecording {
+            meetingNotifier?.requestAuthorization()
+        }
     }
 
     /// The meeting shortcut: starts like `startMeetingRecording()` when
@@ -467,7 +471,6 @@ final class AppCoordinator {
             return
         }
         let notifier = UserNotificationMeetingNotifier()
-        notifier.requestAuthorization()
         meetingNotifier = notifier
         let vocabulary = CustomVocabularyStore()
         let pipeline = MeetingPipeline(

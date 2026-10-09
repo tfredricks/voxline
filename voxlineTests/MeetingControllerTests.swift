@@ -10,8 +10,10 @@ final class FakeRecorder: MeetingRecording {
     var elapsed: Duration = .zero
     var startError: Error?
     private(set) var started = false
+    private(set) var startCount = 0
     func start() throws {
         if let startError { throw startError }
+        startCount += 1
         started = true
     }
     func stop() { finish(.user) }
@@ -50,9 +52,14 @@ final class FakePrompts: MeetingPrompting {
     var consent = true
     var processUnfinished: [Bool] = []
     var onConfirmUnfinished: (() -> Void)?
+    var onConsent: (() -> Void)?
     private(set) var consentAsked = 0
     private(set) var errors: [String] = []
-    func confirmConsent() -> Bool { consentAsked += 1; return consent }
+    func confirmConsent() -> Bool {
+        consentAsked += 1
+        onConsent?()
+        return consent
+    }
     func confirmProcessUnfinished(startedAt: Date) -> Bool {
         onConfirmUnfinished?()
         return processUnfinished.isEmpty ? true : processUnfinished.removeFirst()
@@ -93,6 +100,16 @@ final class FakePrompts: MeetingPrompting {
             Issue.record("expected a second recording")
             return
         }
+    }
+
+    @Test func start_during_consent_prompt_is_ignored() {
+        let controller = makeController()
+        prompts.onConsent = { controller.start() }
+        controller.start()
+        #expect(prompts.consentAsked == 1)
+        #expect(store.all().count == 1)
+        #expect(recorder.startCount == 1)
+        #expect(controller.phase == .recording(startedAt: Date(timeIntervalSince1970: 1_000)))
     }
 
     @Test func declined_consent_does_not_record() {
@@ -140,7 +157,7 @@ final class FakePrompts: MeetingPrompting {
         controller.stop()
         await controller.processingTask?.value
         let id = try #require(controller.lastFailedMeeting)
-        #expect(notifier.notices.contains(.failed("Transcription failed: x")))
+        #expect(notifier.notices.contains(.failed("Transcription failed: x", retryable: true)))
         processing.outcome = .written(URL(fileURLWithPath: "/tmp/n.md"))
         controller.retryFailed()
         await controller.processingTask?.value
@@ -212,7 +229,7 @@ final class FakePrompts: MeetingPrompting {
         let controller = makeController()
         controller.regenerate(UUID())
         await controller.processingTask?.value
-        #expect(notifier.notices.contains(.failed("Notes failed")))
+        #expect(notifier.notices.contains(.failed("Notes failed", retryable: false)))
         #expect(controller.lastFailedMeeting == nil)
         controller.retryFailed()
         #expect(controller.phase == .idle)

@@ -26,6 +26,7 @@ final class MeetingController {
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private var recorder: MeetingRecording?
     @ObservationIgnored private var activeRecordingID: UUID?
+    @ObservationIgnored private var isStarting = false
 
     init(
         store: MeetingStore,
@@ -58,8 +59,12 @@ final class MeetingController {
         }
     }
 
+    /// Ignores a call made while a start is already under way, such as a
+    /// shortcut press delivered during the consent alert's modal loop.
     func start() {
-        guard phase == .idle else { return }
+        guard phase == .idle, !isStarting else { return }
+        isStarting = true
+        defer { isStarting = false }
         if !settings.meetingConsentNoticeShown {
             guard prompts.confirmConsent() else { return }
             settings.meetingConsentNoticeShown = true
@@ -170,7 +175,7 @@ final class MeetingController {
             notifier.post(.nothingRecorded)
         case .failed(let message):
             if retryable { lastFailedMeeting = id }
-            notifier.post(.failed(message))
+            notifier.post(.failed(message, retryable: retryable))
         }
     }
 }

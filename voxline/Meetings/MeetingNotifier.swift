@@ -6,7 +6,9 @@ enum MeetingNotice: Equatable {
     case capWarning
     case notesReady(URL)
     case nothingRecorded
-    case failed(String)
+    /// `retryable` is false for a Regenerate Notes failure, which has no
+    /// Retry Processing item.
+    case failed(String, retryable: Bool)
     case systemAudioUnavailable
 }
 
@@ -25,7 +27,8 @@ protocol MeetingPrompting: AnyObject {
 }
 
 /// Posts meeting notices through Notification Center. Clicking "notes
-/// ready" opens the file. A denied or failed post is logged, never raised.
+/// ready" opens the file. Authorization is requested before the first
+/// post; a denied or failed post is logged, never raised.
 @MainActor
 final class UserNotificationMeetingNotifier: NSObject, MeetingNotifying, UNUserNotificationCenterDelegate {
 
@@ -36,40 +39,54 @@ final class UserNotificationMeetingNotifier: NSObject, MeetingNotifying, UNUserN
         center.delegate = self
     }
 
-    func requestAuthorization() {
+    nonisolated static func text(for notice: MeetingNotice) -> (title: String, body: String) {
+        switch notice {
+        case .capWarning:
+            return ("Meeting recording stops in 5 minutes",
+                    "Voxline records meetings for up to 60 minutes. Notes are written when it stops.")
+        case .notesReady(let url):
+            return ("Meeting notes ready", url.deletingPathExtension().lastPathComponent)
+        case .nothingRecorded:
+            return ("Nothing was recorded", "No speech was found in the meeting recording.")
+        case .failed(let message, let retryable):
+            let next = retryable
+                ? "Choose Retry Processing in the Voxline menu."
+                : "Choose Regenerate Notes in the Voxline menu to try again."
+            return ("Couldn't finish the meeting notes", "\(message) \(next)")
+        case .systemAudioUnavailable:
+            return ("Recording your microphone only",
+                    "Voxline couldn't capture your Mac's sound output, so remote speakers won't be separated.")
+        }
+    }
+
+    /// Shows the system prompt the first time; afterwards it only reports
+    /// the decision already made.
+    func requestAuthorization(then completion: (@Sendable () -> Void)? = nil) {
         center.requestAuthorization(options: [.alert, .sound]) { granted, error in
             if let error {
                 AppLog.meetings.error("notification authorization failed: \(error.localizedDescription, privacy: .public)")
             } else if !granted {
                 AppLog.meetings.notice("notifications not allowed; meeting notices will not show")
             }
+            completion?()
         }
     }
 
     func post(_ notice: MeetingNotice) {
+        let text = Self.text(for: notice)
         let content = UNMutableNotificationContent()
-        switch notice {
-        case .capWarning:
-            content.title = "Meeting recording stops in 5 minutes"
-            content.body = "Voxline records meetings for up to 60 minutes. Notes are written when it stops."
-        case .notesReady(let url):
-            content.title = "Meeting notes ready"
-            content.body = url.deletingPathExtension().lastPathComponent
+        content.title = text.title
+        content.body = text.body
+        if case .notesReady(let url) = notice {
             content.userInfo = ["path": url.path]
-        case .nothingRecorded:
-            content.title = "Nothing was recorded"
-            content.body = "No speech was found in the meeting recording."
-        case .failed(let message):
-            content.title = "Couldn't finish the meeting notes"
-            content.body = "\(message) Choose Retry Processing in the Voxline menu."
-        case .systemAudioUnavailable:
-            content.title = "Recording your microphone only"
-            content.body = "Voxline couldn't capture your Mac's sound output, so remote speakers won't be separated."
         }
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        center.add(request) { error in
-            if let error {
-                AppLog.meetings.error("posting meeting notification failed: \(error.localizedDescription, privacy: .public)")
+        let center = center
+        requestAuthorization {
+            center.add(request) { error in
+                if let error {
+                    AppLog.meetings.error("posting meeting notification failed: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }
