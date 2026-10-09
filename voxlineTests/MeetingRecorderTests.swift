@@ -134,6 +134,59 @@ final class FakeMeetingSource: MeetingAudioSource {
         }
     }
 
+    @Test func system_track_exhaustion_keeps_recording_the_mic() async throws {
+        let recorder = makeRecorder()
+        var stopped: [MeetingStopReason] = []
+        var lost = 0
+        recorder.onStopped = { stopped.append($0) }
+        recorder.onSystemTrackLost = { lost += 1 }
+        try recorder.start()
+        await settle()
+        for _ in 0..<4 {
+            system.fail()
+            await settle()
+            await clock.advance(by: .seconds(1))
+        }
+        #expect(stopped.isEmpty)
+        #expect(lost == 1)
+        #expect(recorder.systemTrackLost)
+        #expect(system.startCount == 4)
+        #expect(system.stopCount >= 4)
+
+        system.fail()
+        await settle()
+        await clock.advance(by: .seconds(1))
+        #expect(system.startCount == 4)
+        #expect(lost == 1)
+
+        mic.emit([0.5, 0.5])
+        recorder.stop()
+        #expect(stopped == [.user])
+        #expect(PCMTrackReader.sampleCount(at: directory.micPCM) >= 2)
+    }
+
+    @Test func stop_racing_the_warning_wake_up_suppresses_the_warning() async throws {
+        let clock = clock
+        var recorder: MeetingRecorder?
+        recorder = MeetingRecorder(
+            mic: mic, system: system, directory: directory, cap: MeetingRecorder.defaultCap,
+            sleep: { @MainActor duration in
+                try await clock.sleep(duration)
+                recorder?.stop()
+            },
+            clock: { clock.now }
+        )
+        var warned = 0
+        var stopped: [MeetingStopReason] = []
+        recorder?.onWarning = { warned += 1 }
+        recorder?.onStopped = { stopped.append($0) }
+        try recorder?.start()
+        await settle()
+        await clock.advance(by: .seconds(3_600))
+        #expect(warned == 0)
+        #expect(stopped == [.user])
+    }
+
     @Test func failures_far_apart_do_not_accumulate() async throws {
         let recorder = makeRecorder()
         var stopped: [MeetingStopReason] = []

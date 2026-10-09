@@ -15,6 +15,10 @@ final class MeetingController {
 
     private(set) var phase: Phase = .idle
     private(set) var lastFailedMeeting: UUID?
+    /// Cached so the menu doesn't read every `meta.json` on each redraw;
+    /// refreshed when processing finishes, after retention, and after a
+    /// recovery discard.
+    private(set) var regenerableMeetings: [MeetingMeta] = []
     @ObservationIgnored private(set) var processingTask: Task<Void, Never>?
 
     @ObservationIgnored private let store: MeetingStore
@@ -45,11 +49,10 @@ final class MeetingController {
         self.prompts = prompts
         self.now = now
         pipeline.onStage = { [weak self] stage in self?.phase = .processing(stage) }
+        refreshRegenerable()
     }
 
     var needsQuitConfirmation: Bool { phase != .idle }
-
-    var regenerableMeetings: [MeetingMeta] { store.regenerable() }
 
     func toggle() {
         switch phase {
@@ -79,6 +82,7 @@ final class MeetingController {
         let recorder = makeRecorder(store.directory(for: meta.id))
         recorder.onWarning = { [weak self] in self?.notifier.post(.capWarning) }
         recorder.onStopped = { [weak self] reason in self?.recordingStopped(meta.id, reason: reason) }
+        recorder.onSystemTrackLost = { [weak self] in self?.notifier.post(.systemAudioLost) }
         do {
             try recorder.start()
         } catch {
@@ -130,12 +134,18 @@ final class MeetingController {
                 await processingTask?.value
             } else {
                 store.delete(meta.id)
+                refreshRegenerable()
             }
         }
     }
 
     func applyRetention() {
         store.applyRetention(settings.meetingAudioRetention, now: now())
+        refreshRegenerable()
+    }
+
+    private func refreshRegenerable() {
+        regenerableMeetings = store.regenerable()
     }
 
     private func recordingStopped(_ id: UUID, reason: MeetingStopReason) {
@@ -151,6 +161,7 @@ final class MeetingController {
         }
         if case .failed(let message) = reason {
             AppLog.meetings.error("recording ended early: \(message, privacy: .public)")
+            notifier.post(.recordingStopped(message))
         }
         runProcessing(id)
     }
@@ -166,6 +177,7 @@ final class MeetingController {
 
     private func finish(_ outcome: MeetingOutcome, id: UUID, retryable: Bool = true) {
         phase = .idle
+        refreshRegenerable()
         switch outcome {
         case .written(let url):
             if lastFailedMeeting == id { lastFailedMeeting = nil }

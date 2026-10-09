@@ -10,6 +10,8 @@ enum MeetingNotice: Equatable {
     /// Retry Processing item.
     case failed(String, retryable: Bool)
     case systemAudioUnavailable
+    case recordingStopped(String)
+    case systemAudioLost
 }
 
 @MainActor
@@ -56,6 +58,11 @@ final class UserNotificationMeetingNotifier: NSObject, MeetingNotifying, UNUserN
         case .systemAudioUnavailable:
             return ("Recording your microphone only",
                     "Voxline couldn't capture your Mac's sound output, so remote speakers won't be separated.")
+        case .recordingStopped(let reason):
+            let sentence = reason.hasSuffix(".") ? reason : reason + "."
+            return ("Meeting recording stopped", "\(sentence) Notes will be written for what was recorded.")
+        case .systemAudioLost:
+            return ("System audio capture stopped", "Recording continues with your microphone only.")
         }
     }
 
@@ -129,7 +136,7 @@ final class AlertMeetingPrompts: MeetingPrompting {
         alert.messageText = "Process unfinished meeting from \(startedAt.formatted(date: .abbreviated, time: .shortened))?"
         alert.informativeText = "Voxline quit before this meeting's notes were written. The audio is still on this Mac."
         alert.addButton(withTitle: "Process")
-        alert.addButton(withTitle: "Discard")
+        alert.addButton(withTitle: "Discard").hasDestructiveAction = true
         NSApp.activate(ignoringOtherApps: true)
         return alert.runModal() == .alertFirstButtonReturn
     }

@@ -6,6 +6,7 @@ import Testing
 final class FakeRecorder: MeetingRecording {
     var onWarning: (() -> Void)?
     var onStopped: ((MeetingStopReason) -> Void)?
+    var onSystemTrackLost: (() -> Void)?
     var systemTapStarted = true
     var elapsed: Duration = .zero
     var startError: Error?
@@ -148,6 +149,66 @@ final class FakePrompts: MeetingPrompting {
         await controller.processingTask?.value
         #expect(notifier.notices.first == .capWarning)
         #expect(processing.processed.count == 1)
+    }
+
+    @Test func early_stop_posts_recording_stopped_before_processing() async throws {
+        let controller = makeController()
+        controller.start()
+        recorder.finish(.failed("The microphone stopped and couldn't be restarted."))
+        #expect(notifier.notices == [.recordingStopped("The microphone stopped and couldn't be restarted.")])
+        await controller.processingTask?.value
+        #expect(processing.processed.count == 1)
+        #expect(notifier.notices.last == .notesReady(URL(fileURLWithPath: "/tmp/n.md")))
+    }
+
+    @Test func user_and_cap_stops_post_no_recording_stopped_notice() async throws {
+        let controller = makeController()
+        controller.start()
+        controller.stop()
+        await controller.processingTask?.value
+        #expect(!notifier.notices.contains { if case .recordingStopped = $0 { true } else { false } })
+    }
+
+    @Test func lost_system_track_posts_a_notice_and_keeps_recording() {
+        let controller = makeController()
+        controller.start()
+        recorder.onSystemTrackLost?()
+        #expect(notifier.notices == [.systemAudioLost])
+        #expect(controller.phase.isRecording)
+    }
+
+    @Test func regenerable_list_is_cached_and_refreshed_after_processing_and_retention() async throws {
+        var old = try store.create(startedAt: Date(timeIntervalSince1970: 1), systemTapStarted: false)
+        old.state = .done
+        try store.save(old)
+        try Data("{}".utf8).write(to: store.directory(for: old.id).transcript)
+        let controller = makeController(now: Date(timeIntervalSince1970: 100 * 86_400))
+        #expect(controller.regenerableMeetings.map(\.id) == [old.id])
+
+        controller.start()
+        let id = try #require(store.all().first { $0.id != old.id }?.id)
+        try Data("{}".utf8).write(to: store.directory(for: id).transcript)
+        #expect(controller.regenerableMeetings.map(\.id) == [old.id])
+        controller.stop()
+        await controller.processingTask?.value
+        #expect(controller.regenerableMeetings.map(\.id) == [id, old.id])
+
+        controller.applyRetention()
+        #expect(controller.regenerableMeetings.map(\.id) == [id])
+    }
+
+    @Test func discarded_recovery_leaves_the_regenerable_list() async throws {
+        var unfinished = try store.create(startedAt: Date(timeIntervalSince1970: 1), systemTapStarted: false)
+        unfinished.state = .processing
+        try store.save(unfinished)
+        try Data("{}".utf8).write(to: store.directory(for: unfinished.id).transcript)
+        let controller = makeController()
+        #expect(controller.regenerableMeetings.map(\.id) == [unfinished.id])
+        prompts.processUnfinished = [false]
+
+        await controller.recoverUnfinished()
+
+        #expect(controller.regenerableMeetings.isEmpty)
     }
 
     @Test func failed_outcome_can_be_retried() async throws {

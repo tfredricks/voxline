@@ -10,6 +10,9 @@ enum MeetingStopReason: Equatable {
 protocol MeetingRecording: AnyObject {
     var onWarning: (() -> Void)? { get set }
     var onStopped: ((MeetingStopReason) -> Void)? { get set }
+    /// Fires once when the system track can't be restarted; the mic keeps
+    /// recording.
+    var onSystemTrackLost: (() -> Void)? { get set }
     var systemTapStarted: Bool { get }
     var elapsed: Duration { get }
     func start() throws
@@ -17,7 +20,9 @@ protocol MeetingRecording: AnyObject {
 }
 
 /// One meeting recording: the mic and, when it starts, the system tap,
-/// each written to its raw track in `directory`.
+/// each written to its raw track in `directory`. A mic that can't be
+/// restarted stops the recording; a system tap that can't be restarted is
+/// dropped and the mic keeps recording.
 @MainActor
 final class MeetingRecorder: MeetingRecording {
 
@@ -41,7 +46,9 @@ final class MeetingRecorder: MeetingRecording {
 
     var onWarning: (() -> Void)?
     var onStopped: ((MeetingStopReason) -> Void)?
+    var onSystemTrackLost: (() -> Void)?
     private(set) var systemTapStarted = false
+    private(set) var systemTrackLost = false
 
     private let mic: MeetingAudioSource
     private let system: MeetingAudioSource?
@@ -85,10 +92,16 @@ final class MeetingRecorder: MeetingRecording {
         let writeFailed: @Sendable (Error) -> Void = { [weak self] error in
             Task { @MainActor in self?.stop(reason: .failed("Couldn't write meeting audio: \(error.localizedDescription)")) }
         }
-        writers[.mic] = try PCMTrackWriter(url: directory.micPCM, onFailure: writeFailed)
-        writers[.system] = try PCMTrackWriter(url: directory.systemPCM, onFailure: writeFailed)
-        startedAt = clock()
-        try startSource(.mic)
+        do {
+            writers[.mic] = try PCMTrackWriter(url: directory.micPCM, onFailure: writeFailed)
+            writers[.system] = try PCMTrackWriter(url: directory.systemPCM, onFailure: writeFailed)
+            startedAt = clock()
+            try startSource(.mic)
+        } catch {
+            writers.values.forEach { $0.close() }
+            writers = [:]
+            throw error
+        }
         isRecording = true
         if system != nil {
             do {
@@ -103,8 +116,10 @@ final class MeetingRecorder: MeetingRecording {
         capTask = Task { [weak self, sleep] in
             do {
                 try await sleep(warningAt)
+                guard self?.isRecording == true else { return }
                 self?.onWarning?()
                 try await sleep(lead)
+                guard self?.isRecording == true else { return }
                 self?.stop(reason: .cap)
             } catch {}
         }
@@ -146,8 +161,12 @@ final class MeetingRecorder: MeetingRecording {
         )
     }
 
+    private func isLive(_ track: Track) -> Bool {
+        isRecording && !(track == .system && systemTrackLost)
+    }
+
     private func handleFailure(_ track: Track) {
-        guard isRecording else { return }
+        guard isLive(track) else { return }
         let now = clock()
         if let last = lastFailure[track], now - last > Self.failureWindow {
             failures[track] = 0
@@ -155,8 +174,11 @@ final class MeetingRecorder: MeetingRecording {
         failures[track, default: 0] += 1
         lastFailure[track] = now
         guard failures[track, default: 0] <= Self.maxConsecutiveFailures else {
-            let name = track == .mic ? "microphone" : "system audio"
-            stop(reason: .failed("The \(name) stopped and couldn't be restarted."))
+            if track == .mic {
+                stop(reason: .failed("The microphone stopped and couldn't be restarted."))
+            } else {
+                loseSystemTrack()
+            }
             return
         }
         AppLog.meetings.notice("\(track == .mic ? "mic" : "system", privacy: .public) track failed; restarting")
@@ -166,8 +188,16 @@ final class MeetingRecorder: MeetingRecording {
         })
     }
 
+    private func loseSystemTrack() {
+        systemTrackLost = true
+        system?.stop()
+        writers[.system]?.close()
+        AppLog.meetings.notice("system track couldn't be restarted; recording mic only")
+        onSystemTrackLost?()
+    }
+
     private func restart(_ track: Track) {
-        guard isRecording, let source = source(track) else { return }
+        guard isLive(track), let source = source(track) else { return }
         source.stop()
         writers[track]?.padSilence(toSampleCount: Self.expectedSamples(after: elapsed))
         do {
