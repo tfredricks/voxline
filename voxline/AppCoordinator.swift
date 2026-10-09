@@ -506,6 +506,10 @@ final class AppCoordinator {
                     observer: observer
                 )
             },
+            makeLiveTranscript: { [weak self] in
+                guard AppSettings().liveTranscriptEnabled, let engine = self?.engines?.engine(for: .apple) else { return nil }
+                return LiveMeetingTranscript(engine: engine)
+            },
             pipeline: pipeline,
             notifier: notifier,
             prompts: AlertMeetingPrompts()
@@ -534,7 +538,7 @@ final class AppCoordinator {
 
     private func updateMeetingTimer(state: AppState) {
         if case .recording(let startedAt) = state.meetings?.phase, AppSettings().showMeetingTimer {
-            meetingTimer.show(startedAt: startedAt)
+            meetingTimer.show(startedAt: startedAt, live: state.meetings?.liveTranscript)
         } else {
             meetingTimer.hide()
         }

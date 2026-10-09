@@ -1,18 +1,26 @@
 import AppKit
 import SwiftUI
 
-/// The elapsed-time chip shown while a meeting records. Borderless,
-/// non-activating, never key or main, on every Space, draggable; its
-/// position is remembered. A panel, so `DockPolicy` ignores it.
+/// The elapsed-time chip shown while a meeting records, expandable to the
+/// live transcript. Borderless, non-activating, never key or main, on every
+/// Space, draggable; its position is remembered. A panel, so `DockPolicy`
+/// ignores it.
 @MainActor
 final class MeetingTimerPanel {
 
     private static let autosaveName = "voxline.meetingTimer"
     private var panel: NSPanel?
+    private var hostingView: NSHostingView<MeetingLivePanelView>?
+    private var startedAt = Date()
+    private var live: (any LiveMeetingTranscribing)?
+    private var expanded = false
 
-    func show(startedAt: Date) {
+    func show(startedAt: Date, live: (any LiveMeetingTranscribing)?) {
         guard panel == nil else { return }
-        let hostingView = NSHostingView(rootView: MeetingTimerChip(startedAt: startedAt))
+        self.startedAt = startedAt
+        self.live = live
+        expanded = live != nil && AppSettings().meetingLivePanelExpanded
+        let hostingView = NSHostingView(rootView: rootView())
         let panel = ChipPanel(
             contentRect: NSRect(origin: .zero, size: hostingView.fittingSize),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -30,8 +38,7 @@ final class MeetingTimerPanel {
         panel.hasShadow = true
         panel.contentView = hostingView
         let saved = panel.setFrameUsingName(Self.autosaveName) ? panel.frame : nil
-        let screen = saved.flatMap { saved in NSScreen.screens.first { $0.frame.intersects(saved) } } ?? NSScreen.main
-        if let screen {
+        if let screen = Self.screen(for: saved) {
             let frame = MeetingTimerLayout.frame(
                 size: hostingView.fittingSize, saved: saved, visibleFrame: screen.visibleFrame
             )
@@ -40,39 +47,43 @@ final class MeetingTimerPanel {
         panel.setFrameAutosaveName(Self.autosaveName)
         panel.orderFrontRegardless()
         self.panel = panel
+        self.hostingView = hostingView
     }
 
     func hide() {
         panel?.orderOut(nil)
         panel = nil
+        hostingView = nil
+        live = nil
+    }
+
+    private func rootView() -> MeetingLivePanelView {
+        MeetingLivePanelView(startedAt: startedAt, live: live, expanded: expanded) { [weak self] in
+            self?.toggle()
+        }
+    }
+
+    private func toggle() {
+        expanded.toggle()
+        var settings = AppSettings()
+        settings.meetingLivePanelExpanded = expanded
+        guard let panel, let hostingView else { return }
+        hostingView.rootView = rootView()
+        hostingView.layoutSubtreeIfNeeded()
+        let size = hostingView.fittingSize
+        guard let screen = Self.screen(for: panel.frame) else { return }
+        panel.setFrame(
+            MeetingTimerLayout.resized(panel.frame, to: size, visibleFrame: screen.visibleFrame),
+            display: true
+        )
+    }
+
+    private static func screen(for frame: CGRect?) -> NSScreen? {
+        frame.flatMap { frame in NSScreen.screens.first { $0.frame.intersects(frame) } } ?? NSScreen.main
     }
 }
 
 private final class ChipPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
-}
-
-private struct MeetingTimerChip: View {
-    let startedAt: Date
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(.red).frame(width: 8, height: 8)
-            ZStack {
-                Text(MeetingTimerLayout.widestLabel).hidden()
-                TimelineView(.periodic(from: startedAt, by: 1)) { context in
-                    Text(MeetingTimerLayout.label(elapsed: context.date.timeIntervalSince(startedAt)))
-                }
-            }
-            .monospacedDigit()
-            .font(.system(size: 12, weight: .medium))
-            .fixedSize()
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(.regularMaterial, in: Capsule())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Meeting recording")
-    }
 }
