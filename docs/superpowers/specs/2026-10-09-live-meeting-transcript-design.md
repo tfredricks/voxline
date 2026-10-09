@@ -1,7 +1,7 @@
 # Live transcript during meetings
 
 **Date:** 2026-10-09
-**Status:** Approved design; implementation plan to follow.
+**Status:** Approved; implemented (see plan 2026-10-09-live-meeting-transcript.md).
 **Builds on:** `2026-10-09-meeting-notes-design.md` (phase 4), which listed
 this as "Approach 2, can be layered on later without changing the post-stop
 pipeline". It does not change that pipeline.

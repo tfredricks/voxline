@@ -93,6 +93,12 @@ app that is no longer sandboxed.
   and LLM notes written as Markdown to a folder you choose. Start and stop
   from the menu or a shortcut; recovery after a quit or crash; Regenerate
   Notes; an audio retention setting.
+- **Live transcript during meetings.** The recording timer has a chevron;
+  expand it to see the last few things said, labeled Me (your mic) and Them
+  (your Mac's sound output), with words that may still change shown dim.
+  Transcribed on this Mac by Apple Speech, kept only in memory, and gone when
+  you stop; the notes after Stop are unchanged. Settings → Meetings → Live
+  transcript turns it off (it needs the timer shown).
 - **Learning from your corrections.** Fix a misheard name in the field after
   dictating it and voxline adds it to Custom vocabulary, with Undo in the
   pill; a word you remove is not learned again. To see the fix, voxline reads

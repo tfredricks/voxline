@@ -643,6 +643,20 @@ Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meeti
 - [ ] Meeting shortcut starts and stops a recording from any app.
 - [ ] Retention "Don't keep": no `.pcm`/`.m4a` remain in `~/Library/Application Support/voxline/meetings/<id>/` after notes are written.
 - [ ] One-hour real meeting: note the time from Stop to "Meeting notes ready" (spike target ≤ 4 min on synthetic audio with small.en; record the real number).
+- [ ] Live transcript: Start a meeting; the chip has a chevron. Expand: "Listening…", then your own words appear under "Me" within a few seconds, bright once settled, dim while changing.
+- [ ] Live transcript on a call with headphones: the other side appears under "Them"; turns interleave in speaking order.
+- [ ] Live transcript in-person (system tap denied or silent): lines carry no label.
+- [ ] Collapse and expand: the top-left corner stays put; with the chip near the bottom of the screen the expanded panel stays on screen.
+- [ ] Expanded state and position survive Stop and the next Start.
+- [ ] Drag the panel by the time; the chevron toggles without moving it.
+- [ ] With Zoom, Slack, or another app frontmost (voxline not active), the first click on the chevron toggles the panel; if the first click only activates nothing and the second toggles, note it (fix: an `NSHostingView` subclass returning true from `acceptsFirstMouse(for:)`).
+- [ ] Expanding and collapsing resizes the panel in one step with no flash of the old size.
+- [ ] Hold the dictation hotkey mid-meeting: dictation works; the words show under "Me".
+- [ ] Unplug headphones mid-meeting: "Me" keeps updating after the restart.
+- [ ] Stop: the panel disappears; the notes after processing match a meeting recorded with Live transcript off.
+- [ ] Settings → Meetings → Live transcript off: the chip is exactly the old chip and `scripts/tail-logs.sh meetings` shows no "live transcript" line. Timer off disables the toggle.
+- [ ] Full-screen Zoom or Teams: the expanded panel stays visible over it.
+- [ ] One-hour meeting with the panel expanded: lines still arrive in the last minute; note voxline's CPU in Activity Monitor in the spec's results table.
 
 ## Learning
 
