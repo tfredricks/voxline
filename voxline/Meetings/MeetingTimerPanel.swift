@@ -3,8 +3,7 @@ import SwiftUI
 
 /// The elapsed-time chip shown while a meeting records. Borderless,
 /// non-activating, never key or main, on every Space, draggable; its
-/// position is remembered. Untitled, so `WindowVisibilityCoordinator`
-/// ignores it.
+/// position is remembered. A panel, so `DockPolicy` ignores it.
 @MainActor
 final class MeetingTimerPanel {
 

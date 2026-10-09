@@ -114,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var learning = LearningCoordinator.live(state: appState)
     let aboutWindow = AboutWindowController()
     let historyWindow = HistoryWindowController()
-    let windowVisibility = WindowVisibilityCoordinator()
+    let activationPolicy = ActivationPolicyController()
     let dictationActivity = DictationActivityMonitor()
     lazy var updateService = UpdateService(dictationActivity: dictationActivity)
 
@@ -124,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let migration = ContainerMigration.standard()?.runIfNeeded()
-        windowVisibility.start()
+        activationPolicy.start()
         coordinator.learning = learning
         coordinator.startIfNeeded(state: appState, historyStore: historyStore, migration: migration)
         _ = updateService // force-init so Sparkle's scheduler starts
