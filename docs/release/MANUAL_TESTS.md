@@ -52,6 +52,7 @@ Sparkle running unsandboxed.
 
 ## Upgrade from 0.3.1
 
+- [ ] Maintainers: if this Mac ever ran an unsandboxed dev build, first wipe `~/Library/Application Support/voxline` and the `com.voxline.app` domain (`defaults delete ~/Library/Preferences/com.voxline.app`), or the migration will skip your real data as "destination already exists".
 - [ ] Install 0.3.1 from Releases. Complete the wizard, save an API key, add
       two custom vocabulary terms, dictate three times (so history is non-empty).
 - [ ] Install 0.4.0 over it (DMG drag, or Sparkle from a staging appcast). Launch.
@@ -63,7 +64,6 @@ Sparkle running unsandboxed.
 - [ ] `scripts/tail-logs.sh --last 2m pipeline` shows a `container migration:` line with `models=true`.
 - [ ] The first dictation after the upgrade is not delayed by a 30 s–2 min model compile (the ANE cache moved with the rest).
 - [ ] Numbers: select a cell (not editing it), dictate. The text lands in the cell, as in 0.3.1. Repeat in Excel.
-- [ ] Maintainers: if this Mac ever ran an unsandboxed dev build, first wipe `~/Library/Application Support/voxline` and the `com.voxline.app` domain (`defaults delete ~/Library/Preferences/com.voxline.app`), or the migration will skip your real data as "destination already exists".
 
 ## Fresh install
 
