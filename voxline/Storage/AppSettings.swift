@@ -20,6 +20,10 @@ struct AppSettings {
         static let saveBakeoffClips = "voxline.debug.saveBakeoffClips"
     }
 
+    /// Stored under `Key.commandChord` for "command mode off". The legacy
+    /// `Key.legacyCommandModifier` used the same string.
+    static let commandChordOff = "off"
+
     let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -78,11 +82,11 @@ struct AppSettings {
     }
 
     /// The command-mode chord, or nil when command mode is off. Stored as
-    /// JSON, or the string `"off"` for nil. Absent → `.defaultCommand`,
+    /// JSON, or `commandChordOff` for nil. Absent → `.defaultCommand`,
     /// unless that is the dictation chord, then off.
     var commandChord: HotkeyChord? {
         get {
-            if defaults.string(forKey: Key.commandChord) == "off" { return nil }
+            if defaults.string(forKey: Key.commandChord) == Self.commandChordOff { return nil }
             if let data = defaults.data(forKey: Key.commandChord),
                let chord = try? JSONDecoder().decode(HotkeyChord.self, from: data) {
                 return chord
@@ -93,7 +97,7 @@ struct AppSettings {
             if let newValue, let data = try? JSONEncoder().encode(newValue) {
                 defaults.set(data, forKey: Key.commandChord)
             } else {
-                defaults.set("off", forKey: Key.commandChord)
+                defaults.set(Self.commandChordOff, forKey: Key.commandChord)
             }
         }
     }
