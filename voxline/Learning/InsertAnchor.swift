@@ -9,9 +9,10 @@ struct AnchorText: Equatable, Sendable {
     let inserted: String
     let range: UTF16Range
     /// Up to `contextLength` units before `range`, its start snapped outward
-    /// to a composed-character boundary.
+    /// to a composed-character boundary. Shorter only when the field's start clipped it.
     let prefix: String
     /// Up to `contextLength` units after `range`, its end snapped outward.
+    /// Shorter only when the field's end clipped it.
     let suffix: String
 
     /// nil unless `caret` is an empty range inside `value` and the
