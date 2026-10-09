@@ -189,7 +189,8 @@ final class AppCoordinator {
             inserter: inserter,
             historyStore: historyStore,
             contextCapture: contextCapture,
-            selectionSnapshot: AXSelectionReader()
+            selectionSnapshot: DefaultSelectionSnapshot(),
+            editContextReader: EditContextReader()
         )
         self.pipeline = pipeline
         capture.onInterrupted = { [weak pipeline] in pipeline?.handleCaptureInterrupted() }
@@ -206,7 +207,7 @@ final class AppCoordinator {
         monitor.chords = settings.chords
         monitor.onStartRecording = { [weak self, weak state] kind in
             self?.soundPlayer?.playStart()
-            self?.pipeline?.startRecording(command: kind == .command)
+            self?.pipeline?.startRecording(kind: kind)
             if let state { self?.pillWindow?.updateVisibility(state: state) }
         }
         monitor.onFinalizeRecording = { [weak self, weak state] _ in

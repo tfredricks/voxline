@@ -5,10 +5,10 @@ import Foundation
 
 /// Reads the current selection by synthesizing a Cmd+C and reading the copied
 /// string back off the pasteboard. This is the fallback behind
-/// `AXSelectionReader` for apps whose AX tree exposes no selected text (some
-/// Electron and web views). The user's clipboard is snapshotted and always
-/// restored, and Cmd+C in a secure (password) field is a no-op on macOS, so a
-/// selected password is never copied out.
+/// `EditContextReader` when AX can't say what is selected (some Electron and
+/// web views). The user's clipboard is snapshotted and always restored, and
+/// Cmd+C in a secure (password) field is a no-op on macOS, so a selected
+/// password is never copied out.
 protocol SelectionSnapshotting: Sendable {
     /// The current selection, or nil when nothing is selected (the synthetic
     /// Cmd+C didn't change the pasteboard), the copied string is empty, or the
@@ -18,13 +18,6 @@ protocol SelectionSnapshotting: Sendable {
 }
 
 struct DefaultSelectionSnapshot: SelectionSnapshotting {
-    /// Transform length limit enforced by the caller (`CapturePipeline`),
-    /// which refuses to transform selections longer than this rather than
-    /// silently truncating them: `performTransform` pastes back over the full
-    /// live selection, so a truncated read would desync the read range from
-    /// the write range and silently drop the untransformed tail.
-    static let selectionMax = 8_000
-
     /// Time to wait after posting the synthetic Cmd+C for the frontmost app to
     /// service the copy and publish it to the pasteboard before we read it
     /// back. Too short and a slow app hasn't written the pasteboard yet, so
@@ -33,7 +26,7 @@ struct DefaultSelectionSnapshot: SelectionSnapshotting {
 
     func readSelection() async -> String? {
         // Posting the synthetic Cmd+C requires Accessibility. Without it the
-        // keystroke silently no-ops (and transform couldn't paste back anyway),
+        // keystroke silently no-ops (and a command couldn't insert anyway),
         // so bail before touching the clipboard. Also keeps the synthetic copy
         // out of test runs, where the host isn't Accessibility-trusted.
         guard AXIsProcessTrusted() else { return nil }
@@ -63,9 +56,8 @@ struct DefaultSelectionSnapshot: SelectionSnapshotting {
 
             // A real copy bumps the change count. If it didn't change, nothing
             // was selected (or the app refused the copy, e.g. a secure field) —
-            // treat as no selection so the speech is dictated, not applied as
-            // a transform command. The stale clipboard must never be mistaken
-            // for a fresh selection.
+            // treat as no selection. The stale clipboard must never be
+            // mistaken for a fresh selection.
             guard pasteboard.changeCount != prepared.changeCount else { return nil }
             guard let copied = pasteboard.string(forType: .string), !copied.isEmpty else {
                 return nil

@@ -380,65 +380,6 @@ import Foundation
         }
     }
 
-    @Test func transform_routes_to_anthropic_with_instruction_and_higher_max_tokens() async throws {
-        let mock = MockHTTPClient()
-        mock.stubResponse = (
-            data: #"{"content":[{"type":"text","text":"rewritten"}]}"#.data(using: .utf8)!,
-            status: 200
-        )
-        var settings = AppSettings(defaults: defaultsSuite())
-        settings.llmProvider = .anthropic
-        let kc = InMemoryKeychain()
-        try kc.set("sk-ant", forKey: KeychainAccount.anthropic)
-
-        let service = LLMService(settings: settings, keychain: kc, http: mock)
-        let mode = Mode(bundleID: "*", displayName: "d", prompt: "ignored-for-transform", model: nil, temperature: nil)
-
-        let out = try await service.transform(instruction: "make it formal", selection: "hey whats up", mode: mode)
-        #expect(out == "rewritten")
-        #expect(mock.capturedRequest?.url?.host == "api.anthropic.com")
-
-        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
-        // Transform uses its own preamble, NOT the transcription post-processor prompt.
-        let system = try #require(body["system"] as? String)
-        #expect(system.contains(LLMService.transformPreamble))
-        #expect(!system.contains(LLMService.transcriptionPreamble))
-        // The spoken command and the selection both reach the model.
-        let bodyString = String(data: try #require(mock.capturedRequest?.httpBody), encoding: .utf8) ?? ""
-        #expect(bodyString.contains("make it formal"))
-        #expect(bodyString.contains("hey whats up"))
-        // Larger output budget than the 1024 cleanup default.
-        #expect((body["max_tokens"] as? Int) == 4096)
-    }
-
-    @Test func transform_with_no_key_throws_missingAPIKey() async throws {
-        let mock = MockHTTPClient()
-        var settings = AppSettings(defaults: defaultsSuite())
-        settings.llmProvider = .anthropic
-        let service = LLMService(settings: settings, keychain: InMemoryKeychain(), http: mock)
-        let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
-        do {
-            _ = try await service.transform(instruction: "make it formal", selection: "hi", mode: mode)
-            Issue.record("expected throw")
-        } catch let e as LLMError {
-            #expect(e == .missingAPIKey)
-        }
-    }
-
-    @Test func transform_blank_selection_short_circuits_without_http() async throws {
-        let mock = MockHTTPClient()
-        var settings = AppSettings(defaults: defaultsSuite())
-        settings.llmProvider = .anthropic
-        let kc = InMemoryKeychain()
-        try kc.set("k", forKey: KeychainAccount.anthropic)
-        let service = LLMService(settings: settings, keychain: kc, http: mock)
-        let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
-
-        let out = try await service.transform(instruction: "make it formal", selection: "   \n ", mode: mode)
-        #expect(out == "   \n ")
-        #expect(mock.capturedRequest == nil)
-    }
-
     // MARK: Command
 
     private func commandRequest(model: String = "claude-haiku-4-5") -> CommandRequest {
@@ -453,7 +394,8 @@ import Foundation
         )
     }
 
-    private func commandService(provider: LLMProvider, key: String?, http: MockHTTPClient) throws -> LLMService {
+    private func commandService(provider: LLMProvider, key: String?, http: MockHTTPClient,
+                                support: StructuredOutputSupport = StructuredOutputSupport()) throws -> LLMService {
         var settings = AppSettings(defaults: defaultsSuite())
         settings.llmProvider = provider
         settings.llmModel = provider == .anthropic ? "claude-sonnet-4-5" : "gpt-4o-mini"
@@ -461,7 +403,7 @@ import Foundation
         if let key {
             try kc.set(key, forKey: provider == .anthropic ? KeychainAccount.anthropic : KeychainAccount.openai)
         }
-        return LLMService(settings: settings, keychain: kc, http: http)
+        return LLMService(settings: settings, keychain: kc, http: http, structuredOutput: support)
     }
 
     private static func anthropicText(_ text: String, stopReason: String = "end_turn") -> Data {
@@ -584,5 +526,53 @@ import Foundation
         } catch let e as LLMError {
             #expect(e == .truncated)
         }
+    }
+
+    @Test(arguments: [LLMProvider.anthropic, .openai])
+    func command_uses_the_injected_structured_output_support(provider: LLMProvider) async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = provider == .anthropic
+            ? (data: Self.anthropicText(#"{"action":"insert","text":"hi"}"#), status: 200)
+            : (data: #"{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"insert\",\"text\":\"hi\"}"},"finish_reason":"stop"}]}"#.data(using: .utf8)!, status: 200)
+        let support = StructuredOutputSupport()
+        support.markRejected("claude-haiku-4-5")
+        let service = try commandService(provider: provider, key: "k", http: mock, support: support)
+
+        let result = try await service.command(commandRequest())
+
+        #expect(result == CommandResult(action: .insert, text: "hi"))
+        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
+        #expect(body["output_config"] == nil)
+        #expect(body["response_format"] == nil)
+        #expect(!StructuredOutputSupport.shared.rejects("claude-haiku-4-5"))
+    }
+
+    @Test func command_rejection_marks_only_the_injected_support() async throws {
+        final class RejectingThenOK: HTTPClient, @unchecked Sendable {
+            var requests: [URLRequest] = []
+            func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+                requests.append(request)
+                let rejected = requests.count == 1
+                let body = rejected
+                    ? #"{"error":{"message":"output_config.format: Extra inputs are not permitted"}}"#.data(using: .utf8)!
+                    : LLMServiceTests.anthropicText(#"{"action":"insert","text":"hi"}"#)
+                return (body, HTTPURLResponse(url: request.url!, statusCode: rejected ? 400 : 200, httpVersion: "HTTP/1.1", headerFields: nil)!)
+            }
+        }
+        let http = RejectingThenOK()
+        var settings = AppSettings(defaults: defaultsSuite())
+        settings.llmProvider = .anthropic
+        let kc = InMemoryKeychain()
+        try kc.set("k", forKey: KeychainAccount.anthropic)
+        let support = StructuredOutputSupport()
+        let model = "claude-test-\(UUID().uuidString)"
+        let service = LLMService(settings: settings, keychain: kc, http: http, structuredOutput: support)
+
+        let result = try await service.command(commandRequest(model: model))
+
+        #expect(result == CommandResult(action: .insert, text: "hi"))
+        #expect(http.requests.count == 2)
+        #expect(support.rejects(model))
+        #expect(!StructuredOutputSupport.shared.rejects(model))
     }
 }

@@ -249,7 +249,7 @@ import Foundation
         #expect(h.state.status == .error(Self.transcriptionFailed))
         #expect(h.state.toastMessage == nil)
         #expect(h.llm.calls.isEmpty)
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
     }
 
     @Test func an_open_failure_does_not_fall_back_to_an_engine_that_isnt_ready() async {
@@ -282,7 +282,7 @@ import Foundation
         #expect(h.state.status == .error(OpenAIRealtimeEngine.missingKeyReason))
         #expect(h.state.toastMessage == nil)
         #expect(h.llm.calls.isEmpty)
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
         #expect(h.pipe.metrics.items.isEmpty)
     }
 

@@ -168,8 +168,8 @@ private final class FakeLLM: LLMServing, @unchecked Sendable {
     func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String {
         try await handler(transcript, mode, context)
     }
-    func transform(instruction: String, selection: String, mode: Mode) async throws -> String {
-        selection
+    func command(_ request: CommandRequest) async throws -> CommandResult {
+        CommandResult(action: .insert, text: "")
     }
 }
 

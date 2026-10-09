@@ -96,47 +96,4 @@ import Testing
         #expect(ModifierReleaseGate.isHeld([.command, .option], in: [.maskAlternate]))
         #expect(!ModifierReleaseGate.isHeld([], in: [.maskCommand]))
     }
-
-    // MARK: - Chord predicate for the paste gate
-
-    private let shiftControl = HotkeyChord(modifierA: .leftShift, modifierB: .leftControl)
-    private let shiftOption = HotkeyChord(modifierA: .leftShift, modifierB: .leftOption)
-
-    @Test func a_key_only_the_command_chord_uses_counts_as_held() {
-        let held = ModifierReleaseGate.chordsHeld(
-            { ChordSet(dictation: shiftControl, command: shiftOption) },
-            flags: { .maskAlternate }
-        )
-        #expect(held())
-    }
-
-    @Test func a_dictation_key_counts_as_held() {
-        let held = ModifierReleaseGate.chordsHeld(
-            { ChordSet(dictation: shiftControl, command: shiftOption) },
-            flags: { .maskControl }
-        )
-        #expect(held())
-    }
-
-    @Test func nothing_held_or_an_unrelated_family_is_released() {
-        let chords: @Sendable () -> ChordSet = { ChordSet(dictation: self.shiftControl, command: self.shiftOption) }
-        #expect(!ModifierReleaseGate.chordsHeld(chords, flags: { [] })())
-        #expect(!ModifierReleaseGate.chordsHeld(chords, flags: { .maskCommand })())
-    }
-
-    @Test func with_command_mode_off_its_keys_no_longer_count() {
-        let held = ModifierReleaseGate.chordsHeld(
-            { ChordSet(dictation: shiftControl, command: nil) },
-            flags: { .maskAlternate }
-        )
-        #expect(!held())
-    }
-
-    @Test func chords_and_flags_are_read_on_every_call() {
-        let chords = LockedBox(ChordSet(dictation: shiftControl, command: nil))
-        let held = ModifierReleaseGate.chordsHeld({ chords.read() }, flags: { .maskAlternate })
-        #expect(!held())
-        chords.mutate { $0.command = self.shiftOption }
-        #expect(held())
-    }
 }

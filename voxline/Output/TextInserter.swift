@@ -26,6 +26,9 @@ enum InsertOutcome: Equatable {
 protocol TextInserting: AnyObject {
     func insert(_ text: String, at target: InsertTarget, expectedElement: AXElementRef?,
                 bundleID: String?, trigger: ModifierFamilies) async -> InsertOutcome
+    /// Returns once an earlier paste has put the user's clipboard back, so
+    /// a synthetic Cmd+C never snapshots voxline's own pasted item.
+    func waitForClipboardRestore() async
 }
 
 /// The one way voxline puts text into another app: checks, targets, then
@@ -113,6 +116,10 @@ final class TextInserter: TextInserting {
         if target == .afterLiveSelection { plan.removeAll { $0 == .accessibility } }
         AppLog.paste.debug("insert plan: \(plan.map(\.rawValue).joined(separator: ", "), privacy: .public)")
         return await run(plan, text: text, element: element, trigger: trigger)
+    }
+
+    func waitForClipboardRestore() async {
+        await paste.pendingRestore?.value
     }
 
     private func insertWithoutFocus(_ text: String, at target: InsertTarget, trigger: ModifierFamilies) async -> InsertOutcome {

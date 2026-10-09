@@ -61,8 +61,8 @@ import Foundation
             if let state { observed.append(Observation(isCancellable: state.isCancellable, phase: state.pipelinePhase)) }
             return try result.get()
         }
-        func transform(instruction: String, selection: String, mode: Mode) async throws -> String {
-            "transformed"
+        func command(_ request: CommandRequest) async throws -> CommandResult {
+            CommandResult(action: .replaceSelection, text: "transformed")
         }
     }
 
@@ -136,10 +136,13 @@ import Foundation
             historyStore: history,
             contextCapture: FakeContextCapture(),
             selectionSnapshot: selection,
+            editContextReader: FakeEditContextReader.needingCopy(),
             llmModelID: { "test-model" },
+            commandModelID: { nil },
             vocabulary: { vocabulary },
             skipShortUtterances: { skipShortUtterances },
-            chords: { .default }
+            chords: { .default },
+            releaseGate: .released
         )
         pipe.transcriptFallback = { _ in }
         return Harness(
@@ -475,7 +478,7 @@ import Foundation
     @Test func retryTranscript_not_set_for_commands() async {
         let h = makeHarness()
         h.selection.selection = "original text"
-        h.pipe.startRecording(command: true)
+        h.pipe.startRecording(kind: .command)
         await h.pipe.finalizeRecording()
         #expect(h.inserter.calls.map(\.text) == ["transformed"])
         #expect(h.state.retryTranscript == nil)

@@ -546,4 +546,50 @@ import Testing
         #expect(h.typed.read().isEmpty)
         #expect(h.board.string(forType: .string) == "ORIGINAL")
     }
+
+    // MARK: - Clipboard restore
+
+    @Test(.timeLimit(.minutes(1)))
+    func waitForClipboardRestore_returns_once_the_paste_restore_has_run() async {
+        let board = NSPasteboard(name: NSPasteboard.Name("voxline-test-\(UUID())"))
+        defer { board.releaseGlobally() }
+        board.clearContents()
+        board.setString("ORIGINAL", forType: .string)
+        let clock = ManualClock()
+        let posts = LockedBox(0)
+        let paste = PasteInjector(
+            pasteboard: board,
+            postPaste: { posts.mutate { $0 += 1 } },
+            gate: .released,
+            sleep: { @MainActor in try await clock.sleep($0) }
+        )
+        let inserter = TextInserter(
+            focused: { .absent },
+            isAccessibilityTrusted: { true },
+            axEditor: AXTextEditor(sleep: { _ in }),
+            paste: paste,
+            typing: TypingInjector(post: { _ in }),
+            gate: .released,
+            postRightArrow: {},
+            overrides: { InsertionPlan.Overrides() },
+            sleep: { _ in }
+        )
+
+        let insert = Task { await inserter.insert("PASTED", at: .liveSelection, expectedElement: nil, bundleID: nil, trigger: []) }
+        #expect(await eventually { clock.pendingCount == 1 })
+        await clock.advance(by: .milliseconds(50))
+        #expect(await eventually { posts.read() == 1 && clock.pendingCount == 2 })
+        await clock.advance(by: .milliseconds(300))
+        #expect(await insert.value == .inserted(.paste, verified: false))
+
+        let restored = LockedBox(false)
+        let wait = Task { await inserter.waitForClipboardRestore(); restored.write(true) }
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(!restored.read())
+
+        await clock.advance(by: .seconds(2))
+        await wait.value
+        #expect(restored.read())
+        #expect(board.string(forType: .string) == "ORIGINAL")
+    }
 }

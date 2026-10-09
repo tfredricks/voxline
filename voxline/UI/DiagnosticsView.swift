@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Latency breakdown of the last dictation and medians over the retained
-/// dictations (commands excluded). Lives in the About window so bug reports
-/// can quote it.
+/// Latency breakdown of the last run, medians over the retained dictations,
+/// and median totals for commands and presets. Lives in the About window so
+/// bug reports can quote it.
 struct DiagnosticsView: View {
     let metrics: DictationMetricsStore
 
@@ -20,6 +20,12 @@ struct DiagnosticsView: View {
                 }
                 if let firstWords = metrics.median(\.firstPartialMs, kind: .dictation) {
                     Text("First words: \(Self.seconds(firstWords))")
+                }
+                if let total = metrics.median(\.totalMs, kind: .command) {
+                    Text("Median of \(metrics.count(kind: .command)) commands: \(Self.seconds(total)) total")
+                }
+                if let total = metrics.median(\.totalMs, kind: .preset) {
+                    Text("Median of \(metrics.count(kind: .preset)) presets: \(Self.seconds(total)) total")
                 }
                 Text("Engine \(last.engineID) · Model \(last.modelID)")
             } else {

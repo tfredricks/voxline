@@ -19,24 +19,31 @@ final class CapturePipeline {
     /// one-second chunks.
     static let fallbackChunkSamples = 16_000
 
-    private let state: AppState
+    let state: AppState
     private let capture: AudioCapturing
     private let engines: TranscriptionEngineProviding
-    private let llm: LLMServing
+    let llm: LLMServing
     var modes: ModeRouter
     private let frontmost: FrontmostAppProviding
     private let fieldInspector: FocusedFieldInspecting
-    private let inserter: TextInserting
-    private let historyStore: DictationHistoryStore
+    let inserter: TextInserting
+    let historyStore: DictationHistoryStore
     private let contextCapture: ContextCapturing
-    private let selectionSnapshot: SelectionSnapshotting
-    private let now: @Sendable () -> Date
+    /// The Cmd+C fallback behind `editContextReader`, for selections AX
+    /// can't read.
+    let selectionSnapshot: SelectionSnapshotting
+    let editContextReader: EditContextReading
+    let now: @Sendable () -> Date
     let metrics: DictationMetricsStore
-    private let llmModelID: @Sendable () -> String
-    private let vocabulary: @Sendable () -> [String]
+    let llmModelID: @Sendable () -> String
+    /// Commands use this model when set, else `llmModelID`.
+    let commandModelID: @Sendable () -> String?
+    let vocabulary: @Sendable () -> [String]
     private let skipShortUtterances: @Sendable () -> Bool
     /// Read at insert time; the release gate waits on the trigger's modifiers.
-    private let chords: @Sendable () -> ChordSet
+    let chords: @Sendable () -> ChordSet
+    /// Holds the Cmd+C fallback until the trigger's modifiers are released.
+    let releaseGate: ModifierReleaseGate
     /// Read at recording start. Off by default in a test host, so the suite
     /// never saves clips into the developer's real bake-off folder.
     private let saveBakeoffClips: @Sendable () -> Bool
@@ -45,7 +52,7 @@ final class CapturePipeline {
     /// Identifies the current recording or retry; `cancel()` bumps it too.
     /// Work resuming after an `await` compares it with the value it captured
     /// and drops its result when a cancel or a newer run has taken over.
-    private var generation: UInt64 = 0
+    private(set) var generation: UInt64 = 0
     private var live: LiveSession?
     private var startTasks: StartTasks?
     /// The finalize or retry in flight, and the signal its caller awaits.
@@ -91,11 +98,14 @@ final class CapturePipeline {
         historyStore: DictationHistoryStore,
         contextCapture: ContextCapturing,
         selectionSnapshot: SelectionSnapshotting = DefaultSelectionSnapshot(),
+        editContextReader: EditContextReading = EditContextReader(),
         metrics: DictationMetricsStore = DictationMetricsStore(),
         llmModelID: @escaping @Sendable () -> String = { AppSettings().llmModel },
+        commandModelID: @escaping @Sendable () -> String? = { AppSettings().commandModel },
         vocabulary: @escaping @Sendable () -> [String] = { CustomVocabularyStore().load() },
         skipShortUtterances: @escaping @Sendable () -> Bool = { AppSettings().skipShortUtterances },
         chords: @escaping @Sendable () -> ChordSet = { AppSettings().chords },
+        releaseGate: ModifierReleaseGate = ModifierReleaseGate(),
         saveBakeoffClips: @escaping @Sendable () -> Bool = { !LaunchEnvironment.isRunningTests && AppSettings().saveBakeoffClips },
         bakeoffClipSink: @escaping @Sendable (_ samples: [Float], _ reference: String) -> Void = { CapturePipeline.writeBakeoffClip($0, reference: $1) },
         now: @escaping @Sendable () -> Date = { Date() }
@@ -111,11 +121,14 @@ final class CapturePipeline {
         self.historyStore = historyStore
         self.contextCapture = contextCapture
         self.selectionSnapshot = selectionSnapshot
+        self.editContextReader = editContextReader
         self.metrics = metrics
         self.llmModelID = llmModelID
+        self.commandModelID = commandModelID
         self.vocabulary = vocabulary
         self.skipShortUtterances = skipShortUtterances
         self.chords = chords
+        self.releaseGate = releaseGate
         self.saveBakeoffClips = saveBakeoffClips
         self.bakeoffClipSink = bakeoffClipSink
         self.now = now
@@ -128,11 +141,10 @@ final class CapturePipeline {
     }
 
     /// Begin a new recording. Caller must ensure we're not already recording.
-    /// `command` reflects whether the command modifier was held at chord
-    /// completion; when true this is a transform gesture and the selection is
-    /// probed once, here at start. When false (plain dictation) the clipboard
-    /// is never touched.
-    func startRecording(command: Bool = false) {
+    /// A `.command` recording reads the EditContext here, at start, in place
+    /// of the dictation context capture. Neither kind touches the clipboard
+    /// while recording.
+    func startRecording(kind: CaptureKind = .dictation) {
         wasCancelled = false
         // Reject re-entry while a recording or its post-recording pipeline
         // (transcribe → LLM → paste) is still in flight. `.thinking` covers
@@ -191,7 +203,7 @@ final class CapturePipeline {
         state.liveTranscript = nil
         state.pipelinePhase = nil
         state.isCancellable = true
-        state.recordingKind = command ? .command : .dictation
+        state.recordingKind = kind
         state.status = .recording
         let generation = self.generation
         live.open { [weak self] partial in
@@ -199,18 +211,14 @@ final class CapturePipeline {
             self.state.liveTranscript = partial
         }
 
-        let snapshotTask = snapshotFocus()
-        // Selection probe runs ONLY in command mode. In dictation the clipboard
-        // is never touched — this is the fix for VS Code's line-copy false
-        // positive (empty-selection Cmd+C copies the whole line).
-        var selectionTask: Task<String?, Never>?
-        if command {
-            let snapshotter = selectionSnapshot
-            selectionTask = Task.detached(priority: .userInitiated) {
-                await snapshotter.readSelection()
-            }
+        switch kind {
+        case .dictation:
+            startTasks = StartTasks(snapshot: snapshotFocus(), editContext: nil)
+        case .command:
+            let reader = editContextReader
+            let editContextTask = Task.detached(priority: .userInitiated) { reader.read() }
+            startTasks = StartTasks(snapshot: snapshotFocus(capturesContext: false), editContext: editContextTask)
         }
-        startTasks = StartTasks(snapshot: snapshotTask, selection: selectionTask)
     }
 
     /// Called when one chord modifier goes down (the "armed" edge). Warms the
@@ -334,9 +342,15 @@ final class CapturePipeline {
         }
     }
 
+    /// Starts a run that supersedes the current one; returns its token.
+    func beginRun() -> UInt64 {
+        generation &+= 1
+        return generation
+    }
+
     /// Runs `work` as the job `cancel()` can abandon. Returns when the work
     /// ends, or at once when it is cancelled.
-    private func runCancellable(_ work: @escaping @MainActor () async -> Void) async {
+    func runCancellable(_ work: @escaping @MainActor () async -> Void) async {
         let done = OneShotSignal()
         finalizeDone = done
         finalizeWork = Task {
@@ -349,7 +363,11 @@ final class CapturePipeline {
     private func runFinalize(generation: UInt64, recording: ReleasedRecording) async {
         let live = recording.live
         let startTasks = recording.startTasks
-        defer { startTasks?.cancel() }
+        var commandContext: Task<Result<ResolvedEditContext, EditContextRefusal>, Never>?
+        defer {
+            startTasks?.cancel()
+            commandContext?.cancel()
+        }
         guard generation == self.generation else { return }
         let router = live.router
 
@@ -369,6 +387,10 @@ final class CapturePipeline {
             return setError("No audio captured. Check that Microphone permission is granted and the input device isn't muted.")
         }
 
+        if let editContext = startTasks?.editContext {
+            commandContext = resolveEditContext(editContext, trigger: chords().command?.families ?? [], generation: generation)
+        }
+
         guard let transcription = await transcribe(live, generation: generation) else { return }
         let transcript = transcription.text
         endLiveSession()
@@ -384,14 +406,6 @@ final class CapturePipeline {
             return
         }
         state.liveTranscript = TranscriptPartial(stable: transcript)
-
-        // Mode resolution uses the frontmost app and focused field as they
-        // were at recording start, not wherever focus drifted since.
-        let snapshot = await startTasks?.snapshot.value ?? .empty
-        guard generation == self.generation else { return }
-        guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
-            return setError(Self.noModeMessage(bundleID: snapshot.bundleID))
-        }
         let timing = PipelineTiming(
             release: recording.release,
             captureTailMs: recording.captureTailMs,
@@ -400,22 +414,18 @@ final class CapturePipeline {
             firstPartialMs: transcription.firstPartial.map(Self.milliseconds)
         )
 
-        // `recordingKind` was latched at recording start.
-        if state.recordingKind == .command {
-            let selection = await startTasks?.selection?.value ?? nil
-            guard generation == self.generation else { return }
-            guard let selection, !selection.isEmpty else {
-                // Command gesture but nothing selected: keep the mode boundary
-                // crisp — no dictation fallback, no clipboard-probe surprise.
-                resetIdle()
-                showToast("Select text to transform")
-                return
-            }
-            await performTransform(command: transcript, selection: selection, mode: mode, snapshot: snapshot, timing: timing, generation: generation)
+        // Mode resolution uses the frontmost app and focused field as they
+        // were at recording start, not wherever focus drifted since.
+        let snapshot = await startTasks?.snapshot.value ?? .empty
+        guard generation == self.generation else { return }
+
+        if let commandContext {
+            await runCommand(instruction: transcript, context: commandContext, snapshot: snapshot, generation: generation, timing: timing)
             return
         }
-        // Dictation path: no selection probe was spawned, so the clipboard was
-        // never touched.
+        guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
+            return setError(Self.noModeMessage(bundleID: snapshot.bundleID))
+        }
         cancellableDictation = (transcript, mode, snapshot.context)
         let bakeoffAudio = live.savesBakeoffClip ? router.retainedAudio : nil
         await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: timing, bakeoffAudio: bakeoffAudio, generation: generation)
@@ -602,99 +612,19 @@ final class CapturePipeline {
         }
     }
 
-    /// Rewrite the user's selection according to the spoken command and paste
-    /// it over the (still-live) selection.
-    /// Owns its terminal state — callers must not call `resetIdle` afterward.
-    private func performTransform(command: String, selection: String, mode: Mode, snapshot: StartSnapshot, timing: PipelineTiming, generation: UInt64) async {
-        // The AX reader returns the FULL live selection (no truncation), and
-        // `inserter.insert` below writes back over that same full live
-        // selection. If we let an over-long selection through, the LLM would
-        // only see/rewrite the first `selectionMax` characters while the
-        // paste still overwrites the entire selection — silently dropping
-        // the untransformed tail. Refuse instead of desyncing read/write.
-        guard selection.count <= DefaultSelectionSnapshot.selectionMax else {
-            resetIdle()
-            showToast("Selection too long to transform")
-            return
-        }
-
-        state.pipelinePhase = .cleaning
-        let transformed: String
-        let transformStart = ContinuousClock.now
-        do {
-            let result = try await llm.transform(instruction: command, selection: selection, mode: mode)
-            guard generation == self.generation else { return }
-            transformed = result
-        } catch let e as LLMError {
-            guard generation == self.generation else { return }
-            return setError("\(e.errorDescription ?? "Transform failed.") Your selection was left unchanged.")
-        } catch {
-            guard generation == self.generation else { return }
-            return setError("Transform failed: \(error.localizedDescription) Your selection was left unchanged.")
-        }
-        let cleanupMs = Self.milliseconds(transformStart.duration(to: .now))
-
-        // Focus/selection may have moved during the LLM await. If the live
-        // selection no longer matches what we transformed, don't overwrite
-        // the wrong target — leave the result on the clipboard for a manual
-        // paste instead.
-        let liveSelection = await selectionSnapshot.readSelection()
-        guard generation == self.generation else { return }
-        guard liveSelection == selection else {
-            transcriptFallback(transformed)
-            resetIdle()
-            showToast("Copied — ⌘V to replace")
-            return
-        }
-
-        // The transform prompt returns the selection verbatim when the command
-        // can't be applied as a rewrite/restructure (e.g. a translate request).
-        // Treat that as a no-op rather than re-pasting identical text.
-        guard !transformed.isEmpty, transformed != selection else {
-            resetIdle()
-            showToast("Couldn't apply that")
-            return
-        }
-
-        historyStore.record(cleanedText: transformed, rawTranscript: command, mode: mode, context: snapshot.context)
-        state.isCancellable = false
-        state.pipelinePhase = .inserting
-
-        guard snapshot.field?.isEditable ?? true else {
-            transcriptFallback(transformed)
-            recordMetrics(kind: .command, timing: timing, cleanupMs: cleanupMs, insertMs: 0, insertStrategy: .copy, mode: mode, text: transformed)
-            resetIdle()
-            showToast("Copied — ⌘V to replace")
-            return
-        }
-
-        let insertStart = ContinuousClock.now
-        let outcome = await inserter.insert(transformed, at: .liveSelection, expectedElement: nil,
-                                            bundleID: snapshot.bundleID, trigger: chords().command?.families ?? [])
-        guard generation == self.generation else { return }
-        guard case .inserted(let strategy, _) = outcome else {
-            // Leave the result on the clipboard so ⌘V still replaces the selection.
-            transcriptFallback(transformed)
-            recordMetrics(kind: .command, timing: timing, cleanupMs: cleanupMs, insertMs: 0, insertStrategy: .copy, mode: mode, text: transformed)
-            resetIdle()
-            showToast("Copied — ⌘V to replace")
-            return
-        }
-        recordMetrics(kind: .command, timing: timing, cleanupMs: cleanupMs, insertMs: Self.milliseconds(insertStart.duration(to: .now)), insertStrategy: .init(strategy), mode: mode, text: transformed)
-        resetIdle()
-    }
-
     // MARK: - Snapshot and metrics
 
-    /// Frontmost app, focused field, and context, read off the main actor.
-    private func snapshotFocus() -> Task<StartSnapshot, Never> {
+    /// Frontmost app, focused field, and (unless `capturesContext` is false)
+    /// context, read off the main actor.
+    private func snapshotFocus(capturesContext: Bool = true) -> Task<StartSnapshot, Never> {
         let captor = contextCapture
         let frontmost = frontmost
         let fieldInspector = fieldInspector
         return Task.detached(priority: .userInitiated) {
             let bundleID = frontmost.frontmostBundleID()
             let field = fieldInspector.inspect()
-            return StartSnapshot(context: await captor.capture(), bundleID: bundleID, field: field)
+            let context = capturesContext ? await captor.capture() : .empty
+            return StartSnapshot(context: context, bundleID: bundleID, field: field)
         }
     }
 
@@ -702,11 +632,12 @@ final class CapturePipeline {
     /// first await, so it can never cancel or clear a later recording's tasks.
     private struct StartTasks {
         let snapshot: Task<StartSnapshot, Never>
-        let selection: Task<String?, Never>?
+        /// Set for a command recording only.
+        let editContext: Task<Result<EditContext, EditContextRefusal>, Never>?
 
         func cancel() {
             snapshot.cancel()
-            selection?.cancel()
+            editContext?.cancel()
         }
     }
 
@@ -719,7 +650,7 @@ final class CapturePipeline {
         let captureTailMs: Int
     }
 
-    private struct StartSnapshot: Sendable {
+    struct StartSnapshot: Sendable {
         let context: CapturedContext
         let bundleID: String?
         let field: FocusedField?
@@ -737,7 +668,7 @@ final class CapturePipeline {
         let firstPartial: Duration?
     }
 
-    private struct PipelineTiming {
+    struct PipelineTiming {
         let release: ContinuousClock.Instant
         let captureTailMs: Int
         let transcribeMs: Int
@@ -779,7 +710,7 @@ final class CapturePipeline {
     }
 
     /// Truncates, so stage times never sum past the total measured around them.
-    private static func milliseconds(_ duration: Duration) -> Int {
+    static func milliseconds(_ duration: Duration) -> Int {
         Int(duration / .milliseconds(1))
     }
 
@@ -789,16 +720,16 @@ final class CapturePipeline {
 
     // MARK: - Terminal states
 
-    private func showToast(_ message: String) {
+    func showToast(_ message: String) {
         state.flashToast(message)
     }
 
-    private func resetIdle() {
+    func resetIdle() {
         clearRecordingState()
         state.status = .idle
     }
 
-    private func setError(_ message: String, permissions: Bool = false) {
+    func setError(_ message: String, permissions: Bool = false) {
         state.status = permissions ? .permissionsError(message) : .error(message)
         clearRecordingState()
     }

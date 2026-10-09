@@ -30,13 +30,4 @@ struct ModifierReleaseGate: Sendable {
     static func isHeld(_ families: ModifierFamilies, in flags: CGEventFlags) -> Bool {
         !ModifierFamilies(flags: flags).isDisjoint(with: families)
     }
-
-    /// True while any family of either chord is held. Reads `chords` and
-    /// `flags` on every call, so a Settings change applies to the next paste.
-    static func chordsHeld(
-        _ chords: @escaping @Sendable () -> ChordSet,
-        flags: @escaping @Sendable () -> CGEventFlags = { CGEventSource.flagsState(.combinedSessionState) }
-    ) -> @Sendable () -> Bool {
-        { isHeld(chords().families, in: flags()) }
-    }
 }

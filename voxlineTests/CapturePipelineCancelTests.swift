@@ -100,10 +100,13 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
             historyStore: history,
             contextCapture: context,
             selectionSnapshot: selection,
+            editContextReader: FakeEditContextReader.needingCopy(),
             llmModelID: { "test-model" },
+            commandModelID: { nil },
             vocabulary: { [] },
             skipShortUtterances: { skipShortUtterances },
-            chords: { .default }
+            chords: { .default },
+            releaseGate: .released
         )
         let fallback = LockedBox<[String]>([])
         pipe.transcriptFallback = { text in fallback.mutate { $0.append(text) } }
@@ -315,14 +318,14 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(h.state.status == .idle)
     }
 
-    @Test func cancel_while_transforming_records_nothing() async {
+    @Test func cancel_while_editing_records_nothing() async {
         let h = makeHarness()
         h.selection.selection = "original text"
-        h.llm.holdCleanup = true
-        defer { h.llm.releaseCleanup() }
-        h.pipe.startRecording(command: true)
+        h.llm.holdCommand = true
+        defer { h.llm.releaseCommand() }
+        h.pipe.startRecording(kind: .command)
         let finalize = Task { await h.pipe.finalizeRecording() }
-        #expect(await eventually { h.llm.cleanupGate.waiting == 1 })
+        #expect(await eventually { h.llm.commandGate.waiting == 1 })
 
         h.pipe.cancel()
         #expect(await finishes(finalize, within: .milliseconds(200)))
@@ -331,9 +334,10 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(h.history.items.isEmpty)
         #expect(h.state.retryTranscript == nil)
 
-        h.llm.releaseCleanup()
+        h.llm.releaseCommand()
         try? await Task.sleep(for: .milliseconds(50))
         #expect(h.inserter.calls.isEmpty)
+        #expect(h.pipe.metrics.items.isEmpty)
     }
 
     @Test func cancel_during_insert_is_ignored() async {

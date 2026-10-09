@@ -35,7 +35,8 @@ protocol FocusedFieldInspecting: Sendable {
 
 protocol LLMServing: Sendable {
     func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String
-    func transform(instruction: String, selection: String, mode: Mode) async throws -> String
+    /// Runs a spoken or preset command; the result is an edit to plan.
+    func command(_ request: CommandRequest) async throws -> CommandResult
 }
 
 protocol FrontmostAppProviding: Sendable {

@@ -56,10 +56,13 @@ import Foundation
             historyStore: DictationHistoryStore(defaults: defaults),
             contextCapture: FakeContextCapture(),
             selectionSnapshot: selection,
+            editContextReader: FakeEditContextReader.needingCopy(),
             llmModelID: { "test-model" },
+            commandModelID: { nil },
             vocabulary: { [] },
             skipShortUtterances: { false },
             chords: { .default },
+            releaseGate: .released,
             saveBakeoffClips: { flag.read() },
             bakeoffClipSink: { samples, reference in clips.mutate { $0.append(Clip(samples: samples, reference: reference)) } }
         )
@@ -70,8 +73,8 @@ import Foundation
         )
     }
 
-    private func dictate(_ h: Harness, command: Bool = false) async {
-        h.pipe.startRecording(command: command)
+    private func dictate(_ h: Harness, kind: CaptureKind = .dictation) async {
+        h.pipe.startRecording(kind: kind)
         await h.pipe.finalizeRecording()
     }
 
@@ -108,7 +111,7 @@ import Foundation
     @Test func commands_save_no_clip() async {
         let h = makeHarness(saveClips: true)
         h.selection.selection = "original text"
-        await dictate(h, command: true)
+        await dictate(h, kind: .command)
 
         #expect(h.inserter.calls.map(\.text) == ["transformed"])
         #expect(h.clips.read().isEmpty)

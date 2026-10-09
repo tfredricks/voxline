@@ -13,6 +13,14 @@ final class FakeTextInserter: TextInserting {
     var holdInsert = false
     let insertGate = TestGate()
     func releaseInsert() { insertGate.open() }
+    /// Calls to `waitForClipboardRestore`, which run `onClipboardRestoreWait`
+    /// and, while `holdClipboardRestore` is true, suspend until
+    /// `releaseClipboardRestore()`.
+    private(set) var clipboardRestoreWaits = 0
+    var onClipboardRestoreWait: (() -> Void)?
+    var holdClipboardRestore = false
+    let clipboardRestoreGate = TestGate()
+    func releaseClipboardRestore() { clipboardRestoreGate.open() }
 
     func insert(_ text: String, at target: InsertTarget, expectedElement: AXElementRef?,
                 bundleID: String?, trigger: ModifierFamilies) async -> InsertOutcome {
@@ -20,5 +28,11 @@ final class FakeTextInserter: TextInserting {
         onInsert?()
         if holdInsert { await insertGate.wait() }
         return outcomes.isEmpty ? .inserted(.accessibility, verified: true) : outcomes.removeFirst()
+    }
+
+    func waitForClipboardRestore() async {
+        clipboardRestoreWaits += 1
+        onClipboardRestoreWait?()
+        if holdClipboardRestore { await clipboardRestoreGate.wait() }
     }
 }
