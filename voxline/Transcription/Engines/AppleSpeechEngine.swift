@@ -55,7 +55,9 @@ final class AppleSpeechEngine: TranscriptionEngine {
     func prepare(progress: @escaping @Sendable (Double) -> Void) async throws {
         guard let locale = await resolveLocale() else { throw AppleSpeechEngineError.unsupportedLocale }
         let transcriber = Self.makeTranscriber(locale)
-        if await AssetInventory.status(forModules: [transcriber]) != .installed,
+        let status = await AssetInventory.status(forModules: [transcriber])
+        if status == .unsupported { throw AppleSpeechEngineError.unavailable }
+        if status != .installed,
            let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
@@ -142,7 +144,9 @@ final class AppleSpeechEngine: TranscriptionEngine {
 
 /// Folds `SpeechTranscriber` results into a running transcript: a final
 /// result commits its text to `stable`; a non-final result replaces
-/// `volatile`, which covers only the not-yet-finalized tail.
+/// `volatile`, which covers only the not-yet-finalized tail. Segments are
+/// concatenated raw because Apple's results carry their own spacing, and
+/// scripts such as Japanese or Thai have no spaces between segments.
 struct ApplePartialAccumulator {
     private var partial = TranscriptPartial()
 
@@ -150,7 +154,7 @@ struct ApplePartialAccumulator {
 
     mutating func apply(text: String, isFinal: Bool) -> TranscriptPartial {
         if isFinal {
-            partial.stable = TranscriptPartial.join(partial.stable, text)
+            partial.stable += text
             partial.volatile = ""
         } else {
             partial.volatile = text
@@ -161,7 +165,8 @@ struct ApplePartialAccumulator {
 
 /// One `SpeechAnalyzer` run. `append` only converts and yields under the
 /// lock, so it is safe on the audio thread. Input that arrives after
-/// `finish()` or `cancel()` began is dropped.
+/// `finish()` or `cancel()` began is dropped. A session released without
+/// either tears its analyzer down.
 final class AppleSpeechSession: TranscriptionSession, @unchecked Sendable {
     let partials: AsyncStream<TranscriptPartial>
 
@@ -174,6 +179,7 @@ final class AppleSpeechSession: TranscriptionSession, @unchecked Sendable {
     private let lock = NSLock()
     private var acceptingInput = true
     private var cancelled = false
+    private var settled = false
 
     init(
         analyzer: SpeechAnalyzer,
@@ -184,7 +190,9 @@ final class AppleSpeechSession: TranscriptionSession, @unchecked Sendable {
         self.analyzer = analyzer
         self.converter = converter
         self.inputContinuation = inputContinuation
-        let (partials, partialsContinuation) = AsyncStream<TranscriptPartial>.makeStream()
+        let (partials, partialsContinuation) = AsyncStream<TranscriptPartial>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
         self.partials = partials
         self.partialsContinuation = partialsContinuation
         self.resultsTask = Task {
@@ -199,9 +207,8 @@ final class AppleSpeechSession: TranscriptionSession, @unchecked Sendable {
     }
 
     deinit {
-        inputContinuation.finish()
         partialsContinuation.finish()
-        resultsTask.cancel()
+        if !settled { tearDown() }
     }
 
     func append(_ samples: [Float]) {
@@ -214,7 +221,10 @@ final class AppleSpeechSession: TranscriptionSession, @unchecked Sendable {
 
     func finish() async throws -> String {
         try await withTaskCancellationHandler {
-            defer { partialsContinuation.finish() }
+            defer {
+                lock.withLock { settled = true }
+                partialsContinuation.finish()
+            }
             try throwIfCancelled()
             lock.withLock { acceptingInput = false }
             inputContinuation.finish()
@@ -237,6 +247,7 @@ final class AppleSpeechSession: TranscriptionSession, @unchecked Sendable {
         let wasCancelled = lock.withLock { () -> Bool in
             let was = cancelled
             cancelled = true
+            settled = true
             acceptingInput = false
             return was
         }
