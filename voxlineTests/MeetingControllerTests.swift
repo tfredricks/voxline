@@ -49,10 +49,14 @@ final class FakeNotifier: MeetingNotifying {
 final class FakePrompts: MeetingPrompting {
     var consent = true
     var processUnfinished: [Bool] = []
+    var onConfirmUnfinished: (() -> Void)?
     private(set) var consentAsked = 0
     private(set) var errors: [String] = []
     func confirmConsent() -> Bool { consentAsked += 1; return consent }
-    func confirmProcessUnfinished(startedAt: Date) -> Bool { processUnfinished.isEmpty ? true : processUnfinished.removeFirst() }
+    func confirmProcessUnfinished(startedAt: Date) -> Bool {
+        onConfirmUnfinished?()
+        return processUnfinished.isEmpty ? true : processUnfinished.removeFirst()
+    }
     func showError(_ message: String) { errors.append(message) }
 }
 
@@ -152,7 +156,10 @@ final class FakePrompts: MeetingPrompting {
             return
         }
         controller.toggle()
+        #expect(controller.phase == .processing(nil))
         controller.toggle()
+        #expect(controller.phase == .processing(nil))
+        #expect(!recorder.started)
         await controller.processingTask?.value
         #expect(processing.processed.count == 1)
     }
@@ -198,5 +205,54 @@ final class FakePrompts: MeetingPrompting {
         #expect(!controller.needsQuitConfirmation)
         controller.start()
         #expect(controller.needsQuitConfirmation)
+    }
+
+    @Test func failed_regenerate_is_not_retryable() async throws {
+        processing.outcome = .failed("Notes failed")
+        let controller = makeController()
+        controller.regenerate(UUID())
+        await controller.processingTask?.value
+        #expect(notifier.notices.contains(.failed("Notes failed")))
+        #expect(controller.lastFailedMeeting == nil)
+        controller.retryFailed()
+        #expect(controller.phase == .idle)
+        #expect(processing.processed.isEmpty)
+    }
+
+    @Test func recording_started_during_recovery_prompt_is_untouched() async throws {
+        var old = try store.create(startedAt: Date(timeIntervalSince1970: 1), systemTapStarted: false)
+        old.state = .recording
+        try store.save(old)
+        let controller = makeController()
+        prompts.processUnfinished = [false]
+        prompts.onConfirmUnfinished = { controller.start() }
+
+        await controller.recoverUnfinished()
+
+        guard case .recording = controller.phase else {
+            Issue.record("expected the new recording to stay active")
+            return
+        }
+        #expect(processing.processed.isEmpty)
+        #expect((try? store.load(old.id)) != nil)
+    }
+
+    @Test func unrelated_success_keeps_failed_meeting_and_nothing_recorded_clears_it() async throws {
+        processing.outcome = .failed("x")
+        let controller = makeController()
+        controller.start()
+        controller.stop()
+        await controller.processingTask?.value
+        let failed = try #require(controller.lastFailedMeeting)
+
+        processing.outcome = .written(URL(fileURLWithPath: "/tmp/n.md"))
+        controller.regenerate(UUID())
+        await controller.processingTask?.value
+        #expect(controller.lastFailedMeeting == failed)
+
+        processing.outcome = .nothingRecorded
+        controller.retryFailed()
+        await controller.processingTask?.value
+        #expect(controller.lastFailedMeeting == nil)
     }
 }

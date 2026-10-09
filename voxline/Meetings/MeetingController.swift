@@ -25,6 +25,7 @@ final class MeetingController {
     @ObservationIgnored private let prompts: MeetingPrompting
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private var recorder: MeetingRecording?
+    @ObservationIgnored private var activeRecordingID: UUID?
 
     init(
         store: MeetingStore,
@@ -82,12 +83,15 @@ final class MeetingController {
         }
         var started = meta
         started.systemTapStarted = recorder.systemTapStarted
-        try? store.save(started)
+        do { try store.save(started) } catch {
+            AppLog.meetings.error("saving meeting metadata failed: \(error.localizedDescription, privacy: .public)")
+        }
         if !recorder.systemTapStarted && !settings.meetingSilentSystemNoticeShown {
             settings.meetingSilentSystemNoticeShown = true
             notifier.post(.systemAudioUnavailable)
         }
         self.recorder = recorder
+        activeRecordingID = meta.id
         phase = .recording(startedAt: meta.startedAt)
     }
 
@@ -106,15 +110,17 @@ final class MeetingController {
         processingTask = Task { [weak self] in
             guard let self else { return }
             let outcome = await pipeline.regenerateNotes(id)
-            finish(outcome, id: id)
+            finish(outcome, id: id, retryable: false)
         }
     }
 
     /// Offers each unfinished meeting, oldest first, one at a time.
     func recoverUnfinished() async {
         for meta in store.unfinished().reversed() {
-            guard phase == .idle else { return }
-            if prompts.confirmProcessUnfinished(startedAt: meta.startedAt) {
+            guard phase == .idle, meta.id != activeRecordingID else { return }
+            let accepted = prompts.confirmProcessUnfinished(startedAt: meta.startedAt)
+            guard phase == .idle, meta.id != activeRecordingID else { return }
+            if accepted {
                 runProcessing(meta.id)
                 await processingTask?.value
             } else {
@@ -124,15 +130,19 @@ final class MeetingController {
     }
 
     func applyRetention() {
-        _ = store.applyRetention(settings.meetingAudioRetention, now: now())
+        store.applyRetention(settings.meetingAudioRetention, now: now())
     }
 
     private func recordingStopped(_ id: UUID, reason: MeetingStopReason) {
         recorder = nil
-        if var meta = try? store.load(id) {
+        activeRecordingID = nil
+        do {
+            var meta = try store.load(id)
             meta.durationSeconds = max(0, now().timeIntervalSince(meta.startedAt))
             meta.state = .recorded
-            try? store.save(meta)
+            try store.save(meta)
+        } catch {
+            AppLog.meetings.error("updating recorded meeting failed: \(error.localizedDescription, privacy: .public)")
         }
         if case .failed(let message) = reason {
             AppLog.meetings.error("recording ended early: \(message, privacy: .public)")
@@ -149,16 +159,17 @@ final class MeetingController {
         }
     }
 
-    private func finish(_ outcome: MeetingOutcome, id: UUID) {
+    private func finish(_ outcome: MeetingOutcome, id: UUID, retryable: Bool = true) {
         phase = .idle
         switch outcome {
         case .written(let url):
-            lastFailedMeeting = nil
+            if lastFailedMeeting == id { lastFailedMeeting = nil }
             notifier.post(.notesReady(url))
         case .nothingRecorded:
+            if lastFailedMeeting == id { lastFailedMeeting = nil }
             notifier.post(.nothingRecorded)
         case .failed(let message):
-            lastFailedMeeting = id
+            if retryable { lastFailedMeeting = id }
             notifier.post(.failed(message))
         }
     }
