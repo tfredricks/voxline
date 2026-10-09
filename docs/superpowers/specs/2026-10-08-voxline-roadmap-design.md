@@ -513,6 +513,7 @@ Every open item in `docs/issues.md` and where it is fixed:
 | 23 trailing audio dropped at release | 2 |
 | 24–27 review-pill follow-ups | 24, 25, 27 done in phase 1 (pill removed); 26 done in phase 3 |
 | 28 meeting timer chip truncates the time | Meetings follow-up, fix before publishing |
+| 29 Dock icon stuck with no window (high) | Fix before publishing |
 
 ## Testing strategy
 
