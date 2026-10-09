@@ -351,6 +351,100 @@ import CoreGraphics
         #expect(monitor.state == .idle)
     }
 
+    // MARK: - Tap masks
+
+    final class TapAttempts {
+        var masks: [CGEventMask] = []
+    }
+
+    private let keyEventsMask = CGEventMask(1 << CGEventType.flagsChanged.rawValue) | CGEventMask(1 << CGEventType.keyDown.rawValue)
+    private let modifiersOnlyMask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
+
+    private func plainPort() -> CFMachPort? {
+        CFMachPortCreate(kCFAllocatorDefault, { _, _, _, _ in }, nil, nil)
+    }
+
+    @Test func masks_prefer_key_events_then_modifiers_only() {
+        #expect(HotkeyMonitor.masks == [keyEventsMask, modifiersOnlyMask])
+    }
+
+    @Test func first_accepted_mask_wins() {
+        var tried: [CGEventMask] = []
+        let accepted = HotkeyMonitor.firstAccepted(HotkeyMonitor.masks) { mask -> String? in
+            tried.append(mask)
+            return mask == modifiersOnlyMask ? "tap" : nil
+        }
+        #expect(accepted?.tap == "tap")
+        #expect(accepted?.mask == modifiersOnlyMask)
+        #expect(tried == [keyEventsMask, modifiersOnlyMask])
+    }
+
+    @Test func first_mask_accepted_stops_trying() {
+        var tried: [CGEventMask] = []
+        let accepted = HotkeyMonitor.firstAccepted(HotkeyMonitor.masks) { mask -> Int? in
+            tried.append(mask)
+            return 1
+        }
+        #expect(accepted?.mask == keyEventsMask)
+        #expect(tried == [keyEventsMask])
+    }
+
+    @Test func no_mask_accepted_is_nil() {
+        #expect(HotkeyMonitor.firstAccepted(HotkeyMonitor.masks) { _ -> Int? in nil } == nil)
+    }
+
+    @Test func start_tries_both_masks_then_throws() {
+        let attempts = TapAttempts()
+        let monitor = HotkeyMonitor(tapFactory: { mask, _ in
+            attempts.masks.append(mask)
+            return nil
+        })
+        #expect(throws: HotkeyMonitorError.accessibilityNotGranted) { try monitor.start() }
+        #expect(attempts.masks == [keyEventsMask, modifiersOnlyMask])
+        #expect(!monitor.isTapInstalled)
+    }
+
+    @Test func start_falls_back_to_a_modifier_only_tap() throws {
+        let attempts = TapAttempts()
+        let monitor = HotkeyMonitor(
+            scheduler: ManualTimers(),
+            heldNow: { [] },
+            tapFactory: { [self] mask, _ in
+                attempts.masks.append(mask)
+                return mask == modifiersOnlyMask ? plainPort() : nil
+            }
+        )
+        try monitor.start()
+        defer { monitor.stop() }
+        #expect(monitor.isTapInstalled)
+        #expect(!monitor.observesKeyDown)
+        #expect(attempts.masks == [keyEventsMask, modifiersOnlyMask])
+    }
+
+    @Test func modifier_only_tap_still_discards_on_an_extra_modifier() throws {
+        let timers = ManualTimers()
+        let log = Log()
+        let monitor = HotkeyMonitor(
+            scheduler: timers,
+            heldNow: { [] },
+            tapFactory: { [self] mask, _ in mask == modifiersOnlyMask ? plainPort() : nil }
+        )
+        monitor.onStartRecording = { log.events.append("start:\($0)") }
+        monitor.onDiscardRecording = { log.events.append("discard:\($0)") }
+        try monitor.start()
+        defer { monitor.stop() }
+        press(monitor, d)
+        press(monitor, d.union([.leftCommand]), keyCode: 55)
+        #expect(log.events == ["start:dictation", "discard:dictation"])
+    }
+
+    @Test func start_with_key_events_observes_key_down() throws {
+        let monitor = HotkeyMonitor(scheduler: ManualTimers(), heldNow: { [] }, tapFactory: { [self] _, _ in plainPort() })
+        try monitor.start()
+        defer { monitor.stop() }
+        #expect(monitor.observesKeyDown)
+    }
+
     // MARK: - Chords
 
     @Test func reassigning_chords_while_armed_resyncs_to_blocked() {

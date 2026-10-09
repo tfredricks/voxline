@@ -40,6 +40,17 @@ final class HotkeyMonitor {
     static let prewarmDelay: Duration = .milliseconds(150)
 
     private nonisolated static let escapeKeyCode: Int64 = 53
+    private nonisolated static let flagsChangedMask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
+    private nonisolated static let keyDownMask = CGEventMask(1 << CGEventType.keyDown.rawValue)
+
+    /// Tap masks in order of preference. Some configurations refuse key
+    /// events to a listen-only tap without Input Monitoring; the
+    /// modifier-only tap still drives both chords, and its shortcut window
+    /// then sees extra modifiers but not other keys.
+    nonisolated static let masks: [CGEventMask] = [flagsChangedMask | keyDownMask, flagsChangedMask]
+
+    /// Creates a listen-only tap for `mask` whose callback receives `userInfo`; nil when refused.
+    typealias TapFactory = @MainActor (_ mask: CGEventMask, _ userInfo: UnsafeMutableRawPointer) -> CFMachPort?
 
     var onStartRecording: ((CaptureKind) -> Void)?
     var onFinalizeRecording: ((CaptureKind) -> Void)?
@@ -71,12 +82,17 @@ final class HotkeyMonitor {
     /// While suspended the tap stays installed and every event is ignored.
     private(set) var isSuspended = false
 
+    /// False when the installed tap fell back to modifiers only.
+    private(set) var observesKeyDown = false
+
     var state: HotkeyStateMachine.State { machine.state }
 
     private let machine = HotkeyStateMachine()
     private var tracker = ModifierTracker()
     private let scheduler: any HotkeyTimerScheduling
     private let heldNow: () -> Set<HotkeyChord.Modifier>
+    private let tapFactory: TapFactory
+    private var didLogModifierOnlyTap = false
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var maxDurationTimer: (any HotkeyTimer)?
@@ -86,10 +102,34 @@ final class HotkeyMonitor {
 
     init(
         scheduler: any HotkeyTimerScheduling = RunLoopTimerScheduler(),
-        heldNow: @escaping () -> Set<HotkeyChord.Modifier> = ModifierTracker.heldNow
+        heldNow: @escaping () -> Set<HotkeyChord.Modifier> = ModifierTracker.heldNow,
+        tapFactory: @escaping TapFactory = HotkeyMonitor.makeListenOnlyTap
     ) {
         self.scheduler = scheduler
         self.heldNow = heldNow
+        self.tapFactory = tapFactory
+    }
+
+    /// The first of `masks` that `create` accepts, with what it created.
+    nonisolated static func firstAccepted<Tap>(
+        _ masks: [CGEventMask],
+        create: (CGEventMask) -> Tap?
+    ) -> (tap: Tap, mask: CGEventMask)? {
+        for mask in masks {
+            if let tap = create(mask) { return (tap, mask) }
+        }
+        return nil
+    }
+
+    static func makeListenOnlyTap(mask: CGEventMask, userInfo: UnsafeMutableRawPointer) -> CFMachPort? {
+        CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: mask,
+            callback: HotkeyMonitor.tapCallback,
+            userInfo: userInfo
+        )
     }
 
     /// A keyDown that can be the key of an OS shortcut: neither Esc nor a modifier.
@@ -99,21 +139,20 @@ final class HotkeyMonitor {
 
     // MARK: - Lifecycle
 
-    /// Install the tap and resync with the keys held now. Throws if
-    /// Accessibility is not granted.
+    /// Install the tap and resync with the keys held now. Falls back to a
+    /// modifier-only tap when key events are refused. Throws if no tap can
+    /// be created (Accessibility not granted).
     func start() throws {
         guard eventTap == nil else { return }
-        let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue) | CGEventMask(1 << CGEventType.keyDown.rawValue)
-
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: mask,
-            callback: HotkeyMonitor.tapCallback,
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
+        let userInfo = Unmanaged.passUnretained(self).toOpaque()
+        guard let installed = Self.firstAccepted(Self.masks, create: { tapFactory($0, userInfo) }) else {
             throw HotkeyMonitorError.accessibilityNotGranted
+        }
+        let tap = installed.tap
+        observesKeyDown = installed.mask & Self.keyDownMask != 0
+        if !observesKeyDown && !didLogModifierOnlyTap {
+            didLogModifierOnlyTap = true
+            AppLog.hotkey.notice("hotkey tap without key events — shortcut window limited to modifiers")
         }
 
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
