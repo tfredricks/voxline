@@ -87,4 +87,12 @@ import Testing
         let list = MeetingMarkdown.speakers(in: [utterances[1], utterances[0], utterances[1]])
         #expect(list == ["Speaker 1", "Me"])
     }
+
+    @Test func clock_formats_seconds_and_survives_non_finite_input() {
+        #expect(MeetingTime.clock(3_725.9) == "01:02:05")
+        #expect(MeetingTime.clock(-4) == "00:00:00")
+        #expect(MeetingTime.clock(.nan) == "00:00:00")
+        #expect(MeetingTime.clock(.infinity) == "00:00:00")
+        #expect(MeetingTime.clock(-.infinity) == "00:00:00")
+    }
 }

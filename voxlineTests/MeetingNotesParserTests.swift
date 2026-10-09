@@ -29,6 +29,28 @@ import Testing
         #expect(try MeetingNotesParser.parse(raw).actionItems[0].due == nil)
     }
 
+    @Test func missing_optional_fields_default_to_empty() throws {
+        let notes = try MeetingNotesParser.parse(#"{"title":"Standup","summary":"Short.","actionItems":[{"owner":"Me","task":"Ship it"}]}"#)
+        #expect(notes.title == "Standup")
+        #expect(notes.summary == "Short.")
+        #expect(notes.keyPoints.isEmpty)
+        #expect(notes.decisions.isEmpty)
+        #expect(notes.openQuestions.isEmpty)
+        #expect(notes.speakerNames.isEmpty)
+        #expect(notes.actionItems == [MeetingNotes.ActionItem(owner: "Me", task: "Ship it", due: nil)])
+    }
+
+    @Test func missing_action_items_default_to_empty() throws {
+        let notes = try MeetingNotesParser.parse(#"{"title":"Standup","summary":"Short.","keyPoints":["One"]}"#)
+        #expect(notes.actionItems.isEmpty)
+        #expect(notes.keyPoints == ["One"])
+    }
+
+    @Test func missing_title_or_summary_is_rejected() {
+        #expect(throws: LLMError.self) { try MeetingNotesParser.parse(#"{"summary":"Short."}"#) }
+        #expect(throws: LLMError.self) { try MeetingNotesParser.parse(#"{"title":"Standup"}"#) }
+    }
+
     @Test func rejects_non_json() {
         #expect(throws: LLMError.self) { try MeetingNotesParser.parse("Here are your notes: …") }
     }

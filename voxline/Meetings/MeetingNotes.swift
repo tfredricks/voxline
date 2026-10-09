@@ -27,6 +27,21 @@ struct MeetingNotes: Codable, Equatable, Sendable {
     """
 }
 
+extension MeetingNotes {
+    /// `title` and `summary` are required; a missing list decodes as empty,
+    /// so prompt-only output that omits a section still parses.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = try container.decode(String.self, forKey: .title)
+        summary = try container.decode(String.self, forKey: .summary)
+        keyPoints = try container.decodeIfPresent([String].self, forKey: .keyPoints) ?? []
+        decisions = try container.decodeIfPresent([String].self, forKey: .decisions) ?? []
+        actionItems = try container.decodeIfPresent([ActionItem].self, forKey: .actionItems) ?? []
+        openQuestions = try container.decodeIfPresent([String].self, forKey: .openQuestions) ?? []
+        speakerNames = try container.decodeIfPresent([SpeakerName].self, forKey: .speakerNames) ?? []
+    }
+}
+
 struct MeetingNotesRequest: Equatable, Sendable {
     var model: String
     var utterances: [MeetingUtterance]

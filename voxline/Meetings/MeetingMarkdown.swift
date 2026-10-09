@@ -3,6 +3,7 @@ import Foundation
 enum MeetingTime {
 
     static func clock(_ seconds: Double) -> String {
+        guard seconds.isFinite else { return "00:00:00" }
         let total = max(0, Int(seconds))
         return String(format: "%02d:%02d:%02d", total / 3_600, (total % 3_600) / 60, total % 60)
     }
