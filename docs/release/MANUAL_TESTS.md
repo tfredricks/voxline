@@ -625,8 +625,10 @@ Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meeti
 - [ ] Run `TEST_RUNNER_VOXLINE_SYSTEM_TAP_SMOKE=1 xcodebuild test … -only-testing:voxlineTests/SystemAudioTapSmokeTests` once (first run shows the System Audio Recording prompt; allow, rerun).
 - [ ] First Start Meeting Recording shows the consent alert once; Cancel records nothing.
 - [ ] First recording shows macOS's System Audio Recording prompt. **Allow** → a Zoom/Meet/Teams call with 2+ remote speakers produces Me + Speaker 1…N, and action items name the right labels.
-- [ ] **Deny** (or revoke in System Settings → Privacy & Security → Screen & System Audio Recording) → notes are processed as in-person and carry the "System audio was silent" warning.
+- [ ] **Deny** (or revoke in System Settings → Privacy & Security → Screen & System Audio Recording) → notes are processed as in-person and carry the "No sound from your Mac was captured" note.
 - [ ] In-person meeting (no call) produces Speaker 1…N from the mic.
+- [ ] Trigger a Slack/Mail notification sound during an in-person meeting; speakers are still Speaker 1…N (no "Me").
+- [ ] Allow the System Audio Recording prompt mid-recording; verify audio arrives without a restart.
 - [ ] Call on speakers vs. headphones: on speakers, remote speech does not also appear as "Me" (echo suppression); note any leaks.
 - [ ] Headset with a mic (AirPods or USB) as the default output: system track contains the call audio, not your mic; note whether AirPods switch to the low-quality call profile when recording starts.
 - [ ] Tap with no sound playing for 10 s, then play audio: recording continues, transcript timestamps line up between Me and call speakers.
