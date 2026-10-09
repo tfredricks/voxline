@@ -4,6 +4,9 @@ import Foundation
 
 enum InsertTarget: Equatable, Sendable {
     case liveSelection
+    /// Posts a Right Arrow, then inserts with paste or typing only: the arrow
+    /// is an async key event, and an AX write could land before it and
+    /// replace the selection. Paste and typing queue behind it.
     case afterLiveSelection
     /// Selects `range` first, provided the field's text there is still `expected`.
     case range(UTF16Range, expected: String)
@@ -98,7 +101,8 @@ final class TextInserter: TextInserting {
             attributeNames: element.attributeNames().value ?? [],
             selectedTextSettable: element.isSettable(kAXSelectedTextAttribute) == .value(true)
         )
-        let plan = InsertionPlan.strategies(for: traits, overrides: overrides())
+        var plan = InsertionPlan.strategies(for: traits, overrides: overrides())
+        if target == .afterLiveSelection { plan.removeAll { $0 == .accessibility } }
         AppLog.paste.debug("insert plan: \(plan.map(\.rawValue).joined(separator: ", "), privacy: .public)")
 
         var failures: [String] = []

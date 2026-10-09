@@ -4,6 +4,11 @@ import Foundation
 /// Deterministic stand-in for `Task.sleep(for:)`. Sleepers suspend until
 /// `advance(by:)` moves `now` past their deadline; cancelling a sleeper
 /// throws `CancellationError` like `Task.sleep` does.
+///
+/// `sleep` and `advance` run on the main actor, so a main-actor caller that
+/// sleeps in a loop registers its next deadline before `advance` takes its
+/// next step. Inject it as `{ @MainActor in try await clock.sleep($0) }`; a
+/// nonisolated wrapper would hop executors and could miss a step.
 final class ManualClock: @unchecked Sendable {
 
     private struct Sleeper {
@@ -21,6 +26,7 @@ final class ManualClock: @unchecked Sendable {
 
     var pendingCount: Int { lock.withLock { sleepers.count } }
 
+    @MainActor
     func sleep(_ duration: Duration) async throws {
         let id: UInt64 = lock.withLock {
             nextID += 1
@@ -49,6 +55,7 @@ final class ManualClock: @unchecked Sendable {
     /// Steps `now` through each pending deadline up to `now + duration`,
     /// resuming due sleepers in deadline order and letting them run before
     /// the next step, so a sleeper that re-sleeps lands on its true deadline.
+    @MainActor
     func advance(by duration: Duration) async {
         let target = now + duration
         while true {
@@ -69,10 +76,8 @@ final class ManualClock: @unchecked Sendable {
         await settle()
     }
 
+    @MainActor
     private func settle() async {
-        for _ in 0..<5 {
-            await Task.yield()
-            await MainActor.run {}
-        }
+        for _ in 0..<10 { await Task.yield() }
     }
 }

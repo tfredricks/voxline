@@ -15,7 +15,9 @@ final class PasteInjector {
         case focusMoved
     }
 
-    /// The restore tail of the last paste, for tests and for the next paste to await.
+    /// The last paste's slot, claimed before its first suspension. It
+    /// completes once that paste's restore tail has run (or it was refused),
+    /// so the next paste, and tests, can await it.
     private(set) var pendingRestore: Task<Void, Never>?
 
     private let pasteboard: NSPasteboard
@@ -54,7 +56,10 @@ final class PasteInjector {
     /// Waits for a pending restore, snapshots, writes the promised item, runs
     /// the gate for `trigger`, settles, posts Cmd+V, verifies, and schedules
     /// the restore tail. `element` is read for verification; `focused` is
-    /// re-read to detect a focus shift.
+    /// re-read to detect a focus shift. When `element` is given it must be
+    /// the focused element the caller already checked, and its ref is the
+    /// focus baseline, so a move during the waits before the Cmd+V counts.
+    /// Without one, `focused()` read just before the promised write is the baseline.
     ///
     /// The tail restores `restoreAfterProvider` after the first provider call
     /// that follows the Cmd+V, or `restoreCeiling` after the Cmd+V, whichever
@@ -64,21 +69,26 @@ final class PasteInjector {
     /// restores at the ceiling.
     func paste(_ text: String, element: (any AXTextElement)?, trigger: ModifierFamilies,
                focused: @escaping @Sendable () -> AXElementRef?) async -> Outcome {
-        await pendingRestore?.value
+        let previous = pendingRestore
+        let (released, release) = AsyncStream<Never>.makeStream()
+        pendingRestore = Task { for await _ in released {} }
+        await previous?.value
 
         let snapshot: PasteboardSnapshot
         do {
             snapshot = try snapshotter.capture(from: pasteboard)
         } catch let error as PasteboardSnapshot.SnapshotError {
+            release.finish()
             AppLog.paste.debug("paste skipped: snapshot refused (\(error.reason, privacy: .public))")
             return .snapshotRefused(error.reason)
         } catch {
+            release.finish()
             AppLog.paste.debug("paste skipped: snapshot failed (\(error.localizedDescription, privacy: .public))")
             return .snapshotRefused(error.localizedDescription)
         }
 
         let before = element?.string(kAXValueAttribute).value
-        let beforeRef = focused()
+        let beforeRef = element?.ref ?? focused()
 
         let provider = PromiseProvider(text: text)
         let ourChangeCount = PasteboardWriter.writePromised(provider: provider, to: pasteboard)
@@ -89,7 +99,7 @@ final class PasteInjector {
         postPaste()
         let pasted = ContinuousClock.now
 
-        pendingRestore = restoreTail(snapshot: snapshot, ourChangeCount: ourChangeCount, provider: provider)
+        restoreTail(snapshot: snapshot, ourChangeCount: ourChangeCount, provider: provider, release: release)
 
         let outcome = await verify(element: element, before: before, beforeRef: beforeRef, focused: focused)
         let elapsed = pasted.duration(to: .now)
@@ -118,13 +128,14 @@ final class PasteInjector {
         case ceiling = "at the ceiling"
     }
 
-    private func restoreTail(snapshot: PasteboardSnapshot, ourChangeCount: Int,
-                             provider: PromiseProvider) -> Task<Void, Never> {
+    private func restoreTail(snapshot: PasteboardSnapshot, ourChangeCount: Int, provider: PromiseProvider,
+                             release: AsyncStream<Never>.Continuation) {
         let sleep = self.sleep
         let afterProvider = restoreAfterProvider
         let ceiling = restoreCeiling
         let pasteboard = self.pasteboard
-        return Task { @MainActor in
+        Task { @MainActor in
+            defer { release.finish() }
             let trigger = await withTaskGroup(of: RestoreTrigger?.self, returning: RestoreTrigger?.self) { group in
                 group.addTask {
                     await provider.firstCallAfterArm()

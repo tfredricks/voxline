@@ -392,8 +392,21 @@ import Testing
 
         let outcome = await insert(h, at: .afterLiveSelection, trigger: [.option])
 
-        #expect(outcome == .inserted(.accessibility, verified: true))
-        #expect(h.events.read() == ["gate", "arrow"])
+        #expect(outcome == .inserted(.paste, verified: true))
+        #expect(h.events.read() == ["gate", "arrow", "paste"])
+        #expect(fake.stringSets.isEmpty)
+    }
+
+    @Test func after_live_selection_never_writes_through_ax() async {
+        let fake = editableFake(value: [.value("hello"), .value("hello world")])
+        let h = makeHarness(element: fake, snapshotter: ThrowingSnapshotter())
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, at: .afterLiveSelection)
+
+        #expect(outcome == .inserted(.typing, verified: true))
+        #expect(fake.stringSets.isEmpty)
+        #expect(h.events.read() == ["arrow", "type"])
     }
 
     @Test func live_selection_posts_no_arrow() async {
@@ -412,12 +425,30 @@ import Testing
         let calls = LockedBox(0)
         let h = makeHarness(focused: {
             calls.mutate { $0 += 1 }
-            return calls.read() <= 2 ? .value(fake) : .value(otherElement)
+            return calls.read() == 1 ? .value(fake) : .value(otherElement)
         })
         defer { h.board.releaseGlobally() }
 
         let outcome = await insert(h, bundleID: Self.slack)
 
+        #expect(outcome == .failed(.pasteVerificationFailed))
+        #expect(h.pastes.read() == 1)
+        #expect(h.typed.read().isEmpty)
+    }
+
+    @Test func focus_move_during_the_ax_settle_is_pasteVerificationFailed() async {
+        let fake = editableFake()
+        let otherElement = FakeAXTextElement(pid: 9191)
+        let calls = LockedBox(0)
+        let h = makeHarness(focused: {
+            calls.mutate { $0 += 1 }
+            return calls.read() == 1 ? .value(fake) : .value(otherElement)
+        })
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h)
+
+        #expect(fake.stringSets.count == 1)
         #expect(outcome == .failed(.pasteVerificationFailed))
         #expect(h.pastes.read() == 1)
         #expect(h.typed.read().isEmpty)
