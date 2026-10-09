@@ -276,7 +276,7 @@ at a time: `didInsert` ends any open window with `.newCapture` first, which
 can't normally happen because `captureWillStart` already ran.
 
 **Logging.** Each window logs one line to `AppLog.learning`:
-`window end=<timeout|focusLeft|newCapture> region=<changed|unchanged|ambiguous|discarded|skipped:reason> hunks=N vocab=N style=<0|1> source=<final|lastGood> ticks=N`.
+`window end=<timeout|focusLeft|newCapture> region=<changed|unchanged|ambiguous|discarded|unreadable> hunks=N vocab=N style=<0|1> source=<final|lastGood> ticks=N`, or, for a window that never anchored, `window end=<anchor|newCapture|none> region=skipped:<reason> hunks=0 vocab=0 style=0`.
 It never logs text, terms, or lengths beyond counts.
 
 ## Classifier
