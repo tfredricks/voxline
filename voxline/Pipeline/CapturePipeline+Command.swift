@@ -50,6 +50,10 @@ extension CapturePipeline {
         }
     }
 
+    /// Shown instead of a copy toast when the edit that didn't land would
+    /// put nothing on the clipboard, as a deletion does.
+    static let nothingDeletedToast = "Couldn't delete in place — nothing was changed"
+
     // MARK: - Presets
 
     /// Runs `preset` against the selection, with no recording and no sounds.
@@ -318,15 +322,24 @@ extension CapturePipeline {
         case .failed(.accessibilityNotGranted):
             setError(TextInsertionError.accessibilityNotGranted.errorDescription!, permissions: true)
         case .failed(let error):
-            AppLog.pipeline.info("command: insert failed, copied instead: \(error.errorDescription ?? "unknown", privacy: .public)")
+            AppLog.pipeline.info("command: insert failed: \(error.errorDescription ?? "unknown", privacy: .public)")
             copyInstead(text, edit, toast: "Couldn't edit in place — copied, ⌘V to apply")
         }
     }
 
     /// History keeps the inserted text (a rewrite's hunk, never field text);
-    /// the clipboard gets what ⌘V should apply.
+    /// the clipboard gets what ⌘V should apply. When that is nothing, as for
+    /// a deletion, neither is written and the toast says nothing changed.
     private func copyInstead(_ text: String, _ edit: PerformedEdit, toast: String) {
-        transcriptFallback(edit.clipboardText(for: text))
+        let clipboard = edit.clipboardText(for: text)
+        guard !clipboard.isEmpty else {
+            AppLog.pipeline.info("command: the deletion didn't land; clipboard left alone")
+            recordCommandMetrics(edit, insertMs: 0, strategy: .none, text: "")
+            resetIdle()
+            showToast(Self.nothingDeletedToast)
+            return
+        }
+        transcriptFallback(clipboard)
         recordCommandMetrics(edit, insertMs: 0, strategy: .copy, text: text)
         recordCommandHistory(text, edit)
         resetIdle()

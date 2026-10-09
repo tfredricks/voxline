@@ -638,6 +638,70 @@ import Testing
         #expect(h.state.status == .idle)
     }
 
+    // MARK: - Deletions that can't land
+
+    nonisolated static let nothingDeleted = "Couldn't delete in place — nothing was changed"
+
+    @Test(arguments: [
+        InsertOutcome.notInserted(.cannotTarget),
+        .notInserted(.fieldChanged),
+        .notInserted(.focusMoved),
+        .notInserted(.outcomeUnknown),
+        .failed(.pasteVerificationFailed),
+        .failed(.allStrategiesFailed(["Accessibility write rejected"])),
+    ])
+    func a_deletion_that_cannot_land_leaves_the_clipboard_and_history_alone(outcome: InsertOutcome) async throws {
+        let h = makeHarness(reader: reader(Self.notesContext(selecting: Self.cat)))
+        answer(h, .replaceSelection, "")
+        h.inserter.outcomes = [outcome]
+        await runCommand(h)
+
+        #expect(h.inserter.calls.first?.text == "")
+        #expect(h.copied.read().isEmpty)
+        #expect(h.history.items.isEmpty)
+        #expect(h.state.toastMessage == Self.nothingDeleted)
+        #expect(h.state.status == .idle)
+        let row = try #require(h.pipe.metrics.items.first)
+        #expect(row.insertStrategy == DictationMetrics.InsertStrategyTag.none)
+        #expect(row.editAction == "replace_selection")
+    }
+
+    @Test func a_deletion_of_a_copied_selection_that_cannot_land_leaves_the_clipboard_alone() async {
+        let h = makeHarness(reader: .needingCopy(), copies: ["quoted"])
+        answer(h, .replaceSelection, "")
+        h.inserter.outcomes = [.notInserted(.cannotTarget)]
+        await runCommand(h)
+
+        #expect(h.inserter.calls.first?.target == .liveSelection)
+        #expect(h.inserter.calls.first?.text == "")
+        #expect(h.copied.read().isEmpty)
+        #expect(h.history.items.isEmpty)
+        #expect(h.state.toastMessage == Self.nothingDeleted)
+    }
+
+    @Test func a_deletion_whose_copied_selection_changed_leaves_the_clipboard_alone() async {
+        let h = makeHarness(reader: .needingCopy(), copies: ["quoted", "changed"])
+        answer(h, .replaceSelection, "")
+        await runCommand(h)
+
+        #expect(h.inserter.calls.isEmpty)
+        #expect(h.copied.read().isEmpty)
+        #expect(h.history.items.isEmpty)
+        #expect(h.state.toastMessage == Self.nothingDeleted)
+    }
+
+    @Test func a_rewrite_that_deletes_and_cannot_land_copies_the_whole_rewritten_text() async throws {
+        let h = makeHarness(reader: reader(Self.notesContext()))
+        answer(h, .rewrite, "the sat")
+        h.inserter.outcomes = [.notInserted(.cannotTarget)]
+        await runCommand(h)
+
+        #expect(h.inserter.calls.first?.text == "")
+        #expect(h.copied.read() == ["the sat"])
+        #expect(h.state.toastMessage == "Couldn't edit in place — copied, ⌘V to apply")
+        #expect(try #require(h.pipe.metrics.items.first).insertStrategy == .copy)
+    }
+
     @Test func insert_failure_is_phase_2s_error_path() async {
         let h = makeHarness(reader: reader(Self.notesContext(selecting: Self.cat)))
         h.inserter.outcomes = [.failed(.accessibilityNotGranted)]
