@@ -675,6 +675,50 @@ import Testing
         #expect(h.typed.read().isEmpty)
     }
 
+    // MARK: - Terminals
+
+    @Test(arguments: InsertionPlan.terminalBundleIDs.sorted())
+    func an_empty_replacement_in_a_terminal_posts_nothing(bundleID: String) async {
+        let fake = selectedFake(value: [.value("hello world"), .value("hello ")])
+        let h = makeHarness(element: fake)
+        defer { h.board.releaseGlobally() }
+
+        let range = await insert(h, "", at: .range(UTF16Range(location: 6, length: 5), expected: "world"),
+                                 bundleID: bundleID)
+        let live = await insert(h, "", bundleID: bundleID)
+
+        #expect(range == .notInserted(.cannotTarget))
+        #expect(live == .notInserted(.cannotTarget))
+        #expect(h.events.read().isEmpty)
+        #expect(h.pastes.read() == 0)
+        #expect(h.typed.read().isEmpty)
+        #expect(fake.stringSets.isEmpty)
+        #expect(fake.rangeSets.isEmpty)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
+    @Test func an_empty_edit_in_a_terminal_without_accessible_focus_posts_nothing() async {
+        let h = makeHarness(focused: { .absent })
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "", bundleID: "io.alacritty")
+
+        #expect(outcome == .notInserted(.cannotTarget))
+        #expect(h.events.read().isEmpty)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
+    @Test func text_in_a_terminal_still_pastes() async {
+        let fake = selectedFake(value: [.value("hello world"), .value("hello world!")])
+        let h = makeHarness(element: fake)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "!", bundleID: "com.apple.Terminal")
+
+        #expect(outcome == .inserted(.paste, verified: true))
+        #expect(h.events.read() == ["paste"])
+    }
+
     // MARK: - Cancellation
 
     @Test(arguments: [InsertTarget.liveSelection, .afterLiveSelection])

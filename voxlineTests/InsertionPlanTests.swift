@@ -38,6 +38,18 @@ import Testing
         }
     }
 
+    @Test func terminals_are_listed() {
+        let terminals: Set<String> = [
+            "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "net.kovidgoyal.kitty",
+            "io.alacritty", "com.mitchellh.ghostty", "com.github.wez.wezterm",
+        ]
+        #expect(InsertionPlan.terminalBundleIDs.isSuperset(of: terminals))
+        for bundleID in terminals { #expect(InsertionPlan.isTerminal(bundleID), "\(bundleID)") }
+        #expect(!InsertionPlan.isTerminal("com.tinyspeck.slackmacgap"))
+        #expect(!InsertionPlan.isTerminal("com.apple.Notes"))
+        #expect(!InsertionPlan.isTerminal(nil))
+    }
+
     @Test func native_field_with_settable_selection_is_ax_first() {
         #expect(InsertionPlan.strategies(for: traits("com.apple.Notes")) == [.accessibility, .paste, .typing])
     }

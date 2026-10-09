@@ -94,7 +94,9 @@ final class TextInserter: TextInserting {
     /// can't express one, so the first of them in the plan posts a single
     /// Backspace instead, after the release gate. It is verified like typing,
     /// reported as `.typing`, and never falls through. An empty `text` with
-    /// no selection, or no accessible focus, posts no Backspace.
+    /// no selection, or no accessible focus, posts no Backspace. In a
+    /// terminal (`InsertionPlan.isTerminal`) an empty `text` is
+    /// `cannotTarget` before anything is read: its selection is scrollback.
     ///
     /// Once the calling task is cancelled nothing more is selected, posted, or
     /// written: the insert checks on entry, before each strategy, and after
@@ -103,6 +105,10 @@ final class TextInserter: TextInserting {
                 bundleID: String?, trigger: ModifierFamilies) async -> InsertOutcome {
         guard isAccessibilityTrusted() else { return .failed(.accessibilityNotGranted) }
         guard !Task.isCancelled else { return notInserted(.cancelled) }
+        if text.isEmpty, InsertionPlan.isTerminal(bundleID) {
+            AppLog.paste.debug("insert: a terminal can't delete its selection")
+            return notInserted(.cannotTarget)
+        }
 
         let element: any AXTextElement
         switch focused() {

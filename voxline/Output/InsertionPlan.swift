@@ -22,6 +22,18 @@ enum InsertionPlan {
         "com.apple.Terminal", "com.googlecode.iterm2",
     ]
 
+    /// Terminal emulators. A selection there is scrollback output, not
+    /// editable text: neither a paste nor the delete key removes it, and a
+    /// Backspace deletes before the shell's cursor instead.
+    static let terminalBundleIDs: Set<String> = [
+        "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "net.kovidgoyal.kitty",
+        "io.alacritty", "com.mitchellh.ghostty", "com.github.wez.wezterm",
+    ]
+
+    static func isTerminal(_ bundleID: String?) -> Bool {
+        bundleID.map(terminalBundleIDs.contains) ?? false
+    }
+
     /// Attributes only web content exposes; catches WebKit views inside
     /// native apps, such as Mail compose.
     static let webContentAttributes: Set<String> = ["AXDOMClassList", "AXDOMIdentifier"]
