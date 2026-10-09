@@ -366,12 +366,34 @@ Chord-release gating before a synthetic paste stays.
 A `commandModel` setting, defaulting to the cleanup model. Drafting and
 answering benefit from a stronger model than filler stripping does.
 
+### Preset edit shortcuts
+
+Added 2026-10-08 after using 0.4.0: the keyboard-driven cousin of command
+mode. Select text anywhere, press a shortcut, and a predefined instruction
+runs through the same transform path with no recording. Defaults shipped as
+a small editable table in Settings → Command:
+
+| Shortcut | Preset |
+|---|---|
+| Option+1 | Fix grammar and typos, change nothing else |
+| Option+2 | Make it concise |
+| Option+3 | Make it professional |
+
+Each row is a shortcut, a name, and the instruction text; the user can edit,
+add, or remove rows. The hotkey monitor gains key-event handling for these
+(phase 2 already adds it for Esc). A preset with no selection shows the same
+"Select text to transform" toast as command mode. Caveat for the spec: on the
+US layout Option+digit types a character (¡ ™ £), so a global shortcut
+swallows it everywhere; the defaults stay, but the table must make remapping
+obvious.
+
 ### Removed
 
 The post-dictation review session: `ReviewSession`, `RefinementDirective`,
 `PillReviewActions`, `CapturePipeline.refine`, the hover-pause timers, and the
-Shorter / Longer / Clearer buttons. "Shorter" becomes "hold the command chord
-and say shorter". Issues 24–27 disappear with it.
+Shorter / Longer / Clearer buttons. "Shorter" becomes either "hold the command
+chord and say shorter" or a preset shortcut on the selection. Issues 24–27
+disappear with it.
 
 ### Done when
 
@@ -383,6 +405,8 @@ and say shorter". Issues 24–27 disappear with it.
 - With no selection in a document: "make the last paragraph shorter" changes
   only that paragraph.
 - A superset chord (dictation chord + Cmd) does nothing.
+- Select a paragraph in Notes, press Option+2: it is replaced by a shorter
+  version with no recording, and Cmd+Z restores it.
 
 ## Phase 4 — Learning (0.7.0)
 
