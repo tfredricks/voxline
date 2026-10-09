@@ -1,7 +1,7 @@
 import Foundation
 
 enum WindowEndReason: String, Sendable {
-    case timeout, focusLeft, newCapture
+    case timeout, focusLeft, newCapture, regionGone
 }
 
 struct WindowResult: Equatable, Sendable {
@@ -30,7 +30,9 @@ private enum WindowPoll: Sendable {
 /// One correction window after a dictation insert: anchor the text, poll the
 /// field once a second for `tickCount` seconds (focus, value, locate), keep
 /// the last poll whose region was located and changed, then read the value
-/// once more. Reports exactly one `WindowEnd`, unless cancelled. Every AX
+/// once more. A poll that finds the region gone (cleared, sent, deleted) ends
+/// the window with no final read, so what is typed afterward is never taken
+/// for the dictation. Reports exactly one `WindowEnd`, unless cancelled. Every AX
 /// read runs detached.
 @MainActor
 final class CorrectionWindow {
@@ -125,6 +127,10 @@ final class CorrectionWindow {
             case .stayed(let match):
                 ticks += 1
                 if case .changed(let text) = match { lastGood = text }
+                if case .discarded = match {
+                    endRegionGone(anchor: anchor)
+                    return
+                }
             }
         }
         await beginFinal(.timeout, anchor: anchor)
@@ -134,6 +140,15 @@ final class CorrectionWindow {
         guard phase == .running else { return }
         phase = .finishing
         await readFinal(reason, anchor: anchor)
+    }
+
+    private func endRegionGone(anchor: InsertAnchor) {
+        guard phase == .running else { return }
+        phase = .finishing
+        let resolved = Self.resolve(final: .discarded, lastGood: lastGood)
+        finish(.finished(WindowResult(
+            reason: .regionGone, anchor: anchor.text, match: resolved.match, source: resolved.source, ticks: ticks
+        )))
     }
 
     private func readFinal(_ reason: WindowEndReason, anchor: InsertAnchor) async {

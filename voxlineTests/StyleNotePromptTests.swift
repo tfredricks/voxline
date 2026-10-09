@@ -82,6 +82,17 @@ import Testing
         #expect(StyleNotePrompt.note(fromReply: String(repeating: "z", count: 700))?.count == LearningStore.noteCap)
     }
 
+    @Test func the_cap_counts_utf16_units_and_never_cuts_mid_line() throws {
+        let first = String(repeating: "x", count: 400)
+        let second = String(repeating: "\u{1F600}", count: 150)
+        let reply = first + "\n" + second
+        #expect(reply.count < LearningStore.noteCap)
+        #expect(reply.utf16.count > LearningStore.noteCap)
+        let note = try #require(StyleNotePrompt.note(fromReply: reply))
+        #expect(note == first)
+        #expect(LearningStore.capped(note, LearningStore.noteCap) == note)
+    }
+
     @Test func thinking_models_get_headroom() {
         #expect(LLMRequest.styleNoteBudget(model: "claude-haiku-4-5") == 400)
         #expect(LLMRequest.styleNoteBudget(model: "claude-sonnet-5-5") == 400 + 4_096)

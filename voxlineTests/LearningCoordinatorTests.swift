@@ -153,6 +153,17 @@ import Testing
         #expect(h.vocabulary.load().isEmpty)
     }
 
+    @Test func a_capture_with_both_toggles_off_cancels_windows_without_settings_notice() async {
+        let h = makeHarness()
+        h.learning.didInsert(InsertedDictation(text: Self.original, bundleID: Self.messages, category: .chat))
+        #expect(await eventually { h.clock.pendingCount == 1 })
+        h.toggles.write(LearningToggles(words: false, style: false))
+        h.learning.captureWillStart()
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(h.reader.valueCalls == 0)
+        #expect(h.store.data == LearningData())
+    }
+
     @Test func terminals_and_untrusted_fields_get_no_window() async {
         let h = makeHarness()
         h.learning.didInsert(InsertedDictation(text: Self.original, bundleID: "com.apple.Terminal", category: .chat))

@@ -93,6 +93,10 @@ final class LearningCoordinator: LearningObserving {
     }
 
     func captureWillStart() {
+        guard toggles().anyOn else {
+            cancelWindows()
+            return
+        }
         endOpenWindows()
     }
 

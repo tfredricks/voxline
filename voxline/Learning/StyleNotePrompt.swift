@@ -72,14 +72,14 @@ enum StyleNotePrompt {
         return kept
     }
 
-    /// The reply trimmed and, past `LearningStore.noteCap` characters, cut
+    /// The reply trimmed and, past `LearningStore.noteCap` UTF-16 units, cut
     /// at its last line break before the cap (or at the cap). nil when empty.
     static func note(fromReply reply: String) -> String? {
         let trimmed = reply.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        guard trimmed.count > LearningStore.noteCap else { return trimmed }
-        let head = trimmed.prefix(LearningStore.noteCap)
-        let cut = head.lastIndex(of: "\n").map { head[..<$0] } ?? head
+        let head = LearningStore.capped(trimmed, LearningStore.noteCap)
+        guard head != trimmed else { return trimmed }
+        let cut = head.lastIndex(of: "\n").map { String(head[..<$0]) } ?? head
         return cut.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

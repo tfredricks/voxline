@@ -190,7 +190,7 @@ import Testing
     }
 
     @Test func only_changed_polls_replace_the_snapshot() async throws {
-        let h = makeHarness(values: [.value(Self.fixed), .value(Self.original), .value(""), .failed])
+        let h = makeHarness(values: [.value(Self.fixed), .value(Self.original), .failed])
         h.window.start(inserted: Self.original)
         await runTicks(3, h)
         #expect(await eventually { h.clock.pendingCount == 1 })
@@ -216,6 +216,31 @@ import Testing
         let r = try #require(await result(h))
         #expect(r.match == .unchanged)
         #expect(r.source == .final)
+    }
+
+    @Test func the_region_going_away_ends_the_window_with_the_last_good_snapshot() async throws {
+        let h = makeHarness(values: [.value(Self.fixed), .value(""), .value("next message")])
+        h.window.start(inserted: Self.original)
+        await runTicks(2, h)
+        let r = try #require(await result(h))
+        #expect(r.reason == .regionGone)
+        #expect(r.match == .changed(Self.fixed))
+        #expect(r.source == .lastGood)
+        #expect(r.ticks == 2)
+        #expect(h.reader.valueCalls == 2)
+        #expect(await eventually { h.clock.pendingCount == 0 })
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(h.ends.read().count == 1)
+    }
+
+    @Test func the_region_going_away_with_no_snapshot_records_nothing() async throws {
+        let h = makeHarness(values: [.value(""), .value(Self.fixed)])
+        h.window.start(inserted: Self.original)
+        await runTicks(1, h)
+        let r = try #require(await result(h))
+        #expect(r.reason == .regionGone)
+        #expect(r.match == .discarded)
+        #expect(h.reader.valueCalls == 1)
     }
 
     @Test func cancel_reports_nothing() async {
