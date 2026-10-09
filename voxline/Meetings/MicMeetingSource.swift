@@ -7,8 +7,8 @@ final class MicMeetingSource: MeetingAudioSource {
 
     private let preferredInputDeviceUID: String?
     private var engine: AVAudioEngine?
-    private var converter: CaptureConverter?
-    private var onSamples: (@Sendable ([Float]) -> Void)?
+    private var delivery: SampleDelivery?
+    private var once: FireOnce?
     private var observer: (any NSObjectProtocol)?
 
     init(preferredInputDeviceUID: String?) {
@@ -28,45 +28,46 @@ final class MicMeetingSource: MeetingAudioSource {
         guard format.sampleRate > 0, format.channelCount > 0 else {
             throw MeetingAudioSourceError.unavailable("No microphone input is available.")
         }
-        let converter: CaptureConverter
+        let delivery: SampleDelivery
         do {
-            converter = try CaptureConverter(inputFormat: format)
+            delivery = SampleDelivery(converter: try CaptureConverter(inputFormat: format), onSamples: onSamples)
         } catch {
             throw MeetingAudioSourceError.unavailable("The microphone's audio format isn't supported.")
         }
         let once = FireOnce()
         engine.inputNode.installTap(onBus: 0, bufferSize: AVAudioFrameCount(format.sampleRate * 0.1), format: format) { buffer, _ in
             guard !once.hasFired else { return }
-            let samples = converter.convert(buffer)
-            if !samples.isEmpty { onSamples(samples) }
+            _ = delivery.deliver(buffer)
         }
-        observer = NotificationCenter.default.addObserver(
+        let observer = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
-        ) { _ in
+        ) { [weak engine] _ in
+            guard let engine, !engine.isRunning else { return }
             if once.claim() { onFailure(.configurationChanged) }
         }
         engine.prepare()
         do {
             try engine.start()
         } catch {
+            NotificationCenter.default.removeObserver(observer)
             engine.inputNode.removeTap(onBus: 0)
-            if let observer { NotificationCenter.default.removeObserver(observer) }
-            observer = nil
             throw MeetingAudioSourceError.unavailable(error.localizedDescription)
         }
         self.engine = engine
-        self.converter = converter
-        self.onSamples = onSamples
+        self.delivery = delivery
+        self.once = once
+        self.observer = observer
     }
 
     func stop() {
+        _ = once?.claim()
+        once = nil
         if let observer { NotificationCenter.default.removeObserver(observer) }
         observer = nil
         engine?.inputNode.removeTap(onBus: 0)
+        delivery?.deliverTail()
+        delivery = nil
         engine?.stop()
         engine = nil
-        if let tail = converter?.flushAndClose(), !tail.isEmpty { onSamples?(tail) }
-        converter = nil
-        onSamples = nil
     }
 }

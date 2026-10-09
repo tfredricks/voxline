@@ -8,16 +8,21 @@ enum MeetingAudioSourceError: Error, Equatable {
 }
 
 /// One track's audio for a meeting recording.
+///
+/// Threading: chunks arrive on a background thread, the tail on the thread
+/// calling `stop()`, and `onFailure` on an arbitrary background thread. Never
+/// call `start()` or `stop()` synchronously from inside either callback; hop
+/// to another queue or actor first.
 protocol MeetingAudioSource: AnyObject {
     /// Starts delivering 16 kHz mono Float32 on a background thread.
     /// `onFailure` fires at most once per start, after which no more samples
-    /// arrive until the next start.
+    /// arrive until the next start. It never fires after `stop()` returns.
     func start(
         onSamples: @escaping @Sendable ([Float]) -> Void,
         onFailure: @escaping @Sendable (MeetingAudioSourceError) -> Void
     ) throws
-    /// Delivers the resampler's tail through `onSamples`, then stops.
-    /// Idempotent.
+    /// Delivers the resampler's tail through `onSamples`, after every earlier
+    /// chunk, then stops. Nothing is delivered once it returns. Idempotent.
     func stop()
 }
 
