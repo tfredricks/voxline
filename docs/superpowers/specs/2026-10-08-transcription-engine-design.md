@@ -553,3 +553,32 @@ setting, and any change to command mode beyond what cancel and the pill need.
   LLM result never lands after a cancel.
 - No regression: dictation, command mode, the no-field copy path, and history
   all behave as in 0.4.0.
+
+## Synthetic bake-off result (provisional)
+
+Run 2026-10-08 23:38 CDT on the maintainer's Mac: 20 clips rendered with
+`say` (five voices rotating) from realistic dictation sentences, 15 dictionary
+terms, real-time pacing, `scripts/make-synthetic-bakeoff.sh`. The clips and
+the full report stay outside the repo.
+
+| Engine | WER % | Term miss % | Finish median ms | Finish p90 ms | First partial median ms |
+|---|---|---|---|---|---|
+| Apple Speech (apple:en_US) | 18.4 | 48.5 | 120 | 155 | 1041 |
+| WhisperKit (large-v3 turbo) | 4.6 | 12.1 | 731 | 947 | 2506 |
+
+**Verdict:** WhisperKit. Apple Speech is out at step 2 of the rule (more than
+5 WER points worse than the best), so `EngineID.default` stays `.whisperKit`.
+
+Caveats. TTS audio is clean and evenly paced, with no room noise and almost
+no trailing silence; Todd's own clips decide. Apple mangled jargon the TTS
+voices pronounce oddly ("Cuban eats" for Kubernetes); Whisper split
+CamelCase names ("lang graph", "Whisper Kid") that the cleanup prompt's
+vocabulary rule repairs, which the term metric already credits.
+
+Consequence for the targets: with WhisperKit as the default, finish latency
+(~730 ms median) misses the ≤ 300 ms `transcribeMs` target. Streaming gives
+WhisperKit live partials, but a short dictation confirms nothing before
+release, so the final pass still decodes the whole clip. Two follow-ups are
+recorded: finish early when the audio after the last rolling pass is silent
+(Task 12 below), and, for Todd to decide, a hybrid that shows Apple's fast
+partials while Whisper produces the final text.
