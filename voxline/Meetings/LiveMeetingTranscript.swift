@@ -119,7 +119,7 @@ final class LiveMeetingTranscript: LiveMeetingTranscribing {
 
     private func sessionEnded(_ track: MeetingRecorder.Track) {
         consumers[track] = nil
-        sessions.remove(track)
+        sessions.remove(track)?.cancel()
         guard !stopped, availability == .listening, sessions.isEmpty else { return }
         availability = .unavailable(LiveTranscriptError.stopped.localizedDescription)
         AppLog.meetings.notice("live transcript ended: last session closed")

@@ -39,9 +39,10 @@ final class MeetingTimerPanel {
         panel.contentView = hostingView
         let saved = panel.setFrameUsingName(Self.autosaveName) ? panel.frame : nil
         if let screen = Self.screen(for: saved) {
-            let frame = MeetingTimerLayout.frame(
-                size: hostingView.fittingSize, saved: saved, visibleFrame: screen.visibleFrame
-            )
+            let size = hostingView.fittingSize
+            let frame = saved.map {
+                MeetingTimerLayout.resized($0, to: size, visibleFrame: screen.visibleFrame)
+            } ?? MeetingTimerLayout.frame(size: size, saved: nil, visibleFrame: screen.visibleFrame)
             panel.setFrame(frame, display: false)
         }
         panel.setFrameAutosaveName(Self.autosaveName)

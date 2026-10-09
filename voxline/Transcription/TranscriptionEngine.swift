@@ -102,7 +102,7 @@ protocol TranscriptionSession: AnyObject, Sendable {
     /// render thread; must not block on I/O.
     func append(_ samples: [Float])
     /// Snapshots of the transcript as it evolves. Finishes after `finish()`
-    /// returns or `cancel()` is called.
+    /// returns, `cancel()` is called, or the engine stops on its own.
     var partials: AsyncStream<TranscriptPartial> { get }
     /// Flush and return the final text, trimmed.
     func finish() async throws -> String

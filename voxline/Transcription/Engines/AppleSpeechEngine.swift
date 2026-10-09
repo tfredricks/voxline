@@ -196,6 +196,7 @@ final class AppleSpeechSession: TranscriptionSession, @unchecked Sendable {
         self.partials = partials
         self.partialsContinuation = partialsContinuation
         self.resultsTask = Task {
+            defer { partialsContinuation.finish() }
             var accumulator = ApplePartialAccumulator()
             for try await result in transcriber.results {
                 partialsContinuation.yield(

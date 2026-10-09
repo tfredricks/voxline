@@ -649,7 +649,7 @@ Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meeti
 - [ ] Collapse and expand: the top-left corner stays put; with the chip near the bottom of the screen the expanded panel stays on screen.
 - [ ] Expanded state and position survive Stop and the next Start.
 - [ ] Drag the panel by the time; the chevron toggles without moving it.
-- [ ] With Zoom, Slack, or another app frontmost (voxline not active), the first click on the chevron toggles the panel; if the first click only activates nothing and the second toggles, note it (fix: an `NSHostingView` subclass returning true from `acceptsFirstMouse(for:)`).
+- [ ] With Zoom, Slack, or another app frontmost (voxline not active), the first click on the chevron toggles the panel; if the first click does nothing and only the second toggles, note it (fix: an `NSHostingView` subclass returning true from `acceptsFirstMouse(for:)`).
 - [ ] Expanding and collapsing resizes the panel in one step with no flash of the old size.
 - [ ] Hold the dictation hotkey mid-meeting: dictation works; the words show under "Me".
 - [ ] Unplug headphones mid-meeting: "Me" keeps updating after the restart.
