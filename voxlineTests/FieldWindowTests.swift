@@ -79,6 +79,26 @@ import Testing
         }
     }
 
+    @Test func end_edge_snaps_inward_out_of_a_crlf() {
+        let window = FieldWindow.make(text: text("\r\n", count: 15_000), anchor: caret(15_000), budget: 12_001)
+        #expect(window == UTF16Range(location: 7_000, length: 12_000))
+    }
+
+    @Test func start_edge_snaps_inward_out_of_a_crlf() {
+        let window = FieldWindow.make(text: text("\r\n", count: 15_000), anchor: caret(15_000), budget: 12_005)
+        #expect(window == UTF16Range(location: 6_998, length: 12_004))
+    }
+
+    @Test func crlf_is_never_split_at_either_edge() {
+        let lines = text("\r\n", count: 15_000)
+        for budget in 12_000...12_007 {
+            let window = FieldWindow.make(text: lines, anchor: caret(15_000), budget: budget)
+            #expect(window.location % 2 == 0)
+            #expect(window.end % 2 == 0)
+            #expect(window.length <= budget)
+        }
+    }
+
     @Test func combining_marks_stay_with_their_base() {
         let decomposed = text("e\u{301}", count: 15_000)
         #expect(decomposed.length == 30_000)

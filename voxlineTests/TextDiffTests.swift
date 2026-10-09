@@ -75,6 +75,46 @@ import Testing
         #expect(apply(result, to: "a\r\nb") == "a\nb")
     }
 
+    @Test func a_flag_is_never_split_when_old_and_new_pair_differently() throws {
+        let result = try #require(TextDiff.minimalChange(from: "x🇺🇸", to: "🇦🇺🇸"))
+        #expect(result == change(0, 5, "🇦🇺🇸"))
+        #expect(apply(result, to: "x🇺🇸") == "🇦🇺🇸")
+    }
+
+    /// UTF-16 offsets between Swift `Character`s, which keep CRLF and
+    /// regional-indicator pairs whole.
+    private func graphemeBoundaries(_ s: String) -> Set<Int> {
+        var offsets: Set<Int> = [0]
+        var offset = 0
+        for character in s {
+            offset += character.utf16.count
+            offsets.insert(offset)
+        }
+        return offsets
+    }
+
+    @Test func edges_are_grapheme_boundaries_in_both_strings() {
+        let alphabet = ["x", "🇦", "🇺", "\r", "\n"]
+        var strings = [""]
+        var level = [""]
+        for _ in 0..<3 {
+            level = level.flatMap { prefix in alphabet.map { prefix + $0 } }
+            strings += level
+        }
+        var failures: [String] = []
+        for old in strings {
+            for new in strings {
+                guard let result = TextDiff.minimalChange(from: old, to: new) else { continue }
+                let newEnd = result.range.location + (result.replacement as NSString).length
+                let ok = apply(result, to: old) == new
+                    && graphemeBoundaries(old).isSuperset(of: [result.range.location, result.range.end])
+                    && graphemeBoundaries(new).isSuperset(of: [result.range.location, newEnd])
+                if !ok { failures.append("\(old.debugDescription) → \(new.debugDescription)") }
+            }
+        }
+        #expect(failures.isEmpty, "\(failures.count) splits, e.g. \(failures.prefix(5))")
+    }
+
     @Test func crlf_is_never_split_from_the_front() throws {
         let result = try #require(TextDiff.minimalChange(from: "a\r\nb", to: "a\rb"))
         #expect(result == change(1, 2, "\r"))
