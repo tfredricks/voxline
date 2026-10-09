@@ -19,13 +19,15 @@ import Testing
         _ defaults: UserDefaults,
         chords: ChordSet = .default,
         counter: Counter? = nil,
-        translate: KeyComboValidator.Translator? = nil
+        translate: KeyComboValidator.Translator? = nil,
+        reserved: @escaping () -> [KeyCombo] = { [] }
     ) -> CommandSettingsViewModel {
         CommandSettingsViewModel(
             store: PresetStore(defaults: defaults),
             chords: { chords },
             onChange: { counter?.count += 1 },
-            translate: translate ?? noTyping
+            translate: translate ?? noTyping,
+            reserved: reserved
         )
     }
 
@@ -50,6 +52,13 @@ import Testing
     }
 
     // MARK: - Combos
+
+    @Test func preset_cannot_take_the_meeting_shortcut() {
+        let meeting = KeyCombo(keyCode: 46, modifiers: [.control, .option])
+        let vm = make(suite(), reserved: { [meeting] })
+        let id = vm.presets[0].id
+        #expect(vm.updateCombo(meeting, for: id) == .rejected(CommandSettingsViewModel.meetingShortcutTaken))
+    }
 
     @Test func duplicate_combo_is_rejected_and_not_applied() {
         let d = suite()

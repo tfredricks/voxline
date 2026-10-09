@@ -8,23 +8,28 @@ import Observation
 @MainActor
 final class CommandSettingsViewModel {
 
+    static let meetingShortcutTaken = "This shortcut starts and stops meeting recording."
+
     private(set) var presets: [PresetShortcut]
 
     private let store: PresetStore
     private let chords: () -> ChordSet
     private let onChange: () -> Void
     private let translate: KeyComboValidator.Translator
+    private let reserved: () -> [KeyCombo]
 
     init(
         store: PresetStore = PresetStore(),
         chords: @escaping () -> ChordSet,
         onChange: @escaping () -> Void,
-        translate: @escaping KeyComboValidator.Translator = KeyComboValidator.liveTranslator
+        translate: @escaping KeyComboValidator.Translator = KeyComboValidator.liveTranslator,
+        reserved: @escaping () -> [KeyCombo] = { [] }
     ) {
         self.store = store
         self.chords = chords
         self.onChange = onChange
         self.translate = translate
+        self.reserved = reserved
         self.presets = store.load()
     }
 
@@ -85,6 +90,7 @@ final class CommandSettingsViewModel {
     }
 
     private func validate(_ combo: KeyCombo, for id: PresetShortcut.ID) -> KeyComboValidator.Verdict {
+        if reserved().contains(combo) { return .rejected(Self.meetingShortcutTaken) }
         let others = presets.filter { $0.id != id && !$0.needsShortcut }.map(\.combo)
         return KeyComboValidator.validate(combo, others: others, chords: chords(), translate: translate)
     }

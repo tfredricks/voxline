@@ -290,4 +290,31 @@ import Testing
         interceptor.uninstall()
         #expect(!interceptor.isInstalled)
     }
+
+    // MARK: - Meeting toggle
+
+    private var ctrlOptionM: KeyCombo { KeyCombo(keyCode: 46, modifiers: [.control, .option]) }
+
+    @Test func armed_meeting_combo_is_swallowed_and_fires() {
+        let config = KeyInterceptor.Config(meetingArmed: true, meetingToggle: ctrlOptionM)
+        let d = decide(46, flags: [.maskControl, .maskAlternate], config: config)
+        #expect(d.decision == .swallowAndFire(.meeting))
+        #expect(d.swallowedDowns == [46])
+    }
+
+    @Test func unarmed_meeting_combo_passes() {
+        let config = KeyInterceptor.Config(meetingArmed: false, meetingToggle: ctrlOptionM)
+        #expect(decide(46, flags: [.maskControl, .maskAlternate], config: config).decision == .pass)
+    }
+
+    @Test func meeting_autorepeat_is_swallowed_without_firing() {
+        let config = KeyInterceptor.Config(meetingArmed: true, meetingToggle: ctrlOptionM)
+        let d = decide(46, flags: [.maskControl, .maskAlternate], autorepeat: true, config: config, downs: [46])
+        #expect(d.decision == .swallow)
+    }
+
+    @Test func meeting_wins_over_a_preset_with_the_same_combo() {
+        let config = KeyInterceptor.Config(presetsArmed: true, presets: [ctrlOptionM: presetID], meetingArmed: true, meetingToggle: ctrlOptionM)
+        #expect(decide(46, flags: [.maskControl, .maskAlternate], config: config).decision == .swallowAndFire(.meeting))
+    }
 }

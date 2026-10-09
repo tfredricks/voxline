@@ -1,8 +1,9 @@
 import CoreGraphics
 import Foundation
 
-/// Swallows Esc while a run can be cancelled, and preset shortcuts while
-/// presets are armed, reporting each on the main actor. An active session
+/// Swallows Esc while a run can be cancelled, the meeting shortcut while
+/// armed, and preset shortcuts while presets are armed, reporting each on
+/// the main actor. An active session
 /// event tap running on its own thread, so a busy main thread never stalls
 /// keyboard input. Everything else passes through untouched.
 final class KeyInterceptor: @unchecked Sendable {
@@ -15,15 +16,19 @@ final class KeyInterceptor: @unchecked Sendable {
         /// Families of both hotkey chords. Esc pressed with only these held
         /// still cancels, since a chord is down while recording.
         var chordFamilies: ModifierFamilies = []
+        var meetingArmed: Bool = false
+        /// Starts or stops meeting recording. Checked before presets.
+        var meetingToggle: KeyCombo? = nil
     }
 
-    enum Fired: Equatable { case escape, preset(UUID) }
+    enum Fired: Equatable { case escape, preset(UUID), meeting }
     enum Decision: Equatable { case pass, swallow, swallowAndFire(Fired) }
 
     static let installRetryInterval: Duration = .seconds(10)
 
     private let onEscape: @MainActor () -> Void
     private let onPreset: @MainActor (UUID) -> Void
+    private let onMeeting: @MainActor () -> Void
     private let lock = NSLock()
     private var current = Config()
     private var swallowedDowns: Set<UInt16> = []
@@ -32,9 +37,14 @@ final class KeyInterceptor: @unchecked Sendable {
     private var runLoop: CFRunLoop?
     private var lastInstallFailure: ContinuousClock.Instant?
 
-    init(onEscape: @escaping @MainActor () -> Void, onPreset: @escaping @MainActor (UUID) -> Void) {
+    init(
+        onEscape: @escaping @MainActor () -> Void,
+        onPreset: @escaping @MainActor (UUID) -> Void,
+        onMeeting: @escaping @MainActor () -> Void = {}
+    ) {
         self.onEscape = onEscape
         self.onPreset = onPreset
+        self.onMeeting = onMeeting
     }
 
     var config: Config {
@@ -68,6 +78,10 @@ final class KeyInterceptor: @unchecked Sendable {
         if keyCode == KeyCombo.escapeKeyCode, config.escapeArmed, families.subtracting(config.chordFamilies).isEmpty {
             downs.insert(keyCode)
             return (.swallowAndFire(.escape), downs)
+        }
+        if config.meetingArmed, let toggle = config.meetingToggle, toggle == KeyCombo(keyCode: keyCode, modifiers: families) {
+            downs.insert(keyCode)
+            return (isAutorepeat ? .swallow : .swallowAndFire(.meeting), downs)
         }
         if config.presetsArmed, let id = config.presets[KeyCombo(keyCode: keyCode, modifiers: families)] {
             downs.insert(keyCode)
@@ -229,11 +243,13 @@ final class KeyInterceptor: @unchecked Sendable {
         case .swallowAndFire(let fired):
             let onEscape = onEscape
             let onPreset = onPreset
+            let onMeeting = onMeeting
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     switch fired {
                     case .escape: onEscape()
                     case .preset(let id): onPreset(id)
+                    case .meeting: onMeeting()
                     }
                 }
             }
