@@ -12,4 +12,5 @@ enum AppLog {
     static let context     = Logger(subsystem: subsystem, category: "context")
     static let permissions = Logger(subsystem: subsystem, category: "permissions")
     static let updates     = Logger(subsystem: subsystem, category: "updates")
+    static let metrics     = Logger(subsystem: subsystem, category: "metrics")
 }

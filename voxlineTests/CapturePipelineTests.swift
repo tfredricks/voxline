@@ -884,6 +884,25 @@ import Foundation
         #expect(item.rawTranscript == "hello world")
     }
 
+    @Test func finalize_success_recordsOneMetricsRow() async throws {
+        let (pipe, state, _, _, _, _, _, _, _) = makePipeline()
+        await startAndFinalize(pipe, state: state)
+        let row = try #require(pipe.metrics.items.first)
+        #expect(pipe.metrics.items.count == 1)
+        #expect(row.kind == .dictation)
+        #expect(row.wordCount == 1)
+        #expect(row.engineID == "unknown")
+        #expect(row.totalMs >= row.transcribeMs + row.cleanupMs)
+    }
+
+    @Test func finalize_llmFailure_recordsNoMetrics() async {
+        let (pipe, state, _, _, llm, _, _, _, _) = makePipeline()
+        llm.nextResult = .failure(LLMError.rateLimited)
+        pipe.transcriptFallback = { _ in }
+        await startAndFinalize(pipe, state: state)
+        #expect(pipe.metrics.items.isEmpty)
+    }
+
 }
 
 final class FakeContextCapture: ContextCapturing, @unchecked Sendable {

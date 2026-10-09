@@ -35,6 +35,8 @@ final class TranscriptionService {
 
     private var whisperKit: WhisperKit?
 
+    var engineID: String { "whisperkit:\(model.whisperKitIdentifier)" }
+
     /// Reference-typed entry so identity comparisons (`===`) are ABA-safe:
     /// distinguishing "this is still my registration" from "a same-variant
     /// successor replaced me" cannot be done with the variant string alone.

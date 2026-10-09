@@ -118,6 +118,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let env = SupportEnvironment.current(
             whisperModel: coordinator.transcriber?.model.displayName ?? "(unknown)"
         )
-        aboutWindow.show(env: env)
+        aboutWindow.show(env: env, metrics: coordinator.pipeline?.metrics)
     }
 }

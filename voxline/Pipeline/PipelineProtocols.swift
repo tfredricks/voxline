@@ -19,10 +19,17 @@ protocol AudioCapturing: AnyObject {
 
 @MainActor
 protocol Transcribing: AnyObject {
+    /// Stable identifier of the engine and model producing transcripts, for
+    /// metrics. Phase 2's engine protocol replaces this.
+    var engineID: String { get }
     /// Transcribe a Float32 PCM buffer at AudioFormat.whisperSampleRate.
     /// Vocabulary biasing happens later in the pipeline via the LLM cleanup
     /// prompt — see `LLMService.transcriptionPreamble`.
     func transcribe(samples: [Float]) async throws -> String
+}
+
+extension Transcribing {
+    var engineID: String { "unknown" }
 }
 
 protocol FocusedFieldInspecting: Sendable {

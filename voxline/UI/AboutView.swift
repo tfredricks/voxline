@@ -3,6 +3,7 @@ import AppKit
 
 struct AboutView: View {
     let env: SupportEnvironment
+    var metrics: DictationMetricsStore? = nil
 
     var body: some View {
         VStack(spacing: 16) {
@@ -49,6 +50,10 @@ struct AboutView: View {
             }
             .controlSize(.large)
 
+            if let metrics {
+                DiagnosticsView(metrics: metrics)
+            }
+
             Spacer(minLength: 4)
 
             VStack(spacing: 2) {
@@ -59,7 +64,7 @@ struct AboutView: View {
             .foregroundStyle(.tertiary)
         }
         .padding(20)
-        .frame(width: 320, height: 420)
+        .frame(width: 320, height: 500)
     }
 }
 

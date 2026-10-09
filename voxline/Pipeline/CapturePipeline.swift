@@ -22,6 +22,8 @@ final class CapturePipeline {
     private var reviewExpiryTask: Task<Void, Never>?
     private let reviewLingerDuration: TimeInterval
     private let now: @Sendable () -> Date
+    let metrics: DictationMetricsStore
+    private let llmModelID: @Sendable () -> String
 
     /// Invoked with the raw transcript when LLM cleanup fails, so the user's
     /// words survive a provider outage instead of being discarded. The default
@@ -49,6 +51,8 @@ final class CapturePipeline {
         historyStore: DictationHistoryStore,
         contextCapture: ContextCapturing,
         selectionSnapshot: SelectionSnapshotting = DefaultSelectionSnapshot(),
+        metrics: DictationMetricsStore = DictationMetricsStore(),
+        llmModelID: @escaping @Sendable () -> String = { AppSettings().llmModel },
         reviewLingerDuration: TimeInterval = 7,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -63,6 +67,8 @@ final class CapturePipeline {
         self.historyStore = historyStore
         self.contextCapture = contextCapture
         self.selectionSnapshot = selectionSnapshot
+        self.metrics = metrics
+        self.llmModelID = llmModelID
         self.reviewLingerDuration = reviewLingerDuration
         self.now = now
 
@@ -171,8 +177,10 @@ final class CapturePipeline {
         // we're already in `.thinking` (an earlier finalize is mid-flight) or
         // any non-recording state would race with the in-flight pipeline.
         guard case .recording = state.status else { return }
+        let finalizeStart = Date()
         capture.stop()
         let samples = capture.takeSamples()
+        let timing = PipelineTiming(finalizeStart: finalizeStart, captureTailMs: Self.milliseconds(since: finalizeStart))
         state.status = .thinking
         state.lastRecordingDuration = Double(samples.count) / 16_000.0
 
@@ -231,7 +239,7 @@ final class CapturePipeline {
                 showToast("Select text to transform")
                 return
             }
-            await performTransform(command: transcript, selection: selection, mode: mode, context: context)
+            await performTransform(command: transcript, selection: selection, mode: mode, context: context, timing: timing)
             return
         }
         // Dictation path: selectionTask was never spawned, so the clipboard was
@@ -253,15 +261,18 @@ final class CapturePipeline {
         state.lastCleanupDuration = Date().timeIntervalSince(cleanupStart)
         state.lastCleanedText = cleaned
         historyStore.record(cleanedText: cleaned, rawTranscript: transcript, mode: mode, context: context)
+        let cleanupMs = Self.milliseconds(state.lastCleanupDuration)
 
         guard field?.isEditable ?? true else {
             transcriptFallback(cleaned)
+            recordMetrics(kind: .dictation, timing: timing, cleanupMs: cleanupMs, insertMs: 0, mode: mode, text: cleaned)
             resetIdle()
             showToast("No text field focused — copied")
             return
         }
 
         // 4. Paste.
+        let insertStart = Date()
         do {
             _ = try await injector.inject(cleaned)
         } catch let e as TextInsertionError {
@@ -269,6 +280,7 @@ final class CapturePipeline {
         } catch {
             return setError("Text insertion failed: \(error.localizedDescription)")
         }
+        recordMetrics(kind: .dictation, timing: timing, cleanupMs: cleanupMs, insertMs: Self.milliseconds(since: insertStart), mode: mode, text: cleaned)
 
         // Offer quick refinements: keep the pill alive for a few seconds.
         startReviewSession(kind: .dictation, transcript: transcript, mode: mode, context: context, insertedText: cleaned)
@@ -278,7 +290,7 @@ final class CapturePipeline {
     /// Rewrite the user's selection according to the spoken command, paste it
     /// over the (still-live) selection, and open a transform review session.
     /// Owns its terminal state — callers must not call `resetIdle` afterward.
-    private func performTransform(command: String, selection: String, mode: Mode, context: CapturedContext) async {
+    private func performTransform(command: String, selection: String, mode: Mode, context: CapturedContext, timing: PipelineTiming) async {
         // The AX reader returns the FULL live selection (no truncation), and
         // `injector.inject` below pastes back over that same full live
         // selection. If we let an over-long selection through, the LLM would
@@ -292,6 +304,7 @@ final class CapturePipeline {
         }
 
         let transformed: String
+        let transformStart = Date()
         do {
             transformed = try await llm.transform(instruction: command, selection: selection, mode: mode)
         } catch let e as LLMError {
@@ -299,6 +312,7 @@ final class CapturePipeline {
         } catch {
             return setError("Transform failed: \(error.localizedDescription) Your selection was left unchanged.")
         }
+        let cleanupMs = Self.milliseconds(since: transformStart)
 
         // Focus/selection may have moved during the LLM await. If the live
         // selection no longer matches what we transformed, don't overwrite
@@ -322,6 +336,7 @@ final class CapturePipeline {
 
         historyStore.record(cleanedText: transformed, rawTranscript: command, mode: mode, context: context)
 
+        let insertStart = Date()
         do {
             // Selection is live, so a paste lands over it — no re-selection needed.
             _ = try await injector.inject(transformed)
@@ -329,11 +344,13 @@ final class CapturePipeline {
             // Any insertion failure: leave the result on the clipboard so ⌘V
             // still replaces the selection.
             transcriptFallback(transformed)
+            recordMetrics(kind: .command, timing: timing, cleanupMs: cleanupMs, insertMs: 0, mode: mode, text: transformed)
             startReviewSession(kind: .transform, transcript: command, mode: mode, context: context, insertedText: transformed)
             resetIdle()
             showToast("Copied — ⌘V to replace")
             return
         }
+        recordMetrics(kind: .command, timing: timing, cleanupMs: cleanupMs, insertMs: Self.milliseconds(since: insertStart), mode: mode, text: transformed)
 
         startReviewSession(kind: .transform, transcript: command, mode: mode, context: context, insertedText: transformed)
         resetIdle()
@@ -438,6 +455,35 @@ final class CapturePipeline {
             guard !Task.isCancelled else { return }
             self?.expireReview()
         }
+    }
+
+    private struct PipelineTiming {
+        let finalizeStart: Date
+        let captureTailMs: Int
+    }
+
+    private func recordMetrics(kind: DictationMetrics.Kind, timing: PipelineTiming, cleanupMs: Int, insertMs: Int, mode: Mode, text: String) {
+        metrics.record(DictationMetrics(
+            timestamp: now(),
+            kind: kind,
+            audioDuration: state.lastRecordingDuration ?? 0,
+            captureTailMs: timing.captureTailMs,
+            transcribeMs: Self.milliseconds(state.lastTranscribeDuration),
+            cleanupMs: cleanupMs,
+            insertMs: insertMs,
+            totalMs: Self.milliseconds(since: timing.finalizeStart),
+            engineID: transcriber.engineID,
+            modelID: mode.model ?? llmModelID(),
+            wordCount: text.split(whereSeparator: \.isWhitespace).count
+        ))
+    }
+
+    private static func milliseconds(_ interval: TimeInterval?) -> Int {
+        Int(((interval ?? 0) * 1000).rounded())
+    }
+
+    private static func milliseconds(since start: Date) -> Int {
+        milliseconds(Date().timeIntervalSince(start))
     }
 
     private func showToast(_ message: String) {
