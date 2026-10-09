@@ -85,7 +85,7 @@ final class TextInserter: TextInserting {
     ///
     /// An app that exposes no focused element (a terminal like Alacritty, a
     /// VM or remote-desktop window) gets an unverified paste, then typing, as
-    /// 0.5.0 did, unless `expectedElement` was given (`focusMoved`) or the
+    /// earlier versions did, unless `expectedElement` was given (`focusMoved`) or the
     /// target is a range it can't check (`cannotTarget`).
     ///
     /// An empty `text` is never pasted or typed. When it replaces a selection

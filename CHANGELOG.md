@@ -8,6 +8,13 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-09
+
+0.4.0 and 0.5.0 were never released on their own; this release includes
+both. Coming from 0.3.1, the big changes are a choice of speech engine with
+live text while you speak, command mode that edits text in place, preset
+shortcuts, and an app that is no longer sandboxed.
+
 ### Added
 
 - **Choice of speech engine.** Settings → General → Recognition has an Engine
@@ -76,6 +83,9 @@ once it reaches its first tagged release.
 - Command and preset runs get their own median lines in About Voxline →
   Diagnostics, and the metrics log line records how each insert landed
   (`strategy=`) and what the edit did (`action=`).
+- Per-dictation timing in About Voxline → Diagnostics: transcribe, cleanup,
+  insert, and total, with medians over the last 50.
+- History keeps the raw transcript next to the cleaned text.
 
 ### Changed
 
@@ -104,7 +114,7 @@ once it reaches its first tagged release.
   browsers, terminals, and any web content still get a paste, and apps with
   no accessible focus (some terminals, VMs, remote desktops) get a plain
   paste as before. A hidden default, `voxline.insert.axFirst` set to NO,
-  restores the 0.5.0 paste-first behavior; `voxline.insert.pasteFirstExtra`
+  restores the paste-first behavior of earlier versions; `voxline.insert.pasteFirstExtra`
   (an array of bundle IDs) adds paste-first apps. Neither has a setting.
 - **The command modifier picker is replaced by a second chord.** Settings →
   General → Hotkey now has a Dictation recorder and a Command mode toggle with
@@ -119,6 +129,23 @@ once it reaches its first tagged release.
   recording, it is silently discarded. Holding Shift alone no longer turns on
   the microphone. If macOS withholds key events from the hotkey listener
   (Input Monitoring denied), it falls back to watching modifier keys only.
+- **voxline is no longer sandboxed.** The App Sandbox blocked reading the
+  focused field through Accessibility, which forced clipboard tricks for
+  selection reads and left cursor context empty. The app now ships with the
+  hardened runtime only. On first launch it copies settings, history, and
+  vocabulary into the new preferences domain and moves custom modes and the
+  cached Whisper model out of the old container, so nothing re-downloads.
+- **Minimum macOS is now 26.** Older systems stay on 0.3.1.
+- Dictating with no editable field focused now says so and copies the text
+  to the clipboard instead of reporting success.
+- Command mode reads the selection through Accessibility; the synthetic
+  copy is now only a fallback for apps that expose no selection.
+
+### Removed
+
+- The post-dictation Shorter / Longer / Clearer pill. The pill now disappears
+  as soon as text lands. Edit-by-voice stays available through command mode;
+  keyboard presets for common edits arrive with the command-mode rewrite.
 
 ### Fixed
 
@@ -173,37 +200,6 @@ once it reaches its first tagged release.
   answer is refused instead of being treated as safe to paste into.
 - An edit that an app applies late is no longer inserted a second time; if it
   never shows up, the text is copied instead.
-
-## [0.4.0] - 2026-10-08
-
-### Added
-
-- Per-dictation timing in About Voxline → Diagnostics: transcribe, cleanup,
-  insert, and total, with medians over the last 50.
-- History keeps the raw transcript next to the cleaned text.
-
-### Changed
-
-- **voxline is no longer sandboxed.** The App Sandbox blocked reading the
-  focused field through Accessibility, which forced clipboard tricks for
-  selection reads and left cursor context empty. The app now ships with the
-  hardened runtime only. On first launch it copies settings, history, and
-  vocabulary into the new preferences domain and moves custom modes and the
-  cached Whisper model out of the old container, so nothing re-downloads.
-- **Minimum macOS is now 26.** Older systems stay on 0.3.1.
-- Dictating with no editable field focused now says so and copies the text
-  to the clipboard instead of reporting success.
-- Command mode reads the selection through Accessibility; the synthetic
-  copy is now only a fallback for apps that expose no selection.
-
-### Removed
-
-- The post-dictation Shorter / Longer / Clearer pill. The pill now disappears
-  as soon as text lands. Edit-by-voice stays available through command mode;
-  keyboard presets for common edits arrive with the command-mode rewrite.
-
-### Fixed
-
 - A hung target app can no longer stall voxline: every Accessibility request
   times out after half a second.
 - A keychain read failure no longer looks like "no key configured", and the
@@ -272,8 +268,8 @@ once it reaches its first tagged release.
   synthetic keystrokes. Under the App Sandbox the previous AX-based
   paste-eligibility check always failed and forced the unreliable typing path.
 
-[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/tfredricks/voxline/releases/tag/v0.4.0
+[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/tfredricks/voxline/releases/tag/v0.6.0
 [0.3.1]: https://github.com/tfredricks/voxline/releases/tag/v0.3.1
 [0.3.0]: https://github.com/tfredricks/voxline/releases/tag/v0.3.0
 [0.2.5]: https://github.com/tfredricks/voxline/releases/tag/v0.2.5

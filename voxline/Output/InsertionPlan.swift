@@ -43,7 +43,7 @@ enum InsertionPlan {
         var axFirst: Bool = true
         var extraPasteFirst: Set<String> = []
 
-        /// `false` restores 0.5.0's paste → accessibility → typing order everywhere.
+        /// `false` restores the pre-0.6.0 paste → accessibility → typing order everywhere.
         static let axFirstKey = "voxline.insert.axFirst"
         /// A string array of bundle IDs added to the built-in paste-first list.
         static let pasteFirstExtraKey = "voxline.insert.pasteFirstExtra"
