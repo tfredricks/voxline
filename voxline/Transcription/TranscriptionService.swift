@@ -75,10 +75,8 @@ final class TranscriptionService {
     static func preflightDiskSpace(for model: WhisperModel) throws {
         let requiredMB = model.approxSizeMB + diskSpaceHeadroomMB
         let requiredBytes = Int64(requiredMB) * 1_048_576
-        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            return
-        }
-        let values = try? docs.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        guard let cacheRoot = try? AppPaths.modelCacheDirectory() else { return }
+        let values = try? cacheRoot.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         guard let available = values?.volumeAvailableCapacityForImportantUsage else {
             return
         }
@@ -96,8 +94,10 @@ final class TranscriptionService {
     func prepareModel(progressHandler: @escaping @Sendable (Double) -> Void) async throws {
         if Self.isModelCached(model) { return }
         try Self.preflightDiskSpace(for: model)
+        let downloadBase = try AppPaths.modelCacheDirectory()
         _ = try await WhisperKit.download(
             variant: model.whisperKitIdentifier,
+            downloadBase: downloadBase,
             from: "argmaxinc/whisperkit-coreml"
         ) { progress in
             progressHandler(progress.fractionCompleted)
@@ -124,18 +124,14 @@ final class TranscriptionService {
     // MARK: - Private
 
     /// Standard Hub cache layout used by huggingface-swift: returns the model
-    /// directory if it exists and is non-empty, otherwise nil. The path is
-    /// sandbox-aware via FileManager.documentDirectory.
+    /// directory if it exists and is non-empty, otherwise nil.
     private static func cachedModelFolder(for model: WhisperModel) -> URL? {
-        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            return nil
-        }
-        let path = docs
-            .appendingPathComponent("huggingface", isDirectory: true)
-            .appendingPathComponent("models", isDirectory: true)
-            .appendingPathComponent("argmaxinc", isDirectory: true)
-            .appendingPathComponent("whisperkit-coreml", isDirectory: true)
-            .appendingPathComponent(model.whisperKitIdentifier, isDirectory: true)
+        guard let base = try? AppPaths.modelCacheDirectory() else { return nil }
+        let path = base
+            .appending(path: "models", directoryHint: .isDirectory)
+            .appending(path: "argmaxinc", directoryHint: .isDirectory)
+            .appending(path: "whisperkit-coreml", directoryHint: .isDirectory)
+            .appending(path: model.whisperKitIdentifier, directoryHint: .isDirectory)
         let contents = (try? FileManager.default.contentsOfDirectory(atPath: path.path)) ?? []
         return contents.isEmpty ? nil : path
     }
@@ -155,6 +151,7 @@ final class TranscriptionService {
                 return try await entry.task.value
             }
             let variant = currentVariant
+            let downloadBase = try AppPaths.modelCacheDirectory()
             let task = Task<WhisperKit, Error> {
                 // Use the standard config: WhisperKit checks cache first,
                 // skips download if files are present, and resolves the
@@ -163,6 +160,7 @@ final class TranscriptionService {
                 // tokenizer fetch.
                 let config = WhisperKitConfig(
                     model: variant,
+                    downloadBase: downloadBase,
                     modelRepo: "argmaxinc/whisperkit-coreml",
                     verbose: false,
                     logLevel: .error,
