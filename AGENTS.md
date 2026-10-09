@@ -16,7 +16,7 @@ voxline is a native macOS menu-bar app (SwiftUI + AppKit, Swift Package Manager 
 
 ## Directory map
 
-- `voxline/Audio`, `Context`, `Hotkey`, `LLM`, `MenuBar`, `Modes`, `Output`, `Permissions`, `Pipeline`, `Settings`, `Storage`, `Transcription`, `UI`, `Updates`, `Util`, `Wizard` — app source, one folder per concern.
+- `voxline/Audio`, `Context`, `Diagnostics`, `Hotkey`, `LLM`, `MenuBar`, `Modes`, `Output`, `Permissions`, `Pipeline`, `Settings`, `Storage`, `Transcription`, `UI`, `Updates`, `Util`, `Wizard` — app source, one folder per concern.
 - `voxline/Modes/ModeStore.swift` — the per-app prompt table (28 bundle IDs currently: Slack, Zoom, Teams, Messages, Discord, Mail, Outlook, Spark, Word, Pages, Notes, Excel, PowerPoint, Keynote, Numbers, Terminal, iTerm, VS Code, Cursor, Xcode, and others). Add new apps here.
 - `voxlineTests/` — Swift Testing unit/integration tests, one file per source file roughly 1:1.
 - `docs/release/RELEASE.md` — one-time Sparkle/notarization setup + release mechanics (maintainer-only, requires secrets you likely don't have).
@@ -57,5 +57,3 @@ Requires Xcode 26 and macOS 26 (Apple Silicon) — this is not cross-platform bu
 ## Releasing
 
 Not something to do casually — see `docs/release/RELEASE.md` for the one-time Sparkle key / cert setup, and the README's "Releasing" section for the per-release checklist (bump `MARKETING_VERSION`, update `CHANGELOG.md`, tag `vX.Y.Z`, push). `release.yml` handles signing, notarization, DMG packaging, and publishing the Sparkle appcast to `gh-pages` — it requires repo secrets (Developer ID cert, notarization key, Sparkle private key) that most contributors won't have.
-
-Note: `CHANGELOG.md` has drifted out of sync with actual releases (six versions have shipped — v0.1.0 through v0.2.4 — but the file still only has an `[Unreleased]` section). Don't take its "pre-release" framing at face value; check `git tag` / GitHub Releases for the real state.

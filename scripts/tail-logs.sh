@@ -10,7 +10,7 @@
 #   scripts/tail-logs.sh --raw                 # disable reformatting/colors (raw `log` output)
 #
 # Known categories (see voxline/Diagnostics/AppLog.swift):
-#   pipeline, hotkey, audio, whisper, llm, paste, context, permissions, keychain, metrics
+#   pipeline, hotkey, audio, whisper, llm, paste, context, permissions, keychain, metrics, updates
 #
 # Notes:
 #   - `log stream` requires admin/dev privileges for the --level flag; macOS will
@@ -90,6 +90,7 @@ format_output() {
             cat_c["keychain"]           = GRY
             cat_c["keychain-migration"] = GRY
             cat_c["metrics"]            = YEL
+            cat_c["updates"]            = GRY
         }
         # drop the `log show` header
         /^Timestamp[[:space:]]+Ty/ { next }

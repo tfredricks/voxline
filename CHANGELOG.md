@@ -19,9 +19,9 @@ once it reaches its first tagged release.
 - **voxline is no longer sandboxed.** The App Sandbox blocked reading the
   focused field through Accessibility, which forced clipboard tricks for
   selection reads and left cursor context empty. The app now ships with the
-  hardened runtime only. On first launch it moves settings, history,
-  vocabulary, custom modes, and the cached Whisper model out of the old
-  container, so nothing re-downloads.
+  hardened runtime only. On first launch it copies settings, history, and
+  vocabulary into the new preferences domain and moves custom modes and the
+  cached Whisper model out of the old container, so nothing re-downloads.
 - **Minimum macOS is now 26.** Older systems stay on 0.3.1.
 - Dictating with no editable field focused now says so and copies the text
   to the clipboard instead of reporting success.

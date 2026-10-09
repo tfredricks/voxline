@@ -61,6 +61,9 @@ Sparkle running unsandboxed.
 - [ ] No model download happens. `ls ~/Library/Application\ Support/voxline/huggingface/models/argmaxinc/whisperkit-coreml/` lists the variant.
 - [ ] `ls ~/Library/Containers/com.voxline.app/Data/Documents/` no longer contains `huggingface`.
 - [ ] `scripts/tail-logs.sh --last 2m pipeline` shows a `container migration:` line with `models=true`.
+- [ ] The first dictation after the upgrade is not delayed by a 30 s–2 min model compile (the ANE cache moved with the rest).
+- [ ] Numbers: select a cell (not editing it), dictate. The text lands in the cell, as in 0.3.1. Repeat in Excel.
+- [ ] Maintainers: if this Mac ever ran an unsandboxed dev build, first wipe `~/Library/Application Support/voxline` and the `com.voxline.app` domain (`defaults delete ~/Library/Preferences/com.voxline.app`), or the migration will skip your real data as "destination already exists".
 
 ## Fresh install
 
@@ -104,6 +107,7 @@ Sparkle running unsandboxed.
 
 - [ ] Click into Slack's message box, then from Terminal run `sleep 3; kill -STOP $(pgrep -x Slack)`
       so the frozen app still owns keyboard focus (click back into Slack during the 3 s). Hold the chord, speak, release.
-      voxline must not beachball for more than a second (the AX timeout is 0.5s per
-      request); the pill shows "No text field focused — copied" or an error within a
-      few seconds. Run `kill -CONT $(pgrep -x Slack)` afterwards.
+      voxline must not beachball for more than a few seconds (each AX request is capped
+      at 0.5 s and a dictation makes several); the pill shows "No text field focused — copied"
+      or an error within a few seconds. Run `kill -CONT $(pgrep -x Slack)` afterwards.
+- [ ] Repeat with text selected and the command chord: same bound.

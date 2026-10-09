@@ -40,7 +40,7 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 - **AI cleanup, not raw dump** — fillers, false starts, and rambling are smoothed out. Punctuation and capitalization are added automatically.
 - **Transform selected text by voice** — highlight text anywhere, hold your hotkey, and say how to change it: *"make this a bullet list"*, *"make this cleaner"*, *"make this shorter"*. voxline rewrites the selection in place and leaves it as a normal ⌘Z-undoable edit. No selection? It just dictates, as usual.
 - **Context-aware per-app formatting** — voxline detects the frontmost app and tunes the output for it: terse Slack messages, structured email replies, code-comment style in your IDE, search-box one-liners. Ships with sensible defaults for 28 common apps out of the box.
-- **Dictation history** — the last 25 cleaned dictations live in a menu-bar submenu; click any row to copy it back to the clipboard.
+- **Dictation history** — the last 25 dictations, cleaned text and raw transcript side by side, in a History window; click any row to copy it back to the clipboard.
 - **Bring your own LLM key** — Anthropic or OpenAI, your account, your model, your costs. Keys live in macOS Keychain.
 - **Menu-bar native** — no Dock icon, no clutter. Configurable hotkey, mic, model, and provider.
 - **Privacy-aware feedback** — clipboard is restored after paste; the system mic indicator turns off the moment you let go.
@@ -138,10 +138,11 @@ What stays local:
 - 🎙 **Audio capture** — held in memory only, never written to disk, dropped as soon as the transcript exists.
 - 🧠 **Speech-to-text** — runs entirely on Apple Neural Engine via WhisperKit. No audio is sent anywhere.
 - 🔑 **API keys** — stored in macOS Keychain. Not logged, not synced, not visible to other apps.
+- 📜 **History** — the last 25 dictations, including raw transcripts, are stored in the app's preferences on your Mac. Clear them any time from the History window.
 
 What goes to your LLM provider:
 
-- ✍️ **The transcript only** — voxline sends a small text request to Anthropic or OpenAI for cleanup. Whatever provider's privacy policy applies (use enterprise tier or org-level keys if that matters to you).
+- ✍️ **The transcript plus a small context slice** — voxline sends your transcript to Anthropic or OpenAI for cleanup, together with the frontmost app's name, the window title (up to 200 characters), the focused field's role, up to 500 characters of selected text, 200 characters before the cursor, 100 after it, and your custom vocabulary. Password fields never contribute their contents. Whatever provider's privacy policy applies (use enterprise tier or org-level keys if that matters to you).
 - voxline has **no telemetry, no analytics, and no first-party server**. The only network traffic is to whichever LLM provider you choose and the Hugging Face model download on first use.
 
 ## Good to know
