@@ -27,6 +27,10 @@ struct CapturedContext: Equatable, Sendable {
     /// Short reason codes like "ax-timeout", "secure-field", "ax-not-trusted".
     /// Diagnostic only — never included in the prompt.
     var captureNotes: [String]
+    /// The category's learned style note and same-app examples, set by the
+    /// pipeline just before cleanup. Rendered into the system prompt, never
+    /// into the Context block.
+    var learnedStyle: LearnedStyle? = nil
 
     static let empty = CapturedContext(
         appName: nil,

@@ -239,4 +239,19 @@ import Testing
         h.learning.didInsert(InsertedDictation(text: "unrelated", bundleID: Self.messages, category: .chat))
         #expect(await eventually { h.vocabulary.load() == ["Kubernetes"] })
     }
+
+    @Test func style_carries_the_note_and_examples_from_the_same_app() {
+        let h = makeHarness()
+        #expect(h.learning.style(for: .chat, bundleID: Self.messages) == nil)
+        h.store.setNote("- Drops final periods.", category: .chat, editedByUser: false)
+        h.store.recordFinalText("Sounds good, see you at noon", bundleID: Self.messages, category: .chat)
+        h.store.recordFinalText("Another app entirely, long text", bundleID: "other", category: .chat)
+        #expect(h.learning.style(for: .chat, bundleID: Self.messages)
+                == LearnedStyle(categoryName: "Chat", note: "- Drops final periods.", examples: ["Sounds good, see you at noon"]))
+        #expect(h.learning.style(for: .chat, bundleID: nil)
+                == LearnedStyle(categoryName: "Chat", note: "- Drops final periods.", examples: []))
+        #expect(h.learning.style(for: .email, bundleID: "none") == nil)
+        h.toggles.write(LearningToggles(words: true, style: false))
+        #expect(h.learning.style(for: .chat, bundleID: Self.messages) == nil)
+    }
 }

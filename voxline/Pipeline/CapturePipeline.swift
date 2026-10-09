@@ -564,6 +564,7 @@ final class CapturePipeline {
     private func performDictation(transcript: String, mode: Mode, snapshot: StartSnapshot, timing: PipelineTiming?, bakeoffAudio: [Float]?, generation: UInt64) async {
         var context = snapshot.context
         context.customVocabulary = vocabulary()
+        context.learnedStyle = learning?.style(for: mode.category, bundleID: snapshot.bundleID)
         state.pipelinePhase = .cleaning
         if !context.captureNotes.isEmpty {
             AppLog.context.info("context partial: notes=\(context.captureNotes.joined(separator: ",")) durationMs=\(context.captureDurationMs)")

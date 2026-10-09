@@ -4,11 +4,22 @@ import Testing
 
 @MainActor
 final class FakeLearning: LearningObserving {
+    struct StyleRequest: Equatable {
+        let category: ModeCategory
+        let bundleID: String?
+    }
+
     private(set) var captureStarts = 0
     private(set) var inserted: [InsertedDictation] = []
+    private(set) var styleRequests: [StyleRequest] = []
+    var learnedStyle: LearnedStyle?
 
     func captureWillStart() { captureStarts += 1 }
     func didInsert(_ dictation: InsertedDictation) { inserted.append(dictation) }
+    func style(for category: ModeCategory, bundleID: String?) -> LearnedStyle? {
+        styleRequests.append(StyleRequest(category: category, bundleID: bundleID))
+        return learnedStyle
+    }
 }
 
 @Suite(.timeLimit(.minutes(1))) @MainActor struct CapturePipelineLearningTests {
@@ -132,5 +143,14 @@ final class FakeLearning: LearningObserving {
         vocabulary.write(["Kubernetes"])
         await h.pipe.finalizeRecording()
         #expect(h.llm.calls.first?.context.customVocabulary == ["Kubernetes"])
+    }
+
+    @Test func cleanup_carries_the_learned_style_for_the_mode_and_app() async {
+        let h = makeHarness()
+        let style = LearnedStyle(categoryName: "Chat", note: "- Short.", examples: [])
+        h.learning.learnedStyle = style
+        await dictate(h)
+        #expect(h.llm.calls.first?.context.learnedStyle == style)
+        #expect(h.learning.styleRequests == [FakeLearning.StyleRequest(category: .chat, bundleID: Self.slack)])
     }
 }

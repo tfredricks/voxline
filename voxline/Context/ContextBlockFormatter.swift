@@ -84,7 +84,7 @@ enum ContextBlockFormatter {
 
     /// Escape backslashes first, then quotes — swapping the order would
     /// double-escape the slashes inserted for `"`.
-    private static func escape(_ s: String) -> String {
+    static func escape(_ s: String) -> String {
         s.replacingOccurrences(of: "\\", with: "\\\\")
          .replacingOccurrences(of: "\"", with: "\\\"")
     }

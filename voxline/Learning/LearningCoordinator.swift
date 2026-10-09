@@ -26,6 +26,9 @@ protocol LearningObserving: AnyObject {
     func captureWillStart()
     /// A dictation's text has landed in the focused field.
     func didInsert(_ dictation: InsertedDictation)
+    /// The learned style for a dictation in `category` from `bundleID`, or
+    /// nil to send none.
+    func style(for category: ModeCategory, bundleID: String?) -> LearnedStyle?
 }
 
 /// Learning's entry point. Opens a correction window after each dictation
@@ -96,6 +99,14 @@ final class LearningCoordinator: LearningObserving {
         }
         windows[id] = window
         window.start(inserted: dictation.text)
+    }
+
+    func style(for category: ModeCategory, bundleID: String?) -> LearnedStyle? {
+        guard toggles().style else { return nil }
+        let note = store.category(category).note
+        let examples = bundleID.map { store.examples(bundleID: $0) } ?? []
+        guard note != nil || !examples.isEmpty else { return nil }
+        return LearnedStyle(categoryName: category.displayName, note: note, examples: examples)
     }
 
     /// Called when a Learning toggle changes. With both off, an open window

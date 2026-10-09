@@ -80,6 +80,8 @@ struct LLMService: LLMServing, MeetingNotesGenerating {
 
     /// Lean variant used for cleanup: the Context and custom-vocabulary
     /// paragraphs are included only when the user message will carry them.
+    /// A learned style, when the context carries one with something to say,
+    /// follows the mode's style guidance.
     static func systemPrompt(mode: Mode, context: CapturedContext) -> String {
         var parts = [preambleCore]
         let userMessage = ContextBlockFormatter.format(transcript: "", context: context)
@@ -90,6 +92,9 @@ struct LLMService: LLMServing, MeetingNotesGenerating {
             parts.append(vocabularyParagraph)
         }
         parts.append(styleHeader + "\n" + mode.prompt)
+        if let style = context.learnedStyle, let paragraph = LearnedStyleFormatter.paragraph(style) {
+            parts.append(paragraph)
+        }
         return parts.joined(separator: "\n\n")
     }
 
