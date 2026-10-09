@@ -55,17 +55,16 @@ final class GeneralSettingsViewModel {
     private let deviceEnumerator: () -> [AudioDevice]
     private var deviceListener: AudioDeviceListener?
     private let loginItemService: LoginItemService
-    private let vocabulary: CustomVocabularyStore
     private let hasOpenAIKey: () -> Bool
     /// Last keychain answer from `hasOpenAIKey`; nil until first refreshed,
     /// so init never touches the keychain.
     private var openAIKeyStored: Bool?
     private var loaded = false
 
-    /// Convenience init that constructs the default `LoginItemService` and
-    /// `CustomVocabularyStore` at call time. Default-argument expressions for
-    /// `@MainActor`-isolated types are evaluated outside the function's
-    /// isolation context, so we build them in the body instead.
+    /// Convenience init that constructs the default `LoginItemService` at call
+    /// time. Default-argument expressions for `@MainActor`-isolated types are
+    /// evaluated outside the function's isolation context, so we build it in
+    /// the body instead.
     convenience init(
         settings: AppSettings = AppSettings(),
         onApply: @escaping (GeneralSettingsSnapshot) -> Void,
@@ -75,8 +74,7 @@ final class GeneralSettingsViewModel {
             settings: settings,
             onApply: onApply,
             deviceEnumerator: deviceEnumerator,
-            loginItemService: LoginItemService(),
-            vocabulary: CustomVocabularyStore()
+            loginItemService: LoginItemService()
         )
     }
 
@@ -85,14 +83,12 @@ final class GeneralSettingsViewModel {
         onApply: @escaping (GeneralSettingsSnapshot) -> Void,
         deviceEnumerator: @escaping () -> [AudioDevice] = AudioDeviceEnumerator.inputDevices,
         loginItemService: LoginItemService,
-        vocabulary: CustomVocabularyStore = CustomVocabularyStore(),
         hasOpenAIKey: @escaping () -> Bool = GeneralSettingsViewModel.storedOpenAIKeyExists
     ) {
         self.settings = settings
         self.onApply = onApply
         self.deviceEnumerator = deviceEnumerator
         self.loginItemService = loginItemService
-        self.vocabulary = vocabulary
         self.hasOpenAIKey = hasOpenAIKey
         self.chord = settings.hotkeyChord
         self.commandChord = settings.commandChord
@@ -227,8 +223,9 @@ final class GeneralSettingsViewModel {
     /// system-default mic, the default engine, large-v3-turbo, sounds on.
     /// Performs one batched commit so the applier sees a single coherent
     /// snapshot rather than several partial ones.
-    /// Launch-at-Login and the presets (`PresetStore`) are intentionally left
-    /// untouched — Reset is for pipeline settings, not OS-level integration.
+    /// Launch-at-Login, the presets (`PresetStore`), the custom vocabulary, and
+    /// everything in Settings → Learning are intentionally left untouched —
+    /// Reset is for pipeline settings, not user data or OS-level integration.
     func resetToDefaults() {
         withoutCommitting {
             chord = .default
@@ -240,7 +237,6 @@ final class GeneralSettingsViewModel {
             playHotkeySounds = true
             provider = .anthropic
         }
-        vocabulary.save([])
         commit()
     }
 

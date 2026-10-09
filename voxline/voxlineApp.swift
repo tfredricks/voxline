@@ -74,6 +74,7 @@ struct voxlineApp: App {
                     chords: { [weak generalVM] in generalVM?.chords ?? AppSettings().chords },
                     onChange: { [weak coordinator = delegate.coordinator] in coordinator?.meetingSettingsDidChange() }
                 ),
+                learning: delegate.learning,
                 engineReadiness: { [weak coordinator = delegate.coordinator] id in
                     await coordinator?.readiness(of: id)
                 }

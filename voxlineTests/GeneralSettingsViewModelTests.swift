@@ -111,16 +111,10 @@ import Foundation
         settings.llmProvider = .openai
 
         let recorder = ApplyRecorder()
-        // resetToDefaults() calls vocabulary.save([]). Without an explicit
-        // suite-backed store here, the default CustomVocabularyStore() hits
-        // UserDefaults.standard — which in the test host resolves
-        // to the live com.voxline.app prefs and silently wipes the user's
-        // real custom-vocabulary list.
         let vm = GeneralSettingsViewModel(
             settings: settings,
             onApply: { recorder.record($0) },
-            loginItemService: LoginItemService(),
-            vocabulary: CustomVocabularyStore(defaults: d)
+            loginItemService: LoginItemService()
         )
         vm.resetToDefaults()
 
@@ -180,7 +174,6 @@ import Foundation
             settings: settings,
             onApply: { recorder.record($0) },
             loginItemService: LoginItemService(),
-            vocabulary: CustomVocabularyStore(defaults: d),
             hasOpenAIKey: { true }
         )
         vm.resetToDefaults()
@@ -366,8 +359,7 @@ import Foundation
         #expect(vm.launchAtLogin == true)
     }
 
-    /// Never reads the keychain, the real audio devices, or the standard
-    /// defaults' vocabulary.
+    /// Never reads the keychain or the real audio devices.
     private func hermeticVM(
         _ settings: AppSettings,
         onApply: @escaping (GeneralSettingsSnapshot) -> Void = noopApply
@@ -377,7 +369,6 @@ import Foundation
             onApply: onApply,
             deviceEnumerator: { [] },
             loginItemService: LoginItemService(),
-            vocabulary: CustomVocabularyStore(defaults: settings.defaults),
             hasOpenAIKey: { false }
         )
     }
@@ -570,6 +561,19 @@ import Foundation
         #expect(PresetStore(defaults: d).load() == custom)
     }
 
+    @Test func reset_leaves_custom_vocabulary_alone() {
+        let d = defaults()
+        CustomVocabularyStore(defaults: d).save(["Argmax"])
+        let vm = GeneralSettingsViewModel(
+            settings: AppSettings(defaults: d),
+            onApply: { _ in },
+            deviceEnumerator: { [] },
+            loginItemService: LoginItemService(),
+            hasOpenAIKey: { false }
+        )
+        vm.resetToDefaults()
+        #expect(CustomVocabularyStore(defaults: d).load() == ["Argmax"])
+    }
 }
 
 private let noopApply: (GeneralSettingsSnapshot) -> Void = { _ in }

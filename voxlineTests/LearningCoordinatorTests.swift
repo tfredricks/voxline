@@ -393,4 +393,12 @@ import Testing
         #expect(await eventually { h.learning.refreshing.isEmpty })
         #expect(h.store.category(.chat).note == nil)
     }
+
+    @Test func words_removed_in_settings_are_rejected_and_typed_words_are_not() {
+        let h = makeHarness()
+        h.learning.learnedWordsRemoved(["Argmax"])
+        #expect(h.store.isRejected("argmax"))
+        h.learning.wordAddedByUser("Argmax")
+        #expect(!h.store.isRejected("argmax"))
+    }
 }

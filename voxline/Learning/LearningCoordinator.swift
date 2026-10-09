@@ -148,6 +148,16 @@ final class LearningCoordinator: LearningObserving {
         state.flashToast("Removed: \(words.joined(separator: ", "))")
     }
 
+    /// Settings removed these learned words: never learn them again.
+    func learnedWordsRemoved(_ words: [String]) {
+        store.reject(words)
+    }
+
+    /// The user typed this word into the list, so it is no longer rejected.
+    func wordAddedByUser(_ word: String) {
+        store.unreject(word)
+    }
+
     /// Settings' Regenerate: refreshes the category's note even when the
     /// user edited it. nil when there are no texts, no generator, or a
     /// refresh for the category is already running.

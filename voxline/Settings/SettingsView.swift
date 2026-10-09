@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var levelMonitor = MicLevelMonitor()
     @State private var status: SettingsStatusViewModel
     @State private var vocabularyVM: CustomVocabularyListViewModel
+    private let learning: LearningCoordinator
     @State private var recognitionKeyRevealed = false
 
     /// `engineReadiness` reports the readiness of the engine that runs for
@@ -22,8 +23,10 @@ struct SettingsView: View {
         apiKeysVM: APIKeysSettingsViewModel,
         commandVM: CommandSettingsViewModel,
         meetingsVM: MeetingSettingsViewModel,
+        learning: LearningCoordinator,
         engineReadiness: @escaping @MainActor (EngineID) async -> EngineReadiness?
     ) {
+        self.learning = learning
         _generalVM = State(wrappedValue: generalVM)
         _apiKeysVM = State(wrappedValue: apiKeysVM)
         _commandVM = State(wrappedValue: commandVM)
@@ -34,7 +37,9 @@ struct SettingsView: View {
             engineReadiness: engineReadiness
         ))
         _vocabularyVM = State(wrappedValue: CustomVocabularyListViewModel(
-            store: CustomVocabularyStore()
+            store: CustomVocabularyStore(),
+            onRemoveLearned: { [weak learning] in learning?.learnedWordsRemoved($0) },
+            onAdd: { [weak learning] in learning?.wordAddedByUser($0) }
         ))
     }
 
@@ -174,7 +179,6 @@ struct SettingsView: View {
                         Spacer()
                         Button("Reset to Defaults") {
                             generalVM.resetToDefaults()
-                            vocabularyVM.reload()
                         }
                     }
                 }
@@ -189,6 +193,9 @@ struct SettingsView: View {
         }
         .task(id: status.readinessKey) {
             await status.refreshEngineReadiness()
+        }
+        .onChange(of: learning.vocabularyRevision) { _, _ in
+            vocabularyVM.reload()
         }
         .onAppear {
             levelMonitor.preferredInputDeviceUID = generalVM.audioInputDeviceUID
