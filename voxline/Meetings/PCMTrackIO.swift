@@ -9,12 +9,17 @@ final class PCMTrackWriter: @unchecked Sendable {
     private let lock = NSLock()
     private let handle: FileHandle
     private let onFailure: @Sendable (Error) -> Void
+    private let performWrite: @Sendable (FileHandle, Data) throws -> Void
     private var count: Int
     private var maxPeak: Float = 0
     private var failed = false
     private var closed = false
 
-    init(url: URL, onFailure: @escaping @Sendable (Error) -> Void = { _ in }) throws {
+    init(
+        url: URL,
+        onFailure: @escaping @Sendable (Error) -> Void = { _ in },
+        write: @escaping @Sendable (FileHandle, Data) throws -> Void = { try $0.write(contentsOf: $1) }
+    ) throws {
         if !FileManager.default.fileExists(atPath: url.path) {
             guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
                 throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
@@ -28,6 +33,7 @@ final class PCMTrackWriter: @unchecked Sendable {
             try handle.seek(toOffset: UInt64(count * 2))
         }
         self.onFailure = onFailure
+        self.performWrite = write
     }
 
     var sampleCount: Int { lock.withLock { count } }
@@ -65,7 +71,7 @@ final class PCMTrackWriter: @unchecked Sendable {
             guard !failed, !closed, let chunk = make(count) else { return nil }
             let (data, samples, peak) = chunk
             do {
-                try handle.write(contentsOf: data)
+                try performWrite(handle, data)
                 count += samples
                 maxPeak = max(maxPeak, peak)
                 return nil

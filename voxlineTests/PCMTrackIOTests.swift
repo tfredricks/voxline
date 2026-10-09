@@ -118,4 +118,31 @@ import Testing
         writer.close()
         #expect(try PCMTrackReader.samples(at: url) == [0])
     }
+
+    @Test func write_failure_fires_once_and_stops_further_writes() throws {
+        struct Boom: Error {}
+        let url = tempURL()
+        let failures = LockedBox(0)
+        let writes = LockedBox(0)
+        let writer = try PCMTrackWriter(
+            url: url,
+            onFailure: { _ in failures.mutate { $0 += 1 } },
+            write: { handle, data in
+                let attempt = writes.read() + 1
+                writes.write(attempt)
+                if attempt == 2 { throw Boom() }
+                try handle.write(contentsOf: data)
+            }
+        )
+        writer.append([0.5, 0.5])
+        writer.append([0.5])
+        writer.append([0.5])
+        writer.padSilence(toSampleCount: 100)
+        writer.close()
+
+        #expect(failures.read() == 1)
+        #expect(writes.read() == 2)
+        #expect(writer.sampleCount == 2)
+        #expect(PCMTrackReader.sampleCount(at: url) == 2)
+    }
 }
