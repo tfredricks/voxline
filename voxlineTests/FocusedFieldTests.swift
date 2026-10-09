@@ -41,6 +41,12 @@ import Testing
         #expect(FocusedField(role: "AXTextField", subrole: nil).isEditable)
     }
 
+    @Test func cell_based_containers_are_editable() {
+        #expect(FocusedField(role: "AXCell", subrole: nil).isEditable)
+        #expect(FocusedField(role: "AXTable", subrole: nil).isEditable)
+        #expect(FocusedField(role: "AXRow", subrole: nil).isEditable)
+    }
+
     @Test func unknown_and_nil_roles_are_treated_as_editable() {
         #expect(FocusedField(role: "AXGroup", subrole: nil).isEditable)
         #expect(FocusedField(role: "AXWebArea", subrole: nil).isEditable)

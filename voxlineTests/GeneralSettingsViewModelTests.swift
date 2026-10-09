@@ -113,7 +113,7 @@ import Foundation
         let recorder = ApplyRecorder()
         // resetToDefaults() calls vocabulary.save([]). Without an explicit
         // suite-backed store here, the default CustomVocabularyStore() hits
-        // UserDefaults.standard — which in the sandboxed test host resolves
+        // UserDefaults.standard — which in the test host resolves
         // to the live com.voxline.app prefs and silently wipes the user's
         // real custom-vocabulary list.
         let vm = GeneralSettingsViewModel(

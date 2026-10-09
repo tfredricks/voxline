@@ -89,7 +89,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var updateService = UpdateService(dictationActivity: dictationActivity)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        guard !LaunchEnvironment.isRunningTests else { return }
+        guard !LaunchEnvironment.isRunningTests else {
+            AppLog.pipeline.notice("launch sequence skipped: test harness detected")
+            return
+        }
         let migration = ContainerMigration.standard()?.runIfNeeded()
         windowVisibility.start()
         coordinator.startIfNeeded(state: appState, historyStore: historyStore, migration: migration)

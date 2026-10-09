@@ -239,7 +239,7 @@ final class CapturePipeline {
                 showToast("Select text to transform")
                 return
             }
-            await performTransform(command: transcript, selection: selection, mode: mode, context: context, timing: timing)
+            await performTransform(command: transcript, selection: selection, mode: mode, context: context, field: field, timing: timing)
             return
         }
         // Dictation path: selectionTask was never spawned, so the clipboard was
@@ -290,7 +290,7 @@ final class CapturePipeline {
     /// Rewrite the user's selection according to the spoken command, paste it
     /// over the (still-live) selection, and open a transform review session.
     /// Owns its terminal state — callers must not call `resetIdle` afterward.
-    private func performTransform(command: String, selection: String, mode: Mode, context: CapturedContext, timing: PipelineTiming) async {
+    private func performTransform(command: String, selection: String, mode: Mode, context: CapturedContext, field: FocusedField?, timing: PipelineTiming) async {
         // The AX reader returns the FULL live selection (no truncation), and
         // `injector.inject` below pastes back over that same full live
         // selection. If we let an over-long selection through, the LLM would
@@ -335,6 +335,14 @@ final class CapturePipeline {
         }
 
         historyStore.record(cleanedText: transformed, rawTranscript: command, mode: mode, context: context)
+
+        guard field?.isEditable ?? true else {
+            transcriptFallback(transformed)
+            recordMetrics(kind: .command, timing: timing, cleanupMs: cleanupMs, insertMs: 0, mode: mode, text: transformed)
+            resetIdle()
+            showToast("Copied — ⌘V to replace")
+            return
+        }
 
         let insertStart = Date()
         do {

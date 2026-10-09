@@ -12,7 +12,7 @@ import Foundation
     // advance() and complete() both call commitProgress(), which writes
     // through to the wizard's keychain. Without an explicit InMemoryKeychain
     // here the default DataProtectionKeychain() is used — and in the
-    // sandboxed test host (TEST_HOST = voxline.app, bundle id com.voxline.app)
+    // test host (TEST_HOST = voxline.app, bundle id com.voxline.app)
     // that resolves to the user's real DPK entries, clobbering live API keys
     // on every test run.
     @Test func starts_at_welcome() {

@@ -38,7 +38,7 @@ final class UpdateService: NSObject {
         // Delegate references are set after super.init(), so construct the
         // controller here once self is fully initialised.
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: true,
+            startingUpdater: !LaunchEnvironment.isRunningTests,
             updaterDelegate: self,
             userDriverDelegate: self
         )

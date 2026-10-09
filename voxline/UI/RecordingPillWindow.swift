@@ -55,7 +55,7 @@ final class RecordingPillWindow {
         panel.ignoresMouseEvents = !inReview
 
         // Review needs room for three buttons + dismiss; other states are compact.
-        let width: CGFloat = inReview ? 300 : 140
+        let width: CGFloat = inReview ? 300 : (hasToast ? 240 : 140)
         if panel.frame.width != width {
             var frame = panel.frame
             frame.size.width = width

@@ -32,3 +32,16 @@ enum KeychainError: Error, Equatable {
     /// routing writes elsewhere.
     case dataProtectionKeychainUnavailable
 }
+
+extension KeychainError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .dataProtectionKeychainUnavailable:
+            return "Voxline can't reach its keychain. The app's signature may be damaged — reinstall it from the Releases page."
+        case .unexpectedDataFormat:
+            return "The saved API key is in an unexpected format. Re-enter it in Settings → API Keys."
+        case .unhandledStatus(let status):
+            return "The keychain returned an error (\(status))."
+        }
+    }
+}

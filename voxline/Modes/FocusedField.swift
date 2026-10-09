@@ -35,11 +35,11 @@ extension FocusedField {
     /// and unfamiliar roles, counts as editable so an AX-opaque editor is
     /// never refused.
     static let nonEditableRoles: Set<String> = [
-        "AXApplication", "AXButton", "AXCell", "AXCheckBox", "AXDisclosureTriangle",
-        "AXImage", "AXIncrementor", "AXLink", "AXList", "AXMenu", "AXMenuBar",
-        "AXMenuButton", "AXMenuItem", "AXOutline", "AXPopUpButton",
-        "AXProgressIndicator", "AXRadioButton", "AXRow", "AXScrollArea",
-        "AXSlider", "AXSplitGroup", "AXStaticText", "AXTabGroup", "AXTable",
+        "AXApplication", "AXButton", "AXCheckBox", "AXDisclosureTriangle",
+        "AXImage", "AXIncrementor", "AXLink", "AXMenu", "AXMenuBar",
+        "AXMenuButton", "AXMenuItem", "AXPopUpButton",
+        "AXProgressIndicator", "AXRadioButton", "AXScrollArea",
+        "AXSlider", "AXSplitGroup", "AXStaticText", "AXTabGroup",
         "AXToolbar", "AXWindow",
     ]
 

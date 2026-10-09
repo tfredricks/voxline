@@ -410,6 +410,7 @@ import Foundation
         #expect(copied.read() == ["cleaned"])
         #expect(state.toastMessage == "No text field focused — copied")
         #expect(state.status == .idle)
+        #expect(state.reviewSession == nil)
         #expect(history.items.first?.cleanedText == "cleaned")
     }
 
@@ -545,14 +546,15 @@ import Foundation
     private func makeTransformPipeline(
         selection: String,
         now: Date = Date(timeIntervalSince1970: 10_000),
-        linger: TimeInterval = 7
+        linger: TimeInterval = 7,
+        focusedField: FocusedField? = nil
     ) -> (CapturePipeline, AppState, FakeLLM, FakeInjector, DictationHistoryStore) {
         let state = AppState()
         let capture = FakeCapture()
         let transcriber = FakeTranscriber()
         let llm = FakeLLM()
         let front = FakeFrontmost(); front.bundleID = "com.tinyspeck.slackmacgap"
-        let inspector = FakeFieldInspector()
+        let inspector = FakeFieldInspector(); inspector.field = focusedField
         let injector = FakeInjector()
         let snap = FakeSelectionSnapshot(); snap.selection = selection
         let router = ModeRouter(modes: [
@@ -718,6 +720,25 @@ import Foundation
         #expect(row.kind == .command)
         #expect(row.wordCount == 1)
         #expect(row.modelID == "test-model")
+    }
+
+    @Test func finalize_withSelection_nonEditableField_copiesInsteadOfPasting() async throws {
+        let (pipe, state, _, injector, history) = makeTransformPipeline(
+            selection: "original text", focusedField: FocusedField(role: "AXStaticText", subrole: nil)
+        )
+        let copied = LockedBox<[String]>([])
+        pipe.transcriptFallback = { text in copied.mutate { $0.append(text) } }
+        pipe.startRecording(command: true)
+        state.lastPeakLevel = 0.5
+        await pipe.finalizeRecording()
+
+        #expect(injector.injected.isEmpty)
+        #expect(copied.read() == ["transformed"])
+        #expect(state.toastMessage == "Copied — ⌘V to replace")
+        #expect(state.status == .idle)
+        #expect(state.reviewSession == nil)
+        #expect(history.items.first?.cleanedText == "transformed")
+        #expect(pipe.metrics.items.first?.kind == .command)
     }
 
     @Test func refine_onTransformSession_usesTransformOnCurrentText() async {

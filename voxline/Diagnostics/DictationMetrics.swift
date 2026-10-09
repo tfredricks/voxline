@@ -13,12 +13,12 @@ struct DictationMetrics: Equatable, Sendable {
     let timestamp: Date
     let kind: Kind
     let audioDuration: TimeInterval
-    /// Key release → last audio sample drained. Near zero until streaming lands in phase 2.
+    /// Finalize entry (just after key release) → last audio sample drained. Near zero until streaming lands in phase 2.
     let captureTailMs: Int
     let transcribeMs: Int
     let cleanupMs: Int
     let insertMs: Int
-    /// Key release → text in the field.
+    /// Finalize entry (just after key release) → text in the field or on the clipboard.
     let totalMs: Int
     let engineID: String
     let modelID: String

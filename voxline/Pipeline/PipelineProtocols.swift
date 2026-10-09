@@ -60,7 +60,7 @@ protocol ClipboardInjecting: AnyObject {
 
 protocol FrontmostAppProviding: Sendable {
     /// Bundle ID of whatever app holds keyboard focus right now, or nil if
-    /// none could be resolved (no frontmost app, sandboxed lookup blocked).
+    /// none could be resolved (no frontmost app).
     func frontmostBundleID() -> String?
 }
 
