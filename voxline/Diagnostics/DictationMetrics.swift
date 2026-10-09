@@ -1,13 +1,28 @@
 import Foundation
 import Observation
 
-/// Timing breakdown of one dictation or command, from key release to text in
-/// the field. Phase 2's latency targets are set against medians of these.
+/// Timing breakdown of one dictation, command, or preset, from key release to
+/// text in the field. Phase 2's latency targets are set against medians of these.
 struct DictationMetrics: Equatable, Sendable {
 
+    /// A preset records no audio, so its audio and transcription times are 0.
     enum Kind: String, Sendable {
         case dictation
         case command
+        case preset
+    }
+
+    /// How the text landed: an insert strategy, the clipboard, or not at all.
+    enum InsertStrategyTag: String, Sendable {
+        case ax, paste, typing, copy, none
+
+        init(_ strategy: InsertStrategy) {
+            switch strategy {
+            case .accessibility: self = .ax
+            case .paste: self = .paste
+            case .typing: self = .typing
+            }
+        }
     }
 
     let timestamp: Date
@@ -28,6 +43,9 @@ struct DictationMetrics: Equatable, Sendable {
     let firstPartialMs: Int?
     /// True when the fast path inserted the engine text without LLM cleanup.
     let skippedCleanup: Bool
+    let insertStrategy: InsertStrategyTag
+    /// The command's planned edit; nil for dictation.
+    let editAction: String?
 }
 
 @Observable
@@ -48,8 +66,9 @@ final class DictationMetricsStore {
             items.removeLast(items.count - Self.capacity)
         }
         let firstPartial = metrics.firstPartialMs.map(String.init) ?? "-"
+        let action = metrics.editAction ?? "-"
         AppLog.metrics.info(
-            "\(metrics.kind.rawValue, privacy: .public) audio=\(String(format: "%.1f", metrics.audioDuration), privacy: .public)s tail=\(metrics.captureTailMs)ms transcribe=\(metrics.transcribeMs)ms cleanup=\(metrics.cleanupMs)ms insert=\(metrics.insertMs)ms total=\(metrics.totalMs)ms engine=\(metrics.engineID, privacy: .public) model=\(metrics.modelID, privacy: .public) words=\(metrics.wordCount) firstPartial=\(firstPartial, privacy: .public)ms skipCleanup=\(metrics.skippedCleanup)"
+            "\(metrics.kind.rawValue, privacy: .public) audio=\(String(format: "%.1f", metrics.audioDuration), privacy: .public)s tail=\(metrics.captureTailMs)ms transcribe=\(metrics.transcribeMs)ms cleanup=\(metrics.cleanupMs)ms insert=\(metrics.insertMs)ms total=\(metrics.totalMs)ms engine=\(metrics.engineID, privacy: .public) model=\(metrics.modelID, privacy: .public) words=\(metrics.wordCount) firstPartial=\(firstPartial, privacy: .public)ms skipCleanup=\(metrics.skippedCleanup) strategy=\(metrics.insertStrategy.rawValue, privacy: .public) action=\(action, privacy: .public)"
         )
     }
 

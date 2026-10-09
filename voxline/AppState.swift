@@ -40,6 +40,7 @@ extension AppStatus {
 enum PipelinePhase: Equatable {
     case transcribing
     case cleaning
+    case editing
     case inserting
 }
 
@@ -50,9 +51,11 @@ final class AppState {
     var hotkeyEnabled: Bool = true
 
     /// Transient feedback string ("Copied" after a history-row click), or nil.
-    /// `RecordingPillWindow` shows the pill while this is set. The setter that
-    /// flips this on is also responsible for clearing it after a short delay.
+    /// `RecordingPillWindow` shows the pill while this is set. Set it through
+    /// `flashToast(_:for:)`, which clears it again.
     var toastMessage: String?
+
+    @ObservationIgnored private var toastToken: UInt64 = 0
 
     /// Live mic input level while recording, in [0, 1]. Used by the
     /// recording-pill waveform. Updated from the audio thread.
@@ -73,10 +76,14 @@ final class AppState {
     /// Used for the pill's elapsed-time display and for the max-duration fail-safe.
     var recordingStartedAt: Date?
 
-    /// True while the current recording is a command gesture (command modifier
-    /// held at start). Read by the recording pill to show a "Command" cue.
-    /// Set at `startRecording`; only meaningful while `status == .recording`.
-    var recordingIsCommand: Bool = false
+    /// Which chord started the current recording, latched at `startRecording`
+    /// for the work that follows it; nil once the pipeline is idle or showing
+    /// an error. The recording pill shows a "Command" cue for `.command`.
+    var recordingKind: CaptureKind?
+
+    /// Shown by the pill in place of the phase label while set ("Fix
+    /// grammar…" for a preset).
+    var activityLabel: String?
 
     /// Duration of the most recent recording in seconds, derived from the
     /// sample count captured at 16 kHz. Nil until the first recording
@@ -111,6 +118,19 @@ final class AppState {
     /// zero, hotkey input is suspended so recording a chord can't start a
     /// dictation (issue 10).
     private(set) var shortcutCaptureDepth: Int = 0
+
+    /// Shows `message`, then clears it after `duration` unless another toast
+    /// or a direct write replaced it in the meantime.
+    func flashToast(_ message: String, for duration: Duration = .seconds(2)) {
+        toastToken &+= 1
+        let token = toastToken
+        toastMessage = message
+        Task { [weak self] in
+            try? await Task.sleep(for: duration)
+            guard let self, self.toastToken == token, self.toastMessage == message else { return }
+            self.toastMessage = nil
+        }
+    }
 
     func beginShortcutCapture() {
         shortcutCaptureDepth += 1

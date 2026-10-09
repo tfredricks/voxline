@@ -67,15 +67,8 @@ import Foundation
     }
 
     @MainActor
-    final class ObservingInjector: ClipboardInjecting {
-        weak var state: AppState?
-        private(set) var injected: [String] = []
-        private(set) var observed: [Observation] = []
-        func inject(_ text: String) async throws -> TextInsertionOutcome {
-            injected.append(text)
-            if let state { observed.append(Observation(isCancellable: state.isCancellable, phase: state.pipelinePhase)) }
-            return TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
-        }
+    final class ObservationLog {
+        var items: [Observation] = []
     }
 
     struct Harness {
@@ -88,7 +81,8 @@ import Foundation
         let llm: ObservingLLM
         let frontmost: LockedFrontmost
         let inspector: LockedFieldInspector
-        let injector: ObservingInjector
+        let inserter: FakeTextInserter
+        let insertObservations: ObservationLog
         let selection: FakeSelectionSnapshot
         let history: DictationHistoryStore
     }
@@ -112,8 +106,12 @@ import Foundation
         let provider = FakeEngineProvider(engine)
         let llm = ObservingLLM()
         llm.state = state
-        let injector = ObservingInjector()
-        injector.state = state
+        let inserter = FakeTextInserter()
+        let insertObservations = ObservationLog()
+        inserter.onInsert = { [weak state] in
+            guard let state else { return }
+            insertObservations.items.append(Observation(isCancellable: state.isCancellable, phase: state.pipelinePhase))
+        }
         let frontmost = LockedFrontmost(frontmostBundleID)
         let inspector = LockedFieldInspector(focusedField)
         let selection = FakeSelectionSnapshot()
@@ -134,19 +132,20 @@ import Foundation
             modes: modes,
             frontmost: frontmost,
             fieldInspector: inspector,
-            injector: injector,
+            inserter: inserter,
             historyStore: history,
             contextCapture: FakeContextCapture(),
             selectionSnapshot: selection,
             llmModelID: { "test-model" },
             vocabulary: { vocabulary },
-            skipShortUtterances: { skipShortUtterances }
+            skipShortUtterances: { skipShortUtterances },
+            chords: { .default }
         )
         pipe.transcriptFallback = { _ in }
         return Harness(
             pipe: pipe, state: state, capture: capture, engine: engine, provider: provider,
             session: session, llm: llm, frontmost: frontmost, inspector: inspector,
-            injector: injector, selection: selection, history: history
+            inserter: inserter, insertObservations: insertObservations, selection: selection, history: history
         )
     }
 
@@ -271,7 +270,7 @@ import Foundation
 
         #expect(h.state.status == .idle)
         #expect(h.llm.calls.isEmpty)
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
         #expect(h.state.toastMessage == nil)
         #expect(h.session.cancelCount == 1)
         #expect(h.session.finishCount == 0)
@@ -383,7 +382,7 @@ import Foundation
         #expect(h.session.finishCount == 1)
         #expect(h.capture.stopCallCount == 1)
         #expect(h.llm.calls.count == 1)
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.pipe.metrics.items.count == 1)
         #expect(h.state.status == .idle)
     }
@@ -425,7 +424,7 @@ import Foundation
         await h.pipe.finalizeRecording()
 
         #expect(h.llm.calls.isEmpty)
-        #expect(h.injector.injected == ["Sounds good."])
+        #expect(h.inserter.calls.map(\.text) == ["Sounds good."])
         let row = try #require(h.pipe.metrics.items.first)
         #expect(row.skippedCleanup == true)
         #expect(row.cleanupMs == 0)
@@ -440,7 +439,7 @@ import Foundation
         await h.pipe.finalizeRecording()
 
         #expect(h.llm.calls.count == 1)
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(try #require(h.pipe.metrics.items.first).skippedCleanup == false)
     }
 
@@ -449,7 +448,7 @@ import Foundation
         h.pipe.startRecording()
         await h.pipe.finalizeRecording()
         #expect(h.llm.calls.count == 1)
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
     }
 
     // MARK: - Retry transcript and cancellability
@@ -478,7 +477,7 @@ import Foundation
         h.selection.selection = "original text"
         h.pipe.startRecording(command: true)
         await h.pipe.finalizeRecording()
-        #expect(h.injector.injected == ["transformed"])
+        #expect(h.inserter.calls.map(\.text) == ["transformed"])
         #expect(h.state.retryTranscript == nil)
     }
 
@@ -498,7 +497,7 @@ import Foundation
         await h.pipe.finalizeRecording()
 
         #expect(h.llm.observed == [Observation(isCancellable: true, phase: .cleaning)])
-        #expect(h.injector.observed == [Observation(isCancellable: false, phase: .inserting)])
+        #expect(h.insertObservations.items == [Observation(isCancellable: false, phase: .inserting)])
         #expect(h.state.isCancellable == false)
         #expect(h.state.status == .idle)
     }
@@ -511,7 +510,7 @@ import Foundation
         h.pipe.handleCaptureInterrupted()
         #expect(h.state.toastMessage == "Microphone disconnected — stopped recording")
 
-        #expect(await eventually { h.state.status == .idle && !h.injector.injected.isEmpty })
+        #expect(await eventually { h.state.status == .idle && !h.inserter.calls.isEmpty })
         #expect(h.llm.calls.count == 1)
         #expect(h.capture.stopCallCount == 1)
 

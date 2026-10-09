@@ -25,7 +25,6 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
 
     typealias FakeCapture = CapturePipelineTests.FakeCapture
     typealias FakeLLM = CapturePipelineTests.FakeLLM
-    typealias FakeInjector = CapturePipelineTests.FakeInjector
     typealias FakeSelectionSnapshot = CapturePipelineTests.FakeSelectionSnapshot
     typealias LockedFrontmost = CapturePipelineStreamingTests.LockedFrontmost
     typealias LockedFieldInspector = CapturePipelineStreamingTests.LockedFieldInspector
@@ -56,7 +55,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         let llm: FakeLLM
         let frontmost: LockedFrontmost
         let inspector: LockedFieldInspector
-        let injector: FakeInjector
+        let inserter: FakeTextInserter
         let selection: FakeSelectionSnapshot
         let history: DictationHistoryStore
         let context: any ContextCapturing
@@ -78,7 +77,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         session.finishResult = .success(transcript)
         engine.nextSessions = [session]
         let llm = FakeLLM()
-        let injector = FakeInjector()
+        let inserter = FakeTextInserter()
         let frontmost = LockedFrontmost(Self.slack)
         let inspector = LockedFieldInspector(focusedField)
         let selection = FakeSelectionSnapshot()
@@ -97,19 +96,20 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
             ]),
             frontmost: frontmost,
             fieldInspector: inspector,
-            injector: injector,
+            inserter: inserter,
             historyStore: history,
             contextCapture: context,
             selectionSnapshot: selection,
             llmModelID: { "test-model" },
             vocabulary: { [] },
-            skipShortUtterances: { skipShortUtterances }
+            skipShortUtterances: { skipShortUtterances },
+            chords: { .default }
         )
         let fallback = LockedBox<[String]>([])
         pipe.transcriptFallback = { text in fallback.mutate { $0.append(text) } }
         return Harness(
             pipe: pipe, state: state, capture: capture, engine: engine, session: session,
-            llm: llm, frontmost: frontmost, inspector: inspector, injector: injector,
+            llm: llm, frontmost: frontmost, inspector: inspector, inserter: inserter,
             selection: selection, history: history, context: context, fallback: fallback
         )
     }
@@ -144,7 +144,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
 
         await h.pipe.finalizeRecording()
         #expect(h.llm.calls.isEmpty, "the chord release after Esc finalizes nothing")
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
         #expect(h.capture.stopCallCount == 1)
         #expect(h.history.items.isEmpty)
         #expect(h.pipe.metrics.items.isEmpty)
@@ -189,10 +189,41 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         try? await Task.sleep(for: .milliseconds(50))
         #expect(h.state.toastMessage == nil)
         #expect(h.llm.calls.isEmpty)
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
         #expect(h.history.items.isEmpty)
         #expect(h.pipe.metrics.items.isEmpty)
         #expect(h.state.retryTranscript == nil)
+    }
+
+    @Test func shortcut_discard_keeps_the_previous_dictation_retryable() async {
+        let h = makeHarness()
+        await dictate(h)
+        #expect(h.state.retryTranscript == "hello world")
+        #expect(h.state.lastTranscript == "hello world")
+        #expect(h.state.lastCleanedText == "cleaned")
+
+        h.pipe.startRecording()
+        #expect(h.state.retryTranscript == nil)
+        h.pipe.cancel(reason: .shortcut)
+
+        #expect(h.state.status == .idle)
+        #expect(h.state.retryTranscript == "hello world")
+        #expect(h.state.lastTranscript == "hello world")
+        #expect(h.state.lastCleanedText == "cleaned")
+
+        await h.pipe.retryLastDictation()
+        #expect(h.inserter.calls.map(\.text) == ["cleaned", "cleaned"])
+    }
+
+    @Test func user_cancel_of_a_recording_still_scrubs_the_previous_dictation() async {
+        let h = makeHarness()
+        await dictate(h)
+        h.pipe.startRecording()
+        h.pipe.cancel()
+
+        #expect(h.state.retryTranscript == nil)
+        #expect(h.state.lastTranscript == nil)
+        #expect(h.state.lastCleanedText == nil)
     }
 
     @Test func cancel_with_shortcut_reason_while_thinking_acts_as_user() async {
@@ -231,7 +262,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         h.session.releaseFinish()
         try? await Task.sleep(for: .milliseconds(50))
         #expect(h.llm.calls.isEmpty)
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
         #expect(h.history.items.isEmpty)
         #expect(h.pipe.metrics.items.isEmpty)
         #expect(h.state.status == .idle)
@@ -278,7 +309,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
 
         h.llm.releaseCleanup()
         try? await Task.sleep(for: .milliseconds(50))
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
         #expect(h.history.items.count == 1)
         #expect(h.pipe.metrics.items.isEmpty)
         #expect(h.state.status == .idle)
@@ -302,16 +333,16 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
 
         h.llm.releaseCleanup()
         try? await Task.sleep(for: .milliseconds(50))
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
     }
 
     @Test func cancel_during_insert_is_ignored() async {
         let h = makeHarness()
-        h.injector.holdInject = true
-        defer { h.injector.releaseInject() }
+        h.inserter.holdInsert = true
+        defer { h.inserter.releaseInsert() }
         h.pipe.startRecording()
         let finalize = Task { await h.pipe.finalizeRecording() }
-        #expect(await eventually { h.injector.injectGate.waiting == 1 })
+        #expect(await eventually { h.inserter.insertGate.waiting == 1 })
         #expect(h.state.isCancellable == false)
         #expect(h.state.pipelinePhase == .inserting)
 
@@ -320,9 +351,9 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(h.state.toastMessage == nil)
         #expect(!h.pipe.wasCancelled)
 
-        h.injector.releaseInject()
+        h.inserter.releaseInsert()
         #expect(await finishes(finalize, within: .seconds(2)))
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.state.status == .idle)
         #expect(h.pipe.metrics.items.count == 1)
     }
@@ -383,7 +414,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(h.llm.calls.map(\.transcript) == ["second take"])
         #expect(h.llm.calls.first?.context.appName == "live")
         #expect(h.llm.calls.first?.mode.bundleID == Self.slack)
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.state.status == .idle)
     }
 
@@ -424,18 +455,18 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
 
         await h.pipe.retryLastDictation()
         #expect(h.llm.calls.count == 1)
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
     }
 
     @Test func retry_reinserts_last_transcript() async {
         let h = makeHarness(transcript: "uh hello there")
         h.llm.nextResult = .success("Hello there.")
         await dictate(h)
-        #expect(h.injector.injected == ["Hello there."])
+        #expect(h.inserter.calls.map(\.text) == ["Hello there."])
 
         await h.pipe.retryLastDictation()
         #expect(h.llm.calls.map(\.transcript) == ["uh hello there", "uh hello there"])
-        #expect(h.injector.injected == ["Hello there.", "Hello there."])
+        #expect(h.inserter.calls.map(\.text) == ["Hello there.", "Hello there."])
         #expect(h.state.status == .idle)
         #expect(h.state.retryTranscript == "uh hello there")
         #expect(h.history.items.count == 2)
@@ -449,7 +480,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         let h = makeHarness()
         await h.pipe.retryLastDictation()
         #expect(h.llm.calls.isEmpty)
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
         #expect(h.history.items.isEmpty)
         #expect(h.state.status == .idle)
         #expect((h.context as? FakeContextCapture)?.captureCallCount == 0)
@@ -484,7 +515,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
 
         h.llm.nextResult = .success("cleaned")
         await h.pipe.retryLastDictation()
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.state.status == .idle)
         #expect(h.history.items.count == 1)
     }
@@ -507,10 +538,24 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         h.inspector.field = FocusedField(role: "AXButton", subrole: nil)
 
         await h.pipe.retryLastDictation()
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.fallback.read() == ["cleaned"])
         #expect(h.state.toastMessage == "No text field focused — copied")
         #expect(h.state.status == .idle)
+    }
+
+    @Test func retry_that_cannot_insert_copies() async {
+        let h = makeHarness()
+        await dictate(h)
+        h.inserter.outcomes = [.notInserted(.focusMoved)]
+
+        await h.pipe.retryLastDictation()
+        #expect(h.inserter.calls.map(\.text) == ["cleaned", "cleaned"])
+        #expect(h.fallback.read() == ["cleaned"])
+        #expect(h.state.toastMessage == "Couldn't insert — copied, ⌘V to paste")
+        #expect(h.state.status == .idle)
+        #expect(h.state.retryTranscript == "hello world")
+        #expect(h.pipe.metrics.items.count == 1, "retry records no metrics")
     }
 
     @Test func retry_honors_the_fast_path() async {
@@ -518,7 +563,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         await dictate(h)
         await h.pipe.retryLastDictation()
         #expect(h.llm.calls.isEmpty)
-        #expect(h.injector.injected == ["Sounds good.", "Sounds good."])
+        #expect(h.inserter.calls.map(\.text) == ["Sounds good.", "Sounds good."])
     }
 
     @Test func cancel_during_retry_drops_the_result_and_files_the_transcript() async {
@@ -543,7 +588,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
 
         h.llm.releaseCleanup()
         try? await Task.sleep(for: .milliseconds(50))
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.history.items.count == 2)
     }
 
@@ -565,7 +610,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         probe.gate.open()
         try? await Task.sleep(for: .milliseconds(50))
         #expect(h.llm.calls.isEmpty)
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
     }
 
     @Test func retry_after_a_cancel_inserts_the_kept_transcript() async {
@@ -579,12 +624,12 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(await finishes(finalize, within: .milliseconds(200)))
         h.llm.releaseCleanup()
         try? await Task.sleep(for: .milliseconds(20))
-        #expect(h.injector.injected.isEmpty, "the cancelled cleanup's late result is dropped")
+        #expect(h.inserter.calls.isEmpty, "the cancelled cleanup's late result is dropped")
 
         h.llm.holdCleanup = false
         let retry = Task { await h.pipe.retryLastDictation() }
         #expect(await finishes(retry, within: .seconds(2)))
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.state.status == .idle)
     }
 
@@ -595,7 +640,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         h.pipe.startRecording()
         h.pipe.capHit = true
         await h.pipe.finalizeRecording()
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.state.toastMessage == "Stopped at 5 minutes")
         #expect(!h.pipe.capHit)
     }

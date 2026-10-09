@@ -229,14 +229,14 @@ import Testing
         let calls = LockedBox(0)
         let focused: @Sendable () -> AXElementRef? = {
             calls.mutate { $0 += 1 }
-            return calls.read() == 1 ? first : other
+            return calls.read() <= 2 ? first : other
         }
         let task = await startPaste(h, focused: focused)
 
         await h.clock.advance(by: .milliseconds(300))
 
         #expect(await task.value == .focusMoved)
-        #expect(calls.read() == 2)
+        #expect(calls.read() == 3)
         await finish(h, task)
     }
 
@@ -249,15 +249,78 @@ import Testing
         let calls = LockedBox(0)
         let focused: @Sendable () -> AXElementRef? = {
             calls.mutate { $0 += 1 }
-            return other
+            return calls.read() == 1 ? fake.ref : other
         }
         let task = await startPaste(h, element: fake, focused: focused)
 
         await h.clock.advance(by: .milliseconds(300))
 
         #expect(await task.value == .focusMoved)
-        #expect(calls.read() == 1)
+        #expect(calls.read() == 2)
         await finish(h, task)
+    }
+
+    @Test func focus_moved_before_the_cmd_v_posts_nothing_and_restores() async {
+        let h = makeHarness()
+        defer { h.board.releaseGlobally() }
+        let first = FakeAXTextElement().ref
+        let other = FakeAXTextElement(pid: 9191).ref
+        let calls = LockedBox(0)
+        let focused: @Sendable () -> AXElementRef? = {
+            calls.mutate { $0 += 1 }
+            return calls.read() == 1 ? first : other
+        }
+        let task = Task { await h.injector.paste("PASTED", element: nil, trigger: [], focused: focused) }
+        #expect(await eventually { h.clock.pendingCount == 1 })
+        #expect(isOurs(h.board))
+
+        await h.clock.advance(by: .milliseconds(50))
+
+        #expect(await task.value == .focusMovedBeforePaste)
+        #expect(calls.read() == 2)
+        #expect(h.posts.read() == 0)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+        #expect(!isOurs(h.board))
+        await h.injector.pendingRestore?.value
+        #expect(h.clock.pendingCount == 0)
+    }
+
+    @Test func element_focus_lost_before_the_cmd_v_posts_nothing() async {
+        let h = makeHarness()
+        defer { h.board.releaseGlobally() }
+        let fake = FakeAXTextElement()
+        fake.setValue("a")
+        let other = FakeAXTextElement(pid: 9191).ref
+        let task = Task { await h.injector.paste("PASTED", element: fake, trigger: [], focused: { other }) }
+        #expect(await eventually { h.clock.pendingCount == 1 })
+
+        await h.clock.advance(by: .milliseconds(50))
+
+        #expect(await task.value == .focusMovedBeforePaste)
+        #expect(h.posts.read() == 0)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
+    @Test func an_abandoned_paste_releases_its_slot() async {
+        let h = makeHarness()
+        defer { h.board.releaseGlobally() }
+        let first = FakeAXTextElement().ref
+        let other = FakeAXTextElement(pid: 9191).ref
+        let calls = LockedBox(0)
+        let moving: @Sendable () -> AXElementRef? = {
+            calls.mutate { $0 += 1 }
+            return calls.read() == 1 ? first : other
+        }
+        let abandoned = Task { await h.injector.paste("FIRST", element: nil, trigger: [], focused: moving) }
+        #expect(await eventually { h.clock.pendingCount == 1 })
+        await h.clock.advance(by: .milliseconds(50))
+        #expect(await abandoned.value == .focusMovedBeforePaste)
+
+        let task = await startPaste(h)
+        #expect(h.posts.read() == 1)
+        #expect(h.board.string(forType: .string) == "PASTED")
+        await finish(h, task)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
     }
 
     @Test func overlapping_pastes_keep_the_users_clipboard() async {

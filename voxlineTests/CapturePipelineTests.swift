@@ -64,21 +64,6 @@ import Foundation
         func inspect() -> FocusedField? { field }
     }
 
-    final class FakeInjector: ClipboardInjecting {
-        var injected: [String] = []
-        var nextError: Error?
-        /// When true, `inject` suspends until `releaseInject()`.
-        var holdInject = false
-        let injectGate = TestGate()
-        func releaseInject() { injectGate.open() }
-        func inject(_ text: String) async throws -> TextInsertionOutcome {
-            if holdInject { await injectGate.wait() }
-            if let nextError { throw nextError }
-            injected.append(text)
-            return TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
-        }
-    }
-
     final class FakeSelectionSnapshot: SelectionSnapshotting, @unchecked Sendable {
         var selection: String?
         private(set) var readCount = 0
@@ -106,14 +91,14 @@ import Foundation
             Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil, category: .chat),
             Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil, category: .general)
         ]
-    ) -> (pipe: CapturePipeline, state: AppState, capture: FakeCapture, engine: FakeTranscriptionEngine, llm: FakeLLM, frontmost: FakeFrontmost, inspector: FakeFieldInspector, injector: FakeInjector, history: DictationHistoryStore) {
+    ) -> (pipe: CapturePipeline, state: AppState, capture: FakeCapture, engine: FakeTranscriptionEngine, llm: FakeLLM, frontmost: FakeFrontmost, inspector: FakeFieldInspector, inserter: FakeTextInserter, history: DictationHistoryStore) {
         let state = AppState()
         let capture = FakeCapture()
         let engine = FakeTranscriptionEngine()
         let llm = FakeLLM()
         let front = FakeFrontmost(); front.bundleID = frontmostBundleID
         let inspector = FakeFieldInspector(); inspector.field = focusedField
-        let injector = FakeInjector()
+        let inserter = FakeTextInserter()
         let router = ModeRouter(modes: modes)
         let suiteName = "voxline-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -122,21 +107,22 @@ import Foundation
         let pipe = CapturePipeline(
             state: state, capture: capture, engines: FakeEngineProvider(engine),
             llm: llm, modes: router, frontmost: front,
-            fieldInspector: inspector, injector: injector,
+            fieldInspector: inspector, inserter: inserter,
             historyStore: history, contextCapture: FakeContextCapture(),
             selectionSnapshot: FakeSelectionSnapshot(),
             llmModelID: { "test-model" },
             vocabulary: { [] },
-            skipShortUtterances: { false }
+            skipShortUtterances: { false },
+            chords: { .default }
         )
-        return (pipe, state, capture, engine, llm, front, inspector, injector, history)
+        return (pipe, state, capture, engine, llm, front, inspector, inserter, history)
     }
 
     private func makePipelineWithContext(
         frontmostBundleID: String? = "com.tinyspeck.slackmacgap",
         focusedField: FocusedField? = nil
-    ) -> (pipe: CapturePipeline, state: AppState, capture: FakeCapture, engine: FakeTranscriptionEngine, llm: FakeLLM, frontmost: FakeFrontmost, inspector: FakeFieldInspector, injector: FakeInjector, history: DictationHistoryStore, contextCapture: FakeContextCapture) {
-        let (_, state, capture, engine, llm, front, inspector, injector, history) = makePipeline(
+    ) -> (pipe: CapturePipeline, state: AppState, capture: FakeCapture, engine: FakeTranscriptionEngine, llm: FakeLLM, frontmost: FakeFrontmost, inspector: FakeFieldInspector, inserter: FakeTextInserter, history: DictationHistoryStore, contextCapture: FakeContextCapture) {
+        let (_, state, capture, engine, llm, front, inspector, inserter, history) = makePipeline(
             frontmostBundleID: frontmostBundleID, focusedField: focusedField
         )
         // Re-build the pipeline with all the same deps, plus a FakeContextCapture.
@@ -148,14 +134,15 @@ import Foundation
         let pipe = CapturePipeline(
             state: state, capture: capture, engines: FakeEngineProvider(engine),
             llm: llm, modes: router, frontmost: front,
-            fieldInspector: inspector, injector: injector,
+            fieldInspector: inspector, inserter: inserter,
             historyStore: history, contextCapture: ctx,
             selectionSnapshot: FakeSelectionSnapshot(),
             llmModelID: { "test-model" },
             vocabulary: { [] },
-            skipShortUtterances: { false }
+            skipShortUtterances: { false },
+            chords: { .default }
         )
-        return (pipe, state, capture, engine, llm, front, inspector, injector, history, ctx)
+        return (pipe, state, capture, engine, llm, front, inspector, inserter, history, ctx)
     }
 
     @Test func startRecording_setsStateAndStartsCapture() {
@@ -176,7 +163,7 @@ import Foundation
     }
 
     @Test func finalizeRecording_routesViaModeAndCallsLLMAndPastes() async throws {
-        let (pipe, state, _, engine, llm, _, _, injector, _) = makePipeline()
+        let (pipe, state, _, engine, llm, _, _, inserter, _) = makePipeline()
         let session = willTranscribe(engine, .success("uh hello there"))
         llm.nextResult = .success("Hello there.")
         await startAndFinalize(pipe, state: state)
@@ -185,7 +172,7 @@ import Foundation
         #expect(llm.calls.count == 1)
         #expect(llm.calls[0].transcript == "uh hello there")
         #expect(llm.calls[0].mode.bundleID == "com.tinyspeck.slackmacgap")
-        #expect(injector.injected == ["Hello there."])
+        #expect(inserter.calls.map(\.text) == ["Hello there."])
         #expect(state.status == .idle)
         #expect(state.lastTranscript == "uh hello there")
     }
@@ -216,20 +203,20 @@ import Foundation
 
     @Test func transcriptionFailure_setsErrorStateNoLLMNoPaste() async throws {
         struct StubError: Error {}
-        let (pipe, state, _, engine, llm, _, _, injector, _) = makePipeline()
+        let (pipe, state, _, engine, llm, _, _, inserter, _) = makePipeline()
         willTranscribe(engine, .failure(StubError()))
         await startAndFinalize(pipe, state: state)
         if case .error = state.status { } else { Issue.record("expected .error") }
         #expect(llm.calls.isEmpty)
-        #expect(injector.injected.isEmpty)
+        #expect(inserter.calls.isEmpty)
     }
 
     @Test func empty_transcript_skips_llm_and_paste() async throws {
-        let (pipe, state, _, engine, llm, _, _, injector, _) = makePipeline()
+        let (pipe, state, _, engine, llm, _, _, inserter, _) = makePipeline()
         willTranscribe(engine, .success(""))
         await startAndFinalize(pipe, state: state)
         #expect(llm.calls.isEmpty)
-        #expect(injector.injected.isEmpty)
+        #expect(inserter.calls.isEmpty)
         #expect(state.status == .idle)
     }
 
@@ -246,9 +233,8 @@ import Foundation
     }
 
     @Test func paste_failure_setsErrorState() async throws {
-        struct StubError: Error {}
-        let (pipe, state, _, _, _, _, _, injector, _) = makePipeline()
-        injector.nextError = StubError()
+        let (pipe, state, _, _, _, _, _, inserter, _) = makePipeline()
+        inserter.outcomes = [.failed(.allStrategiesFailed(["Typing produced no change"]))]
         await startAndFinalize(pipe, state: state)
         if case .error = state.status { } else { Issue.record("expected .error") }
     }
@@ -394,10 +380,9 @@ import Foundation
     }
 
     @Test func paste_failure_stillRecordsInHistory() async throws {
-        struct StubError: Error {}
-        let (pipe, state, _, _, llm, _, _, injector, history) = makePipeline()
+        let (pipe, state, _, _, llm, _, _, inserter, history) = makePipeline()
         llm.nextResult = .success("Hello there.")
-        injector.nextError = StubError()
+        inserter.outcomes = [.failed(.allStrategiesFailed(["Typing produced no change"]))]
         await startAndFinalize(pipe, state: state)
         if case .error = state.status { } else { Issue.record("expected .error") }
         #expect(history.items.count == 1)
@@ -405,7 +390,7 @@ import Foundation
     }
 
     @Test func finalize_nonEditableFocusedField_copiesInsteadOfPasting() async throws {
-        let (pipe, state, _, _, _, _, _, injector, history) = makePipeline(
+        let (pipe, state, _, _, _, _, _, inserter, history) = makePipeline(
             focusedField: FocusedField(role: "AXButton", subrole: nil)
         )
         let copied = LockedBox<[String]>([])
@@ -413,7 +398,7 @@ import Foundation
 
         await startAndFinalize(pipe, state: state)
 
-        #expect(injector.injected.isEmpty)
+        #expect(inserter.calls.isEmpty)
         #expect(copied.read() == ["cleaned"])
         #expect(state.toastMessage == "No text field focused — copied")
         #expect(state.status == .idle)
@@ -490,7 +475,7 @@ import Foundation
     // MARK: - Raw-transcript fallback
 
     @Test func llmFailure_handsRawTranscriptToFallbackAndSaysSo() async {
-        let (pipe, state, _, _, llm, _, _, injector, _) = makePipeline()
+        let (pipe, state, _, _, llm, _, _, inserter, _) = makePipeline()
         llm.nextResult = .failure(LLMError.rateLimited)
         var fallbackTranscripts: [String] = []
         pipe.transcriptFallback = { fallbackTranscripts.append($0) }
@@ -498,7 +483,7 @@ import Foundation
         await startAndFinalize(pipe, state: state)
 
         #expect(fallbackTranscripts == ["hello world"], "the raw transcript must survive the cleanup failure")
-        #expect(injector.injected.isEmpty, "nothing gets pasted on failure")
+        #expect(inserter.calls.isEmpty, "nothing gets pasted on failure")
         if case .error(let message) = state.status {
             #expect(message.contains("clipboard"), "the error must tell the user where their words went")
         } else {
@@ -521,14 +506,14 @@ import Foundation
     private func makeTransformPipeline(
         selection: String,
         focusedField: FocusedField? = nil
-    ) -> (CapturePipeline, AppState, FakeLLM, FakeInjector, DictationHistoryStore) {
+    ) -> (CapturePipeline, AppState, FakeLLM, FakeTextInserter, DictationHistoryStore) {
         let state = AppState()
         let capture = FakeCapture()
         let engine = FakeTranscriptionEngine()
         let llm = FakeLLM()
         let front = FakeFrontmost(); front.bundleID = "com.tinyspeck.slackmacgap"
         let inspector = FakeFieldInspector(); inspector.field = focusedField
-        let injector = FakeInjector()
+        let inserter = FakeTextInserter()
         let snap = FakeSelectionSnapshot(); snap.selection = selection
         let router = ModeRouter(modes: [
             Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil, category: .chat),
@@ -541,24 +526,25 @@ import Foundation
         let pipe = CapturePipeline(
             state: state, capture: capture, engines: FakeEngineProvider(engine),
             llm: llm, modes: router, frontmost: front,
-            fieldInspector: inspector, injector: injector,
+            fieldInspector: inspector, inserter: inserter,
             historyStore: history, contextCapture: FakeContextCapture(),
             selectionSnapshot: snap,
             llmModelID: { "test-model" },
             vocabulary: { [] },
-            skipShortUtterances: { false }
+            skipShortUtterances: { false },
+            chords: { .default }
         )
-        return (pipe, state, llm, injector, history)
+        return (pipe, state, llm, inserter, history)
     }
 
     @Test func finalize_withSelection_transformsAndInjectsOverSelection() async {
-        let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
+        let (pipe, state, llm, inserter, history) = makeTransformPipeline(selection: "original text")
         pipe.startRecording(command: true); await pipe.finalizeRecording()
 
         #expect(llm.transformCalls.last?.selection == "original text")
         #expect(llm.transformCalls.last?.instruction == "hello world")   // the spoken command
         #expect(llm.calls.isEmpty)                                       // dictation cleanup NOT called
-        #expect(injector.injected.last == "transformed")                 // pasted over the live selection
+        #expect(inserter.calls.map(\.text).last == "transformed")                 // pasted over the live selection
         #expect(history.items.first?.cleanedText == "transformed")
         if case .idle = state.status {} else { Issue.record("expected .idle after transform") }
     }
@@ -584,7 +570,7 @@ import Foundation
     }
 
     @Test func finalize_withSelection_nonEditableField_copiesInsteadOfPasting() async throws {
-        let (pipe, state, _, injector, history) = makeTransformPipeline(
+        let (pipe, state, _, inserter, history) = makeTransformPipeline(
             selection: "original text", focusedField: FocusedField(role: "AXStaticText", subrole: nil)
         )
         let copied = LockedBox<[String]>([])
@@ -592,7 +578,7 @@ import Foundation
         pipe.startRecording(command: true)
         await pipe.finalizeRecording()
 
-        #expect(injector.injected.isEmpty)
+        #expect(inserter.calls.isEmpty)
         #expect(copied.read() == ["transformed"])
         #expect(state.toastMessage == "Copied — ⌘V to replace")
         #expect(state.status == .idle)
@@ -601,28 +587,28 @@ import Foundation
     }
 
     @Test func finalize_withSelection_unchangedResult_showsToastNoWrite() async {
-        let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
+        let (pipe, state, llm, inserter, history) = makeTransformPipeline(selection: "original text")
         llm.transformResult = .success("original text")   // model declined → returned selection verbatim
         pipe.startRecording(command: true); await pipe.finalizeRecording()
 
-        #expect(injector.injected.isEmpty)
+        #expect(inserter.calls.isEmpty)
         #expect(history.items.isEmpty)
         #expect(state.toastMessage == "Couldn't apply that")
         if case .idle = state.status {} else { Issue.record("expected .idle") }
     }
 
     @Test func finalize_withSelection_llmError_setsError() async {
-        let (pipe, state, llm, injector, _) = makeTransformPipeline(selection: "original text")
+        let (pipe, state, llm, inserter, _) = makeTransformPipeline(selection: "original text")
         llm.transformResult = .failure(LLMError.missingAPIKey)
         pipe.startRecording(command: true); await pipe.finalizeRecording()
 
-        #expect(injector.injected.isEmpty)
+        #expect(inserter.calls.isEmpty)
         if case .error = state.status {} else { Issue.record("expected .error status") }
     }
 
     @Test func finalize_withSelection_injectFails_fallsBackToClipboard() async {
-        let (pipe, state, _, injector, _) = makeTransformPipeline(selection: "original text")
-        injector.nextError = TextInsertionError.pasteVerificationFailed
+        let (pipe, state, _, inserter, _) = makeTransformPipeline(selection: "original text")
+        inserter.outcomes = [.failed(.pasteVerificationFailed)]
         var fallbackText: String?
         pipe.transcriptFallback = { fallbackText = $0 }   // capture instead of touching NSPasteboard.general
         pipe.startRecording(command: true); await pipe.finalizeRecording()
@@ -632,21 +618,21 @@ import Foundation
     }
 
     @Test func finalize_withEmptySelection_usesDictationPath() async {
-        let (pipe, _, llm, injector, _) = makeTransformPipeline(selection: "")
+        let (pipe, _, llm, inserter, _) = makeTransformPipeline(selection: "")
         pipe.startRecording(); await pipe.finalizeRecording()
 
         #expect(llm.transformCalls.isEmpty)
         #expect(llm.calls.count == 1)                    // dictation cleanup called
-        #expect(injector.injected.last == "cleaned")
+        #expect(inserter.calls.map(\.text).last == "cleaned")
     }
 
     @Test func finalize_withSelection_overLimit_refusesWithToast() async {
         let overLimit = String(repeating: "a", count: DefaultSelectionSnapshot.selectionMax + 1)
-        let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: overLimit)
+        let (pipe, state, llm, inserter, history) = makeTransformPipeline(selection: overLimit)
         pipe.startRecording(command: true); await pipe.finalizeRecording()
 
         #expect(llm.transformCalls.isEmpty)
-        #expect(injector.injected.isEmpty)
+        #expect(inserter.calls.isEmpty)
         #expect(history.items.isEmpty)
         #expect(state.toastMessage == "Selection too long to transform")
         if case .idle = state.status {} else { Issue.record("expected .idle after over-limit refusal") }
@@ -659,7 +645,7 @@ import Foundation
         let llm = FakeLLM()
         let front = FakeFrontmost(); front.bundleID = "com.tinyspeck.slackmacgap"
         let inspector = FakeFieldInspector()
-        let injector = FakeInjector()
+        let inserter = FakeTextInserter()
         let snap = FakeSelectionSnapshot(); snap.selection = "original text"
         let router = ModeRouter(modes: [
             Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil, category: .chat),
@@ -672,12 +658,13 @@ import Foundation
         let pipe = CapturePipeline(
             state: state, capture: capture, engines: FakeEngineProvider(engine),
             llm: llm, modes: router, frontmost: front,
-            fieldInspector: inspector, injector: injector,
+            fieldInspector: inspector, inserter: inserter,
             historyStore: history, contextCapture: FakeContextCapture(),
             selectionSnapshot: snap,
             llmModelID: { "test-model" },
             vocabulary: { [] },
-            skipShortUtterances: { false }
+            skipShortUtterances: { false },
+            chords: { .default }
         )
         // Focus/selection moves mid-await: flip the snapshot from inside
         // `transform` (which fires `onCleanup` before returning).
@@ -687,7 +674,7 @@ import Foundation
 
         pipe.startRecording(command: true); await pipe.finalizeRecording()
 
-        #expect(injector.injected.isEmpty)          // did NOT paste over the wrong target
+        #expect(inserter.calls.isEmpty)          // did NOT paste over the wrong target
         #expect(fallbackText == "transformed")       // result left on clipboard
         #expect(state.toastMessage == "Copied — ⌘V to replace")
         #expect(history.items.isEmpty)               // focus guard is before history.record
@@ -695,12 +682,12 @@ import Foundation
     }
 
     @Test func finalize_commandMode_emptySelection_showsSelectToast() async {
-        let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "")
+        let (pipe, state, llm, inserter, history) = makeTransformPipeline(selection: "")
         pipe.startRecording(command: true); await pipe.finalizeRecording()
 
         #expect(llm.transformCalls.isEmpty)      // no transform attempted
         #expect(llm.calls.isEmpty)               // no dictation cleanup either
-        #expect(injector.injected.isEmpty)
+        #expect(inserter.calls.isEmpty)
         #expect(history.items.isEmpty)
         #expect(state.toastMessage == "Select text to transform")
         if case .idle = state.status {} else { Issue.record("expected .idle") }
@@ -713,7 +700,7 @@ import Foundation
         let llm = FakeLLM()
         let front = FakeFrontmost(); front.bundleID = "com.tinyspeck.slackmacgap"
         let inspector = FakeFieldInspector()
-        let injector = FakeInjector()
+        let inserter = FakeTextInserter()
         let snap = FakeSelectionSnapshot(); snap.selection = "user had something selected"
         let router = ModeRouter(modes: [
             Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil, category: .chat),
@@ -726,12 +713,13 @@ import Foundation
         let pipe = CapturePipeline(
             state: state, capture: capture, engines: FakeEngineProvider(engine),
             llm: llm, modes: router, frontmost: front,
-            fieldInspector: inspector, injector: injector,
+            fieldInspector: inspector, inserter: inserter,
             historyStore: history, contextCapture: FakeContextCapture(),
             selectionSnapshot: snap,
             llmModelID: { "test-model" },
             vocabulary: { [] },
-            skipShortUtterances: { false }
+            skipShortUtterances: { false },
+            chords: { .default }
         )
 
         pipe.startRecording(command: false); await pipe.finalizeRecording()
@@ -739,13 +727,33 @@ import Foundation
         #expect(snap.readCount == 0)             // THE FIX: dictation never touches the selection
         #expect(llm.transformCalls.isEmpty)
         #expect(llm.calls.count == 1)            // dictation cleanup ran
-        #expect(injector.injected.last == "cleaned")
+        #expect(inserter.calls.map(\.text).last == "cleaned")
     }
 
-    @Test func startRecording_command_sets_recordingIsCommand_flag() {
+    @Test func startRecording_command_sets_recordingKind_command() {
         let (pipe, state, _, _, _, _, _, _, _) = makePipeline()
         pipe.startRecording(command: true)
-        #expect(state.recordingIsCommand == true)
+        #expect(state.recordingKind == .command)
+    }
+
+    @Test func recordingKind_is_dictation_while_recording_and_nil_after() async {
+        let (pipe, state, _, _, _, _, _, _, _) = makePipeline()
+        #expect(state.recordingKind == nil)
+        pipe.startRecording()
+        #expect(state.recordingKind == .dictation)
+        await pipe.finalizeRecording()
+        #expect(state.status == .idle)
+        #expect(state.recordingKind == nil)
+    }
+
+    @Test func recordingKind_clears_on_the_error_path() async {
+        let (pipe, state, _, _, llm, _, _, _, _) = makePipeline()
+        llm.nextResult = .failure(LLMError.rateLimited)
+        pipe.transcriptFallback = { _ in }
+        pipe.startRecording(command: false)
+        await pipe.finalizeRecording()
+        if case .error = state.status {} else { Issue.record("expected .error, got \(state.status)") }
+        #expect(state.recordingKind == nil)
     }
 
     @Test func finalizeRecording_recordsRawTranscriptInHistory() async throws {
@@ -776,6 +784,138 @@ import Foundation
         #expect(pipe.metrics.items.isEmpty)
     }
 
+    // MARK: - Insert outcomes
+
+    @Test func dictation_inserts_at_live_selection_with_dictation_families() async throws {
+        let (pipe, state, _, _, _, _, _, inserter, _) = makePipeline()
+        await startAndFinalize(pipe, state: state)
+
+        let call = try #require(inserter.calls.first)
+        #expect(inserter.calls.count == 1)
+        #expect(call.text == "cleaned")
+        #expect(call.target == .liveSelection)
+        #expect(call.expected == nil)
+        #expect(call.bundleID == "com.tinyspeck.slackmacgap")
+        #expect(call.trigger == ChordSet.default.dictation.families)
+    }
+
+    @Test func transform_inserts_at_live_selection_with_command_families() async throws {
+        let (pipe, _, _, inserter, _) = makeTransformPipeline(selection: "original text")
+        pipe.startRecording(command: true); await pipe.finalizeRecording()
+
+        let call = try #require(inserter.calls.first)
+        let command = try #require(ChordSet.default.command)
+        #expect(call.text == "transformed")
+        #expect(call.target == .liveSelection)
+        #expect(call.expected == nil)
+        #expect(call.trigger == command.families)
+    }
+
+    @Test(arguments: [NotInsertedReason.fieldChanged, .focusMoved, .cannotTarget, .outcomeUnknown])
+    func not_inserted_copies_with_the_paste_hint(reason: NotInsertedReason) async throws {
+        let (pipe, state, _, _, _, _, _, inserter, history) = makePipeline()
+        inserter.outcomes = [.notInserted(reason)]
+        let copied = LockedBox<[String]>([])
+        pipe.transcriptFallback = { text in copied.mutate { $0.append(text) } }
+
+        await startAndFinalize(pipe, state: state)
+
+        #expect(copied.read() == ["cleaned"])
+        #expect(state.toastMessage == "Couldn't insert — copied, ⌘V to paste")
+        #expect(state.status == .idle)
+        #expect(history.items.first?.cleanedText == "cleaned")
+        let row = try #require(pipe.metrics.items.first)
+        #expect(row.insertStrategy == .copy)
+        #expect(row.insertMs == 0)
+        #expect(row.editAction == nil)
+    }
+
+    @Test func not_responding_copies_and_says_so() async throws {
+        let (pipe, state, _, _, _, _, _, inserter, _) = makePipeline()
+        inserter.outcomes = [.notInserted(.notResponding)]
+        let copied = LockedBox<[String]>([])
+        pipe.transcriptFallback = { text in copied.mutate { $0.append(text) } }
+
+        await startAndFinalize(pipe, state: state)
+
+        #expect(copied.read() == ["cleaned"])
+        #expect(state.toastMessage == "Field isn't responding — copied")
+        #expect(state.status == .idle)
+        #expect(try #require(pipe.metrics.items.first).insertStrategy == .copy)
+    }
+
+    @Test func secure_field_is_todays_error() async {
+        let (pipe, state, _, _, _, _, _, inserter, _) = makePipeline()
+        inserter.outcomes = [.notInserted(.secure)]
+        let copied = LockedBox<[String]>([])
+        pipe.transcriptFallback = { text in copied.mutate { $0.append(text) } }
+
+        await startAndFinalize(pipe, state: state)
+
+        guard case .error(let message) = state.status else {
+            Issue.record("expected .error, got \(state.status)"); return
+        }
+        #expect(message == TextInsertionError.secureFieldUnsupported.errorDescription)
+        #expect(message.contains("secure text field"))
+        #expect(copied.read().isEmpty)
+        #expect(pipe.metrics.items.isEmpty)
+    }
+
+    @Test func accessibility_not_granted_is_a_permissions_error() async {
+        let (pipe, state, _, _, _, _, _, inserter, _) = makePipeline()
+        inserter.outcomes = [.failed(.accessibilityNotGranted)]
+
+        await startAndFinalize(pipe, state: state)
+
+        #expect(state.status == .permissionsError(TextInsertionError.accessibilityNotGranted.errorDescription!))
+        #expect(pipe.metrics.items.isEmpty)
+    }
+
+    @Test func inserted_records_the_strategy() async throws {
+        let (pipe, state, _, _, _, _, _, inserter, _) = makePipeline()
+        inserter.outcomes = [.inserted(.paste, verified: false)]
+        await startAndFinalize(pipe, state: state)
+        let row = try #require(pipe.metrics.items.first)
+        #expect(row.insertStrategy == .paste)
+        #expect(row.editAction == nil)
+        #expect(state.toastMessage == nil)
+        #expect(state.status == .idle)
+    }
+
+    @Test func inserted_through_accessibility_records_ax() async throws {
+        let (pipe, state, _, _, _, _, _, _, _) = makePipeline()
+        await startAndFinalize(pipe, state: state)
+        #expect(try #require(pipe.metrics.items.first).insertStrategy == .ax)
+    }
+
+    @Test func no_text_field_records_copy() async throws {
+        let (pipe, state, _, _, _, _, _, _, _) = makePipeline(focusedField: FocusedField(role: "AXButton", subrole: nil))
+        pipe.transcriptFallback = { _ in }
+        await startAndFinalize(pipe, state: state)
+        #expect(try #require(pipe.metrics.items.first).insertStrategy == .copy)
+    }
+
+    @Test func transform_not_inserted_copies_with_the_replace_hint() async throws {
+        let (pipe, state, _, inserter, _) = makeTransformPipeline(selection: "original text")
+        inserter.outcomes = [.notInserted(.secure)]
+        var fallbackText: String?
+        pipe.transcriptFallback = { fallbackText = $0 }
+        pipe.startRecording(command: true); await pipe.finalizeRecording()
+
+        #expect(fallbackText == "transformed")
+        #expect(state.toastMessage == "Copied — ⌘V to replace")
+        #expect(state.status == .idle)
+        #expect(try #require(pipe.metrics.items.first).insertStrategy == .copy)
+    }
+
+    @Test func transform_inserted_records_the_strategy() async throws {
+        let (pipe, _, _, inserter, _) = makeTransformPipeline(selection: "original text")
+        inserter.outcomes = [.inserted(.typing, verified: true)]
+        pipe.startRecording(command: true); await pipe.finalizeRecording()
+        let row = try #require(pipe.metrics.items.first)
+        #expect(row.kind == .command)
+        #expect(row.insertStrategy == .typing)
+    }
 }
 
 final class FakeContextCapture: ContextCapturing, @unchecked Sendable {

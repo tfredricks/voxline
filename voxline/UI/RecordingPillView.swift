@@ -36,7 +36,7 @@ struct RecordingPillView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
                 WaveformBars(level: state.audioLevel)
-                if state.recordingIsCommand {
+                if state.recordingKind == .command {
                     Text("Command")
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
@@ -109,9 +109,11 @@ struct RecordingPillView: View {
     }
 
     private var phaseLabel: String {
+        if let activity = state.activityLabel { return activity }
         switch state.pipelinePhase {
         case .transcribing, nil: return "Transcribing…"
         case .cleaning:          return "Cleaning up…"
+        case .editing:           return "Editing…"
         case .inserting:         return "Inserting…"
         }
     }

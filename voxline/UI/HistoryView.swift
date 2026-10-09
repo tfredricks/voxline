@@ -124,13 +124,7 @@ struct HistoryView: View {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(item.cleanedText, forType: .string)
-        state.toastMessage = "Copied"
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            if state.toastMessage == "Copied" {
-                state.toastMessage = nil
-            }
-        }
+        state.flashToast("Copied", for: .milliseconds(1200))
     }
 
     private static func relativeTime(_ when: Date) -> String {

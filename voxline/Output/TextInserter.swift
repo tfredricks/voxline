@@ -68,9 +68,10 @@ final class TextInserter: TextInserting {
 
     /// A strategy that may have inserted never falls through: an AX write
     /// that timed out is `outcomeUnknown`, and a posted Cmd+V is `inserted`
-    /// (or `pasteVerificationFailed` when focus moved during it). Only a
-    /// rejected AX write, a refused clipboard snapshot, or typing that left
-    /// the value unchanged moves on to the next strategy.
+    /// (or `pasteVerificationFailed` when focus moved during it). Focus that
+    /// moves before the Cmd+V is posted is `focusMoved`. Only a rejected AX
+    /// write, a refused clipboard snapshot, or typing that left the value
+    /// unchanged moves on to the next strategy.
     func insert(_ text: String, at target: InsertTarget, expectedElement: AXElementRef?,
                 bundleID: String?, trigger: ModifierFamilies) async -> InsertOutcome {
         guard isAccessibilityTrusted() else { return .failed(.accessibilityNotGranted) }
@@ -125,8 +126,10 @@ final class TextInserter: TextInserting {
                 case .pasted(let verified):
                     return inserted(.paste, verified: verified)
                 case .snapshotRefused(let reason):
-                    failures.append(reason)
+                    failures.append("Clipboard paste skipped: \(reason)")
                     AppLog.paste.debug("insert: paste refused (\(reason, privacy: .public)); moving on")
+                case .focusMovedBeforePaste:
+                    return notInserted(.focusMoved)
                 case .focusMoved:
                     AppLog.paste.debug("insert: focus moved during the paste")
                     return .failed(.pasteVerificationFailed)

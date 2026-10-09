@@ -6,7 +6,6 @@ import Foundation
 
     typealias FakeCapture = CapturePipelineTests.FakeCapture
     typealias FakeLLM = CapturePipelineTests.FakeLLM
-    typealias FakeInjector = CapturePipelineTests.FakeInjector
     typealias FakeSelectionSnapshot = CapturePipelineTests.FakeSelectionSnapshot
     typealias LockedFrontmost = CapturePipelineStreamingTests.LockedFrontmost
     typealias LockedFieldInspector = CapturePipelineStreamingTests.LockedFieldInspector
@@ -23,7 +22,7 @@ import Foundation
         let local: FakeTranscriptionEngine
         let localSession: FakeTranscriptionSession
         let llm: FakeLLM
-        let injector: FakeInjector
+        let inserter: FakeTextInserter
         let history: DictationHistoryStore
     }
 
@@ -47,7 +46,7 @@ import Foundation
         let provider = FakeEngineProvider(current ?? cloud)
         provider.add(local)
         let llm = FakeLLM()
-        let injector = FakeInjector()
+        let inserter = FakeTextInserter()
         let suiteName = "voxline-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -62,20 +61,21 @@ import Foundation
             ]),
             frontmost: LockedFrontmost(Self.slack),
             fieldInspector: LockedFieldInspector(nil),
-            injector: injector,
+            inserter: inserter,
             historyStore: history,
             contextCapture: FakeContextCapture(),
             selectionSnapshot: FakeSelectionSnapshot(),
             llmModelID: { "test-model" },
             vocabulary: { ["Voxline"] },
             skipShortUtterances: { false },
+            chords: { .default },
             saveBakeoffClips: { false }
         )
         pipe.transcriptFallback = { _ in }
         return Harness(
             pipe: pipe, state: state, capture: capture, provider: provider,
             cloud: cloud, cloudSession: cloudSession, local: local, localSession: localSession,
-            llm: llm, injector: injector, history: history
+            llm: llm, inserter: inserter, history: history
         )
     }
 
@@ -106,7 +106,7 @@ import Foundation
         #expect(h.local.openedConfigs == h.cloud.openedConfigs)
         #expect(h.local.openedConfigs.map(\.vocabularyHints) == [["Voxline"]])
         #expect(h.llm.calls.map(\.transcript) == ["local text"])
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.state.toastMessage == Self.fellBack)
         #expect(h.state.status == .idle)
         #expect(h.state.retryTranscript == "local text")
@@ -141,7 +141,7 @@ import Foundation
         #expect(h.localSession.appended.flatMap { $0 } == Self.speech)
         #expect(h.local.openedConfigs == h.cloud.openedConfigs)
         #expect(h.llm.calls.map(\.transcript) == ["local text"])
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.state.toastMessage == Self.fellBack)
         #expect(h.state.status == .idle)
         #expect(try #require(h.pipe.metrics.items.first).engineID == "fake:local")
@@ -177,7 +177,7 @@ import Foundation
         #expect(transport.sentTypes.contains("input_audio_buffer.commit"))
         #expect(h.localSession.appendedSampleCount == h.capture.pendingSamples.count)
         #expect(h.llm.calls.map(\.transcript) == ["local text"])
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.state.toastMessage == Self.fellBack)
         #expect(try #require(h.pipe.metrics.items.first).engineID == "fake:local")
     }
@@ -193,7 +193,7 @@ import Foundation
         #expect(h.state.status == .error("Couldn't start OpenAI: OpenAI rejected the API key."))
         #expect(h.state.toastMessage == nil)
         #expect(h.llm.calls.isEmpty)
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
         #expect(h.pipe.metrics.items.isEmpty)
         #expect(h.state.isCancellable == false)
     }
@@ -208,7 +208,7 @@ import Foundation
         #expect(h.state.status == .error(Self.transcriptionFailed))
         #expect(h.state.toastMessage == nil)
         #expect(h.llm.calls.isEmpty)
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
     }
 
     // MARK: - No fallback
@@ -322,7 +322,7 @@ import Foundation
         h.localSession.releaseFinish()
         try? await Task.sleep(for: .milliseconds(50))
         #expect(h.llm.calls.isEmpty)
-        #expect(h.injector.injected.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
         #expect(h.history.items.isEmpty)
         #expect(h.pipe.metrics.items.isEmpty)
         #expect(h.state.status == .idle)

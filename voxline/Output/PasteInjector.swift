@@ -2,16 +2,31 @@
 import AppKit
 import ApplicationServices
 
+/// Pasteboard snapshot capture seam. Production wraps `PasteboardSnapshot.capture`;
+/// tests fake it to drive a refused snapshot.
+protocol PasteboardSnapshotting: Sendable {
+    func capture(from pasteboard: NSPasteboard) throws -> PasteboardSnapshot
+}
+
+struct DefaultPasteboardSnapshotter: PasteboardSnapshotting {
+    func capture(from pasteboard: NSPasteboard) throws -> PasteboardSnapshot {
+        try PasteboardSnapshot.capture(from: pasteboard)
+    }
+}
+
 /// Pastes through a promised pasteboard item and puts the user's clipboard
 /// back once the target has read it (issue 6).
 @MainActor
 final class PasteInjector {
 
-    /// `pasted` means Cmd+V was posted, so the caller must not try another
-    /// strategy. `snapshotRefused` means the board was never touched.
+    /// `pasted` and `focusMoved` mean Cmd+V was posted, so the caller must not
+    /// try another strategy. `snapshotRefused` means the board was never
+    /// touched. `focusMovedBeforePaste` means focus left the baseline element
+    /// before the Cmd+V, so nothing was posted and the board was restored.
     enum Outcome: Equatable {
         case pasted(verified: Bool)
         case snapshotRefused(String)
+        case focusMovedBeforePaste
         case focusMoved
     }
 
@@ -54,12 +69,14 @@ final class PasteInjector {
     }
 
     /// Waits for a pending restore, snapshots, writes the promised item, runs
-    /// the gate for `trigger`, settles, posts Cmd+V, verifies, and schedules
-    /// the restore tail. `element` is read for verification; `focused` is
-    /// re-read to detect a focus shift. When `element` is given it must be
-    /// the focused element the caller already checked, and its ref is the
-    /// focus baseline, so a move during the waits before the Cmd+V counts.
-    /// Without one, `focused()` read just before the promised write is the baseline.
+    /// the gate for `trigger`, settles, checks focus, posts Cmd+V, verifies,
+    /// and schedules the restore tail. `element` is read for verification;
+    /// `focused` is re-read to detect a focus shift. When `element` is given
+    /// it must be the focused element the caller already checked, and its
+    /// ref is the focus baseline. Without one, `focused()` read just before
+    /// the promised write is the baseline. A move away from the baseline
+    /// during the waits skips the Cmd+V; a move after it is `focusMoved`.
+    /// An unreadable focus never counts as a move.
     ///
     /// The tail restores `restoreAfterProvider` after the first provider call
     /// that follows the Cmd+V, or `restoreCeiling` after the Cmd+V, whichever
@@ -72,17 +89,17 @@ final class PasteInjector {
         let previous = pendingRestore
         let (released, release) = AsyncStream<Never>.makeStream()
         pendingRestore = Task { for await _ in released {} }
+        var handedOff = false
+        defer { if !handedOff { release.finish() } }
         await previous?.value
 
         let snapshot: PasteboardSnapshot
         do {
             snapshot = try snapshotter.capture(from: pasteboard)
         } catch let error as PasteboardSnapshot.SnapshotError {
-            release.finish()
             AppLog.paste.debug("paste skipped: snapshot refused (\(error.reason, privacy: .public))")
             return .snapshotRefused(error.reason)
         } catch {
-            release.finish()
             AppLog.paste.debug("paste skipped: snapshot failed (\(error.localizedDescription, privacy: .public))")
             return .snapshotRefused(error.localizedDescription)
         }
@@ -95,11 +112,17 @@ final class PasteInjector {
 
         try? await gate.wait(for: trigger)
         try? await sleep(settleDelay)
+        if let beforeRef, let now = focused(), now != beforeRef {
+            if pasteboard.changeCount == ourChangeCount { snapshot.restore(to: pasteboard) }
+            AppLog.paste.debug("paste skipped: focus moved before the Cmd+V")
+            return .focusMovedBeforePaste
+        }
         provider.arm()
         postPaste()
         let pasted = ContinuousClock.now
 
         restoreTail(snapshot: snapshot, ourChangeCount: ourChangeCount, provider: provider, release: release)
+        handedOff = true
 
         let outcome = await verify(element: element, before: before, beforeRef: beforeRef, focused: focused)
         let elapsed = pasted.duration(to: .now)
@@ -167,6 +190,7 @@ final class PasteInjector {
         switch outcome {
         case .pasted(let verified): return verified ? "verified" : "unverified"
         case .snapshotRefused: return "refused"
+        case .focusMovedBeforePaste: return "skipped, focus moved"
         case .focusMoved: return "focus moved"
         }
     }

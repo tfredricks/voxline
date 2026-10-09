@@ -27,9 +27,8 @@ struct DefaultSelectionSnapshot: SelectionSnapshotting {
 
     /// Time to wait after posting the synthetic Cmd+C for the frontmost app to
     /// service the copy and publish it to the pasteboard before we read it
-    /// back. Mirrors the injector's `verificationDelay`; too short and a slow
-    /// app hasn't written the pasteboard yet, so the read looks like "nothing
-    /// selected".
+    /// back. Too short and a slow app hasn't written the pasteboard yet, so
+    /// the read looks like "nothing selected".
     var copySettleDelay: Duration = .milliseconds(150)
 
     func readSelection() async -> String? {

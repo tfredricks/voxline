@@ -248,9 +248,19 @@ import Testing
         let outcome = await insert(h)
 
         #expect(outcome == .failed(.allStrategiesFailed([
-            "Accessibility write rejected", "test refusal", "Typing produced no change",
+            "Accessibility write rejected", "Clipboard paste skipped: test refusal", "Typing produced no change",
         ])))
         #expect(h.typed.read().count == 1)
+    }
+
+    @Test func all_strategies_failed_message_lists_what_was_tried() {
+        let error = TextInsertionError.allStrategiesFailed([
+            "Accessibility write rejected", "Clipboard paste skipped: test refusal", "Typing produced no change",
+        ])
+        #expect(error.errorDescription == "Text insertion failed. Accessibility write rejected. Clipboard paste skipped: test refusal. Typing produced no change.")
+        #expect(TextInsertionError.allStrategiesFailed(["Typing produced no change"]).errorDescription
+                == "Text insertion failed. Typing produced no change.")
+        #expect(TextInsertionError.allStrategiesFailed([]).errorDescription == "Text insertion failed.")
     }
 
     // MARK: - Checks
@@ -425,7 +435,7 @@ import Testing
         let calls = LockedBox(0)
         let h = makeHarness(focused: {
             calls.mutate { $0 += 1 }
-            return calls.read() == 1 ? .value(fake) : .value(otherElement)
+            return calls.read() <= 2 ? .value(fake) : .value(otherElement)
         })
         defer { h.board.releaseGlobally() }
 
@@ -436,7 +446,25 @@ import Testing
         #expect(h.typed.read().isEmpty)
     }
 
-    @Test func focus_move_during_the_ax_settle_is_pasteVerificationFailed() async {
+    @Test func focus_move_before_the_cmd_v_is_focus_moved() async {
+        let fake = editableFake()
+        let otherElement = FakeAXTextElement(pid: 9191)
+        let calls = LockedBox(0)
+        let h = makeHarness(focused: {
+            calls.mutate { $0 += 1 }
+            return calls.read() == 1 ? .value(fake) : .value(otherElement)
+        })
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, bundleID: Self.slack)
+
+        #expect(outcome == .notInserted(.focusMoved))
+        #expect(h.pastes.read() == 0)
+        #expect(h.typed.read().isEmpty)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
+    @Test func focus_move_during_the_ax_settle_skips_the_paste() async {
         let fake = editableFake()
         let otherElement = FakeAXTextElement(pid: 9191)
         let calls = LockedBox(0)
@@ -449,8 +477,9 @@ import Testing
         let outcome = await insert(h)
 
         #expect(fake.stringSets.count == 1)
-        #expect(outcome == .failed(.pasteVerificationFailed))
-        #expect(h.pastes.read() == 1)
+        #expect(outcome == .notInserted(.focusMoved))
+        #expect(h.pastes.read() == 0)
         #expect(h.typed.read().isEmpty)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
     }
 }

@@ -9,9 +9,7 @@ import Foundation
     private func pipeline(
         transcript: Result<String, Error> = .success("hello"),
         cleanup: @escaping (String, Mode, CapturedContext) async throws -> String = { t, _, _ in t },
-        inject: @escaping (String) async throws -> TextInsertionOutcome = { _ in
-            TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
-        }
+        insert: InsertOutcome = .inserted(.paste, verified: false)
     ) -> (CapturePipeline, AppState, FakeCapture) {
         let state = AppState()
         let capture = FakeCapture()
@@ -20,6 +18,8 @@ import Foundation
         let session = FakeTranscriptionSession()
         session.finishResult = transcript
         engine.nextSessions = [session]
+        let inserter = FakeTextInserter()
+        inserter.outcomes = [insert]
         let suiteName = "voxline-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -31,13 +31,14 @@ import Foundation
             modes: ModeRouter(modes: [Mode(bundleID: "*", displayName: "Default", prompt: "p", model: nil, temperature: nil)]),
             frontmost: FakeFrontmost(),
             fieldInspector: FakeFieldInspector(),
-            injector: FakeInjector(handler: inject),
+            inserter: inserter,
             historyStore: DictationHistoryStore(defaults: defaults),
             contextCapture: FakeContextCapture(),
             selectionSnapshot: FakeSelectionSnapshot(),
             llmModelID: { "test-model" },
             vocabulary: { [] },
-            skipShortUtterances: { false }
+            skipShortUtterances: { false },
+            chords: { .default }
         )
         return (p, state, capture)
     }
@@ -85,15 +86,14 @@ import Foundation
     }
 
     @Test func text_insertion_failure_surfaces_actionable_message() async {
-        struct PasteFail: Error {}
-        let (p, state, _) = pipeline(inject: { _ in throw PasteFail() })
+        let (p, state, _) = pipeline(insert: .failed(.allStrategiesFailed(["Typing produced no change"])))
         await runOnce(p, state)
         guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("text insertion"))
     }
 
     @Test func revoked_accessibility_during_paste_is_sticky_permissions_error() async {
-        let (p, state, _) = pipeline(inject: { _ in throw TextInsertionError.accessibilityNotGranted })
+        let (p, state, _) = pipeline(insert: .failed(.accessibilityNotGranted))
         await runOnce(p, state)
         guard case .permissionsError(let msg) = state.status else {
             Issue.record("Expected .permissionsError status, got \(state.status)"); return
@@ -124,13 +124,14 @@ import Foundation
             modes: ModeRouter(modes: [Mode(bundleID: "*", displayName: "D", prompt: "p", model: nil, temperature: nil)]),
             frontmost: FakeFrontmost(),
             fieldInspector: FakeFieldInspector(),
-            injector: FakeInjector(handler: { _ in TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified) }),
+            inserter: FakeTextInserter(),
             historyStore: DictationHistoryStore(defaults: defaults),
             contextCapture: FakeContextCapture(),
             selectionSnapshot: FakeSelectionSnapshot(),
             llmModelID: { "test-model" },
             vocabulary: { [] },
-            skipShortUtterances: { false }
+            skipShortUtterances: { false },
+            chords: { .default }
         )
         p.startRecording()
         await p.finalizeRecording()
@@ -143,7 +144,7 @@ import Foundation
 
 // MARK: - Test fakes
 //
-// AudioCapturing / ClipboardInjecting are AnyObject-constrained
+// AudioCapturing is AnyObject-constrained
 // (and @MainActor). LLMServing / FrontmostAppProviding are Sendable.
 
 @MainActor
@@ -184,11 +185,4 @@ private struct FakeFieldInspector: FocusedFieldInspecting {
 /// dictation path (and never post a real synthetic Cmd+C via the default).
 private struct FakeSelectionSnapshot: SelectionSnapshotting {
     func readSelection() async -> String? { nil }
-}
-
-@MainActor
-private final class FakeInjector: ClipboardInjecting {
-    let handler: (String) async throws -> TextInsertionOutcome
-    init(handler: @escaping (String) async throws -> TextInsertionOutcome) { self.handler = handler }
-    func inject(_ text: String) async throws -> TextInsertionOutcome { try await handler(text) }
 }

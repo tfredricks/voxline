@@ -122,4 +122,44 @@ import Foundation
         state.endShortcutCapture(recorder: a)
         #expect(state.shortcutCaptureDepth == 1)
     }
+
+    // MARK: - flashToast
+
+    private func eventually(_ condition: () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !condition() {
+            if ContinuousClock.now >= deadline { return false }
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        return true
+    }
+
+    @Test func flashToast_sets_then_clears_after_the_duration() async {
+        let state = AppState()
+        state.flashToast("Copied", for: .milliseconds(10))
+        #expect(state.toastMessage == "Copied")
+        #expect(await eventually { state.toastMessage == nil })
+    }
+
+    @Test func flashToast_leaves_a_newer_message_alone() async {
+        let state = AppState()
+        state.flashToast("Copied", for: .milliseconds(10))
+        state.toastMessage = "Cancelled"
+        try? await Task.sleep(for: .milliseconds(60))
+        #expect(state.toastMessage == "Cancelled")
+    }
+
+    @Test func flashToast_again_restarts_the_timer() async {
+        let state = AppState()
+        state.flashToast("Copied", for: .milliseconds(10))
+        state.flashToast("Copied", for: .seconds(5))
+        try? await Task.sleep(for: .milliseconds(60))
+        #expect(state.toastMessage == "Copied")
+    }
+
+    @Test func new_state_has_no_recording_kind_or_activity_label() {
+        let state = AppState()
+        #expect(state.recordingKind == nil)
+        #expect(state.activityLabel == nil)
+    }
 }

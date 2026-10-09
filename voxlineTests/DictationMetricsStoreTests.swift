@@ -10,13 +10,16 @@ import Foundation
         insert: Int = 0,
         kind: DictationMetrics.Kind = .dictation,
         firstPartial: Int? = nil,
-        skippedCleanup: Bool = false
+        skippedCleanup: Bool = false,
+        insertStrategy: DictationMetrics.InsertStrategyTag = .paste,
+        editAction: String? = nil
     ) -> DictationMetrics {
         DictationMetrics(
             timestamp: Date(), kind: kind, audioDuration: 1.0,
             captureTailMs: 0, transcribeMs: transcribe, cleanupMs: 0, insertMs: insert, totalMs: total,
             engineID: "test", modelID: "test-model", wordCount: 3,
-            firstPartialMs: firstPartial, skippedCleanup: skippedCleanup
+            firstPartialMs: firstPartial, skippedCleanup: skippedCleanup,
+            insertStrategy: insertStrategy, editAction: editAction
         )
     }
 
@@ -106,5 +109,31 @@ import Foundation
         store.record(metrics(total: 1, kind: .dictation))
         #expect(store.count(kind: .dictation) == 2)
         #expect(store.count(kind: .command) == 1)
+    }
+
+    @Test func preset_rows_are_excluded_from_the_dictation_median() {
+        let store = DictationMetricsStore()
+        store.record(metrics(total: 100, kind: .dictation))
+        store.record(metrics(total: 5_000, kind: .preset, insertStrategy: .ax, editAction: "replaceSelection"))
+        store.record(metrics(total: 300, kind: .dictation))
+        #expect(store.median(\.totalMs, kind: .dictation) == 200)
+        #expect(store.median(\.totalMs, kind: .preset) == 5_000)
+        #expect(store.count(kind: .preset) == 1)
+    }
+
+    @Test func insert_strategy_tag_maps_each_strategy() {
+        #expect(DictationMetrics.InsertStrategyTag(.accessibility) == .ax)
+        #expect(DictationMetrics.InsertStrategyTag(.paste) == .paste)
+        #expect(DictationMetrics.InsertStrategyTag(.typing) == .typing)
+        #expect(DictationMetrics.InsertStrategyTag.ax.rawValue == "ax")
+        #expect(DictationMetrics.InsertStrategyTag.copy.rawValue == "copy")
+        #expect(DictationMetrics.InsertStrategyTag.none.rawValue == "none")
+    }
+
+    @Test func record_keeps_the_strategy_and_action() {
+        let store = DictationMetricsStore()
+        store.record(metrics(total: 1, insertStrategy: .copy, editAction: "insertAtCaret"))
+        #expect(store.items.first?.insertStrategy == .copy)
+        #expect(store.items.first?.editAction == "insertAtCaret")
     }
 }

@@ -16,8 +16,10 @@ enum SyntheticKeys {
         event.getIntegerValueField(.eventSourceUserData) == tag
     }
 
-    /// Key down + key up with exactly `flags`, from `.hidSystemState`
-    /// (today's `defaultPostKey` behavior), both tagged.
+    /// Key down + key up with exactly `flags`, both tagged. Posted from
+    /// `.hidSystemState`, as a physical key press is: some terminals with an
+    /// autocomplete suggestion showing drop a Cmd+V posted from
+    /// `.combinedSessionState`.
     static func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags) {
         post(keyEvents(keyCode, flags: flags, source: CGEventSource(stateID: .hidSystemState)))
     }
@@ -37,15 +39,15 @@ enum SyntheticKeys {
     }
 
     /// One tagged keyDown/keyUp pair carrying `units` via
-    /// `keyboardSetUnicodeString`, from `.combinedSessionState` (today's
-    /// `defaultTypeText` behavior). Callers keep each chunk to at most 20
-    /// UTF-16 units (`TypingChunker`'s `maxUnits`); only a single grapheme
-    /// longer than that may exceed it, alone in its chunk.
+    /// `keyboardSetUnicodeString`, from `.combinedSessionState`. Callers keep
+    /// each chunk to at most 20 UTF-16 units (`TypingChunker`'s `maxUnits`);
+    /// only a single grapheme longer than that may exceed it, alone in its chunk.
     static func typeChunk(_ units: [UInt16]) {
         post(chunkEvents(units, source: CGEventSource(stateID: .combinedSessionState)))
     }
 
-    /// Today's `defaultForceClearChord`: a tagged flagsChanged with empty flags.
+    /// A tagged flagsChanged with empty flags, which tells the focused app
+    /// that no modifier is held.
     static func forceClearModifiers() {
         guard let event = forceClearEvent(source: CGEventSource(stateID: .hidSystemState)) else { return }
         post([event])
@@ -84,8 +86,8 @@ enum SyntheticKeys {
     }
 
     /// Keycode that types `character` on the current layout, via UCKeyTranslate
-    /// over keycodes 0..<128 with `kUCKeyActionDisplay`. Moved from
-    /// `ClipboardInjector.resolvePasteVirtualKey`.
+    /// over keycodes 0..<128 with `kUCKeyActionDisplay`, so ⌘C and ⌘V follow a
+    /// non-QWERTY layout.
     /// Must be called on the main thread (Text Input Sources asserts otherwise).
     static func keyCode(typing character: String) -> CGKeyCode? {
         let target = character.lowercased()

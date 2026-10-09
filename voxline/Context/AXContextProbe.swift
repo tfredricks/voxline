@@ -96,8 +96,7 @@ struct DefaultAXContextProbe: AXContextProbing {
         let axValue = rangeValue as! AXValue
 
         // The AXValue type tag is independent of the AXValue CFTypeID — verify
-        // it carries a CFRange before extracting one. Matches the defensive
-        // pattern in ClipboardInjector's selection-range reader.
+        // it carries a CFRange before extracting one.
         guard AXValueGetType(axValue) == .cfRange else { return (nil, nil) }
         var range = CFRange(location: 0, length: 0)
         guard AXValueGetValue(axValue, .cfRange, &range) else { return (nil, nil) }

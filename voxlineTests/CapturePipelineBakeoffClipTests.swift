@@ -6,7 +6,6 @@ import Foundation
 
     typealias FakeCapture = CapturePipelineTests.FakeCapture
     typealias FakeLLM = CapturePipelineTests.FakeLLM
-    typealias FakeInjector = CapturePipelineTests.FakeInjector
     typealias FakeSelectionSnapshot = CapturePipelineTests.FakeSelectionSnapshot
     typealias LockedFrontmost = CapturePipelineStreamingTests.LockedFrontmost
     typealias LockedFieldInspector = CapturePipelineStreamingTests.LockedFieldInspector
@@ -22,7 +21,7 @@ import Foundation
         let capture: FakeCapture
         let engine: FakeTranscriptionEngine
         let llm: FakeLLM
-        let injector: FakeInjector
+        let inserter: FakeTextInserter
         let inspector: LockedFieldInspector
         let selection: FakeSelectionSnapshot
         let flag: LockedBox<Bool>
@@ -35,7 +34,7 @@ import Foundation
         capture.pendingSamples = (0..<8_000).map { 0.05 + Float($0 % 89) / 1_000 }
         let engine = FakeTranscriptionEngine()
         let llm = FakeLLM()
-        let injector = FakeInjector()
+        let inserter = FakeTextInserter()
         let inspector = LockedFieldInspector(focusedField)
         let selection = FakeSelectionSnapshot()
         let suiteName = "voxline-test-\(UUID().uuidString)"
@@ -53,20 +52,21 @@ import Foundation
             ]),
             frontmost: LockedFrontmost("com.example.editor"),
             fieldInspector: inspector,
-            injector: injector,
+            inserter: inserter,
             historyStore: DictationHistoryStore(defaults: defaults),
             contextCapture: FakeContextCapture(),
             selectionSnapshot: selection,
             llmModelID: { "test-model" },
             vocabulary: { [] },
             skipShortUtterances: { false },
+            chords: { .default },
             saveBakeoffClips: { flag.read() },
             bakeoffClipSink: { samples, reference in clips.mutate { $0.append(Clip(samples: samples, reference: reference)) } }
         )
         pipe.transcriptFallback = { _ in }
         return Harness(
             pipe: pipe, state: state, capture: capture, engine: engine, llm: llm,
-            injector: injector, inspector: inspector, selection: selection, flag: flag, clips: clips
+            inserter: inserter, inspector: inspector, selection: selection, flag: flag, clips: clips
         )
     }
 
@@ -80,7 +80,7 @@ import Foundation
         h.llm.nextResult = .success("Ship it on Friday.")
         await dictate(h)
 
-        #expect(h.injector.injected == ["Ship it on Friday."])
+        #expect(h.inserter.calls.map(\.text) == ["Ship it on Friday."])
         #expect(h.clips.read() == [Clip(samples: h.capture.pendingSamples, reference: "Ship it on Friday.")])
     }
 
@@ -88,7 +88,7 @@ import Foundation
         let h = makeHarness(saveClips: false)
         await dictate(h)
 
-        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.clips.read().isEmpty)
     }
 
@@ -110,7 +110,7 @@ import Foundation
         h.selection.selection = "original text"
         await dictate(h, command: true)
 
-        #expect(h.injector.injected == ["transformed"])
+        #expect(h.inserter.calls.map(\.text) == ["transformed"])
         #expect(h.clips.read().isEmpty)
     }
 
@@ -124,7 +124,7 @@ import Foundation
 
     @Test func a_failed_insert_saves_no_clip() async {
         let h = makeHarness(saveClips: true)
-        h.injector.nextError = TextInsertionError.accessibilityNotGranted
+        h.inserter.outcomes = [.failed(.accessibilityNotGranted)]
         await dictate(h)
 
         #expect(h.clips.read().isEmpty)
@@ -136,7 +136,7 @@ import Foundation
         #expect(h.clips.read().count == 1)
 
         await h.pipe.retryLastDictation()
-        #expect(h.injector.injected == ["cleaned", "cleaned"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned", "cleaned"])
         #expect(h.clips.read().count == 1)
     }
 

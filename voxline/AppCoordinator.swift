@@ -10,7 +10,7 @@ final class AppCoordinator {
     var engines: TranscriptionEngines?
     var llm: LLMService?
     var modes: ModeRouter?
-    var injector: ClipboardInjector?
+    var inserter: TextInserter?
     var frontmost: FrontmostApp?
     var capture: AudioCaptureService?
     var soundPlayer: HotkeySoundPlayer?
@@ -94,15 +94,7 @@ final class AppCoordinator {
         }
 
         if let migration, !migration.failures.isEmpty {
-            flashToast("Couldn't move old data — see log", state: state)
-        }
-    }
-
-    private func flashToast(_ message: String, state: AppState) {
-        state.toastMessage = message
-        Task { @MainActor [weak state] in
-            try? await Task.sleep(for: .seconds(4))
-            if state?.toastMessage == message { state?.toastMessage = nil }
+            state.flashToast("Couldn't move old data — see log", for: .seconds(4))
         }
     }
 
@@ -174,14 +166,11 @@ final class AppCoordinator {
         self.modes = router
 
         // Output
-        let focusedTextSystem = AXFocusedTextSystem()
-        let injector = ClipboardInjector(
-            focusedTextSystem: focusedTextSystem,
-            chordIsHeld: ModifierReleaseGate.chordsHeld { AppSettings().chords }
-        )
+        let paste = PasteInjector()
+        let inserter = TextInserter(paste: paste)
         let frontmost = FrontmostApp()
         let fieldInspector = AXFocusedFieldInspector()
-        self.injector = injector
+        self.inserter = inserter
         self.frontmost = frontmost
 
         let contextCapture = DefaultContextCaptureService(
@@ -197,7 +186,7 @@ final class AppCoordinator {
             modes: router,
             frontmost: frontmost,
             fieldInspector: fieldInspector,
-            injector: injector,
+            inserter: inserter,
             historyStore: historyStore,
             contextCapture: contextCapture,
             selectionSnapshot: AXSelectionReader()

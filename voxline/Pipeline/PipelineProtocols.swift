@@ -38,12 +38,6 @@ protocol LLMServing: Sendable {
     func transform(instruction: String, selection: String, mode: Mode) async throws -> String
 }
 
-@MainActor
-protocol ClipboardInjecting: AnyObject {
-    @discardableResult
-    func inject(_ text: String) async throws -> TextInsertionOutcome
-}
-
 protocol FrontmostAppProviding: Sendable {
     /// Bundle ID of whatever app holds keyboard focus right now, or nil if
     /// none could be resolved (no frontmost app).
@@ -51,7 +45,6 @@ protocol FrontmostAppProviding: Sendable {
 }
 
 extension AudioCaptureService: AudioCapturing {}
-extension ClipboardInjector: ClipboardInjecting {}
 // LLMService: LLMServing lives in its own source file — Sendable-bearing
 // protocol conformances must be declared in the same file as the type under
 // Swift 6's strict concurrency rules.
