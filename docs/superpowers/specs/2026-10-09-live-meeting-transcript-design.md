@@ -357,4 +357,6 @@ Machine: Apple M3 Pro, 36 GB. Audio: four `say` sentences in two voices, tiled t
 
 The hour of audio was fed in 958 s wall (about 3.8x real time). Stable text grew by about 880 characters every minute through the whole hour.
 
+One early exit was not reproduced. The first gate 1 run ended at about 9m44s (17:04 start, 17:13 relaunch) when the test runner exited with code 0 before the test finished: no crash report, no assertion output, cause unknown. The rerun under `caffeinate -i`, with the host's resident memory sampled every 30 s (flat at 110 to 150 MB), ran the full hour of audio and passed. The decision below stands with this caveat, and the one-hour manual test in `docs/release/MANUAL_TESTS.md` (added in Task 9) re-checks it. A live session dying silently near 10 minutes is the failure the 10-minute restart fallback exists for.
+
 Decision: sessions run uninterrupted for the hour; live transcript defaults on.
