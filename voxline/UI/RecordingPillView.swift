@@ -73,9 +73,15 @@ struct RecordingPillView: View {
     @ViewBuilder
     private var toastView: some View {
         if let toast = state.toastMessage {
-            Text(toast)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .lineLimit(1)
+            HStack(spacing: PillLayout.retrySpacing) {
+                Text(toast)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if let action = state.toastAction {
+                    PillActionButton(title: action.title) { action.perform() }
+                }
+            }
         }
     }
 
@@ -85,18 +91,7 @@ struct RecordingPillView: View {
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .lineLimit(1)
                 .truncationMode(.tail)
-            Button {
-                onRetry?()
-            } label: {
-                Text("Retry")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(width: PillLayout.retryButtonWidth, height: 20)
-                    .background(Capsule().fill(Color.accentColor))
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .layoutPriority(1)
+            PillActionButton(title: "Retry") { onRetry?() }
         }
     }
 
@@ -121,6 +116,25 @@ struct RecordingPillView: View {
     private var elapsed: String {
         guard let startedAt = state.recordingStartedAt else { return PillLayout.elapsedLabel(0) }
         return PillLayout.elapsedLabel(Date().timeIntervalSince(startedAt))
+    }
+}
+
+/// The pill's capsule button: Retry, or a toast's action.
+struct PillActionButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: PillLayout.retryButtonWidth, height: 20)
+                .background(Capsule().fill(Color.accentColor))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .layoutPriority(1)
     }
 }
 

@@ -125,6 +125,24 @@ import Foundation
 
     // MARK: - flashToast
 
+    @Test func flashToast_with_an_action_keeps_it_until_the_toast_clears() async {
+        let state = AppState()
+        let ran = LockedBox(false)
+        state.flashToast("Learned: Argmax", for: .milliseconds(10), action: ToastAction(title: "Undo") { ran.write(true) })
+        #expect(state.toastAction?.title == "Undo")
+        state.toastAction?.perform()
+        #expect(ran.read())
+        #expect(await eventually { state.toastMessage == nil && state.toastAction == nil })
+    }
+
+    @Test func a_later_toast_without_an_action_drops_the_earlier_action() {
+        let state = AppState()
+        state.flashToast("Learned: Argmax", for: .seconds(5), action: ToastAction(title: "Undo") {})
+        state.flashToast("Copied")
+        #expect(state.toastMessage == "Copied")
+        #expect(state.toastAction == nil)
+    }
+
     @Test func flashToast_sets_then_clears_after_the_duration() async {
         let state = AppState()
         state.flashToast("Copied", for: .milliseconds(10))

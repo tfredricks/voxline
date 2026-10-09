@@ -44,6 +44,12 @@ enum PipelinePhase: Equatable {
     case inserting
 }
 
+/// A button a toast offers, such as Undo on "Learned: Argmax".
+struct ToastAction {
+    let title: String
+    let perform: @MainActor () -> Void
+}
+
 @Observable
 @MainActor
 final class AppState {
@@ -54,6 +60,10 @@ final class AppState {
     /// `RecordingPillWindow` shows the pill while this is set. Set it through
     /// `flashToast(_:for:)`, which clears it again.
     var toastMessage: String?
+
+    /// The button shown with `toastMessage`, if any. Set and cleared with it
+    /// by `flashToast(_:for:action:)`.
+    var toastAction: ToastAction?
 
     @ObservationIgnored private var toastToken: UInt64 = 0
 
@@ -133,16 +143,19 @@ final class AppState {
     /// dictation (issue 10).
     private(set) var shortcutCaptureDepth: Int = 0
 
-    /// Shows `message`, then clears it after `duration` unless another toast
-    /// or a direct write replaced it in the meantime.
-    func flashToast(_ message: String, for duration: Duration = .seconds(2)) {
+    /// Shows `message`, with `action` as a button when given, then clears
+    /// both after `duration` unless another toast or a direct write replaced
+    /// the message in the meantime.
+    func flashToast(_ message: String, for duration: Duration = .seconds(2), action: ToastAction? = nil) {
         toastToken &+= 1
         let token = toastToken
         toastMessage = message
+        toastAction = action
         Task { [weak self] in
             try? await Task.sleep(for: duration)
             guard let self, self.toastToken == token, self.toastMessage == message else { return }
             self.toastMessage = nil
+            self.toastAction = nil
         }
     }
 

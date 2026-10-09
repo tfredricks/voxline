@@ -41,6 +41,18 @@ enum PillLayout {
         return hasRetryTranscript
     }
 
+    /// Whether the pill takes clicks: while it offers Retry, and while a
+    /// toast shows an action button.
+    static func acceptsClicks(content: PillContent, hasToastAction: Bool) -> Bool {
+        content == .retry || (content == .toast && hasToastAction)
+    }
+
+    /// Width of a toast's or Retry offer's content: the text, plus the
+    /// button and its spacing when there is one.
+    static func messageWidth(textWidth: CGFloat, hasButton: Bool) -> CGFloat {
+        hasButton ? textWidth + retrySpacing + retryButtonWidth : textWidth
+    }
+
     static func showsText(content: PillContent, hasText: Bool) -> Bool {
         switch content {
         case .recording, .thinking:   return hasText

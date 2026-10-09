@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Hosts RecordingPillView in a click-through, non-activating NSPanel anchored
 /// bottom-center on the screen that held the mouse when the pill appeared.
-/// The panel takes clicks only while it offers Retry after an error.
+/// The panel takes clicks only while it offers Retry after an error or shows a toast with an action.
 @MainActor
 final class RecordingPillWindow {
     private var panel: NSPanel?
@@ -53,7 +53,7 @@ final class RecordingPillWindow {
         guard let panel else { return }
         updateRetryOffer(state: state)
         let content = PillLayout.content(status: state.status, hasToast: state.toastMessage != nil, retryOffered: retryUntil != nil)
-        panel.ignoresMouseEvents = content != .retry
+        panel.ignoresMouseEvents = !PillLayout.acceptsClicks(content: content, hasToastAction: state.toastAction != nil)
         updateRootView(state: state, retryVisible: content == .retry)
         guard content != .hidden else {
             if panel.isVisible {
@@ -67,10 +67,12 @@ final class RecordingPillWindow {
         let compactWidth: CGFloat?
         switch content {
         case .toast:
-            compactWidth = state.toastMessage.map(Self.toastTextWidth)
+            compactWidth = state.toastMessage.map {
+                PillLayout.messageWidth(textWidth: Self.toastTextWidth($0), hasButton: state.toastAction != nil)
+            }
         case .retry:
             let message = PillLayout.firstSentence(state.status.errorMessage ?? "")
-            compactWidth = Self.toastTextWidth(message) + PillLayout.retrySpacing + PillLayout.retryButtonWidth
+            compactWidth = PillLayout.messageWidth(textWidth: Self.toastTextWidth(message), hasButton: true)
         case .recording, .thinking, .hidden:
             compactWidth = nil
         }

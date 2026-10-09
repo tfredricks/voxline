@@ -166,4 +166,17 @@ import CoreGraphics
         #expect(segments.secondary == secondary)
         #expect(segments.primary + segments.secondary == partial.text)
     }
+
+    @Test func the_pill_takes_clicks_for_retry_and_for_a_toast_with_an_action() {
+        #expect(PillLayout.acceptsClicks(content: .retry, hasToastAction: false))
+        #expect(PillLayout.acceptsClicks(content: .toast, hasToastAction: true))
+        #expect(!PillLayout.acceptsClicks(content: .toast, hasToastAction: false))
+        #expect(!PillLayout.acceptsClicks(content: .recording, hasToastAction: true))
+        #expect(!PillLayout.acceptsClicks(content: .hidden, hasToastAction: true))
+    }
+
+    @Test func a_button_adds_its_width_and_spacing() {
+        #expect(PillLayout.messageWidth(textWidth: 100, hasButton: false) == 100)
+        #expect(PillLayout.messageWidth(textWidth: 100, hasButton: true) == 100 + PillLayout.retrySpacing + PillLayout.retryButtonWidth)
+    }
 }
