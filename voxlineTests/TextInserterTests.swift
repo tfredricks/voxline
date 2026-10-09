@@ -58,7 +58,8 @@ import Testing
         trusted: Bool = true,
         snapshotter: PasteboardSnapshotting = DefaultPasteboardSnapshotter(),
         flags: [CGEventFlags] = [[]],
-        cancelInGate: Bool = false
+        cancelInGate: Bool = false,
+        onGate: @escaping @Sendable () -> Void = {}
     ) -> Harness {
         let board = NSPasteboard(name: NSPasteboard.Name("voxline-test-\(UUID())"))
         board.clearContents()
@@ -81,6 +82,7 @@ import Testing
         gate.forceClear = {}
         gate.sleep = { _ in
             events.mutate { $0.append("gate") }
+            onGate()
             if cancelInGate { withUnsafeCurrentTask { $0?.cancel() } }
         }
 
@@ -120,9 +122,10 @@ import Testing
 
     private func makeHarness(element: any AXTextElement, trusted: Bool = true,
                              snapshotter: PasteboardSnapshotting = DefaultPasteboardSnapshotter(),
-                             flags: [CGEventFlags] = [[]], cancelInGate: Bool = false) -> Harness {
+                             flags: [CGEventFlags] = [[]], cancelInGate: Bool = false,
+                             onGate: @escaping @Sendable () -> Void = {}) -> Harness {
         makeHarness(focused: { .value(element) }, trusted: trusted, snapshotter: snapshotter, flags: flags,
-                    cancelInGate: cancelInGate)
+                    cancelInGate: cancelInGate, onGate: onGate)
     }
 
     private func insert(_ h: Harness, _ text: String = " world", at target: InsertTarget = .liveSelection,
@@ -705,6 +708,65 @@ import Testing
         #expect(outcome == .inserted(.typing, verified: false))
         #expect(h.events.read() == ["delete"])
         #expect(h.typed.read().isEmpty)
+    }
+
+    @Test func focus_moved_while_waiting_to_delete_posts_no_delete() async {
+        let fake = selectedFake(value: [.value("hello world"), .value("hello ")])
+        let other = FakeAXTextElement(pid: 9191)
+        let moved = LockedBox(false)
+        let h = makeHarness(focused: { moved.read() ? .value(other) : .value(fake) }, flags: [.maskShift, []],
+                            onGate: { moved.write(true) })
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "", bundleID: Self.slack, trigger: [.shift])
+
+        #expect(outcome == .notInserted(.focusMoved))
+        #expect(h.events.read() == ["gate"])
+    }
+
+    @Test func unreadable_focus_after_the_wait_posts_no_delete() async {
+        let fake = selectedFake(value: [.value("hello world"), .value("hello ")])
+        let waited = LockedBox(false)
+        let h = makeHarness(focused: { waited.read() ? .failed : .value(fake) }, flags: [.maskShift, []],
+                            onGate: { waited.write(true) })
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "", bundleID: Self.slack, trigger: [.shift])
+
+        #expect(outcome == .notInserted(.focusMoved))
+        #expect(h.events.read() == ["gate"])
+    }
+
+    @Test(arguments: [
+        (InsertTarget.liveSelection, UTF16Range(location: 0, length: 11)),
+        (.liveSelection, UTF16Range(location: 6, length: 0)),
+        (.range(UTF16Range(location: 6, length: 5), expected: "world"), UTF16Range(location: 0, length: 11)),
+        (.range(UTF16Range(location: 6, length: 5), expected: "world"), UTF16Range(location: 11, length: 0)),
+    ])
+    func a_selection_changed_while_waiting_to_delete_posts_no_delete(target: InsertTarget, changed: UTF16Range) async {
+        let fake = selectedFake(value: [.value("hello world")])
+        let h = makeHarness(element: fake, flags: [.maskShift, []],
+                            onGate: { fake.ranges[kAXSelectedTextRangeAttribute] = .value(changed) })
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "", at: target, bundleID: Self.slack, trigger: [.shift])
+
+        #expect(outcome == .notInserted(.fieldChanged))
+        #expect(h.events.read() == ["gate"])
+    }
+
+    @Test func selected_text_changed_while_waiting_to_delete_posts_no_delete() async {
+        let fake = editableFake(value: [.value("hello world")])
+        fake.ranges[kAXSelectedTextRangeAttribute] = .absent
+        fake.strings[kAXSelectedTextAttribute] = [.value("world")]
+        let h = makeHarness(element: fake, flags: [.maskShift, []],
+                            onGate: { fake.strings[kAXSelectedTextAttribute] = [.value("hello world")] })
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "", bundleID: Self.slack, trigger: [.shift])
+
+        #expect(outcome == .notInserted(.fieldChanged))
+        #expect(h.events.read() == ["gate"])
     }
 
     // MARK: - Terminals

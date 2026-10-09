@@ -92,10 +92,12 @@ final class TextInserter: TextInserting {
     /// the element shows as non-empty (a `.range` of non-zero length, or a
     /// live selection) it is a deletion: an AX write of "" deletes it as
     /// usual, and the first paste or typing step in the plan posts a single
-    /// Backspace instead, after the release gate. It is verified like typing,
-    /// reported as `.typing`, and never falls through. With no selection the
-    /// element shows (one only Cmd+C could read), or no accessible focus,
-    /// that step is `cannotTarget` and posts nothing. In a terminal
+    /// Backspace instead, after the release gate and only while the same
+    /// element is focused (else `focusMoved`) with the same selection (else
+    /// `fieldChanged`). It is verified like typing, reported as `.typing`,
+    /// and never falls through. With no selection the element shows (one
+    /// only Cmd+C could read), or no accessible focus, that step is
+    /// `cannotTarget` and posts nothing. In a terminal
     /// (`InsertionPlan.isTerminal`) an empty `text` is `cannotTarget` before
     /// anything is read: the selection there is scrollback.
     ///
@@ -142,9 +144,9 @@ final class TextInserter: TextInserting {
         )
         var plan = InsertionPlan.strategies(for: traits, overrides: overrides())
         if target == .afterLiveSelection { plan.removeAll { $0 == .accessibility } }
-        let deletesSelection = text.isEmpty && Self.showsSelection(for: target, in: element)
-        AppLog.paste.debug("insert plan: \(plan.map(\.rawValue).joined(separator: ", "), privacy: .public)\(deletesSelection ? " (deleting)" : "", privacy: .public)")
-        return await run(plan, text: text, element: element, trigger: trigger, deletesSelection: deletesSelection)
+        let deletion = text.isEmpty ? Self.deletion(for: target, in: element) : nil
+        AppLog.paste.debug("insert plan: \(plan.map(\.rawValue).joined(separator: ", "), privacy: .public)\(deletion != nil ? " (deleting)" : "", privacy: .public)")
+        return await run(plan, text: text, element: element, trigger: trigger, deletion: deletion)
     }
 
     func waitForClipboardRestore() async {
@@ -169,16 +171,16 @@ final class TextInserter: TextInserting {
     /// With no `element`, nothing can be verified: a posted paste or typed
     /// text is `inserted(_, verified: false)`, and an AX write is skipped.
     private func run(_ plan: [InsertStrategy], text: String, element: (any AXTextElement)?,
-                     trigger: ModifierFamilies, deletesSelection: Bool = false) async -> InsertOutcome {
+                     trigger: ModifierFamilies, deletion: Deletion? = nil) async -> InsertOutcome {
         var failures: [String] = []
         for strategy in plan {
             guard !Task.isCancelled else { return notInserted(.cancelled) }
             if text.isEmpty, strategy != .accessibility {
-                guard deletesSelection, let element else {
+                guard let deletion, let element else {
                     AppLog.paste.debug("insert: no selection to delete; posting nothing")
                     return notInserted(.cannotTarget)
                 }
-                return await deleteSelection(in: element, trigger: trigger)
+                return await deleteSelection(deletion, in: element, trigger: trigger)
             }
             switch strategy {
             case .accessibility:
@@ -226,10 +228,18 @@ final class TextInserter: TextInserting {
         return .failed(.allStrategiesFailed(failures))
     }
 
-    private func deleteSelection(in element: any AXTextElement, trigger: ModifierFamilies) async -> InsertOutcome {
+    private func deleteSelection(_ deletion: Deletion, in element: any AXTextElement, trigger: ModifierFamilies) async -> InsertOutcome {
         try? await gate.wait(for: trigger)
         guard !Task.isCancelled else { return notInserted(.cancelled) }
         let before = element.string(kAXValueAttribute).value
+        guard focused().value?.ref == element.ref else {
+            AppLog.paste.debug("insert: focus moved before the delete key")
+            return notInserted(.focusMoved)
+        }
+        guard Self.stillSelected(deletion, in: element) else {
+            AppLog.paste.debug("insert: selection changed before the delete key")
+            return notInserted(.fieldChanged)
+        }
         postDelete()
         try? await sleep(typingVerifyDelay)
         let after = element.string(kAXValueAttribute).value
@@ -237,18 +247,34 @@ final class TextInserter: TextInserting {
         return inserted(.typing, verified: before != after)
     }
 
+    /// The selection an empty `text` deletes, as the element showed it.
+    private enum Deletion {
+        case range(UTF16Range)
+        case selectedText(String)
+    }
+
     /// A `.range` has been selected and checked by `select`; a live
-    /// selection counts only when the element reports it, by range or by
-    /// selected text.
-    private static func showsSelection(for target: InsertTarget, in element: any AXTextElement) -> Bool {
+    /// selection counts only when the element reports it, by range or, when
+    /// the range is unreadable, by selected text.
+    private static func deletion(for target: InsertTarget, in element: any AXTextElement) -> Deletion? {
         switch target {
         case .range(let range, _):
-            return range.length > 0
+            return range.length > 0 ? .range(range) : nil
         case .afterLiveSelection:
-            return false
+            return nil
         case .liveSelection:
-            if let range = element.range(kAXSelectedTextRangeAttribute).value { return range.length > 0 }
-            return !(element.string(kAXSelectedTextAttribute).value ?? "").isEmpty
+            if let range = element.range(kAXSelectedTextRangeAttribute).value {
+                return range.length > 0 ? .range(range) : nil
+            }
+            let selected = element.string(kAXSelectedTextAttribute).value ?? ""
+            return selected.isEmpty ? nil : .selectedText(selected)
+        }
+    }
+
+    private static func stillSelected(_ deletion: Deletion, in element: any AXTextElement) -> Bool {
+        switch deletion {
+        case .range(let range): return element.range(kAXSelectedTextRangeAttribute) == .value(range)
+        case .selectedText(let text): return element.string(kAXSelectedTextAttribute) == .value(text)
         }
     }
 
