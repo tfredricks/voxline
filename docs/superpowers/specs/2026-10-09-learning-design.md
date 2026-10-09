@@ -66,9 +66,10 @@ note for each mode category.
 
 | Question | Decision | Why |
 |---|---|---|
-| How corrections are seen | **Snapshot, not notifications.** After a dictation insert, remember the element, the inserted text, its `UTF16Range`, and 32 units of text on each side. When the window ends, read `kAXValue` once and diff the anchored region. `kAXValueChangedNotification` is not used. | Ruling 1. One read works in any app whose value is readable, Electron included, and needs no observer plumbing. |
+| How corrections are seen | **Snapshot, not notifications.** After a dictation insert, remember the element, the inserted text, its `UTF16Range`, and 32 units of text on each side. Each poll tick re-reads the value and keeps the **last snapshot whose region was located and changed**. At window end, read the value once more; if that read can't locate the region (field sent or cleared, element gone, region ambiguous), use the last such snapshot. One diff per window. `kAXValueChangedNotification` is not used. | Ruling 1, amended: a fix followed by sending in Messages or a Mail compose must still be learned. Reads work in any app whose value is readable, Electron included, with no observer plumbing. |
 | Window length (deferred question) | **30 s**, or until focus leaves the element, or until a new dictation, command, preset, or retry starts, whichever comes first. | Ruling 1. |
-| Focus-leave detection | Poll `LiveFocusedElementSource.readElement()` once a second, off the main actor. A different element, or `.absent`, ends the window. `.failed` does not. | An `AXObserver` needs a run-loop thread and per-app registration calls that can block. Thirty single AX calls per dictation cost nothing. |
+| Poll | Once a second, off the main actor: `LiveFocusedElementSource.readElement()`, then `kAXValue` of the anchored element, then `RegionLocator` on it. A different focused element, or `.absent`, ends the window. `.failed` does not. | An `AXObserver` needs a run-loop thread and per-app registration calls that can block. Cost: ≤ 30 focus reads and ≤ 31 value reads per window (30 ticks plus the final read), each detached and bounded by the 0.5 s messaging timeout. |
+| Last good snapshot | A tick whose locate result is `.changed` replaces the stored snapshot. `.unchanged`, `.discarded`, `.ambiguous`, and failed reads leave it alone. The final read wins when it is `.changed` or `.unchanged`. Otherwise, if a snapshot is stored, it is diffed instead; if not, the final result stands. | Still never a guess: every snapshot was located by the same unique-prefix and bounds rules. Keeping only `.changed` snapshots means deleting an unedited dictation is still `.discarded`, and an edit that the user then reverts counts as reverted. |
 | When learning skips | Skip silently and log a reason with counts only when: Accessibility isn't trusted; there is no focused element; the field is secure or its subrole can't be read; the value can't be read; the app is a terminal (`InsertionPlan.isTerminal`) or in `EditContextPolicy.untrustedFieldBundleIDs`; the inserted text doesn't sit right before the caret; or the region can't be found unambiguously at window end. | Ruling 1: never guess. Terminal values are scrollback, and VS Code and Cursor expose a hidden input, not the document. |
 | Vocabulary candidate | A hunk is a candidate only if all of these hold: (1) each side has 1–2 word tokens; (2) the change is not case-only and not punctuation-only; (3) the sides are **close** (see Similarity); (4) there is a **signal**: a new word has a digit or an internal capital, or a new word is unknown to `NSSpellChecker`, or the new side is capitalized mid-sentence where the old side started lowercase; (5) the region is not a heavy rewrite. | Ruling 2. Clause (4) keeps the ruling's three signals. The capital counts only when the user added it, so "Tuesday" → "Thursday" (both dictionary words, both already capitalized) stays out, while "clod" → "Claude" gets in. |
 | Similarity (deferred question) | Normalize both sides: lowercase, letters and digits only, spaces dropped. `d = levenshtein(a, b) / max(|a|, |b|)`. Close when **`d ≤ 0.34`**, or when **`d ≤ 0.6` and the phonetic keys are equal** (key length ≥ 2). | Ruling 2. Dropping spaces makes segmentation fixes ("arg max" → "Argmax") distance 0. The phonetic key catches sound-alike misspellings with a large edit distance ("Cooper Nettis" → "Kubernetes": d = 0.5, keys `216532` and `216532`). |
@@ -109,7 +110,7 @@ UserDefaults dependencies.
 | File | Type | Role |
 |---|---|---|
 | `LearningCoordinator.swift` | `@MainActor @Observable final class LearningCoordinator` | The one entry point. `didInsert(_:)`, `captureWillStart()`, `style(for:bundleID:)`, `undo(_:)`, `regenerate(_:)`, `reset()`. Owns at most one `CorrectionWindow`, the pending announcement, the in-flight refreshes, and `vocabularyRevision` (bumped on every vocabulary change it makes, so Settings reloads). |
-| `CorrectionWindow.swift` | `@MainActor final class CorrectionWindow` | One observation: anchor read, 1 Hz focus poll, 30 s deadline, final read. Reports a `WindowEnd` once. |
+| `CorrectionWindow.swift` | `@MainActor final class CorrectionWindow` | One observation: anchor read, 1 Hz poll (focus plus value plus locate), last good snapshot, 30 s deadline, final read. Reports a `WindowEnd` once. |
 | `CorrectionReader.swift` | `protocol CorrectionReading: Sendable`, `struct LiveCorrectionReader` | The AX seam: `anchor(for:) -> AnchorRead`, `focusedRef() -> AXRead<AXElementRef>`, `value(of:) -> AXRead<String>`. Synchronous; callers run it detached. |
 | `InsertAnchor.swift` | `struct InsertAnchor`, `static func make(value:caret:inserted:)` | Pure. Builds the anchor from a value and a caret, or returns nil. |
 | `RegionLocator.swift` | `enum RegionLocator` | Pure. `locate(_ anchor: InsertAnchor, in value: String) -> RegionMatch`. |
@@ -186,11 +187,14 @@ performDictation ── .inserted ── resetIdle() ── learning.didInsert(t
                                                    │ (retry once after 300 ms if not found)
                                                    ▼
                        every 1 s, detached: reader.focusedRef() ≠ anchor.ref → end(.focusLeft)
+                                            reader.value(of: anchor.element) → RegionLocator
+                                            .changed → lastGood = region text
                        30 s deadline ─────────────────────────────────────────► end(.timeout)
                        captureWillStart() (dictation, command, preset, retry) ─► end(.newCapture)
                                                    ▼
                                    detached: reader.value(of: anchor.element)
-                                   main: RegionLocator → CorrectionClassifier → apply
+                                   RegionLocator → (.changed/.unchanged ? final : lastGood ?? final)
+                                   main: CorrectionClassifier (once) → apply
 ```
 
 **Anchor read** (`LiveCorrectionReader.anchor(for:)`, detached):
@@ -227,11 +231,12 @@ only starts the final read; it never waits for it, so recording starts as
 fast as it does today. The final read happens before the new dictation's text
 can reach the field, because that takes at least the recording plus cleanup.
 
-**Final read and region** (`RegionLocator.locate`, pure):
+**Region** (`RegionLocator.locate`, pure; run on every tick's value and on
+the final value):
 
 1. `value(of: anchor.element)` reads the stored element, not the focused
    one, so a Mail draft behind another window still reads. `.failed` or
-   `.absent` skips with `valueUnreadable`.
+   `.absent` is `valueUnreadable`.
 2. Region start: an empty `prefix` means 0. Otherwise `prefix` must occur
    exactly once in the value, and the region starts right after it. Zero
    occurrences or more than one returns `.ambiguous`.
@@ -243,26 +248,35 @@ can reach the field, because that takes at least the recording plus cleanup.
    `.discarded`. Text equal to `inserted` returns `.unchanged`. Anything else
    returns `.changed(text)`.
 
-`.ambiguous` and `valueUnreadable` record the inserted text as the final
-text, and nothing else. `.discarded` records nothing. `.unchanged` records
-the inserted text as the final text. `.changed` runs the classifier, and the
-region's text becomes the final text.
+**Choosing what to diff** (`CorrectionWindow.resolve(final:lastGood:)`,
+pure). A final `.changed` or `.unchanged` is used as it is. Any other final
+result (`.ambiguous`, `.discarded`, `valueUnreadable`) is replaced by
+`.changed(lastGood)` when a last good snapshot exists, and stands otherwise.
+So "fix the name, press Return" in Messages diffs the fixed text from the
+last tick before the send.
 
-A known limit: a correction followed by sending the message within the window
-(chat apps clear the field) is not learned. The value is read once, as
-ruling 1 says. In practice those apps are mostly Electron, whose value is
-unreadable anyway.
+The resolved result decides what is recorded. `.ambiguous` and
+`valueUnreadable` record the inserted text as the final text, and nothing
+else. `.discarded` records nothing. `.unchanged` records the inserted text as
+the final text. `.changed` runs the classifier once, and the region's text
+becomes the final text.
+
+What is still missed: a fix and a send both made within the first second
+(before any tick), and anything in apps whose value is unreadable.
 
 **Concurrency.** The coordinator, the window, the store, and the classifier
 run on the main actor. Every AX call (anchor, poll, final read) runs in
 `Task.detached(priority: .utility)` through `CorrectionReading`, and each one
-is bounded by the 0.5 s messaging timeout. The poll and the deadline sleep
+is bounded by the 0.5 s messaging timeout. `RegionLocator` runs inside the
+same detached task as the read it checks, so the main actor only ever sees a
+locate result and at most one region string. A tick never overlaps the next:
+the poll loop awaits each tick before sleeping again. The poll and the deadline sleep
 through an injected `sleep` (tests use `ManualClock`). There is one window
 at a time: `didInsert` ends any open window with `.newCapture` first, which
 can't normally happen because `captureWillStart` already ran.
 
 **Logging.** Each window logs one line to `AppLog.learning`:
-`window end=<timeout|focusLeft|newCapture> region=<changed|unchanged|ambiguous|discarded|skipped:reason> hunks=N vocab=N style=<0|1>`.
+`window end=<timeout|focusLeft|newCapture> region=<changed|unchanged|ambiguous|discarded|skipped:reason> hunks=N vocab=N style=<0|1> source=<final|lastGood> ticks=N`.
 It never logs text, terms, or lengths beyond counts.
 
 ## Classifier
@@ -441,7 +455,7 @@ Learning (issue 15).
 | `TokenDiffTests` | Substitution, 2→1 merge, insertion, deletion, several hunks, the 1,000-token cap. |
 | `SimilarityTests` | Levenshtein; a phonetic-key table (Kubernetes / Cooper Nettis, Claude / clod, digits); both sides of each threshold. |
 | `CorrectionClassifierTests` | The worked-cases table, with a fake `WordDictionary`; the heavy-rewrite guard; mid-sentence after the prefix; term-shape limits. |
-| `CorrectionWindowTests` | With `ManualClock` and a scripted `CorrectionReading`: ends at 30 s; ends on a focus change and on `.absent`; `.failed` keeps it open; `captureWillStart` ends it without waiting; a stale token is dropped; one anchor retry after 300 ms; final read failure → skipped. |
+| `CorrectionWindowTests` | With `ManualClock` and a scripted `CorrectionReading`: ends at 30 s; ends on a focus change and on `.absent`; `.failed` keeps it open; `captureWillStart` ends it without waiting; a stale token is dropped; one anchor retry after 300 ms; final read failure with no snapshot → skipped; **final read of an emptied field (`.discarded`) after a `.changed` tick → the last good snapshot is diffed**; a final `.ambiguous` or unreadable read → last good snapshot used; `.unchanged` and `.discarded` ticks never replace a stored snapshot; a later `.changed` tick replaces an earlier one; a final `.unchanged` wins over a stored snapshot (the edit was reverted). Plus `resolve(final:lastGood:)` as a pure table test. |
 | `LearningCoordinatorTests` | Both toggles off → no reader calls and no store writes; terminal and untrusted apps skip; candidates deduped against the vocabulary and the rejected list; the toast's action undoes and rejects; the announcement waits for `.idle` and drops after 60 s; final texts and pairs recorded per the rules; refresh starts at 20, not when edited, not twice at once; failure resets the counter; `reset()` removes only learned words. |
 | `LearningStoreTests` | Round trip; tolerant decode (missing fields, unknown category key, `version` absent); a corrupt file moved aside; caps (20, 10, 600, 500, 200). |
 | `CustomVocabularyStoreTests` | No sidecar → all `user`; `addLearned`; remove and save prune the sidecar; `removeAll` returns sources; `load()` unchanged. |
@@ -459,42 +473,47 @@ Learning (issue 15).
    it to "Kubernetes" in the field and wait 30 s. "Learned: Kubernetes"
    appears, and Settings shows it labeled Learned. Dictate the sentence
    again: it comes out right.
-2. **Fix then dictate at once.** Same as 1, but start the next dictation
+2. **Fix then send.** In Messages, dictate "ask Cooper Nettis", fix it to
+   "Kubernetes", wait 2 s, and press Return. "Learned: Kubernetes" appears.
+   Repeat in a Mail compose by fixing, then clicking Send.
+3. **Fix then dictate at once.** Same as 1, but start the next dictation
    within 5 s of the fix. The toast appears after that dictation inserts,
    and that dictation already has the word right (through cleanup).
-3. **Undo.** Click Undo on the toast. The word leaves the list. Make the same
+4. **Undo.** Click Undo on the toast. The word leaves the list. Make the same
    fix again: nothing is learned.
-4. **Not vocabulary.** Change "Tuesday" to "Thursday", "there" to "their",
+5. **Not vocabulary.** Change "Tuesday" to "Thursday", "there" to "their",
    and the case of a word: nothing is learned.
-5. **Focus leaves.** Dictate in Notes, click into another app, and edit
+6. **Focus leaves.** Dictate in Notes, click into another app, and edit
    nothing: the log shows `end=focusLeft region=unchanged`.
-6. **Electron and web.** Dictate and fix a word in Slack, then in Gmail in
+7. **Electron and web.** Dictate and fix a word in Slack, then in Gmail in
    Safari. Learning either works or logs `valueUnreadable`. No toast is
    wrong, and nothing slows down.
-7. **Skipped fields.** Terminal, VS Code, and a password field log a skip and
+8. **Skipped fields.** Terminal, VS Code, and a password field log a skip and
    never toast.
-8. **Style.** After 20 Slack dictations, Settings → Learning → Chat shows a
+9. **Style.** After 20 Slack dictations, Settings → Learning → Chat shows a
    sensible note. With `VOXLINE_TRACE_LLM=1`, the next Slack dictation's
    system prompt carries the note and at most two quoted Slack examples, and
    its output follows the note.
-9. **Edited note.** Edit the Chat note. After 20 more Slack dictations it is
+10. **Edited note.** Edit the Chat note. After 20 more Slack dictations it is
    unchanged and says "Edited by you". Regenerate asks, then replaces it.
-10. **Both off.** Turn both toggles off. A traced dictation's system prompt
+11. **Both off.** Turn both toggles off. A traced dictation's system prompt
     matches a build without this phase, `log stream` shows no `learning`
     lines, and a fix in the field learns nothing.
-11. **Issue 15.** Reset to Defaults leaves the vocabulary and Learning alone.
+12. **Issue 15.** Reset to Defaults leaves the vocabulary and Learning alone.
     Clear All asks before removing anything.
-12. **Reset Learning.** It asks, then empties the notes and removes only the
+13. **Reset Learning.** It asks, then empties the notes and removes only the
     learned words; words added by hand stay.
-13. **Latency.** 20 Slack dictations with both toggles off, then 20 with
+14. **Latency.** 20 Slack dictations with both toggles off, then 20 with
     both on: the Diagnostics `totalMs` median is within 5%.
 
 ## Done when
 
 - Dictate a name the engine misspells into a Cocoa field, fix it, and dictate
   it again: it comes out right, and the "Learned" toast's Undo works.
-  (Electron apps learn only where their AX value is readable; manual test 6
+  (Electron apps learn only where their AX value is readable; manual test 7
   records which do.)
+- Fix a dictated name in Messages and press Return within the window: it is
+  learned from the last snapshot taken before the send.
 - After 20 Slack dictations, the Chat style note exists, reads sensibly, and
   a new Slack dictation visibly follows it. This needs no AX reads: final
   texts fall back to the inserted text.
@@ -511,7 +530,8 @@ Learning (issue 15).
 | Window length | 30 s | Ruling 1. |
 | Phonetic threshold | `d ≤ 0.34`, or `d ≤ 0.6` with equal keys | It passes every worked case and rejects the dictionary-word swaps. |
 | N for refresh | 20 | Ruling 5. |
-| `kAXValueChangedNotification` | Not used at all | One final read is enough. An early signal would add an observer without changing the result. |
+| `kAXValueChangedNotification` | Not used at all | The 1 Hz value poll already gives the last good snapshot. An early signal would add an observer without changing the result. |
+| Fix then send | Diff the last `.changed` snapshot from the poll when the final read can't locate the region | Maintainer ruling: chat and mail sends are a primary case. |
 | Anchor context length | 32 UTF-16 units on each side | Long enough to be unique in prose, short enough to survive the user editing nearby. |
 | Where style rides | `CapturedContext.learnedStyle` | It reaches the system prompt with no protocol change. |
 | Toast while busy | Deferred to idle, dropped after 60 s | The recording pill would hide it. |
