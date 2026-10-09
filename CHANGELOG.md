@@ -94,7 +94,9 @@ app that is no longer sandboxed.
   pill; a word you remove is not learned again. To see the fix, voxline reads
   the field for up to 30 seconds after each dictation, never in password
   fields or terminals, and still catches a fix you made before dictating
-  again.
+  again. The window ends early when the dictated text leaves the field, for
+  example when you send the message, so what you type next is never read as
+  a correction.
 - **Style notes.** voxline keeps a short note on how you write in each kind of
   app (chat, email, writing, code, general), refreshed every 20 dictations,
   and sends it with cleanup together with two recent dictations from the same
