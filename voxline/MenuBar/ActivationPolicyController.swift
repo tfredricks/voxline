@@ -3,7 +3,10 @@ import AppKit
 /// Keeps `NSApp.activationPolicy()` equal to `DockPolicy` for the windows on
 /// screen right now. Nothing is tracked between events, and the policy is
 /// set only when it changes: a redundant `.regular` interrupts AppKit's
-/// in-flight activation and flickers the window being shown.
+/// in-flight activation and flickers the window being shown. A flip to
+/// `.regular` caused by a window event also activates the app, whichever
+/// window event arrives first; the Show in Dock toggle and the launch-time
+/// evaluation never activate.
 @MainActor
 final class ActivationPolicyController {
     private let center: NotificationCenter
@@ -17,12 +20,12 @@ final class ActivationPolicyController {
 
     func start() {
         observe(NSWindow.didBecomeKeyNotification) { $0.reevaluate(activating: true) }
-        observe(NSWindow.didMiniaturizeNotification) { $0.reevaluate(activating: false) }
-        observe(NSWindow.didDeminiaturizeNotification) { $0.reevaluate(activating: false) }
-        observe(NSWindow.didChangeOcclusionStateNotification) { $0.reevaluate(activating: false) }
+        observe(NSWindow.didMiniaturizeNotification) { $0.reevaluate(activating: true) }
+        observe(NSWindow.didDeminiaturizeNotification) { $0.reevaluate(activating: true) }
+        observe(NSWindow.didChangeOcclusionStateNotification) { $0.reevaluate(activating: true) }
         observe(UserDefaults.didChangeNotification) { $0.reevaluate(activating: false) }
         observe(NSWindow.willCloseNotification) { controller in
-            DispatchQueue.main.async { [weak controller] in controller?.reevaluate(activating: false) }
+            DispatchQueue.main.async { [weak controller] in controller?.reevaluate(activating: true) }
         }
         reevaluate(activating: false)
     }
