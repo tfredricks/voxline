@@ -4,20 +4,24 @@ import SwiftUI
 struct MenuBarContent: View {
     @Bindable var state: AppState
     @Bindable var updateService: UpdateService
-    @Environment(\.openSettings) private var openSettings
 
     var openAboutWindow: () -> Void = {}
     var openHistoryWindow: () -> Void = {}
-    var openPermissionsWindow: () -> Void = {}
+    var openMainWindow: (MainWindowPage) -> Void = { _ in }
     var retryLastDictation: () -> Void = {}
     var startMeetingRecording: () -> Void = {}
 
     var body: some View {
+        Button("Open Voxline") { openMainWindow(.home) }
+            .keyboardShortcut("o")
+
+        Divider()
+
         if let message = state.status.errorMessage {
             Text(message)
                 .foregroundStyle(.red)
             if case .permissionsError = state.status {
-                Button("Fix permissions…") { openPermissionsWindow() }
+                Button("Fix permissions…") { openMainWindow(.home) }
             }
             Divider()
         }
@@ -78,13 +82,8 @@ struct MenuBarContent: View {
             Divider()
         }
 
-        Button("Settings…") {
-            NSApp.activate(ignoringOtherApps: true)
-            openSettings()
-        }
-        .keyboardShortcut(",")
-
-        Button("Check Permissions…") { openPermissionsWindow() }
+        Button("Settings…") { openMainWindow(.settings) }
+            .keyboardShortcut(",")
 
         Divider()
 

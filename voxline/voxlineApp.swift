@@ -37,9 +37,8 @@ struct voxlineApp: App {
                         state: delegate.appState
                     )
                 },
-                openPermissionsWindow: {
-                    NSApp.activate(ignoringOtherApps: true)
-                    delegate.coordinator.showPermissionsWindow()
+                openMainWindow: { page in
+                    delegate.mainWindow.show(page)
                 },
                 retryLastDictation: {
                     delegate.coordinator.retryLastDictation()
@@ -52,35 +51,11 @@ struct voxlineApp: App {
             MenuBarLabel(state: delegate.appState, updateService: delegate.updateService)
         }
         .menuBarExtraStyle(.menu)
-
-        Settings {
-            let generalVM = GeneralSettingsViewModel(onApply: { [weak coordinator = delegate.coordinator] snapshot in
-                coordinator?.apply(snapshot)
-            })
-            SettingsView(
-                generalVM: generalVM,
-                apiKeysVM: APIKeysSettingsViewModel(onOpenAIKeyChange: { [weak coordinator = delegate.coordinator] in
-                    coordinator?.openAIKeyDidChange()
-                }),
-                commandVM: CommandSettingsViewModel(
-                    chords: { [weak generalVM] in generalVM?.chords ?? AppSettings().chords },
-                    onChange: { [weak coordinator = delegate.coordinator] in
-                        coordinator?.presetsDidChange()
-                    },
-                    reserved: { AppSettings().meetingShortcut.map { [$0] } ?? [] }
-                ),
-                meetingsVM: MeetingSettingsViewModel(
-                    presets: { PresetStore().load() },
-                    chords: { [weak generalVM] in generalVM?.chords ?? AppSettings().chords },
-                    onChange: { [weak coordinator = delegate.coordinator] in coordinator?.meetingSettingsDidChange() }
-                ),
-                learning: delegate.learning,
-                engineReadiness: { [weak coordinator = delegate.coordinator] id in
-                    await coordinator?.readiness(of: id)
-                }
-            )
-            .environment(delegate.appState)
-            .environment(delegate.updateService)
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { delegate.mainWindow.show(.settings) }
+                    .keyboardShortcut(",")
+            }
         }
     }
 }
@@ -117,6 +92,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let activationPolicy = ActivationPolicyController()
     let dictationActivity = DictationActivityMonitor()
     lazy var updateService = UpdateService(dictationActivity: dictationActivity)
+
+    lazy var mainWindow = MainWindowController { [unowned self] selection in
+        AnyView(
+            MainWindowView(
+                selection: selection,
+                home: HomeView(model: HomeViewModel(state: appState)),
+                settings: makeSettingsView()
+            )
+            .environment(appState)
+            .environment(updateService)
+        )
+    }
+
+    private func makeSettingsView() -> some View {
+        let coordinator = self.coordinator
+        let generalVM = GeneralSettingsViewModel(onApply: { [weak coordinator] snapshot in
+            coordinator?.apply(snapshot)
+        })
+        return SettingsView(
+            generalVM: generalVM,
+            apiKeysVM: APIKeysSettingsViewModel(onOpenAIKeyChange: { [weak coordinator] in
+                coordinator?.openAIKeyDidChange()
+            }),
+            commandVM: CommandSettingsViewModel(
+                chords: { [weak generalVM] in generalVM?.chords ?? AppSettings().chords },
+                onChange: { [weak coordinator] in coordinator?.presetsDidChange() },
+                reserved: { AppSettings().meetingShortcut.map { [$0] } ?? [] }
+            ),
+            meetingsVM: MeetingSettingsViewModel(
+                presets: { PresetStore().load() },
+                chords: { [weak generalVM] in generalVM?.chords ?? AppSettings().chords },
+                onChange: { [weak coordinator] in coordinator?.meetingSettingsDidChange() }
+            ),
+            learning: learning,
+            engineReadiness: { [weak coordinator] id in
+                await coordinator?.readiness(of: id)
+            }
+        )
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        mainWindow.show(.home)
+        return false
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !LaunchEnvironment.isRunningTests else {
