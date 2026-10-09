@@ -134,7 +134,7 @@ final class GeneralSettingsViewModel {
     }
 
     /// True when OpenAI transcribes but another provider cleans up, so the
-    /// Cleanup section shows no OpenAI key row and Recognition shows one.
+    /// AI Provider page shows no OpenAI key row and Recognition shows one.
     var showsOpenAIKeyInRecognition: Bool {
         engine == .openAIRealtime && provider != .openai
     }
@@ -194,8 +194,9 @@ final class GeneralSettingsViewModel {
     }
 
     /// Re-reads `LoginItemService.status` and reconciles `launchAtLogin` to it.
-    /// Called after every toggle and on Settings-window-becomes-key, so external
-    /// approval/revocation in System Settings → Login Items reflects back.
+    /// Called after every toggle, when the main window is built, and each time
+    /// the General page appears, so approval or revocation in System Settings →
+    /// Login Items shows up there.
     func refreshLoginItemStatus() {
         let status = loginItemService.status
         loginItemStatus = status
@@ -209,8 +210,8 @@ final class GeneralSettingsViewModel {
     /// stored, so the Settings UI reflects writes made elsewhere in the app
     /// (e.g., the wizard's `advance()` persisting `selectedProvider` and the
     /// keys). The view model otherwise caches the value from init and would
-    /// show stale state on subsequent window opens. Called via `.task` on the
-    /// Settings window the same way `refreshLoginItemStatus()` is.
+    /// show stale state on subsequent window opens. Called via `.task` when the
+    /// main window is built, together with `refreshLoginItemStatus()`.
     func refreshFromUserDefaults() {
         withoutCommitting {
             chord = settings.hotkeyChord

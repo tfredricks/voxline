@@ -212,6 +212,30 @@ import Foundation
         #expect(f.status.issues.isEmpty)
     }
 
+    @Test func openai_engine_and_provider_without_a_key_report_only_the_ai_provider_issue() async throws {
+        let f = try makeFixtures(
+            provider: .openai,
+            engine: .openAIRealtime,
+            anthropicKey: "",
+            openaiKey: "",
+            readiness: { _ in .unavailable(OpenAIRealtimeEngine.missingKeyReason) }
+        )
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.issues == [SetupIssue(text: "No OpenAI API key", page: .aiProvider)])
+        #expect(!f.status.needsSetup(.dictation))
+    }
+
+    @Test func openai_engine_without_a_key_under_another_provider_is_a_dictation_issue() async throws {
+        let f = try makeFixtures(
+            provider: .anthropic,
+            engine: .openAIRealtime,
+            openaiKey: "",
+            readiness: { _ in .unavailable(OpenAIRealtimeEngine.missingKeyReason) }
+        )
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.issues == [SetupIssue(text: OpenAIRealtimeEngine.missingKeyReason, page: .dictation)])
+    }
+
     @Test func needs_setup_maps_issues_to_their_pages() async throws {
         let f = try makeFixtures(provider: .openai, openaiKey: "")
         await f.status.refreshEngineReadiness()

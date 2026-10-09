@@ -56,13 +56,17 @@ final class SettingsStatusViewModel {
     }
 
     /// Unchecked readiness (nil) is not an issue, so opening the window
-    /// doesn't flash a warning before the check finishes.
+    /// doesn't flash a warning before the check finishes. When OpenAI both
+    /// transcribes and cleans up without a key, only the AI Provider issue
+    /// shows: that page holds the key.
     var issues: [SetupIssue] {
         var result: [SetupIssue] = []
         if !micPresent {
             result.append(SetupIssue(text: "Microphone not found", page: .dictation))
         }
         switch currentReadiness {
+        case .unavailable where providerIssueCoversEngine:
+            break
         case .unavailable(let reason):
             result.append(SetupIssue(text: reason, page: .dictation))
         case .needsPreparation(let downloadMB):
@@ -85,6 +89,10 @@ final class SettingsStatusViewModel {
     private var currentReadiness: EngineReadiness? {
         guard let checked, checked.key == readinessKey else { return nil }
         return checked.readiness
+    }
+
+    private var providerIssueCoversEngine: Bool {
+        general.engine == .openAIRealtime && general.provider == .openai && !providerKeySaved
     }
 
     private var providerKeySaved: Bool {

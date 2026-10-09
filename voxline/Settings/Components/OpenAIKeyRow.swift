@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The OpenAI key row. Shown by the Cleanup section when OpenAI cleans up,
+/// The OpenAI key row. Shown by the AI Provider page when OpenAI cleans up,
 /// and by Recognition when OpenAI only transcribes.
 struct OpenAIKeyRow: View {
 

@@ -50,6 +50,7 @@ struct GeneralSettingsPage: View {
                 }
             }
         }
+        .task { general.refreshLoginItemStatus() }
         .confirmationDialog("Reset settings to defaults?", isPresented: $confirmingReset) {
             Button("Reset", role: .destructive) { general.resetToDefaults() }
         } message: {

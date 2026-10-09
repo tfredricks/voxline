@@ -4,7 +4,7 @@ struct DictationSettingsPage: View {
     @Environment(AppState.self) private var appState
     @Bindable var general: GeneralSettingsViewModel
     @Bindable var keys: APIKeysSettingsViewModel
-    @State private var levelMonitor = MicLevelMonitor()
+    @State private var levelMonitor: MicLevelMonitor?
     @State private var keyRevealed = false
 
     var body: some View {
@@ -30,7 +30,11 @@ struct DictationSettingsPage: View {
                     Text("Live level")
                         .foregroundStyle(.secondary)
                         .font(.callout)
-                    MicLevelMeter(monitor: levelMonitor)
+                    if let levelMonitor {
+                        MicLevelMeter(monitor: levelMonitor)
+                    } else {
+                        Color.clear.frame(height: 8)
+                    }
                 }
             }
 
@@ -72,18 +76,19 @@ struct DictationSettingsPage: View {
             }
         }
         .onAppear {
-            levelMonitor.preferredInputDeviceUID = general.audioInputDeviceUID
+            if levelMonitor == nil { levelMonitor = MicLevelMonitor() }
+            levelMonitor?.preferredInputDeviceUID = general.audioInputDeviceUID
             startMonitorIfAllowed()
         }
-        .onDisappear { levelMonitor.stop() }
+        .onDisappear { levelMonitor?.stop() }
         .onChange(of: general.audioInputDeviceUID) { _, newValue in
-            levelMonitor.stop()
-            levelMonitor.preferredInputDeviceUID = newValue
+            levelMonitor?.stop()
+            levelMonitor?.preferredInputDeviceUID = newValue
             startMonitorIfAllowed()
         }
         .onChange(of: appState.status) { _, newStatus in
             if newStatus == .recording {
-                levelMonitor.stop()
+                levelMonitor?.stop()
             } else {
                 startMonitorIfAllowed()
             }
@@ -92,6 +97,6 @@ struct DictationSettingsPage: View {
 
     private func startMonitorIfAllowed() {
         guard appState.status != .recording else { return }
-        try? levelMonitor.start()
+        try? levelMonitor?.start()
     }
 }

@@ -24,7 +24,7 @@ struct LearningSection: View {
                         TextField("Style note", text: noteBinding(category), axis: .vertical)
                             .labelsHidden()
                             .textFieldStyle(.roundedBorder)
-                            .lineLimit(3...10)
+                            .lineLimit(3...)
                             .font(.callout)
                         HStack {
                             Text(model.status(for: category))
