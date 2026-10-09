@@ -94,16 +94,19 @@ import Testing
     }
 
     @Test func row3_range_and_selected_text_without_value() throws {
-        let fake = makeFake()
-        fake.ranges[kAXSelectedTextRangeAttribute] = .value(UTF16Range(location: 2, length: 3))
-        fake.strings[kAXSelectedTextAttribute] = [.value("abc")]
+        for value: AXRead<String> in [.absent, .failed] {
+            let fake = makeFake()
+            fake.strings[kAXValueAttribute] = [value]
+            fake.ranges[kAXSelectedTextRangeAttribute] = .value(UTF16Range(location: 2, length: 3))
+            fake.strings[kAXSelectedTextAttribute] = [.value("abc")]
 
-        let context = try readContext(makeReader(fake))
+            let context = try readContext(makeReader(fake))
 
-        #expect(context.selection == SelectionInfo(text: "abc", range: UTF16Range(location: 2, length: 3)))
-        #expect(context.field == nil)
-        #expect(context.cursor == nil)
-        #expect(context.needsCopyFallback == false)
+            #expect(context.selection == SelectionInfo(text: "abc", range: UTF16Range(location: 2, length: 3)))
+            #expect(context.field == nil)
+            #expect(context.cursor == nil)
+            #expect(context.needsCopyFallback == false)
+        }
     }
 
     @Test func gap_range_without_readable_text_falls_back() throws {
@@ -121,7 +124,7 @@ import Testing
         }
     }
 
-    @Test func range_outside_value_is_not_a_readable_field() throws {
+    @Test func range_outside_value_keeps_selected_text_but_drops_the_range() throws {
         let fake = makeFake()
         fake.setValue("hi")
         fake.ranges[kAXSelectedTextRangeAttribute] = .value(UTF16Range(location: 5, length: 3))
@@ -129,9 +132,86 @@ import Testing
 
         let context = try readContext(makeReader(fake))
 
-        #expect(context.selection == SelectionInfo(text: "abc", range: UTF16Range(location: 5, length: 3)))
+        #expect(context.selection == SelectionInfo(text: "abc", range: nil))
         #expect(context.field == nil)
         #expect(context.cursor == nil)
+        #expect(context.needsCopyFallback == false)
+    }
+
+    @Test func range_outside_value_without_selected_text_falls_back() throws {
+        for selectedText: AXRead<String> in [.value(""), .absent, .failed] {
+            let fake = makeFake()
+            fake.setValue("hi")
+            fake.ranges[kAXSelectedTextRangeAttribute] = .value(UTF16Range(location: 1, length: 3))
+            fake.strings[kAXSelectedTextAttribute] = [selectedText]
+
+            let context = try readContext(makeReader(fake))
+
+            #expect(context.needsCopyFallback)
+            #expect(context.selection == nil)
+            #expect(context.field == nil)
+            #expect(context.cursor == nil)
+        }
+    }
+
+    @Test func zero_length_range_outside_value_is_no_selection() throws {
+        let fake = makeFake()
+        fake.setValue("hi")
+        fake.ranges[kAXSelectedTextRangeAttribute] = .value(UTF16Range(location: 9, length: 0))
+
+        let context = try readContext(makeReader(fake))
+
+        #expect(context.selection == nil)
+        #expect(context.cursor == nil)
+        #expect(context.field == nil)
+        #expect(context.needsCopyFallback == false)
+    }
+
+    private static let hostileRanges = [
+        UTF16Range(location: NSNotFound, length: 1),
+        UTF16Range(location: -1, length: 3),
+        UTF16Range(location: 2, length: -1),
+        UTF16Range(location: 1, length: Int.max),
+    ]
+
+    @Test func hostile_range_is_treated_as_absent() throws {
+        for hostile in Self.hostileRanges {
+            for value: AXRead<String> in [.value("xx abc"), .absent] {
+                let fake = makeFake()
+                fake.strings[kAXValueAttribute] = [value]
+                fake.ranges[kAXSelectedTextRangeAttribute] = .value(hostile)
+                fake.strings[kAXSelectedTextAttribute] = [.value("abc")]
+
+                let context = try readContext(makeReader(fake))
+
+                #expect(context.selection == SelectionInfo(text: "abc", range: nil))
+                #expect(context.field == nil)
+                #expect(context.cursor == nil)
+                #expect(context.needsCopyFallback == false)
+            }
+        }
+    }
+
+    @Test func hostile_range_without_selected_text_falls_back() throws {
+        for hostile in Self.hostileRanges {
+            let fake = makeFake()
+            fake.ranges[kAXSelectedTextRangeAttribute] = .value(hostile)
+
+            let context = try readContext(makeReader(fake))
+
+            #expect(context.needsCopyFallback)
+            #expect(context.selection == nil)
+        }
+    }
+
+    @Test func hostile_range_on_a_non_editable_element_is_treated_as_absent() throws {
+        let fake = makeFake(role: "AXStaticText")
+        fake.ranges[kAXSelectedTextRangeAttribute] = .value(UTF16Range(location: NSNotFound, length: 1))
+        fake.strings[kAXSelectedTextAttribute] = [.value("quote")]
+
+        let context = try readContext(makeReader(fake))
+
+        #expect(context.selection == SelectionInfo(text: "quote", range: nil))
     }
 
     @Test func row4_selected_text_without_range() throws {

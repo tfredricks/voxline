@@ -24,7 +24,11 @@ protocol EditContextReading: Sendable {
 /// - The selection is resolved from kAXSelectedTextRange (R), kAXValue (V),
 ///   and kAXSelectedText (S). An empty S means "nothing selected" only when R
 ///   is readable; every inconclusive read sets `needsCopyFallback`.
-/// - `cursor` and `field` are set only when V is readable and R lies inside it.
+/// - An R that is negative or overflows counts as absent, and an R that lies
+///   outside a readable V is dropped from the selection, so no range handed
+///   downstream is unchecked.
+/// - `cursor` and `field` are set only when V is readable, R lies inside it,
+///   and the app is not in `EditContextPolicy.untrustedFieldBundleIDs`.
 struct EditContextReader: EditContextReading {
     private let source: @Sendable () -> AXRead<FocusedElementSnapshot>
     private let policy: EditContextPolicy
@@ -86,11 +90,13 @@ struct EditContextReader: EditContextReading {
             needsCopyFallback: false
         )
 
-        let selectedRange = element.range(kAXSelectedTextRangeAttribute)
+        let selectedRange = element.range(kAXSelectedTextRangeAttribute).value.flatMap {
+            $0.fits(in: Int.max) ? $0 : nil
+        }
         let value: AXRead<String> = isEditable ? element.string(kAXValueAttribute) : .absent
 
         var readableValue: NSString?
-        if let range = selectedRange.value, let text = value.value, range.fits(in: (text as NSString).length) {
+        if let range = selectedRange, let text = value.value, range.fits(in: (text as NSString).length) {
             let full = text as NSString
             readableValue = full
             context.selection = range.length > 0
@@ -98,7 +104,9 @@ struct EditContextReader: EditContextReading {
                 : nil
             context.cursor = range.location
         } else {
-            (context.selection, context.needsCopyFallback) = Self.resolveWithoutField(selectedRange, element)
+            (context.selection, context.needsCopyFallback) = Self.resolveWithoutField(
+                selectedRange, keepsRange: value.value == nil, element
+            )
         }
 
         if readableValue != nil, let bundleID = snapshot.bundleID, policy.untrustedFieldBundleIDs.contains(bundleID) {
@@ -123,12 +131,13 @@ struct EditContextReader: EditContextReading {
     }
 
     private static func resolveWithoutField(
-        _ selectedRange: AXRead<UTF16Range>,
+        _ selectedRange: UTF16Range?,
+        keepsRange: Bool,
         _ element: any AXTextElement
     ) -> (selection: SelectionInfo?, needsCopyFallback: Bool) {
-        if let range = selectedRange.value, range.length == 0 { return (nil, false) }
+        if let range = selectedRange, range.length == 0 { return (nil, false) }
         if let text = element.string(kAXSelectedTextAttribute).value, !text.isEmpty {
-            return (SelectionInfo(text: text, range: selectedRange.value), false)
+            return (SelectionInfo(text: text, range: keepsRange ? selectedRange : nil), false)
         }
         return (nil, true)
     }

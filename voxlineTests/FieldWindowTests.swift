@@ -97,4 +97,39 @@ import Testing
         let window = FieldWindow.make(text: text("😀", count: 15_000), anchor: anchor, budget: 12_000)
         #expect(window == anchor)
     }
+
+    @Test func end_clamp_keeps_an_anchor_that_ends_inside_a_surrogate_pair() {
+        let emoji = text("😀", count: 15_000)
+        for (anchor, budget) in [
+            (UTF16Range(location: 15_000, length: 1), 1),
+            (UTF16Range(location: 15_000, length: 12_001), 12_000),
+        ] {
+            let window = FieldWindow.make(text: emoji, anchor: anchor, budget: budget)
+            #expect(window == anchor)
+            #expect(window.location <= anchor.location && window.end >= anchor.end)
+        }
+    }
+
+    private static let family = "👨\u{200D}👩\u{200D}👧"
+
+    @Test func zwj_family_is_eight_units() {
+        #expect((Self.family as NSString).length == 8)
+    }
+
+    @Test func both_edges_snap_out_of_a_zwj_sequence() {
+        let families = text(Self.family, count: 4_000)
+        let window = FieldWindow.make(text: families, anchor: caret(16_000), budget: 12_003)
+        #expect(window == UTF16Range(location: 8_000, length: 12_000))
+    }
+
+    @Test func zwj_sequence_is_never_split_at_either_edge() {
+        let families = text(Self.family, count: 4_000)
+        for budget in 12_000...12_015 {
+            let window = FieldWindow.make(text: families, anchor: caret(16_000), budget: budget)
+            #expect(window.location % 8 == 0)
+            #expect(window.end % 8 == 0)
+            #expect(window.length <= budget)
+            #expect(window.location <= 16_000 && window.end >= 16_000)
+        }
+    }
 }
