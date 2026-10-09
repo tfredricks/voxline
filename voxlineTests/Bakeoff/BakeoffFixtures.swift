@@ -23,8 +23,10 @@ enum BakeoffFixtures {
         }
     }
 
-    static var directory: URL {
-        if let override = ProcessInfo.processInfo.environment["VOXLINE_BAKEOFF_DIR"], !override.isEmpty {
+    static var directory: URL { directory(environment: ProcessInfo.processInfo.environment) }
+
+    static func directory(environment: [String: String]) -> URL {
+        if let override = environment["VOXLINE_BAKEOFF_DIR"], !override.isEmpty {
             return URL(fileURLWithPath: (override as NSString).expandingTildeInPath, isDirectory: true)
         }
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -32,6 +34,14 @@ enum BakeoffFixtures {
     }
 
     static var isPresent: Bool { !clipURLs(in: directory).isEmpty }
+
+    /// The bake-off runs real-time engines and rewrites the report, so having
+    /// fixtures on disk is not enough: `VOXLINE_BAKEOFF=1` must also be set.
+    static var isEnabled: Bool { isEnabled(environment: ProcessInfo.processInfo.environment) }
+
+    static func isEnabled(environment: [String: String]) -> Bool {
+        environment["VOXLINE_BAKEOFF"] == "1" && !clipURLs(in: directory(environment: environment)).isEmpty
+    }
 
     static func load(from directory: URL = BakeoffFixtures.directory) throws -> (clips: [Clip], terms: [String]) {
         let clips = try clipURLs(in: directory).map { audioURL -> Clip in

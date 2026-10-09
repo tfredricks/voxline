@@ -13,17 +13,20 @@ struct EngineScore: Equatable {
 
 /// One engine's result for one fixture clip. `finishMs` is the `finish()`
 /// call to its return; `firstPartialMs` runs from the first appended chunk to
-/// the first non-empty partial.
+/// the first non-empty partial. A `failed` clip keeps its (empty) hypothesis
+/// for WER and term misses, but its timings are not real measurements.
 struct BakeoffClipResult: Equatable {
     let reference: String
     let hypothesis: String
     let finishMs: Int
     let firstPartialMs: Int?
+    var failed = false
 }
 
 extension EngineScore {
     /// WER and term misses are pooled over all clips rather than averaged per
-    /// clip, so long clips weigh in proportion to their length.
+    /// clip, so long clips weigh in proportion to their length. Latency
+    /// figures use only the clips that did not fail.
     init(engine: EngineID, terms: [String], results: [BakeoffClipResult]) {
         var distance = 0
         var referenceWords = 0
@@ -43,8 +46,9 @@ extension EngineScore {
                 termHits += hits.hits
             }
         }
-        let finishTimes = results.map(\.finishMs)
-        let firstPartials = results.compactMap(\.firstPartialMs)
+        let measured = results.filter { !$0.failed }
+        let finishTimes = measured.map(\.finishMs)
+        let firstPartials = measured.compactMap(\.firstPartialMs)
         self.init(
             engine: engine,
             wer: referenceWords == 0 ? (distance == 0 ? 0 : 1) : Double(distance) / Double(referenceWords),

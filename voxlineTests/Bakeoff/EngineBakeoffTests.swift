@@ -5,9 +5,13 @@ import Foundation
 /// A measurement, not a gate: it runs each available engine over the fixture
 /// clips (see `BakeoffFixtures`), prints a report, writes it next to the
 /// fixtures, and only fails when an engine returns almost nothing.
-/// Env: `VOXLINE_BAKEOFF_DIR` (fixtures), `VOXLINE_BAKEOFF_SPEED` (pacing
-/// multiplier). Pass them to `xcodebuild` as `TEST_RUNNER_<name>`.
-@Suite(.serialized, .enabled(if: BakeoffFixtures.isPresent))
+///
+/// Opt-in: runs only with `VOXLINE_BAKEOFF=1` and fixtures present. Optional
+/// env: `VOXLINE_BAKEOFF_DIR` (fixtures), `VOXLINE_BAKEOFF_SPEED` (pacing
+/// multiplier; keep 1 for numbers that feed the decision rule). Pass them to
+/// `xcodebuild` as `TEST_RUNNER_<name>`:
+/// `TEST_RUNNER_VOXLINE_BAKEOFF=1 xcodebuild test ... -only-testing:voxlineTests/EngineBakeoffTests`
+@Suite(.serialized, .enabled(if: BakeoffFixtures.isEnabled, "Set VOXLINE_BAKEOFF=1 with bake-off fixtures present"))
 @MainActor
 struct EngineBakeoffTests {
 
@@ -123,7 +127,8 @@ struct EngineBakeoffTests {
                 reference: clip.reference,
                 hypothesis: hypothesis,
                 finishMs: finishMs,
-                firstPartialMs: firstPartialMs
+                firstPartialMs: firstPartialMs,
+                failed: failure != nil
             ),
             error: failure
         )

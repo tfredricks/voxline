@@ -11,8 +11,10 @@ mono Float32) with a matching clip-NN.txt reference, rotating through the
 voices Samantha, Daniel, Karen, Moira, and Tessa. Voices that `say -v '?'`
 does not list are skipped.
 
+Existing clip-*.wav and clip-*.txt files in <outdir> are removed first.
+
 Add a terms.txt (one dictionary term per line) to <outdir>, then run:
-  TEST_RUNNER_VOXLINE_BAKEOFF_DIR=<outdir> xcodebuild test \
+  TEST_RUNNER_VOXLINE_BAKEOFF=1 TEST_RUNNER_VOXLINE_BAKEOFF_DIR=<outdir> xcodebuild test \
     -project voxline.xcodeproj -scheme voxline -destination 'platform=macOS' \
     -only-testing:voxlineTests/EngineBakeoffTests
 USAGE
@@ -50,6 +52,7 @@ if [[ ${#voices[@]} -eq 0 ]]; then
 fi
 
 mkdir -p "$out"
+rm -f "$out"/clip-*.wav "$out"/clip-*.txt
 
 count=0
 while IFS= read -r line || [[ -n "$line" ]]; do
@@ -62,8 +65,8 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     count=$((count + 1))
     name=$(printf 'clip-%02d' "$count")
 
-    say -v "$voice" -o "$out/$name.wav" --data-format=LEF32@16000 "$line"
     printf '%s\n' "$line" >"$out/$name.txt"
+    say -v "$voice" -o "$out/$name.wav" --data-format=LEF32@16000 -f "$out/$name.txt"
 done <"$lines_file"
 
 echo "Wrote $count clips to $out"

@@ -65,4 +65,21 @@ import Foundation
         defer { try? FileManager.default.removeItem(at: dir) }
         #expect(try BakeoffFixtures.load(from: dir).terms.isEmpty)
     }
+
+    @Test func suite_is_enabled_only_with_the_opt_in_and_fixtures() throws {
+        let populated = try makeDirectory()
+        let empty = try makeDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: populated)
+            try? FileManager.default.removeItem(at: empty)
+        }
+        try writeWav(populated.appending(path: "clip-01.wav"), seconds: 0.2, rate: 16_000)
+        try "hello".write(to: populated.appending(path: "clip-01.txt"), atomically: true, encoding: .utf8)
+
+        let withFixtures = ["VOXLINE_BAKEOFF_DIR": populated.path]
+        #expect(!BakeoffFixtures.isEnabled(environment: withFixtures))
+        #expect(!BakeoffFixtures.isEnabled(environment: withFixtures.merging(["VOXLINE_BAKEOFF": "0"]) { $1 }))
+        #expect(BakeoffFixtures.isEnabled(environment: withFixtures.merging(["VOXLINE_BAKEOFF": "1"]) { $1 }))
+        #expect(!BakeoffFixtures.isEnabled(environment: ["VOXLINE_BAKEOFF_DIR": empty.path, "VOXLINE_BAKEOFF": "1"]))
+    }
 }

@@ -147,7 +147,7 @@ private func score(
         #expect(result.winner == .whisperKit)
     }
 
-    @Test func with_three_engines_only_the_top_two_miss_rates_are_compared() {
+    @Test func a_cloud_engine_with_perfect_numbers_leaves_the_decision_to_the_two_on_device_engines() {
         let result = BakeoffDecision.winner([
             score(.apple, miss: 0.10, finish: 400),
             score(.whisperKit, miss: 0.30, finish: 150),
@@ -213,6 +213,19 @@ private func score(
             result("a", "a", finish: 200, firstPartial: 600),
         ])
         #expect(score.finishMedianMs == 200)
+        #expect(score.finishP90Ms == 300)
+        #expect(score.firstPartialMedianMs == 500)
+    }
+
+    @Test func failed_clips_count_as_deletions_but_not_as_latency_samples() {
+        let score = EngineScore(engine: .whisperKit, terms: ["Argmax"], results: [
+            result("Argmax ships it", "Argmax ships it", finish: 300, firstPartial: 500),
+            BakeoffClipResult(reference: "Argmax ships it", hypothesis: "", finishMs: 0, firstPartialMs: nil, failed: true),
+            BakeoffClipResult(reference: "ships it", hypothesis: "", finishMs: 90_000, firstPartialMs: 80_000, failed: true),
+        ])
+        #expect(score.wer == 5.0 / 8.0)
+        #expect(score.termMissRate == 0.5)
+        #expect(score.finishMedianMs == 300)
         #expect(score.finishP90Ms == 300)
         #expect(score.firstPartialMedianMs == 500)
     }
