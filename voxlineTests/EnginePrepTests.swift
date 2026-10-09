@@ -69,6 +69,21 @@ import Testing
         #expect(EnginePrep.status(for: .fail(Self.reason), audience: .settingsSwitch, current: current) == nil)
     }
 
+    // MARK: Superseded tasks
+
+    @Test func the_latest_uncancelled_task_owns_status_and_window() {
+        #expect(EnginePrep.isCurrentTask(token: 3, latestToken: 3, isCancelled: false))
+    }
+
+    @Test func a_cancelled_task_no_longer_owns_them() {
+        #expect(!EnginePrep.isCurrentTask(token: 3, latestToken: 3, isCancelled: true))
+    }
+
+    @Test func a_superseded_task_no_longer_owns_them_even_if_not_yet_cancelled() {
+        #expect(!EnginePrep.isCurrentTask(token: 2, latestToken: 3, isCancelled: false))
+        #expect(!EnginePrep.isCurrentTask(token: 2, latestToken: 3, isCancelled: true))
+    }
+
     // MARK: Download window
 
     @Test func only_the_launch_audience_shows_the_download_window_and_only_to_download() {

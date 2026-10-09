@@ -159,7 +159,12 @@ import Foundation
 
     @Test func engine_refreshes_from_writes_made_elsewhere() {
         let d = defaults()
-        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: d), onApply: noopApply)
+        let vm = GeneralSettingsViewModel(
+            settings: AppSettings(defaults: d),
+            onApply: noopApply,
+            loginItemService: LoginItemService(),
+            hasOpenAIKey: { false }
+        )
         var elsewhere = AppSettings(defaults: d)
         elsewhere.transcriptionEngine = .apple
         vm.refreshFromUserDefaults()
@@ -184,55 +189,57 @@ import Foundation
         #expect(AppSettings(defaults: d).transcriptionEngine == EngineID.default)
     }
 
-    @Test func openai_engine_without_a_key_shows_the_key_warning() {
+    private func openAIEngineVM(hasOpenAIKey: @escaping () -> Bool) -> GeneralSettingsViewModel {
         var settings = AppSettings(defaults: defaults())
         settings.transcriptionEngine = .openAIRealtime
-        let vm = GeneralSettingsViewModel(
+        return GeneralSettingsViewModel(
             settings: settings,
             onApply: noopApply,
             loginItemService: LoginItemService(),
-            hasOpenAIKey: { false }
+            hasOpenAIKey: hasOpenAIKey
         )
+    }
+
+    @Test func openai_engine_without_a_key_shows_the_key_warning() {
+        let vm = openAIEngineVM(hasOpenAIKey: { false })
+        vm.refreshFromUserDefaults()
         #expect(vm.showsOpenAIKeyWarning)
     }
 
     @Test func openai_engine_with_a_key_hides_the_key_warning() {
-        var settings = AppSettings(defaults: defaults())
-        settings.transcriptionEngine = .openAIRealtime
-        let vm = GeneralSettingsViewModel(
-            settings: settings,
-            onApply: noopApply,
-            loginItemService: LoginItemService(),
-            hasOpenAIKey: { true }
-        )
+        let vm = openAIEngineVM(hasOpenAIKey: { true })
+        vm.refreshFromUserDefaults()
         #expect(!vm.showsOpenAIKeyWarning)
     }
 
-    @Test func on_device_engines_never_show_the_key_warning() {
+    @Test func key_is_not_read_until_refreshed_and_no_warning_shows_before() {
         var keyChecks = 0
-        let vm = GeneralSettingsViewModel(
-            settings: AppSettings(defaults: defaults()),
-            onApply: noopApply,
-            loginItemService: LoginItemService(),
-            hasOpenAIKey: { keyChecks += 1; return false }
-        )
-        vm.engine = .apple
-        #expect(!vm.showsOpenAIKeyWarning)
-        vm.engine = .whisperKit
+        let vm = openAIEngineVM(hasOpenAIKey: { keyChecks += 1; return false })
         #expect(!vm.showsOpenAIKeyWarning)
         #expect(keyChecks == 0)
     }
 
+    @Test func the_key_is_read_once_per_refresh_not_per_evaluation() {
+        var keyChecks = 0
+        let vm = openAIEngineVM(hasOpenAIKey: { keyChecks += 1; return false })
+        vm.openAIKeyDidChange()
+        for _ in 0..<5 { _ = vm.showsOpenAIKeyWarning }
+        #expect(keyChecks == 1)
+    }
+
+    @Test func on_device_engines_never_show_the_key_warning() {
+        let vm = openAIEngineVM(hasOpenAIKey: { false })
+        vm.openAIKeyDidChange()
+        vm.engine = .apple
+        #expect(!vm.showsOpenAIKeyWarning)
+        vm.engine = .whisperKit
+        #expect(!vm.showsOpenAIKeyWarning)
+    }
+
     @Test func key_warning_follows_the_stored_key() {
         var stored = false
-        var settings = AppSettings(defaults: defaults())
-        settings.transcriptionEngine = .openAIRealtime
-        let vm = GeneralSettingsViewModel(
-            settings: settings,
-            onApply: noopApply,
-            loginItemService: LoginItemService(),
-            hasOpenAIKey: { stored }
-        )
+        let vm = openAIEngineVM(hasOpenAIKey: { stored })
+        vm.openAIKeyDidChange()
         #expect(vm.showsOpenAIKeyWarning)
         stored = true
         vm.openAIKeyDidChange()

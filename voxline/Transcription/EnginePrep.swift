@@ -67,6 +67,15 @@ enum EnginePrep {
         }
     }
 
+    /// Whether a prepare task may still touch the status and the download
+    /// window: no newer task has started and it hasn't been cancelled. A
+    /// cancelled download can surface as an ordinary error (WhisperKit's Hub
+    /// download throws `URLError(.cancelled)`), so its handler checks this
+    /// before reporting.
+    static func isCurrentTask(token: UInt64, latestToken: UInt64, isCancelled: Bool) -> Bool {
+        !isCancelled && token == latestToken
+    }
+
     static func showsDownloadWindow(for plan: Plan, audience: Audience) -> Bool {
         audience == .launch && plan == .download
     }

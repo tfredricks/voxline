@@ -47,9 +47,9 @@ final class GeneralSettingsViewModel {
     private let loginItemService: LoginItemService
     private let vocabulary: CustomVocabularyStore
     private let hasOpenAIKey: () -> Bool
-    /// Bumped by `openAIKeyDidChange()` so views reading
-    /// `showsOpenAIKeyWarning` re-check the stored key.
-    private var openAIKeyRevision = 0
+    /// Last keychain answer from `hasOpenAIKey`; nil until first refreshed,
+    /// so init never touches the keychain.
+    private var openAIKeyStored: Bool?
     private var loaded = false
 
     /// Convenience init that constructs the default `LoginItemService` and
@@ -113,24 +113,23 @@ final class GeneralSettingsViewModel {
         return rows
     }
 
-    /// True when the OpenAI engine is selected but no OpenAI key is stored.
-    /// Reads the keychain only while that engine is selected.
+    /// True when the OpenAI engine is selected and the last keychain check
+    /// found no OpenAI key. False until the key has been checked.
     var showsOpenAIKeyWarning: Bool {
-        guard engine == .openAIRealtime else { return false }
-        _ = openAIKeyRevision
-        return !hasOpenAIKey()
+        engine == .openAIRealtime && openAIKeyStored == false
     }
 
-    /// Call after the stored OpenAI key may have changed.
+    /// Re-reads whether an OpenAI key is stored. Call after the stored key
+    /// may have changed; `refreshFromUserDefaults()` calls it too.
     func openAIKeyDidChange() {
-        openAIKeyRevision &+= 1
+        openAIKeyStored = hasOpenAIKey()
     }
 
     /// Production `hasOpenAIKey`: a non-blank OpenAI key is in the keychain.
     /// A keychain read error counts as no key.
     nonisolated static func storedOpenAIKeyExists() -> Bool {
-        let key = (try? DataProtectionKeychain().string(forKey: KeychainAccount.openai)) ?? nil
-        return !(key ?? "").isBlank
+        guard let key = try? DataProtectionKeychain().string(forKey: KeychainAccount.openai) else { return false }
+        return !key.isBlank
     }
 
     /// Soft warning for the current command-modifier choice, or nil when clean.
@@ -154,12 +153,12 @@ final class GeneralSettingsViewModel {
         }
     }
 
-    /// Re-reads UserDefaults-backed settings so the Settings UI reflects
-    /// writes made elsewhere in the app (e.g., the wizard's `advance()`
-    /// persisting `selectedProvider`). The view model otherwise caches the
-    /// value from init and would show stale state on subsequent window
-    /// opens. Called via `.task` on the Settings window the same way
-    /// `refreshLoginItemStatus()` is.
+    /// Re-reads UserDefaults-backed settings, and whether an OpenAI key is
+    /// stored, so the Settings UI reflects writes made elsewhere in the app
+    /// (e.g., the wizard's `advance()` persisting `selectedProvider` and the
+    /// keys). The view model otherwise caches the value from init and would
+    /// show stale state on subsequent window opens. Called via `.task` on the
+    /// Settings window the same way `refreshLoginItemStatus()` is.
     func refreshFromUserDefaults() {
         withoutCommitting {
             chord = settings.hotkeyChord
@@ -170,6 +169,7 @@ final class GeneralSettingsViewModel {
             playHotkeySounds = settings.playHotkeySounds
             provider = settings.llmProvider
         }
+        openAIKeyDidChange()
     }
 
     /// Restore Spec defaults: hotkey to Left Shift + Left Control, system-default

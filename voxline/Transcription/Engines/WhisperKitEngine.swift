@@ -72,6 +72,7 @@ final class WhisperKitEngine: TranscriptionEngine {
 
     func prepare(progress: @escaping @Sendable (Double) -> Void) async throws {
         try await service.prepareModel(progressHandler: progress)
+        try Task.checkCancellation()
         progress(1)
         try await service.prewarm()
     }

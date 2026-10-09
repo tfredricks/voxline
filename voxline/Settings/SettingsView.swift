@@ -166,7 +166,6 @@ struct SettingsView: View {
         .task {
             generalVM.refreshFromUserDefaults()
             generalVM.refreshLoginItemStatus()
-            generalVM.openAIKeyDidChange()
         }
         .task(id: status.readinessKey) {
             await status.refreshEngineReadiness()

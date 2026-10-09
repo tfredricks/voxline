@@ -448,7 +448,9 @@ final class AppCoordinator {
                 let progressReporter = reporter
                 try await engine.prepare { progress in
                     Task { @MainActor in
-                        guard let progressReporter, case .downloadingModel = progressReporter.status else { return }
+                        guard self?.isCurrentPrepTask(myToken) == true,
+                              let progressReporter,
+                              case .downloadingModel = progressReporter.status else { return }
                         progressReporter.status = progress >= 1 ? .preparingModel : .downloadingModel(progress: progress)
                     }
                 }
@@ -464,6 +466,9 @@ final class AppCoordinator {
                 // user-facing error.
                 return
             } catch {
+                // A cancelled download can surface as an ordinary error
+                // (`URLError(.cancelled)`); a superseded task must not report it.
+                guard self?.isCurrentPrepTask(myToken, cancelled: Task.isCancelled) == true else { return }
                 AppLog.pipeline.error("engine \(engine.id.rawValue, privacy: .public) prep failed: \(error.localizedDescription)")
                 if let reporter {
                     reporter.status = .error("Model setup failed: \(error.localizedDescription). Try Retry or relaunch Voxline.")
@@ -474,6 +479,10 @@ final class AppCoordinator {
             }
             self?.finishModelPrepTask(token: myToken)
         }
+    }
+
+    private func isCurrentPrepTask(_ token: UInt64, cancelled: Bool = false) -> Bool {
+        EnginePrep.isCurrentTask(token: token, latestToken: modelPrepTaskToken, isCancelled: cancelled)
     }
 
     /// Only clears the registration if no newer task has replaced this one.
