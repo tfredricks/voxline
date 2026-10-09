@@ -54,6 +54,10 @@ extension CapturePipeline {
     /// put nothing on the clipboard, as a deletion does.
     static let nothingDeletedToast = "Couldn't delete in place — nothing was changed"
 
+    /// `nothingDeletedToast` for an AX write that timed out: it may still
+    /// land once the app recovers.
+    static let unconfirmedDeletionToast = "Couldn't confirm the deletion — check the field"
+
     // MARK: - Presets
 
     /// Runs `preset` against the selection, with no recording and no sounds.
@@ -328,7 +332,7 @@ extension CapturePipeline {
             resetIdle()
             showToast(Self.toast(for: reason))
         case .notInserted(let reason):
-            copyInstead(text, edit, toast: Self.toast(for: reason))
+            copyInstead(text, edit, toast: Self.toast(for: reason), outcomeUnknown: reason == .outcomeUnknown)
         case .failed(.accessibilityNotGranted):
             setError(TextInsertionError.accessibilityNotGranted.errorDescription!, permissions: true)
         case .failed(let error):
@@ -339,14 +343,15 @@ extension CapturePipeline {
 
     /// History keeps the inserted text (a rewrite's hunk, never field text);
     /// the clipboard gets what ⌘V should apply. When that is nothing, as for
-    /// a deletion, neither is written and the toast says nothing changed.
-    private func copyInstead(_ text: String, _ edit: PerformedEdit, toast: String) {
+    /// a deletion, neither is written and the toast says nothing changed, or,
+    /// when `outcomeUnknown`, that the deletion couldn't be confirmed.
+    private func copyInstead(_ text: String, _ edit: PerformedEdit, toast: String, outcomeUnknown: Bool = false) {
         let clipboard = edit.clipboardText(for: text)
         guard !clipboard.isEmpty else {
-            AppLog.pipeline.info("command: the deletion didn't land; clipboard left alone")
+            AppLog.pipeline.info("command: the deletion \(outcomeUnknown ? "wasn't confirmed" : "didn't land", privacy: .public); clipboard left alone")
             recordCommandMetrics(edit, insertMs: 0, strategy: .none, text: "")
             resetIdle()
-            showToast(Self.nothingDeletedToast)
+            showToast(outcomeUnknown ? Self.unconfirmedDeletionToast : Self.nothingDeletedToast)
             return
         }
         transcriptFallback(clipboard)

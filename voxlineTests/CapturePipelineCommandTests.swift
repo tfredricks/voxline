@@ -646,7 +646,6 @@ import Testing
         InsertOutcome.notInserted(.cannotTarget),
         .notInserted(.fieldChanged),
         .notInserted(.focusMoved),
-        .notInserted(.outcomeUnknown),
         .failed(.pasteVerificationFailed),
         .failed(.allStrategiesFailed(["Accessibility write rejected"])),
     ])
@@ -660,6 +659,22 @@ import Testing
         #expect(h.copied.read().isEmpty)
         #expect(h.history.items.isEmpty)
         #expect(h.state.toastMessage == Self.nothingDeleted)
+        #expect(h.state.status == .idle)
+        let row = try #require(h.pipe.metrics.items.first)
+        #expect(row.insertStrategy == DictationMetrics.InsertStrategyTag.none)
+        #expect(row.editAction == "replace_selection")
+    }
+
+    @Test func a_deletion_whose_outcome_is_unknown_says_to_check_the_field() async throws {
+        let h = makeHarness(reader: reader(Self.notesContext(selecting: Self.cat)))
+        answer(h, .replaceSelection, "")
+        h.inserter.outcomes = [.notInserted(.outcomeUnknown)]
+        await runCommand(h)
+
+        #expect(h.inserter.calls.first?.text == "")
+        #expect(h.copied.read().isEmpty)
+        #expect(h.history.items.isEmpty)
+        #expect(h.state.toastMessage == "Couldn't confirm the deletion — check the field")
         #expect(h.state.status == .idle)
         let row = try #require(h.pipe.metrics.items.first)
         #expect(row.insertStrategy == DictationMetrics.InsertStrategyTag.none)
@@ -690,10 +705,11 @@ import Testing
         #expect(h.state.toastMessage == Self.nothingDeleted)
     }
 
-    @Test func a_rewrite_that_deletes_and_cannot_land_copies_the_whole_rewritten_text() async throws {
+    @Test(arguments: [NotInsertedReason.cannotTarget, .outcomeUnknown])
+    func a_rewrite_that_deletes_and_cannot_land_copies_the_whole_rewritten_text(reason: NotInsertedReason) async throws {
         let h = makeHarness(reader: reader(Self.notesContext()))
         answer(h, .rewrite, "the sat")
-        h.inserter.outcomes = [.notInserted(.cannotTarget)]
+        h.inserter.outcomes = [.notInserted(reason)]
         await runCommand(h)
 
         #expect(h.inserter.calls.first?.text == "")
