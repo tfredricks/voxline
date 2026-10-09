@@ -73,9 +73,12 @@ final class HotkeyMonitor {
     /// Setting it resyncs the machine against the keys held now, so a chord
     /// change never starts a recording from keys that are already down. A
     /// recording whose chord changed or was removed finalizes. While
-    /// suspended there is no resync; `resume()` does it.
+    /// suspended there is no resync; `resume()` does it. Setting the chords
+    /// it already has does nothing, so a Settings commit made with a chord
+    /// key held never blocks the machine.
     var chords: ChordSet = .default {
         didSet {
+            guard oldValue != chords else { return }
             machine.chords = chords
             if case .recording(let kind) = machine.state,
                oldValue.chord(for: kind)?.keys != chords.chord(for: kind)?.keys {

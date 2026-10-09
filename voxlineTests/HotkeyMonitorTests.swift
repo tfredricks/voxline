@@ -524,6 +524,17 @@ import CoreGraphics
         #expect(monitor.state == .idle)
     }
 
+    @Test func reassigning_the_same_chords_while_armed_stays_armed() {
+        let (monitor, timers, log) = makeMonitor()
+        press(monitor, [.leftShift])
+        timers.fire(HotkeyMonitor.prewarmDelay)
+        monitor.chords = .default
+        #expect(monitor.state == .armed)
+        #expect(log.events == ["prewarm"])
+        press(monitor, d, keyCode: 59)
+        #expect(log.events == ["prewarm", "start:dictation"])
+    }
+
     @Test func turning_command_mode_off_while_recording_a_command_finalizes_it() {
         let (monitor, _, log) = makeMonitor()
         press(monitor, c, keyCode: 58)
