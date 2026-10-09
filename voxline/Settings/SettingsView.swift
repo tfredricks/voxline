@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var generalVM: GeneralSettingsViewModel
     @State private var apiKeysVM: APIKeysSettingsViewModel
     @State private var commandVM: CommandSettingsViewModel
+    @State private var meetingsVM: MeetingSettingsViewModel
     @State private var levelMonitor = MicLevelMonitor()
     @State private var status: SettingsStatusViewModel
     @State private var vocabularyVM: CustomVocabularyListViewModel
@@ -20,11 +21,13 @@ struct SettingsView: View {
         generalVM: GeneralSettingsViewModel,
         apiKeysVM: APIKeysSettingsViewModel,
         commandVM: CommandSettingsViewModel,
+        meetingsVM: MeetingSettingsViewModel,
         engineReadiness: @escaping @MainActor (EngineID) async -> EngineReadiness?
     ) {
         _generalVM = State(wrappedValue: generalVM)
         _apiKeysVM = State(wrappedValue: apiKeysVM)
         _commandVM = State(wrappedValue: commandVM)
+        _meetingsVM = State(wrappedValue: meetingsVM)
         _status = State(wrappedValue: SettingsStatusViewModel(
             general: generalVM,
             keys: apiKeysVM,
@@ -156,6 +159,8 @@ struct SettingsView: View {
 
                     CommandSection(general: generalVM, command: commandVM)
                         .id(SettingsAnchor.command)
+
+                    MeetingsSection(model: meetingsVM)
 
                     CustomVocabularyListView(viewModel: vocabularyVM)
                         .id(SettingsAnchor.customVocabulary)

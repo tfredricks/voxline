@@ -174,3 +174,10 @@ final class MeetingController {
         }
     }
 }
+
+extension MeetingController.Phase {
+    var isRecording: Bool {
+        if case .recording = self { return true }
+        return false
+    }
+}

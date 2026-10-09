@@ -43,6 +43,9 @@ struct voxlineApp: App {
                 },
                 retryLastDictation: {
                     delegate.coordinator.retryLastDictation()
+                },
+                startMeetingRecording: {
+                    delegate.coordinator.startMeetingRecording()
                 }
             )
         } label: {
@@ -63,7 +66,13 @@ struct voxlineApp: App {
                     chords: { [weak generalVM] in generalVM?.chords ?? AppSettings().chords },
                     onChange: { [weak coordinator = delegate.coordinator] in
                         coordinator?.presetsDidChange()
-                    }
+                    },
+                    reserved: { AppSettings().meetingShortcut.map { [$0] } ?? [] }
+                ),
+                meetingsVM: MeetingSettingsViewModel(
+                    presets: { PresetStore().load() },
+                    chords: { [weak generalVM] in generalVM?.chords ?? AppSettings().chords },
+                    onChange: { [weak coordinator = delegate.coordinator] in coordinator?.meetingSettingsDidChange() }
                 ),
                 engineReadiness: { [weak coordinator = delegate.coordinator] id in
                     await coordinator?.readiness(of: id)
@@ -80,7 +89,11 @@ private struct MenuBarLabel: View {
     @Bindable var updateService: UpdateService
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Image(systemName: MenuBarIcon.symbolName(for: state.status, paused: !state.hotkeyEnabled))
+            Image(systemName: MenuBarIcon.symbolName(
+                for: state.status,
+                paused: !state.hotkeyEnabled,
+                meetingRecording: state.meetings?.phase.isRecording ?? false
+            ))
             if updateService.hasPendingUpdate {
                 Circle()
                     .fill(.blue)
@@ -130,6 +143,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Also seed the initial value.
         dictationActivity.observe(status: appState.status)
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard appState.meetings?.needsQuitConfirmation == true else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = "Quit while a meeting is recording or being processed?"
+        alert.informativeText = "The audio is saved. Voxline will offer to finish the notes the next time it opens."
+        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
     }
 
     func showAboutWindow() {

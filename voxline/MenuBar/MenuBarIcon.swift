@@ -2,7 +2,7 @@ import Foundation
 
 /// Maps AppStatus → SF Symbol name for the menu bar icon.
 enum MenuBarIcon {
-    static func symbolName(for status: AppStatus, paused: Bool = false) -> String {
+    static func symbolName(for status: AppStatus, paused: Bool = false, meetingRecording: Bool = false) -> String {
         // Active status wins over paused — recording/error/downloading are
         // more urgent signals and pause is a future-only effect anyway.
         switch status {
@@ -15,7 +15,9 @@ enum MenuBarIcon {
         // badge rather than sharing the mic.slash symbol.
         case .permissionsError: return "exclamationmark.triangle.fill"
         case .error:            return "mic.slash"
-        case .idle:             return paused ? "pause.circle" : "mic"
+        case .idle:
+            if meetingRecording { return "record.circle" }
+            return paused ? "pause.circle" : "mic"
         }
     }
 }

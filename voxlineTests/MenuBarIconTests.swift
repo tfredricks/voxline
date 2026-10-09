@@ -19,4 +19,10 @@ import Testing
         #expect(MenuBarIcon.symbolName(for: .idle) == "mic")
         #expect(MenuBarIcon.symbolName(for: .idle, paused: true) == "pause.circle")
     }
+
+    @Test func idle_with_meeting_recording_shows_record_symbol() {
+        #expect(MenuBarIcon.symbolName(for: .idle, meetingRecording: true) == "record.circle")
+        #expect(MenuBarIcon.symbolName(for: .recording, meetingRecording: true) == "mic.fill")
+        #expect(MenuBarIcon.symbolName(for: .idle, paused: true, meetingRecording: true) == "record.circle")
+    }
 }

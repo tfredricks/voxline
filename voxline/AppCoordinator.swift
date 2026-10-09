@@ -17,6 +17,9 @@ final class AppCoordinator {
 
     private var pillWindow: RecordingPillWindow?
     private var keyInterceptor: KeyInterceptor?
+    private let meetingTimer = MeetingTimerPanel()
+    private var meetingNotifier: UserNotificationMeetingNotifier?
+    private var retentionTimer: Timer?
     private let presetStore = PresetStore()
     private var presetMap: [KeyCombo: UUID] = [:]
     private var frontmostObserver: NSObjectProtocol?
@@ -65,6 +68,29 @@ final class AppCoordinator {
     /// "Fix permissions…" item and from the startup / revocation guards.
     func showPermissionsWindow() {
         permissionsWindow.show()
+    }
+
+    /// Starts a meeting recording, or raises the permissions window instead
+    /// when the microphone isn't allowed.
+    func startMeetingRecording() {
+        guard let meetings = appState?.meetings else { return }
+        guard PermissionsService().microphoneStatus == .granted else {
+            AppLog.meetings.notice("meeting start blocked: microphone not allowed")
+            showPermissionsWindow()
+            return
+        }
+        meetings.start()
+    }
+
+    /// The meeting shortcut: starts like `startMeetingRecording()` when
+    /// idle, stops while recording, and does nothing while processing.
+    func toggleMeetingRecording() {
+        guard let meetings = appState?.meetings else { return }
+        if meetings.phase == .idle {
+            startMeetingRecording()
+        } else {
+            meetings.toggle()
+        }
     }
 
     /// Cleans up and inserts the last dictation's transcript again, into the
@@ -207,6 +233,7 @@ final class AppCoordinator {
         pill.show(state: state)
         observeToastChanges(state: state)
         observePillContentChanges(state: state)
+        buildMeetings(state: state, settings: settings)
     }
 
     private func installHotkey(state: AppState, settings: AppSettings) {
@@ -252,6 +279,10 @@ final class AppCoordinator {
                 self.hotkeyMonitor?.noteSwallowedKeyDown()
                 guard let preset = self.presetStore.load().first(where: { $0.id == id }) else { return }
                 Task { await self.pipeline?.runPreset(preset) }
+            },
+            onMeeting: { [weak self] in
+                self?.hotkeyMonitor?.noteSwallowedKeyDown()
+                self?.toggleMeetingRecording()
             }
         )
         presetMap = KeyInterceptor.presetMap(presetStore.load())
@@ -400,15 +431,18 @@ final class AppCoordinator {
         guard let interceptor = keyInterceptor, let state = appState else { return }
         let frontmost = activated ?? NSWorkspace.shared.frontmostApplication
         let voxlineIsFrontmost = frontmost?.bundleIdentifier == Bundle.main.bundleIdentifier
+        let presetsArmed = KeyInterceptor.presetsArmed(
+            installed: interceptor.isInstalled,
+            capturingShortcut: state.shortcutCaptureDepth > 0,
+            voxlineIsFrontmost: voxlineIsFrontmost
+        )
         interceptor.config = KeyInterceptor.Config(
             escapeArmed: state.isCancellable,
-            presetsArmed: KeyInterceptor.presetsArmed(
-                installed: interceptor.isInstalled,
-                capturingShortcut: state.shortcutCaptureDepth > 0,
-                voxlineIsFrontmost: voxlineIsFrontmost
-            ),
+            presetsArmed: presetsArmed,
             presets: presetMap,
-            chordFamilies: hotkeyMonitor?.chords.families ?? []
+            chordFamilies: hotkeyMonitor?.chords.families ?? [],
+            meetingArmed: presetsArmed,
+            meetingToggle: AppSettings().meetingShortcut
         )
     }
 
@@ -416,6 +450,87 @@ final class AppCoordinator {
     func presetsDidChange() {
         presetMap = KeyInterceptor.presetMap(presetStore.load())
         refreshInterceptorConfig()
+    }
+
+    /// Settings → Meetings changed the shortcut, timer, or other settings.
+    func meetingSettingsDidChange() {
+        refreshInterceptorConfig()
+        if let state = appState { updateMeetingTimer(state: state) }
+    }
+
+    private func buildMeetings(state: AppState, settings: AppSettings) {
+        let store: MeetingStore
+        do {
+            store = try MeetingStore.standard()
+        } catch {
+            AppLog.meetings.error("meetings unavailable: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        let notifier = UserNotificationMeetingNotifier()
+        notifier.requestAuthorization()
+        meetingNotifier = notifier
+        let vocabulary = CustomVocabularyStore()
+        let pipeline = MeetingPipeline(
+            store: store,
+            transcriber: WhisperMeetingTranscriber(model: { .smallEn }),
+            diarizer: SpeakerKitDiarizer(),
+            notes: LLMService.meetingNotesService(settings: settings),
+            transcoder: AACTranscoder(),
+            settings: {
+                let current = AppSettings()
+                return MeetingPipelineSettings(
+                    notesFolder: current.meetingNotesFolder,
+                    notesModel: current.resolvedMeetingNotesModel,
+                    vocabulary: vocabulary.load(),
+                    retention: current.meetingAudioRetention,
+                    modelsNeedDownload: !TranscriptionService.isModelCached(.smallEn)
+                )
+            }
+        )
+        let controller = MeetingController(
+            store: store,
+            settings: settings,
+            makeRecorder: { directory in
+                let current = AppSettings()
+                return MeetingRecorder(
+                    mic: MicMeetingSource(preferredInputDeviceUID: current.audioInputDeviceUID),
+                    system: SystemAudioTap(),
+                    directory: directory,
+                    cap: current.meetingCapSeconds.map { .seconds($0) } ?? MeetingRecorder.defaultCap
+                )
+            },
+            pipeline: pipeline,
+            notifier: notifier,
+            prompts: AlertMeetingPrompts()
+        )
+        state.meetings = controller
+        controller.applyRetention()
+        retentionTimer = Timer.scheduledTimer(withTimeInterval: 86_400, repeats: true) { [weak controller] _ in
+            MainActor.assumeIsolated { controller?.applyRetention() }
+        }
+        observeMeetingPhase(state: state)
+        Task { await controller.recoverUnfinished() }
+    }
+
+    private func observeMeetingPhase(state: AppState) {
+        withObservationTracking {
+            _ = state.meetings?.phase
+        } onChange: { [weak self, weak state] in
+            Task { @MainActor in
+                guard let self, let state else { return }
+                self.updateMeetingTimer(state: state)
+                self.observeMeetingPhase(state: state)
+            }
+        }
+        updateMeetingTimer(state: state)
+    }
+
+    private func updateMeetingTimer(state: AppState) {
+        if case .recording(let startedAt) = state.meetings?.phase, AppSettings().showMeetingTimer {
+            meetingTimer.show(startedAt: startedAt)
+        } else {
+            meetingTimer.hide()
+        }
     }
 
     private func observeFrontmostApp() {

@@ -10,6 +10,7 @@ struct MenuBarContent: View {
     var openHistoryWindow: () -> Void = {}
     var openPermissionsWindow: () -> Void = {}
     var retryLastDictation: () -> Void = {}
+    var startMeetingRecording: () -> Void = {}
 
     var body: some View {
         if let message = state.status.errorMessage {
@@ -46,6 +47,36 @@ struct MenuBarContent: View {
         Button("Show history…") { openHistoryWindow() }
 
         Divider()
+
+        if let meetings = state.meetings {
+            switch meetings.phase {
+            case .idle:
+                Button("Start Meeting Recording") { startMeetingRecording() }
+            case .recording(let startedAt):
+                Button("Stop Meeting Recording") { meetings.stop() }
+                Text("Recording since \(startedAt.formatted(date: .omitted, time: .shortened))")
+                    .foregroundStyle(.secondary)
+            case .processing(let stage):
+                Text(stage?.label ?? "Processing meeting…")
+                    .foregroundStyle(.secondary)
+            }
+            if meetings.lastFailedMeeting != nil {
+                Button("Retry Processing") { meetings.retryFailed() }
+                    .disabled(meetings.phase != .idle)
+            }
+            let recent = meetings.regenerableMeetings
+            if !recent.isEmpty {
+                Menu("Regenerate Notes") {
+                    ForEach(recent, id: \.id) { meta in
+                        Button("\(meta.startedAt.formatted(date: .abbreviated, time: .shortened)) — \(meta.title ?? MeetingMarkdown.untitled)") {
+                            meetings.regenerate(meta.id)
+                        }
+                    }
+                }
+                .disabled(meetings.phase != .idle)
+            }
+            Divider()
+        }
 
         Button("Settings…") {
             NSApp.activate(ignoringOtherApps: true)

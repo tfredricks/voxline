@@ -29,7 +29,9 @@
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Voxline records audio while you hold the dictation hotkey and discards it after transcription. Audio stays on this Mac unless you choose the OpenAI cloud engine.</string>
+	<string>Voxline records audio while you hold the dictation hotkey and during meeting recordings you start. Audio stays on this Mac unless you choose the OpenAI cloud engine.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Voxline records your Mac's sound output during meeting recordings you start, so the other people on a call are in the transcript. Audio stays on this Mac.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Voxline transcribes your speech on this Mac when Apple Speech is the selected engine.</string>
 	<key>SUFeedURL</key>

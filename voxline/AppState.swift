@@ -124,6 +124,10 @@ final class AppState {
     /// True while Esc may cancel: recording, and thinking until insert begins.
     var isCancellable: Bool = false
 
+    /// The meetings feature, once the app has started. Nil before launch
+    /// finishes and in tests.
+    var meetings: MeetingController?
+
     /// Number of Settings recorders capturing a shortcut right now. Above
     /// zero, hotkey input is suspended so recording a chord can't start a
     /// dictation (issue 10).
