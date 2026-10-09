@@ -8,11 +8,16 @@ final class InMemoryKeychain: KeychainStorage, @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [String: String] = [:]
 
+    /// When set, every read throws it. Simulates a keychain that is present
+    /// but unreadable (broken entitlement, locked store).
+    var readError: Error?
+
     init(seed: [String: String] = [:]) {
         self.storage = seed
     }
 
     func string(forKey account: String) throws -> String? {
+        if let readError { throw readError }
         lock.lock(); defer { lock.unlock() }
         return storage[account]
     }

@@ -185,4 +185,19 @@ import Foundation
         vm.advance()
         #expect(AppSettings(defaults: d).llmProvider == .anthropic)
     }
+
+    @Test func advance_with_unreadable_keychain_keeps_existing_keys() throws {
+        let kc = InMemoryKeychain()
+        try kc.set("sk-ant-real", forKey: KeychainAccount.anthropic)
+        try kc.set("sk-oa-real", forKey: KeychainAccount.openai)
+        kc.readError = KeychainError.dataProtectionKeychainUnavailable
+        let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: kc)
+
+        vm.advance()
+        vm.advance()
+
+        kc.readError = nil
+        #expect(try kc.string(forKey: KeychainAccount.anthropic) == "sk-ant-real")
+        #expect(try kc.string(forKey: KeychainAccount.openai) == "sk-oa-real")
+    }
 }

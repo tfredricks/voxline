@@ -24,6 +24,8 @@ final class APIKeysSettingsViewModel {
     private let clientFactory: LLMClientFactory
     private var anthropicPersisted: String = ""
     private var openaiPersisted: String = ""
+    private var anthropicReadFailed = false
+    private var openaiReadFailed = false
 
     init(
         keychain: any KeychainStorage = DataProtectionKeychain(),
@@ -36,10 +38,26 @@ final class APIKeysSettingsViewModel {
     ) {
         self.keychain = keychain
         self.clientFactory = clientFactory
-        self.anthropicKey = (try? keychain.string(forKey: KeychainAccount.anthropic)) ?? ""
-        self.openaiKey    = (try? keychain.string(forKey: KeychainAccount.openai)) ?? ""
-        self.anthropicPersisted = self.anthropicKey
-        self.openaiPersisted    = self.openaiKey
+        let anthropic = Self.load(KeychainAccount.anthropic, from: keychain)
+        let openai = Self.load(KeychainAccount.openai, from: keychain)
+        self.anthropicKey = anthropic.value
+        self.openaiKey = openai.value
+        self.anthropicPersisted = anthropic.value
+        self.openaiPersisted = openai.value
+        self.anthropicReadFailed = anthropic.failed
+        self.openaiReadFailed = openai.failed
+        if anthropic.failed || openai.failed {
+            self.lastError = "Couldn't read the saved API keys from the keychain. They were left untouched — relaunch and try again."
+        }
+    }
+
+    private static func load(_ account: String, from keychain: any KeychainStorage) -> (value: String, failed: Bool) {
+        do {
+            return (try keychain.string(forKey: account) ?? "", false)
+        } catch {
+            AppLog.llm.error("keychain read failed for \(account, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return ("", true)
+        }
     }
 
     /// Persist the Anthropic key. Whitespace is trimmed; an empty/whitespace
@@ -111,16 +129,33 @@ final class APIKeysSettingsViewModel {
         lastError = nil
     }
 
+    /// An empty value deletes the entry — unless the entry could not be read
+    /// at load time, in which case deleting would destroy a key the user
+    /// never saw. A successful non-empty save clears that guard.
     private func persist(value: String, account: String) {
         let v = value.trimmed
+        if v.isEmpty && readFailed(for: account) { return }
         do {
             if v.isEmpty {
                 try keychain.delete(forKey: account)
             } else {
                 try keychain.set(v, forKey: account)
             }
+            setReadFailed(false, for: account)
         } catch {
             lastError = "Save failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func readFailed(for account: String) -> Bool {
+        account == KeychainAccount.anthropic ? anthropicReadFailed : openaiReadFailed
+    }
+
+    private func setReadFailed(_ failed: Bool, for account: String) {
+        if account == KeychainAccount.anthropic {
+            anthropicReadFailed = failed
+        } else {
+            openaiReadFailed = failed
         }
     }
 

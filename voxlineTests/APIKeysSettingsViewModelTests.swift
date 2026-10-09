@@ -140,6 +140,41 @@ import Foundation
         vm.commitAnthropic()
         #expect(vm.isPersisted(.anthropic))
     }
+
+    @Test func read_failure_leaves_field_empty_and_reports() {
+        let kc = keychain()
+        kc.readError = KeychainError.dataProtectionKeychainUnavailable
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        #expect(vm.anthropicKey == "")
+        #expect(vm.openaiKey == "")
+        #expect(vm.lastError?.lowercased().contains("keychain") == true)
+    }
+
+    @Test func empty_commit_after_read_failure_keeps_stored_key() throws {
+        let kc = keychain()
+        try kc.set("sk-real", forKey: KeychainAccount.anthropic)
+        kc.readError = KeychainError.dataProtectionKeychainUnavailable
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+
+        vm.commitAnthropic()
+
+        kc.readError = nil
+        #expect(try kc.string(forKey: KeychainAccount.anthropic) == "sk-real")
+    }
+
+    @Test func typed_key_after_read_failure_saves_and_reenables_delete() throws {
+        let kc = keychain()
+        kc.readError = KeychainError.dataProtectionKeychainUnavailable
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        vm.anthropicKey = "sk-new"
+        vm.commitAnthropic()
+        kc.readError = nil
+        #expect(try kc.string(forKey: KeychainAccount.anthropic) == "sk-new")
+
+        vm.anthropicKey = ""
+        vm.commitAnthropic()
+        #expect(try kc.string(forKey: KeychainAccount.anthropic) == nil)
+    }
 }
 
 private struct StubClient: LLMClient {
