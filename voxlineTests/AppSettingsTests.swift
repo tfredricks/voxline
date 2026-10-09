@@ -160,7 +160,6 @@ import Foundation
 
     @Test func command_chord_keys_match_the_spec() {
         #expect(AppSettings.Key.commandChord == "voxline.hotkey.commandChord")
-        #expect(AppSettings.Key.legacyCommandModifier == "voxline.hotkey.commandModifier")
         #expect(AppSettings.Key.commandModel == "voxline.llm.commandModel")
     }
 
@@ -184,64 +183,6 @@ import Foundation
         #expect(s.chords.families == [.shift, .control, .command])
         s.commandChord = nil
         #expect(s.chords.families == [.shift, .control])
-    }
-
-    @Test(arguments: [
-        ("rightCommand", HotkeyChord?.some(HotkeyChord(modifierA: .leftShift, modifierB: .rightCommand))),
-        ("off", HotkeyChord?.some(.defaultCommand)),
-        ("leftShift", HotkeyChord?.some(.defaultCommand)),
-    ])
-    func migration_from_a_stored_command_modifier(stored: String, expected: HotkeyChord?) {
-        let d = makeDefaults()
-        d.set(stored, forKey: AppSettings.Key.legacyCommandModifier)
-        var s = AppSettings(defaults: d)
-        s.migrateCommandChordIfNeeded()
-        #expect(AppSettings(defaults: d).commandChord == expected)
-        #expect(d.object(forKey: AppSettings.Key.commandChord) != nil)
-        #expect(d.object(forKey: AppSettings.Key.legacyCommandModifier) == nil)
-    }
-
-    @Test func migration_with_no_stored_command_modifier_writes_the_default_command_chord() {
-        let d = makeDefaults()
-        var s = AppSettings(defaults: d)
-        s.migrateCommandChordIfNeeded()
-        #expect(AppSettings(defaults: d).commandChord == .defaultCommand)
-        #expect(d.data(forKey: AppSettings.Key.commandChord) != nil)
-    }
-
-    @Test func migration_writes_off_when_the_default_command_chord_is_the_dictation_chord() {
-        let d = makeDefaults()
-        var s = AppSettings(defaults: d)
-        s.hotkeyChord = HotkeyChord(modifierA: .leftShift, modifierB: .leftOption)
-        d.set("off", forKey: AppSettings.Key.legacyCommandModifier)
-        s.migrateCommandChordIfNeeded()
-        #expect(d.string(forKey: AppSettings.Key.commandChord) == "off")
-        #expect(AppSettings(defaults: d).commandChord == nil)
-    }
-
-    @Test func migrating_twice_changes_nothing_the_second_time() throws {
-        let d = makeDefaults()
-        d.set("rightCommand", forKey: AppSettings.Key.legacyCommandModifier)
-        var s = AppSettings(defaults: d)
-        s.migrateCommandChordIfNeeded()
-        let first = try #require(d.data(forKey: AppSettings.Key.commandChord))
-
-        d.set("leftCommand", forKey: AppSettings.Key.legacyCommandModifier)
-        s.migrateCommandChordIfNeeded()
-
-        #expect(d.data(forKey: AppSettings.Key.commandChord) == first)
-        #expect(d.string(forKey: AppSettings.Key.legacyCommandModifier) == "leftCommand")
-        #expect(AppSettings(defaults: d).commandChord == HotkeyChord(modifierA: .leftShift, modifierB: .rightCommand))
-    }
-
-    @Test func migration_leaves_an_existing_command_chord_and_the_stale_legacy_key_alone() {
-        let d = makeDefaults()
-        var s = AppSettings(defaults: d)
-        s.commandChord = nil
-        d.set("rightCommand", forKey: AppSettings.Key.legacyCommandModifier)
-        s.migrateCommandChordIfNeeded()
-        #expect(AppSettings(defaults: d).commandChord == nil)
-        #expect(d.string(forKey: AppSettings.Key.legacyCommandModifier) == "rightCommand")
     }
 
     @Test func command_model_is_nil_when_absent() {

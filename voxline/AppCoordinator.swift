@@ -103,24 +103,13 @@ final class AppCoordinator {
         Task { await pipeline.retryLastDictation() }
     }
 
-    func startIfNeeded(state: AppState, historyStore: DictationHistoryStore, migration: ContainerMigration.Report? = nil, launchedAtLogin: Bool = false) {
+    func startIfNeeded(state: AppState, historyStore: DictationHistoryStore, launchedAtLogin: Bool = false) {
         AXMessagingTimeout.install()
         guard !didStart else { return }
         didStart = true
         self.appState = state
 
-        if let migration {
-            AppLog.pipeline.info("container migration: prefs=\(migration.preferencesCopied) modes=\(migration.movedModes) models=\(migration.movedModelCache) ane=\(migration.movedANECache)")
-            for skipped in migration.skipped {
-                AppLog.pipeline.notice("container migration skipped: \(skipped, privacy: .public)")
-            }
-            for failure in migration.failures {
-                AppLog.pipeline.error("container migration failed: \(failure, privacy: .public)")
-            }
-        }
-
-        var settings = AppSettings()
-        settings.migrateCommandChordIfNeeded()
+        let settings = AppSettings()
         logLaunchTrace(settings: settings)
         let presentation = LaunchPresentation.decide(
             firstRunComplete: settings.hasCompletedFirstRun,
@@ -136,10 +125,6 @@ final class AppCoordinator {
             presentMainWindow(.home)
         case .none:
             startApp(state: state, settings: settings, historyStore: historyStore)
-        }
-
-        if let migration, !migration.failures.isEmpty {
-            state.flashToast("Couldn't move old data — see log", for: .seconds(4))
         }
     }
 

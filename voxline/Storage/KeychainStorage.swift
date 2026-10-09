@@ -18,7 +18,7 @@ enum KeychainAccount {
     static let anthropic = "anthropic"
     static let openai = "openai"
 
-    /// All known accounts. Used by the migrator and the --reset-keys handler
+    /// All known accounts. Used by the --reset-keys handler
     /// so a new provider added in the future only needs to be listed once.
     static let all: [String] = [anthropic, openai]
 }

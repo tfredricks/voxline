@@ -149,11 +149,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppLog.pipeline.notice("launch sequence skipped: test harness detected")
             return
         }
-        let migration = ContainerMigration.standard()?.runIfNeeded()
         activationPolicy.start()
         coordinator.learning = learning
         coordinator.presentMainWindow = { [weak self] page in self?.mainWindow.show(page) }
-        coordinator.startIfNeeded(state: appState, historyStore: historyStore, migration: migration, launchedAtLogin: launchedAtLogin)
+        coordinator.startIfNeeded(state: appState, historyStore: historyStore, launchedAtLogin: launchedAtLogin)
         _ = updateService // force-init so Sparkle's scheduler starts
         observeStatusForUpdates()
     }
