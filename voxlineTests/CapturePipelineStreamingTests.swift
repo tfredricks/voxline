@@ -152,15 +152,6 @@ import Foundation
         )
     }
 
-    private func eventually(timeout: Duration = .seconds(5), _ condition: () -> Bool) async -> Bool {
-        let deadline = ContinuousClock.now + timeout
-        while !condition() {
-            if ContinuousClock.now >= deadline { return false }
-            try? await Task.sleep(for: .milliseconds(2))
-        }
-        return true
-    }
-
     // MARK: - Live partials
 
     @Test func streams_partials_into_liveTranscript() async {

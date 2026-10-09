@@ -125,15 +125,6 @@ import Foundation
 
     // MARK: - flashToast
 
-    private func eventually(_ condition: () -> Bool) async -> Bool {
-        let deadline = ContinuousClock.now + .seconds(2)
-        while !condition() {
-            if ContinuousClock.now >= deadline { return false }
-            try? await Task.sleep(for: .milliseconds(2))
-        }
-        return true
-    }
-
     @Test func flashToast_sets_then_clears_after_the_duration() async {
         let state = AppState()
         state.flashToast("Copied", for: .milliseconds(10))

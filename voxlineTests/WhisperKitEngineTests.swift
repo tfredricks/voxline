@@ -223,14 +223,6 @@ private func finishAfterOnePass(
     return (text, fake.calls)
 }
 
-private func eventually(_ condition: () -> Bool) async -> Bool {
-    for _ in 0..<300 {
-        if condition() { return true }
-        try? await Task.sleep(for: .milliseconds(10))
-    }
-    return condition()
-}
-
 private struct PassFailed: Error {}
 
 @Suite(.timeLimit(.minutes(1)))

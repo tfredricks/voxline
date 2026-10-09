@@ -2,17 +2,6 @@ import Testing
 import Foundation
 @testable import voxline
 
-/// Polls `condition` until it holds or `timeout` passes; never waits longer.
-@MainActor
-func eventually(timeout: Duration = .seconds(2), _ condition: () -> Bool) async -> Bool {
-    let deadline = ContinuousClock.now + timeout
-    while !condition() {
-        if ContinuousClock.now >= deadline { return false }
-        try? await Task.sleep(for: .milliseconds(2))
-    }
-    return true
-}
-
 /// True when `task` completes within `timeout`; never waits longer.
 @MainActor
 func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool {
