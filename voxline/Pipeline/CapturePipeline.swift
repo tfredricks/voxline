@@ -555,7 +555,7 @@ final class CapturePipeline {
     }
 
     private static func noModeMessage(bundleID: String?) -> String {
-        "No mode for app '\(bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes."
+        "No mode for app '\(bundleID ?? "unknown")' and no '*' fallback in modes.json. Add a '*' mode, or delete ~/Library/Application Support/voxline/modes.json and relaunch Voxline to restore the defaults."
     }
 
     /// Clean up the transcript (or pass it through on the fast path) and

@@ -9,7 +9,8 @@ import Foundation
     private func pipeline(
         transcript: Result<String, Error> = .success("hello"),
         cleanup: @escaping (String, Mode, CapturedContext) async throws -> String = { t, _, _ in t },
-        insert: InsertOutcome = .inserted(.paste, verified: false)
+        insert: InsertOutcome = .inserted(.paste, verified: false),
+        modes: [Mode] = [Mode(bundleID: "*", displayName: "Default", prompt: "p", model: nil, temperature: nil)]
     ) -> (CapturePipeline, AppState, FakeCapture) {
         let state = AppState()
         let capture = FakeCapture()
@@ -28,7 +29,7 @@ import Foundation
             capture: capture,
             engines: FakeEngineProvider(engine),
             llm: FakeLLM(handler: cleanup),
-            modes: ModeRouter(modes: [Mode(bundleID: "*", displayName: "Default", prompt: "p", model: nil, temperature: nil)]),
+            modes: ModeRouter(modes: modes),
             frontmost: FakeFrontmost(),
             fieldInspector: FakeFieldInspector(),
             inserter: inserter,
@@ -90,6 +91,14 @@ import Foundation
         await runOnce(p, state)
         guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg == "Couldn't insert the text.")
+    }
+
+    @Test func missing_fallback_mode_points_at_the_modes_file() async {
+        let (p, state, _) = pipeline(modes: [])
+        await runOnce(p, state)
+        guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
+        #expect(msg.contains("modes.json"))
+        #expect(!msg.contains("Settings →"))
     }
 
     @Test func revoked_accessibility_during_paste_is_sticky_permissions_error() async {
