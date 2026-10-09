@@ -22,10 +22,12 @@ enum SyntheticKeys {
         post(keyEvents(keyCode, flags: flags, source: CGEventSource(stateID: .hidSystemState)))
     }
 
+    /// Must be called on the main thread (Text Input Sources asserts otherwise).
     static func postCopy() {
         postKey(keyCode(typing: "c") ?? copyFallbackKeyCode, flags: .maskCommand)
     }
 
+    /// Must be called on the main thread (Text Input Sources asserts otherwise).
     static func postPaste() {
         postKey(keyCode(typing: "v") ?? pasteFallbackKeyCode, flags: .maskCommand)
     }
@@ -36,7 +38,9 @@ enum SyntheticKeys {
 
     /// One tagged keyDown/keyUp pair carrying `units` via
     /// `keyboardSetUnicodeString`, from `.combinedSessionState` (today's
-    /// `defaultTypeText` behavior).
+    /// `defaultTypeText` behavior). Callers keep each chunk to at most 20
+    /// UTF-16 units (`TypingChunker`'s `maxUnits`); only a single grapheme
+    /// longer than that may exceed it, alone in its chunk.
     static func typeChunk(_ units: [UInt16]) {
         post(chunkEvents(units, source: CGEventSource(stateID: .combinedSessionState)))
     }
@@ -81,8 +85,8 @@ enum SyntheticKeys {
 
     /// Keycode that types `character` on the current layout, via UCKeyTranslate
     /// over keycodes 0..<128 with `kUCKeyActionDisplay`. Moved from
-    /// `ClipboardInjector.resolvePasteVirtualKey`. Text Input Sources expects
-    /// the main thread.
+    /// `ClipboardInjector.resolvePasteVirtualKey`.
+    /// Must be called on the main thread (Text Input Sources asserts otherwise).
     static func keyCode(typing character: String) -> CGKeyCode? {
         let target = character.lowercased()
         guard

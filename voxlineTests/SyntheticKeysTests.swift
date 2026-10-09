@@ -28,8 +28,12 @@ import Testing
 
     @Test func source_events_are_tagged_too() {
         let source = CGEventSource(stateID: .privateState)
-        #expect(SyntheticKeys.keyEvents(124, flags: [], source: source).allSatisfy(SyntheticKeys.isTagged))
-        #expect(SyntheticKeys.chunkEvents([0x61], source: source).allSatisfy(SyntheticKeys.isTagged))
+        let keys = SyntheticKeys.keyEvents(124, flags: [], source: source)
+        let chunk = SyntheticKeys.chunkEvents([0x61], source: source)
+        #expect(keys.count == 2)
+        #expect(chunk.count == 2)
+        #expect(keys.allSatisfy(SyntheticKeys.isTagged))
+        #expect(chunk.allSatisfy(SyntheticKeys.isTagged))
     }
 
     @Test func key_events_are_tagged_with_exact_flags() {

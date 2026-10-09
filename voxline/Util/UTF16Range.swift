@@ -11,10 +11,15 @@ struct UTF16Range: Equatable, Hashable, Sendable {
     init(_ range: CFRange) { self.init(location: range.location, length: range.length) }
     init(_ range: NSRange) { self.init(location: range.location, length: range.length) }
 
+    /// `location + length`. Traps on overflow, so check a range from AX with
+    /// `fits(in:)` before using it.
     var end: Int { location + length }
     var cfRange: CFRange { CFRange(location: location, length: length) }
     var nsRange: NSRange { NSRange(location: location, length: length) }
 
-    /// True when the range lies inside a value of `length` units.
-    func fits(in length: Int) -> Bool { location >= 0 && self.length >= 0 && end <= length }
+    /// True when the range lies inside a value of `total` units. Never traps,
+    /// so hostile AX answers such as `{NSNotFound, 1}` are safe to test.
+    func fits(in total: Int) -> Bool {
+        location >= 0 && length >= 0 && location <= total && length <= total - location
+    }
 }

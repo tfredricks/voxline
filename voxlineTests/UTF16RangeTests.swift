@@ -34,6 +34,14 @@ import Testing
         #expect(!UTF16Range(location: 2, length: -1).fits(in: 10))
     }
 
+    @Test func fits_rejects_overflowing_ranges_without_trapping() {
+        #expect(!UTF16Range(location: Int.max, length: 1).fits(in: 10))
+        #expect(!UTF16Range(location: 5, length: Int.max).fits(in: 10))
+        #expect(!UTF16Range(location: NSNotFound, length: 1).fits(in: 10))
+        #expect(!UTF16Range(location: 11, length: 0).fits(in: 10))
+        #expect(!UTF16Range(location: 0, length: 0).fits(in: -1))
+    }
+
     @Test func units_are_utf16_not_characters() {
         let value = "a👍b" as NSString
         #expect(value.length == 4)
