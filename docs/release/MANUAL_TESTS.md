@@ -44,3 +44,66 @@ Configure a staging appcast by setting `SUFeedURL` in a debug build's `Info.plis
 
 - [ ] Disable network. Click "Check for updates…". Sparkle reports an error dialog. App keeps running.
 - [ ] Re-enable network. Click "Check for updates…". Normal flow resumes.
+
+# Manual test pass: 0.4.0 platform reset
+
+Covers what XCTest cannot: the real container migration, real AX reads, and
+Sparkle running unsandboxed.
+
+## Upgrade from 0.3.1
+
+- [ ] Install 0.3.1 from Releases. Complete the wizard, save an API key, add
+      two custom vocabulary terms, dictate three times (so history is non-empty).
+- [ ] Install 0.4.0 over it (DMG drag, or Sparkle from a staging appcast). Launch.
+- [ ] No wizard appears. Settings → the hotkey, provider, and model are unchanged.
+- [ ] Settings → API Keys shows the saved key (no re-entry).
+- [ ] Custom vocabulary still lists both terms. Show history… lists the three dictations.
+- [ ] No model download happens. `ls ~/Library/Application\ Support/voxline/huggingface/models/argmaxinc/whisperkit-coreml/` lists the variant.
+- [ ] `ls ~/Library/Containers/com.voxline.app/Data/Documents/` no longer contains `huggingface`.
+- [ ] `scripts/tail-logs.sh --last 2m pipeline` shows a `container migration:` line with `models=true`.
+
+## Fresh install
+
+- [ ] `scripts/reset-local-state.sh`, launch, complete the wizard, dictate into Notes.
+- [ ] `defaults read com.voxline.app voxline.migration.containerMigrated` prints `1`.
+
+## Accessibility reads work
+
+- [ ] Run a Debug build with `VOXLINE_TRACE_LLM=1` from Xcode. Dictate into the
+      middle of an existing paragraph in Notes. The trace's `textBeforeCursor`
+      and `textAfterCursor` are populated (not `(nil)`).
+- [ ] Select text in Notes, hold the dictation chord + command modifier, say
+      "make this shorter". The selection is replaced. Repeat in Slack and in
+      Gmail in Safari.
+
+## No editable field
+
+- [ ] Click the Finder desktop so nothing editable has focus. Dictate. The pill
+      shows "No text field focused — copied"; ⌘V in Notes pastes the text.
+
+## Diagnostics
+
+- [ ] After three dictations, About Voxline shows a Diagnostics block with
+      "Last:" and "Median of 3:" lines and non-zero transcribe/cleanup times.
+- [ ] After 20 dictations, note the median total. Record it in the phase 2
+      spec as the baseline.
+
+## Entitlements and notarization
+
+- [ ] `codesign -d --entitlements :- /Applications/voxline.app` lists exactly
+      `com.apple.security.device.audio-input`, `keychain-access-groups`, and
+      the signing-injected identifiers. No `app-sandbox`.
+- [ ] `spctl -a -v /Applications/voxline.app` → `accepted source=Notarized Developer ID` (release build only).
+
+## Sparkle unsandboxed
+
+- [ ] Point a Debug build at a staging appcast with a newer version. Check for
+      updates… installs and relaunches without an XPC or permission error.
+
+## Hung target app
+
+- [ ] Click into Slack's message box, then from Terminal run `kill -STOP $(pgrep -x Slack)`
+      so the frozen app still owns keyboard focus. Hold the chord, speak, release.
+      voxline must not beachball for more than a second (the AX timeout is 0.5s per
+      request); the pill shows "No text field focused — copied" or an error within a
+      few seconds. Run `kill -CONT $(pgrep -x Slack)` afterwards.

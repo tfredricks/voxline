@@ -18,12 +18,13 @@ voxline is a native macOS menu-bar app (SwiftUI + AppKit, Swift Package Manager 
 
 - `voxline/Audio`, `Context`, `Hotkey`, `LLM`, `MenuBar`, `Modes`, `Output`, `Permissions`, `Pipeline`, `Settings`, `Storage`, `Transcription`, `UI`, `Updates`, `Util`, `Wizard` — app source, one folder per concern.
 - `voxline/Modes/ModeStore.swift` — the per-app prompt table (28 bundle IDs currently: Slack, Zoom, Teams, Messages, Discord, Mail, Outlook, Spark, Word, Pages, Notes, Excel, PowerPoint, Keynote, Numbers, Terminal, iTerm, VS Code, Cursor, Xcode, and others). Add new apps here.
-- `voxlineTests/` — XCTest unit/integration tests, one file per source file roughly 1:1.
+- `voxlineTests/` — Swift Testing unit/integration tests, one file per source file roughly 1:1.
 - `docs/release/RELEASE.md` — one-time Sparkle/notarization setup + release mechanics (maintainer-only, requires secrets you likely don't have).
 - `docs/release/MANUAL_TESTS.md` — manual QA checklist for things XCTest can't cover (permissions dialogs, real hotkey presses, etc.).
 - `docs/features.md` — competitive feature-matrix doc, not architecture.
 - `scripts/build-local.sh` — build Release/Debug and install to `/Applications` with a real git-derived version stamp (plain `⌘R` in Xcode leaves `CFBundleVersion = 1`).
 - `scripts/reset-local-state.sh`, `scripts/tail-logs.sh` — local dev utilities.
+- `scripts/tail-logs.sh` categories include `metrics` (per-dictation timings).
 - `.github/workflows/ci.yml` — build + test on every push/PR.
 - `.github/workflows/release.yml` — sign, notarize, DMG, Sparkle appcast; runs on `v*` tags.
 
@@ -50,7 +51,7 @@ Requires Xcode 26 and macOS 26 (Apple Silicon) — this is not cross-platform bu
 - **Branching**: this project commits directly to `main` — don't default to proposing a feature branch unless asked.
 - **Versioning**: `MARKETING_VERSION` (SemVer, in `project.pbxproj`) is bumped manually only when cutting a release. `CFBundleVersion`/build number is always the commit count on `main`, stamped automatically — never hand-edit it.
 - **No comments explaining what code does** — this codebase favors clear naming; existing doc comments (`///`) are mostly on public-facing types/behavior contracts, not narration.
-- Sandboxed app (`voxline/voxline.entitlements`): model cache and other app data live in the container, not `~/Documents`. See `Storage/AppPaths.swift`.
+- Not sandboxed (hardened runtime only). App data lives in `~/Library/Application Support/voxline`; preferences in the standard defaults domain. `Storage/AppPaths.swift` owns every path and `Storage/ContainerMigration.swift` moves 0.3.x container data on first launch.
 - API keys live in the macOS Keychain via `Storage/KeychainStorage.swift` / `DataProtectionKeychain.swift` — never persist keys anywhere else (UserDefaults, plists, logs).
 
 ## Releasing

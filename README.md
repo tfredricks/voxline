@@ -146,7 +146,7 @@ What goes to your LLM provider:
 
 ## Good to know
 
-- **Sandboxed app** — voxline runs inside the macOS app sandbox, so model files live in the container, not your home folder.
+- **Not sandboxed, on purpose** — voxline reads the focused field through the Accessibility API, which the App Sandbox blocks. The app ships notarized with the hardened runtime, and its data lives in `~/Library/Application Support/voxline`.
 - **Settings live in one place** — single-page Settings window with a status strip up top showing what's wired up. Switching providers keeps both keys around for fast toggling.
 - **Resilient hotkey** — when permissions are revoked or restored, voxline reconciles automatically without a relaunch.
 - **Open source** — read the code, audit the data path, file an issue, send a PR.

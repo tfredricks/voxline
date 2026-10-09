@@ -8,6 +8,31 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
+### Changed
+
+- **voxline is no longer sandboxed.** The App Sandbox blocked reading the
+  focused field through Accessibility, which forced clipboard tricks for
+  selection reads and left cursor context empty. The app now ships with the
+  hardened runtime only. On first launch it moves settings, history,
+  vocabulary, custom modes, and the cached Whisper model out of the old
+  container, so nothing re-downloads.
+- **Minimum macOS is now 26.** Older systems stay on 0.3.1.
+- Dictating with no editable field focused now says so and copies the text
+  to the clipboard instead of reporting success.
+
+### Added
+
+- Per-dictation timing in About Voxline → Diagnostics: transcribe, cleanup,
+  insert, and total, with medians over the last 50.
+- History keeps the raw transcript next to the cleaned text.
+
+### Fixed
+
+- A hung target app can no longer stall voxline: every Accessibility request
+  times out after half a second.
+- A keychain read failure no longer looks like "no key configured", and the
+  setup wizard can no longer delete saved keys over a transient read error.
+
 ## [0.3.1] - 2026-07-12
 
 ### Added
