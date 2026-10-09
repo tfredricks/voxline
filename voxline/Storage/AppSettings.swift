@@ -28,6 +28,7 @@ struct AppSettings {
         static let meetingCapSeconds = "voxline.debug.meetingCapSeconds"
         static let learnWords = "voxline.learning.words"
         static let learnStyle = "voxline.learning.style"
+        static let showInDock = "voxline.showInDock"
     }
 
     /// Stored under `Key.commandChord` for "command mode off". The legacy
@@ -212,6 +213,13 @@ struct AppSettings {
     var learnWords: Bool {
         get { defaults.object(forKey: Key.learnWords) == nil ? true : defaults.bool(forKey: Key.learnWords) }
         set { defaults.set(newValue, forKey: Key.learnWords) }
+    }
+
+    /// When true the app stays a regular Dock app; when false the Dock icon
+    /// shows only while a main-level window is open.
+    var showInDock: Bool {
+        get { defaults.bool(forKey: Key.showInDock) }
+        set { defaults.set(newValue, forKey: Key.showInDock) }
     }
 
     /// Settings → Learning: keep recent dictations and edits per category

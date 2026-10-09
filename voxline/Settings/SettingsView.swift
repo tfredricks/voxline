@@ -73,6 +73,10 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.link)
                         }
+                        Toggle("Show Voxline in Dock", isOn: $generalVM.showInDock)
+                        Text("When off, Voxline appears in the Dock only while its window is open.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
                     }
 
                     Section("Software Updates") {

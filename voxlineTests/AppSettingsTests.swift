@@ -341,4 +341,16 @@ import Foundation
         #expect(!settings.learnStyle)
         #expect(settings.defaults.object(forKey: AppSettings.Key.learnWords) as? Bool == false)
     }
+
+    @Test func show_in_dock_defaults_to_false() {
+        #expect(AppSettings(defaults: makeDefaults()).showInDock == false)
+    }
+
+    @Test func show_in_dock_round_trips() {
+        let defaults = makeDefaults()
+        var s = AppSettings(defaults: defaults)
+        s.showInDock = true
+        #expect(AppSettings(defaults: defaults).showInDock == true)
+        #expect(defaults.bool(forKey: "voxline.showInDock") == true)
+    }
 }

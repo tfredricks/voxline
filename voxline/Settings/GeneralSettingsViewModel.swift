@@ -46,6 +46,12 @@ final class GeneralSettingsViewModel {
             applyLaunchAtLogin()
         }
     }
+    var showInDock: Bool {
+        didSet {
+            guard loaded, oldValue != showInDock else { return }
+            settings.showInDock = showInDock
+        }
+    }
     private(set) var loginItemStatus: LoginItemService.Status
 
     private(set) var devices: [AudioDevice] = []
@@ -101,6 +107,7 @@ final class GeneralSettingsViewModel {
         let initialStatus = loginItemService.status
         self.loginItemStatus = initialStatus
         self.launchAtLogin = (initialStatus == .enabled)
+        self.showInDock = settings.showInDock
         self.devices = deviceEnumerator()
         self.loaded = true
         self.deviceListener = AudioDeviceListener { [weak self] in
@@ -214,6 +221,7 @@ final class GeneralSettingsViewModel {
             whisperModel = settings.whisperModel
             playHotkeySounds = settings.playHotkeySounds
             provider = settings.llmProvider
+            showInDock = settings.showInDock
         }
         openAIKeyDidChange()
     }
@@ -223,7 +231,7 @@ final class GeneralSettingsViewModel {
     /// system-default mic, the default engine, large-v3-turbo, sounds on.
     /// Performs one batched commit so the applier sees a single coherent
     /// snapshot rather than several partial ones.
-    /// Launch-at-Login, the presets (`PresetStore`), the custom vocabulary, and
+    /// Launch-at-Login, Show in Dock, the presets (`PresetStore`), the custom vocabulary, and
     /// everything in Settings → Learning are intentionally left untouched —
     /// Reset is for pipeline settings, not user data or OS-level integration.
     func resetToDefaults() {

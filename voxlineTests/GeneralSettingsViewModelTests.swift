@@ -574,6 +574,29 @@ import Foundation
         vm.resetToDefaults()
         #expect(CustomVocabularyStore(defaults: d).load() == ["Argmax"])
     }
+
+    @Test func show_in_dock_loads_and_persists_without_applying() {
+        let d = defaults()
+        var settings = AppSettings(defaults: d)
+        settings.showInDock = true
+        let recorder = ApplyRecorder()
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: { recorder.record($0) })
+        #expect(vm.showInDock == true)
+
+        vm.showInDock = false
+        #expect(AppSettings(defaults: d).showInDock == false)
+        #expect(recorder.applied == nil)
+    }
+
+    @Test func reset_to_defaults_leaves_show_in_dock_alone() {
+        let d = defaults()
+        var settings = AppSettings(defaults: d)
+        settings.showInDock = true
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
+        vm.resetToDefaults()
+        #expect(vm.showInDock == true)
+        #expect(AppSettings(defaults: d).showInDock == true)
+    }
 }
 
 private let noopApply: (GeneralSettingsSnapshot) -> Void = { _ in }
