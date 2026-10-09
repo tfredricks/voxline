@@ -311,3 +311,16 @@ enrolling speakers by voice, cloud transcription or diarization for meetings,
 meetings longer than 60 minutes, calendar integration, follow-up email drafts.
 Live transcript (Approach 2 in brainstorming) can be layered on later without
 changing the post-stop pipeline.
+
+## Spike results (2026-10-09)
+
+Machine: Apple M3 Pro, 36 GB RAM. Audio: synthetic two-voice fixture tiled to 60 min.
+
+| Model | Transcribe | Diarize + align | Total after load | Peak footprint |
+|---|---|---|---|---|
+| large-v3 turbo | 237.7 s | 32.3 s | 269.9 s | 1439 MB |
+| small.en | 207.5 s | 32.3 s | 239.8 s | 1350 MB |
+
+Both rows are second runs (the first includes Core ML compilation). large-v3 turbo misses the 240 s total target; small.en meets both targets, with only 0.2 s of margin on time.
+
+Decision: meetings use small.en.
