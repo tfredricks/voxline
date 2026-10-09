@@ -5,9 +5,9 @@ import Testing
 
 @Suite(.timeLimit(.minutes(1))) @MainActor struct LearningCoordinatorTests {
 
-    static let original = "ask Cooper Nettis to review"
-    static let fixed = "ask Kubernetes to review"
-    static let messages = "com.apple.MobileSMS"
+    nonisolated static let original = "ask Cooper Nettis to review"
+    nonisolated static let fixed = "ask Kubernetes to review"
+    nonisolated static let messages = "com.apple.MobileSMS"
 
     struct Harness {
         let learning: LearningCoordinator

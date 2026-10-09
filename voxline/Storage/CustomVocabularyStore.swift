@@ -12,9 +12,8 @@ struct VocabularyEntry: Equatable, Sendable {
 /// Global custom-vocabulary list. Plain `[String]` persisted to UserDefaults,
 /// with a sidecar list naming the terms Learning added. A term not in the
 /// sidecar is the user's, so lists saved before Learning load unchanged.
-/// UserDefaults is documented thread-safe, so this struct (held by the
-/// `Sendable`-conforming `DefaultContextCaptureService`) is safe across actors.
-struct CustomVocabularyStore {
+/// `@unchecked Sendable`: its only state is a `UserDefaults`, which is documented thread-safe.
+struct CustomVocabularyStore: @unchecked Sendable {
 
     private static let key = "voxline.context.customVocabulary"
     private static let learnedKey = "voxline.context.learnedVocabulary"

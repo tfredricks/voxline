@@ -140,8 +140,8 @@ final class AppCoordinator {
                 settings: settings,
                 engine: engine,
                 chord: settings.hotkeyChord,
-                onRetryDownload: { [weak self, weak state] in
-                    guard let self, let state, let engine = self.engines?.current else { return }
+                onRetryDownload: { [weak self] in
+                    guard let self, let engine = self.engines?.current else { return }
                     self.prepareIfNeeded(state: state, engine: engine)
                 },
                 onComplete: { [weak self] in

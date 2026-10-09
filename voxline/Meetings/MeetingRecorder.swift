@@ -26,7 +26,7 @@ protocol MeetingRecording: AnyObject {
 @MainActor
 final class MeetingRecorder: MeetingRecording {
 
-    static let defaultCap: Duration = .seconds(3_600)
+    nonisolated static let defaultCap: Duration = .seconds(3_600)
     static let restartDelay: Duration = .milliseconds(500)
     static let maxConsecutiveFailures = 3
     static let failureWindow: Duration = .seconds(30)
@@ -35,7 +35,7 @@ final class MeetingRecorder: MeetingRecording {
         cap >= .seconds(600) ? .seconds(300) : cap / 2
     }
 
-    private static let lagToleranceSamples = 8_000
+    nonisolated private static let lagToleranceSamples = 8_000
 
     nonisolated static func expectedSamples(after elapsed: Duration) -> Int {
         let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
