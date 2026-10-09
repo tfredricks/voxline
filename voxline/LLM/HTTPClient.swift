@@ -13,12 +13,13 @@ struct URLSessionHTTPClient: HTTPClient {
     /// Dedicated session, not .shared: a hung provider must not freeze a
     /// dictation for the 60s system default (the pipeline blocks new
     /// recordings the whole time). 15s idle / 30s total is generous for a
-    /// few hundred tokens of cleanup. .ephemeral keeps transcripts and API
-    /// responses out of any on-disk URL cache.
-    static func makeSession() -> URLSession {
+    /// few hundred tokens of cleanup; meeting notes pass longer limits.
+    /// .ephemeral keeps transcripts and API responses out of any on-disk URL
+    /// cache.
+    static func makeSession(requestTimeout: TimeInterval = 15, resourceTimeout: TimeInterval = 30) -> URLSession {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 15
-        config.timeoutIntervalForResource = 30
+        config.timeoutIntervalForRequest = requestTimeout
+        config.timeoutIntervalForResource = resourceTimeout
         return URLSession(configuration: config)
     }
 

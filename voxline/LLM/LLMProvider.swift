@@ -31,6 +31,7 @@ struct StructuredOutput: Equatable, Sendable {
     }
 
     static let commandEdit = StructuredOutput(name: "edit", schemaJSON: CommandResult.schemaJSON)
+    static let meetingNotes = StructuredOutput(name: "meeting_notes", schemaJSON: MeetingNotes.schemaJSON)
 }
 
 /// Provider-agnostic request shape. The LLMService translates this into the
@@ -84,6 +85,11 @@ struct LLMRequest: Equatable {
     /// returns the whole field window, so the budget does not scale with the
     /// instruction.
     static func commandBudget(model: String) -> Int {
+        8192 + thinkingHeadroom(for: model)
+    }
+
+    /// Output budget for meeting notes: 8,192 plus `thinkingHeadroom`.
+    static func meetingNotesBudget(model: String) -> Int {
         8192 + thinkingHeadroom(for: model)
     }
 }

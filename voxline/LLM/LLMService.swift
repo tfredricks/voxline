@@ -3,7 +3,7 @@ import Foundation
 /// Single entry point for transcript → LLM-cleaned-text. Picks the right
 /// client based on AppSettings, fetches the corresponding key from Keychain,
 /// applies per-mode overrides, and runs the cleanup request.
-struct LLMService: LLMServing {
+struct LLMService: LLMServing, MeetingNotesGenerating {
 
     /// Fixed preamble prepended to every mode prompt. Establishes the model's
     /// role as a transcription post-processor so that questions or
@@ -174,6 +174,31 @@ struct LLMService: LLMServing {
         #endif
 
         return try await client.complete(request)
+    }
+
+    /// Meeting notes for a merged transcript, with the `MeetingNotes` schema.
+    func meetingNotes(_ request: MeetingNotesRequest) async throws -> MeetingNotes {
+        let req = LLMRequest(
+            model: request.model,
+            systemPrompt: MeetingNotesPrompt.system,
+            userPrompt: MeetingNotesPrompt.user(request),
+            temperature: nil,
+            maxOutputTokens: LLMRequest.meetingNotesBudget(model: request.model),
+            structuredOutput: .meetingNotes
+        )
+        let raw = try await resolveClient().complete(req)
+        return try MeetingNotesParser.parse(raw)
+    }
+
+    /// An instance for meeting notes: same settings and keychain, but an HTTP
+    /// session that allows 60 s idle and 180 s total.
+    static func meetingNotesService(settings: AppSettings, keychain: any KeychainStorage = DataProtectionKeychain()) -> LLMService {
+        let session = URLSessionHTTPClient.makeSession(requestTimeout: 60, resourceTimeout: 180)
+        return LLMService(
+            settings: settings,
+            keychain: keychain,
+            http: RetryingHTTPClient(wrapped: URLSessionHTTPClient(session: session))
+        )
     }
 
     /// Runs a spoken or preset command against `request.model` with the
