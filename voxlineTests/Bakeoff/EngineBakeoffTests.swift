@@ -8,7 +8,9 @@ import Foundation
 ///
 /// Opt-in: runs only with `VOXLINE_BAKEOFF=1` and fixtures present. Optional
 /// env: `VOXLINE_BAKEOFF_DIR` (fixtures), `VOXLINE_BAKEOFF_SPEED` (pacing
-/// multiplier; keep 1 for numbers that feed the decision rule), and
+/// multiplier; keep 1 for numbers that feed the decision rule),
+/// `VOXLINE_BAKEOFF_TAIL_MS` (milliseconds of digital silence appended to
+/// each clip and fed at the same pacing before `finish()`; default 0), and
 /// `VOXLINE_BAKEOFF_CLOUD=1` to add OpenAI (sends the clips to OpenAI with
 /// the saved key; never eligible to win). Pass them to
 /// `xcodebuild` as `TEST_RUNNER_<name>`:
@@ -18,6 +20,10 @@ import Foundation
 struct EngineBakeoffTests {
 
     private static let chunkSamples = 1_600
+
+    private static var tailMs: Int {
+        max(Int(ProcessInfo.processInfo.environment["VOXLINE_BAKEOFF_TAIL_MS"] ?? "") ?? 0, 0)
+    }
 
     @MainActor
     private final class FirstPartialProbe {
@@ -104,13 +110,14 @@ struct EngineBakeoffTests {
                     probe.firstNonEmptyAt = clock.now
                 }
             }
+            let samples = clip.samples + [Float](repeating: 0, count: tailMs * Int(AudioFormat.whisperSampleRate) / 1_000)
             audioStart = clock.now
             var offset = 0
-            while offset < clip.samples.count {
-                let end = min(offset + chunkSamples, clip.samples.count)
-                opened.append(Array(clip.samples[offset..<end]))
+            while offset < samples.count {
+                let end = min(offset + chunkSamples, samples.count)
+                opened.append(Array(samples[offset..<end]))
                 offset = end
-                if offset < clip.samples.count {
+                if offset < samples.count {
                     try await Task.sleep(for: .milliseconds(Int(100 / speed)))
                 }
             }
@@ -157,7 +164,7 @@ struct EngineBakeoffTests {
         var lines = [
             "# Engine bake-off",
             "",
-            "\(clips.count) clips, \(terms.count) dictionary terms, pacing x\(speed), \(Date().formatted(.iso8601)).",
+            "\(clips.count) clips, \(terms.count) dictionary terms, pacing x\(speed), tail silence \(tailMs) ms, \(Date().formatted(.iso8601)).",
             "",
             "| Engine | WER % | Term miss % | Finish median ms | Finish p90 ms | First partial median ms |",
             "|---|---|---|---|---|---|",

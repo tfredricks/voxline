@@ -1,3 +1,4 @@
+import Accelerate
 import Foundation
 import WhisperKit
 
@@ -84,14 +85,24 @@ final class WhisperKitEngine: TranscriptionEngine {
 }
 
 /// Rolling re-transcription of the whole recording. A background loop runs a
-/// pass each time at least a second of new audio has arrived, starting from
-/// the end of the last confirmed segment. Only one pass is in flight at a
-/// time; `finish()` stops the loop, waits for its pass, then runs one final
-/// pass over the complete buffer.
+/// pass each time at least a second of new audio has arrived, or when speech
+/// pauses, starting from the end of the last confirmed segment. Only one pass
+/// is in flight at a time. `finish()` stops the loop; when only silence
+/// follows the audio the last pass covered, that pass's text is final.
+/// Otherwise it runs one final pass over the complete buffer.
+///
+/// Audio is silent where its peak absolute amplitude is below `silencePeak`
+/// (default 0.02, about −34 dBFS).
 final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendable {
     typealias Transcribe = @Sendable (_ samples: [Float], _ clipStart: Float) async throws -> [TimedText]
 
     static let samplesPerPass = 16_000
+    /// A pause: this much trailing silence after at least
+    /// `minimumSpeechSamples` of non-silent audio since the last pass.
+    static let pauseSamples = 4_800
+    static let minimumSpeechSamples = 4_800
+    /// Non-silent audio is counted in frames of this many samples (10 ms).
+    static let peakFrameSamples = 160
     static let pollInterval: Duration = .milliseconds(100)
     static let keepUnconfirmed = 2
     /// WhisperKit starts no decode window when `windowClipTime` (1.0 s) or
@@ -102,9 +113,13 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
     let partials: AsyncStream<TranscriptPartial>
     private let continuation: AsyncStream<TranscriptPartial>.Continuation
     private let transcribe: Transcribe
+    private let silencePeak: Float
     private let lock = NSLock()
     private var buffer: [Float] = []
     private var lastPassSampleCount = 0
+    private var inFlightSampleCount: Int?
+    private var coveredSampleCount = 0
+    private var coveredHasText = false
     private var confirmed: [TimedText] = []
     private var confirmedEnd: Float = 0
     private var lastUnconfirmed: [TimedText] = []
@@ -125,14 +140,14 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
         }
     }
 
-    init(transcribe: @escaping Transcribe) {
+    init(silencePeak: Float = 0.02, transcribe: @escaping Transcribe) {
+        self.silencePeak = silencePeak
         self.transcribe = transcribe
         (partials, continuation) = AsyncStream.makeStream(of: TranscriptPartial.self)
         loopTask = Task.detached(priority: .userInitiated) { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.pollInterval)
-                guard let self else { return }
-                await self.passIfDue()
+                guard let self, await self.passIfDue() else { return }
             }
         }
     }
@@ -149,10 +164,15 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
         }
     }
 
-    /// Final text = kept confirmed text, then the final pass's segments.
-    /// When the final pass finds nothing past its clip start, the released
-    /// segments and the last rolling pass's unconfirmed segments stand in,
-    /// so words already shown as partials are never dropped.
+    /// When the last completed rolling pass heard words and only silence
+    /// follows the audio it covered, its confirmed and unconfirmed text is
+    /// final. A pass still in flight with only silence after its audio is
+    /// awaited rather than cancelled, so it can be that pass.
+    ///
+    /// Otherwise final text = kept confirmed text, then the final pass's
+    /// segments. When the final pass finds nothing past its clip start, the
+    /// released segments and the last rolling pass's unconfirmed segments
+    /// stand in, so words already shown as partials are never dropped.
     func finish() async throws -> String {
         try await withTaskCancellationHandler {
             try await finishPasses()
@@ -173,12 +193,18 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
 
     private func finishPasses() async throws -> String {
         defer { continuation.finish() }
-        let loop = lock.withLock {
+        let (loop, awaitsInFlightPass) = lock.withLock {
             finishing = true
-            return loopTask
+            return (loopTask, inFlightSampleCount.map(isSilent(from:)) ?? false)
         }
-        loop?.cancel()
+        if !awaitsInFlightPass { loop?.cancel() }
         await loop?.value
+
+        let lastPassText = try lock.withLock {
+            if cancelled { throw CancellationError() }
+            return lastPassTextIfFinal()
+        }
+        if let lastPassText { return lastPassText }
 
         let input = try lock.withLock {
             if cancelled { throw CancellationError() }
@@ -221,18 +247,39 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
         }
     }
 
-    private func passIfDue() async {
-        let due: (samples: [Float], clipStart: Float)? = lock.withLock {
-            guard !finishing, !cancelled, buffer.count - lastPassSampleCount >= Self.samplesPerPass else { return nil }
-            lastPassSampleCount = buffer.count
-            return (copyOfBuffer(), confirmedEnd)
-        }
-        guard let due else { return }
+    private enum Poll {
+        case stop
+        case idle
+        case pass(samples: [Float], clipStart: Float)
+    }
 
+    /// Runs a pass when one is due. Returns false once the session is
+    /// finishing or cancelled, which ends the loop.
+    private func passIfDue() async -> Bool {
+        let poll: Poll = lock.withLock {
+            if finishing || cancelled { return .stop }
+            guard isPassDue() else { return .idle }
+            lastPassSampleCount = buffer.count
+            inFlightSampleCount = buffer.count
+            return .pass(samples: copyOfBuffer(), clipStart: confirmedEnd)
+        }
+        switch poll {
+        case .stop:
+            return false
+        case .idle:
+            return true
+        case .pass(let samples, let clipStart):
+            await runPass(samples, clipStart: clipStart)
+            return lock.withLock { !finishing && !cancelled }
+        }
+    }
+
+    private func runPass(_ samples: [Float], clipStart: Float) async {
         let segments: [TimedText]
         do {
-            segments = try await transcribe(due.samples, due.clipStart)
+            segments = try await transcribe(samples, clipStart)
         } catch {
+            lock.withLock { inFlightSampleCount = nil }
             if !Task.isCancelled {
                 AppLog.whisper.error("streaming pass failed: \(error.localizedDescription, privacy: .public)")
             }
@@ -240,14 +287,52 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
         }
 
         let partial: TranscriptPartial? = lock.withLock {
+            inFlightSampleCount = nil
             guard !cancelled else { return nil }
             let split = SegmentConfirmation.split(segments, keepUnconfirmed: Self.keepUnconfirmed, after: confirmedEnd)
             confirmed.append(contentsOf: split.confirmed)
             confirmedEnd = split.newConfirmedEnd
             lastUnconfirmed = split.unconfirmed
+            coveredSampleCount = samples.count
+            coveredHasText = (split.confirmed + split.unconfirmed).contains {
+                !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
             return TranscriptPartial(stable: Self.joined(confirmed), volatile: Self.joined(split.unconfirmed))
         }
         if let partial { continuation.yield(partial) }
+    }
+
+    /// Must be called with `lock` held.
+    private func isPassDue() -> Bool {
+        let fresh = buffer.count - lastPassSampleCount
+        if fresh >= Self.samplesPerPass { return true }
+        guard buffer.count >= Self.pauseSamples, fresh >= Self.minimumSpeechSamples else { return false }
+        return buffer.withUnsafeBufferPointer { all in
+            isSilent(UnsafeBufferPointer(rebasing: all[(all.count - Self.pauseSamples)...]))
+                && nonSilentSampleCount(UnsafeBufferPointer(rebasing: all[lastPassSampleCount...])) >= Self.minimumSpeechSamples
+        }
+    }
+
+    /// Must be called with `lock` held.
+    private func lastPassTextIfFinal() -> String? {
+        guard coveredSampleCount > 0, coveredHasText, isSilent(from: coveredSampleCount) else { return nil }
+        return Self.joined(confirmed + lastUnconfirmed)
+    }
+
+    /// Must be called with `lock` held. Scans the buffer in place.
+    private func isSilent(from start: Int) -> Bool {
+        buffer.withUnsafeBufferPointer { isSilent(UnsafeBufferPointer(rebasing: $0[start...])) }
+    }
+
+    private func isSilent(_ samples: UnsafeBufferPointer<Float>) -> Bool {
+        samples.isEmpty || vDSP.maximumMagnitude(samples) < silencePeak
+    }
+
+    private func nonSilentSampleCount(_ samples: UnsafeBufferPointer<Float>) -> Int {
+        stride(from: 0, to: samples.count, by: Self.peakFrameSamples).reduce(0) { count, start in
+            let frame = UnsafeBufferPointer(rebasing: samples[start..<min(start + Self.peakFrameSamples, samples.count)])
+            return isSilent(frame) ? count : count + frame.count
+        }
     }
 
     /// Must be called with `lock` held. A real copy, so the audio thread's
