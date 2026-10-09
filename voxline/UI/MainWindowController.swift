@@ -4,6 +4,34 @@ import SwiftUI
 
 enum MainWindowPage: Hashable {
     case home, settings
+    case general, dictation, aiProvider, commands, vocabulary, meetings
+
+    static let settingsPages: [MainWindowPage] = [.general, .dictation, .aiProvider, .commands, .vocabulary, .meetings]
+
+    var title: String {
+        switch self {
+        case .home: "Home"
+        case .settings: "Settings"
+        case .general: "General"
+        case .dictation: "Dictation"
+        case .aiProvider: "AI Provider"
+        case .commands: "Commands"
+        case .vocabulary: "Vocabulary"
+        case .meetings: "Meetings"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .home: "house"
+        case .settings, .general: "gearshape"
+        case .dictation: "mic"
+        case .aiProvider: "sparkles"
+        case .commands: "command"
+        case .vocabulary: "character.book.closed"
+        case .meetings: "person.2"
+        }
+    }
 }
 
 @Observable
@@ -87,7 +115,7 @@ struct MainWindowView<Home: View, Settings: View>: View {
         } detail: {
             switch selection.page ?? .home {
             case .home: home
-            case .settings: settings
+            default: settings
             }
         }
     }

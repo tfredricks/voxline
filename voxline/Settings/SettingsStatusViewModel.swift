@@ -85,6 +85,33 @@ final class SettingsStatusViewModel {
         general.provider.displayName
     }
 
+    /// Unchecked readiness (nil) is not an issue, so opening the window
+    /// doesn't flash a warning before the check finishes.
+    var issues: [SetupIssue] {
+        var result: [SetupIssue] = []
+        if !micPresent {
+            result.append(SetupIssue(text: "Microphone not found", page: .dictation))
+        }
+        switch currentReadiness {
+        case .unavailable(let reason):
+            result.append(SetupIssue(text: reason, page: .dictation))
+        case .needsPreparation(let downloadMB):
+            let name = general.engine == .whisperKit ? "The Whisper model" : general.engine.shortName
+            let size = downloadMB.map { " (\($0) MB)" } ?? ""
+            result.append(SetupIssue(text: "\(name) needs a one-time download\(size)", page: .dictation))
+        case .ready, nil:
+            break
+        }
+        if !providerKeySaved {
+            result.append(SetupIssue(text: "No \(general.provider.displayName) API key", page: .aiProvider))
+        }
+        return result
+    }
+
+    func needsSetup(_ page: MainWindowPage) -> Bool {
+        issues.contains { $0.page == page }
+    }
+
     private var currentReadiness: EngineReadiness? {
         guard let checked, checked.key == readinessKey else { return nil }
         return checked.readiness

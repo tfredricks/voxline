@@ -199,6 +199,57 @@ import Foundation
         await status.refreshEngineReadiness()
         #expect(status.isReady == false)
     }
+
+    @Test func no_issues_when_everything_is_ready() async throws {
+        let f = try makeFixtures()
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.issues.isEmpty)
+    }
+
+    @Test func unchecked_readiness_is_not_an_issue() async throws {
+        let f = try makeFixtures(readiness: { _ in nil })
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.issues.isEmpty)
+    }
+
+    @Test func missing_provider_key_is_an_ai_provider_issue() async throws {
+        let f = try makeFixtures(provider: .openai, openaiKey: "")
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.issues == [SetupIssue(text: "No OpenAI API key", page: .aiProvider)])
+    }
+
+    @Test func unavailable_engine_reason_is_a_dictation_issue() async throws {
+        let reason = "Apple Speech doesn't support this Mac's language."
+        let f = try makeFixtures(engine: .apple, readiness: { _ in .unavailable(reason) })
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.issues == [SetupIssue(text: reason, page: .dictation)])
+    }
+
+    @Test func whisper_download_issue_names_the_model_and_size() async throws {
+        let f = try makeFixtures(engine: .whisperKit, readiness: { _ in .needsPreparation(downloadMB: 466) })
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.issues == [SetupIssue(text: "The Whisper model needs a one-time download (466 MB)", page: .dictation)])
+    }
+
+    @Test func download_issue_omits_an_unknown_size() async throws {
+        let f = try makeFixtures(engine: .apple, readiness: { _ in .needsPreparation(downloadMB: nil) })
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.issues == [SetupIssue(text: "Apple Speech needs a one-time download", page: .dictation)])
+    }
+
+    @Test func missing_microphone_is_a_dictation_issue() async throws {
+        let f = try makeFixtures(deviceUID: "ghost-uid")
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.issues == [SetupIssue(text: "Microphone not found", page: .dictation)])
+    }
+
+    @Test func needs_setup_maps_issues_to_their_pages() async throws {
+        let f = try makeFixtures(provider: .openai, openaiKey: "")
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.needsSetup(.aiProvider))
+        #expect(!f.status.needsSetup(.dictation))
+        #expect(!f.status.needsSetup(.home))
+    }
 }
 
 /// Holds one readiness check open until the test releases it.
