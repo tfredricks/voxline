@@ -390,6 +390,7 @@ obvious.
 ### Removed
 
 Done early, in 0.4.0.
+
 The post-dictation review session: `ReviewSession`, `RefinementDirective`,
 `PillReviewActions`, `CapturePipeline.refine`, the hover-pause timers, and the
 Shorter / Longer / Clearer buttons. "Shorter" becomes either "hold the command
@@ -499,7 +500,7 @@ Every open item in `docs/issues.md` and where it is fixed:
 | 21 wizard dead end offline | 2 |
 | 22 hotkey dead over Screen Sharing | 3 |
 | 23 trailing audio dropped at release | 2 |
-| 24–27 review-pill follow-ups | 3 (deleted with the review pill) |
+| 24–27 review-pill follow-ups | 24, 25, 27 done in 0.4.0 (pill removed); 26 open |
 
 ## Testing strategy
 
