@@ -8,11 +8,11 @@
 
 A native macOS dictation app that turns your voice into clean, written text — anywhere on your Mac. Speech runs on-device via Whisper. Cleanup runs through your own LLM API key, so you control the model, the cost, and the data path.
 
-macOS 14.0+ · Apple Silicon · Bring your own API key
+macOS 26+ · Apple Silicon · Bring your own API key
 
 ![Platform](https://img.shields.io/badge/platform-macOS-blue?style=flat-square)
 &nbsp;
-![Requires](https://img.shields.io/badge/macOS-14%2B-fa4e49?style=flat-square)
+![Requires](https://img.shields.io/badge/macOS-26%2B-fa4e49?style=flat-square)
 &nbsp;
 ![Status](https://img.shields.io/badge/status-early-yellow?style=flat-square)
 &nbsp;
@@ -92,10 +92,10 @@ Why cloud cleanup instead of a local model? Because the gap between a frontier L
 
 | | |
 |---|---|
-| **macOS** | 14 (Sonoma) or later |
+| **macOS** | 26 (Tahoe) or later |
 | **Mac** | Apple Silicon — M1, M2, M3, M4, or any variant. Intel Macs are **not** supported. |
 | **RAM** | 8 GB minimum, 16 GB recommended (the default `large-v3-turbo` model is happier with headroom) |
-| **Disk** | ~2 GB free for speech models (`large-v3-turbo` ~1.5 GB, `small.en` ~466 MB). Models cache inside the app container. |
+| **Disk** | ~2 GB free for speech models (`large-v3-turbo` ~1.5 GB, `small.en` ~466 MB). Models cache in `~/Library/Application Support/voxline`. |
 | **Network** | Required on first launch to download the Whisper model, and at runtime for AI cleanup. Pure transcription works offline once the model is cached. |
 | **Microphone** | Any input device macOS recognizes (built-in mic is fine). |
 

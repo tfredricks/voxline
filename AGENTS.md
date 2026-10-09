@@ -41,7 +41,7 @@ xcodebuild test \
   -destination 'platform=macOS'
 ```
 
-Requires Xcode 16.x and macOS (Apple Silicon) — this is not cross-platform buildable. CI (`ci.yml`) runs the same test command with `CODE_SIGNING_ALLOWED=NO` on `macos-15` runners.
+Requires Xcode 26 and macOS 26 (Apple Silicon) — this is not cross-platform buildable. CI (`ci.yml`) runs the same test command with `CODE_SIGNING_ALLOWED=NO` on `macos-26` runners.
 
 ## Conventions
 
