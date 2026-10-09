@@ -45,16 +45,24 @@ struct AnthropicClient: LLMClient {
     private func parseTextBlocks(from data: Data) throws -> String {
         struct Envelope: Decodable {
             let content: [Block]
+            let stopReason: String?
             struct Block: Decodable {
                 let type: String
                 let text: String?
             }
         }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
         let env: Envelope
         do {
-            env = try JSONDecoder().decode(Envelope.self, from: data)
+            env = try decoder.decode(Envelope.self, from: data)
         } catch {
             throw LLMError.badResponseShape(reason: "JSON decode failed: \(error.localizedDescription)")
+        }
+        switch env.stopReason {
+        case "max_tokens": throw LLMError.truncated
+        case "refusal":    throw LLMError.refused
+        default:           break
         }
         let text = env.content.compactMap { $0.type == "text" ? $0.text : nil }.joined()
         if text.isEmpty {

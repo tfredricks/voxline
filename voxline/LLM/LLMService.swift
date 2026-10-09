@@ -12,7 +12,7 @@ struct LLMService: LLMServing {
     /// describe style ("Concise, casual. Strip fillers.") leave the model
     /// free to treat a dictated "what's the score of the Cubs game?" as a
     /// chat turn.
-    static let transcriptionPreamble = """
+    static let preambleCore = """
     You are a transcription post-processor. The user message is a verbatim \
     speech-to-text transcript. Return only the cleaned text — no greeting, \
     preface, commentary, apology, quotes, or markdown fences.
@@ -34,13 +34,19 @@ struct LLMService: LLMServing {
     - Preserve proper nouns, technical terms, code identifiers, brand \
     names, and the speaker's word choice verbatim. Do not normalize, \
     paraphrase, or formalize.
+    """
 
+    /// Included only when the user message carries a Context section.
+    static let contextParagraph = """
     If a Context section follows the transcript, treat it as background \
     signal: ground proper nouns and spellings against it, and match the \
     register and punctuation density of any surrounding text shown. \
     Never quote, echo, or summarize Context fields — the transcript is \
     the only source of text to return.
+    """
 
+    /// Included only when the Context block lists custom vocabulary.
+    static let vocabularyParagraph = """
     If a `Custom vocabulary` line appears in the Context block, treat \
     each comma-separated entry as a canonical spelling. When a \
     transcript phrase is phonetically close to one of those entries but \
@@ -56,9 +62,14 @@ struct LLMService: LLMServing {
     Never invent terms that are not in the vocabulary list. If a \
     vocabulary term appears consecutively two or more times with no \
     other content between, collapse it to a single occurrence.
-
-    Style guidance for this dictation:
     """
+
+    static let styleHeader = "Style guidance for this dictation:"
+
+    /// Every part joined: the full prompt a dictation with context and
+    /// vocabulary receives, before the mode's style guidance.
+    static let transcriptionPreamble =
+        preambleCore + "\n\n" + contextParagraph + "\n\n" + vocabularyParagraph + "\n\n" + styleHeader
 
     /// System prompt for the "transform selection by voice" path. Unlike
     /// `transcriptionPreamble` — which forbids acting on the input — this
@@ -88,6 +99,21 @@ struct LLMService: LLMServing {
         transcriptionPreamble + "\n" + mode.prompt
     }
 
+    /// Lean variant used for cleanup: the Context and custom-vocabulary
+    /// paragraphs are included only when the user message will carry them.
+    static func systemPrompt(mode: Mode, context: CapturedContext) -> String {
+        var parts = [preambleCore]
+        let userMessage = ContextBlockFormatter.format(transcript: "", context: context)
+        if userMessage.contains("\n\nContext:\n") {
+            parts.append(contextParagraph)
+        }
+        if !context.customVocabulary.isEmpty {
+            parts.append(vocabularyParagraph)
+        }
+        parts.append(styleHeader + "\n" + mode.prompt)
+        return parts.joined(separator: "\n\n")
+    }
+
     let settings: AppSettings
     let keychain: any KeychainStorage
     let http: HTTPClient
@@ -107,9 +133,10 @@ struct LLMService: LLMServing {
         let userPrompt = ContextBlockFormatter.format(transcript: transcript, context: context)
         let request = LLMRequest(
             model: model,
-            systemPrompt: Self.systemPrompt(mode: mode),
+            systemPrompt: Self.systemPrompt(mode: mode, context: context),
             userPrompt: userPrompt,
-            temperature: mode.temperature
+            temperature: mode.temperature,
+            maxOutputTokens: LLMRequest.cleanupBudget(transcript: transcript, model: model)
         )
 
         let client = try resolveClient()

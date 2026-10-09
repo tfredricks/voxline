@@ -34,10 +34,55 @@ import Foundation
             .rateLimited,
             .network(URLError(.timedOut)),
             .badStatus(code: 500, body: "server boom"),
-            .badResponseShape(reason: "missing content")
+            .badResponseShape(reason: "missing content"),
+            .truncated,
+            .refused
         ]
         for e in cases {
             #expect(!e.localizedDescription.isEmpty)
+        }
+    }
+
+    @Test func truncated_and_refused_have_exact_user_text() {
+        #expect(LLMError.truncated.errorDescription == "The model ran out of output tokens before finishing.")
+        #expect(LLMError.refused.errorDescription == "The model declined to process this text.")
+    }
+
+    @Test func cleanup_budget_for_empty_transcript_is_the_floor() {
+        #expect(LLMRequest.cleanupBudget(transcript: "", model: "claude-haiku-4-5") == 256)
+    }
+
+    @Test func cleanup_budget_scales_with_utf8_length() {
+        let transcript = String(repeating: "a", count: 400)
+        #expect(LLMRequest.cleanupBudget(transcript: transcript, model: "claude-haiku-4-5") == 406)
+    }
+
+    @Test func cleanup_budget_counts_utf8_bytes_not_characters() {
+        let transcript = String(repeating: "é", count: 200)
+        #expect(transcript.utf8.count == 400)
+        #expect(LLMRequest.cleanupBudget(transcript: transcript, model: "claude-haiku-4-5") == 406)
+    }
+
+    @Test func cleanup_budget_is_capped_at_4096() {
+        let transcript = String(repeating: "a", count: 20_000)
+        #expect(LLMRequest.cleanupBudget(transcript: transcript, model: "claude-haiku-4-5") == 4096)
+    }
+
+    @Test func cleanup_budget_adds_reasoning_headroom_after_the_clamp() {
+        #expect(LLMRequest.cleanupBudget(transcript: "", model: "gpt-5-mini") == 4352)
+        let long = String(repeating: "a", count: 20_000)
+        #expect(LLMRequest.cleanupBudget(transcript: long, model: "gpt-5") == 8192)
+    }
+
+    @Test func cleanup_budget_reasoning_prefixes_are_o1_o3_o4_gpt5_case_insensitive() {
+        for model in ["o1-mini", "o3", "o4-mini", "gpt-5-nano", "GPT-5-Mini", "O3-Mini"] {
+            #expect(LLMRequest.cleanupBudget(transcript: "", model: model) == 4352, "\(model)")
+        }
+    }
+
+    @Test func cleanup_budget_gives_non_reasoning_models_no_headroom() {
+        for model in ["claude-haiku-4-5", "gpt-4.1-nano", "gpt-4o-mini", "gpt-4.1"] {
+            #expect(LLMRequest.cleanupBudget(transcript: "", model: model) == 256, "\(model)")
         }
     }
 }

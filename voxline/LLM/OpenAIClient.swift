@@ -47,20 +47,33 @@ struct OpenAIClient: LLMClient {
             let choices: [Choice]
             struct Choice: Decodable {
                 let message: Message
+                let finishReason: String?
                 struct Message: Decodable {
-                    let content: String
+                    let content: String?
                 }
             }
         }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
         let env: Envelope
         do {
-            env = try JSONDecoder().decode(Envelope.self, from: data)
+            env = try decoder.decode(Envelope.self, from: data)
         } catch {
             throw LLMError.badResponseShape(reason: "JSON decode failed: \(error.localizedDescription)")
         }
         guard let first = env.choices.first else {
             throw LLMError.badResponseShape(reason: "no choices in response")
         }
-        return first.message.content
+        switch first.finishReason {
+        case "length":         throw LLMError.truncated
+        case "content_filter": throw LLMError.refused
+        default:               break
+        }
+        guard let content = first.message.content,
+              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            throw LLMError.badResponseShape(reason: "empty message content")
+        }
+        return content
     }
 }

@@ -85,4 +85,76 @@ import Foundation
             }
         }
     }
+
+    private func cleanupError(forBody json: String) async -> LLMError? {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Data(json.utf8), status: 200)
+        let client = OpenAIClient(apiKey: "k", http: mock)
+        do {
+            _ = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+            return nil
+        } catch let e as LLMError {
+            return e
+        } catch {
+            return nil
+        }
+    }
+
+    @Test func length_finish_reason_with_empty_content_throws_truncated() async {
+        let e = await cleanupError(forBody: #"{"choices":[{"message":{"role":"assistant","content":""},"finish_reason":"length"}]}"#)
+        #expect(e == .truncated)
+    }
+
+    @Test func length_finish_reason_with_null_content_throws_truncated() async {
+        let e = await cleanupError(forBody: #"{"choices":[{"message":{"role":"assistant","content":null},"finish_reason":"length"}]}"#)
+        #expect(e == .truncated)
+    }
+
+    @Test func length_finish_reason_with_partial_content_throws_truncated() async {
+        let e = await cleanupError(forBody: #"{"choices":[{"message":{"role":"assistant","content":"partial"},"finish_reason":"length"}]}"#)
+        #expect(e == .truncated)
+    }
+
+    @Test func content_filter_finish_reason_throws_refused() async {
+        let e = await cleanupError(forBody: #"{"choices":[{"message":{"role":"assistant","content":null},"finish_reason":"content_filter"}]}"#)
+        #expect(e == .refused)
+    }
+
+    @Test func null_content_with_stop_throws_badResponseShape() async {
+        let e = await cleanupError(forBody: #"{"choices":[{"message":{"role":"assistant","content":null},"finish_reason":"stop"}]}"#)
+        #expect(e == .badResponseShape(reason: "empty message content"))
+    }
+
+    @Test func whitespace_only_content_throws_badResponseShape() async {
+        let e = await cleanupError(forBody: #"{"choices":[{"message":{"role":"assistant","content":" \n "},"finish_reason":"stop"}]}"#)
+        #expect(e == .badResponseShape(reason: "empty message content"))
+    }
+
+    @Test func missing_content_key_throws_badResponseShape() async {
+        let e = await cleanupError(forBody: #"{"choices":[{"message":{"role":"assistant"},"finish_reason":"stop"}]}"#)
+        #expect(e == .badResponseShape(reason: "empty message content"))
+    }
+
+    @Test func stop_finish_reason_returns_the_content() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"choices":[{"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}]}"#.data(using: .utf8)!,
+            status: 200
+        )
+        let client = OpenAIClient(apiKey: "k", http: mock)
+        let out = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+        #expect(out == "done")
+    }
+
+    @Test func max_output_tokens_from_the_request_reach_the_body() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"choices":[{"message":{"role":"assistant","content":"x"}}]}"#.data(using: .utf8)!,
+            status: 200
+        )
+        let client = OpenAIClient(apiKey: "k", http: mock)
+        _ = try await client.cleanup(LLMRequest(model: "gpt-5-mini", systemPrompt: "s", userPrompt: "u", temperature: nil, maxOutputTokens: 4353))
+        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
+        #expect(body["max_completion_tokens"] as? Int == 4353)
+    }
 }

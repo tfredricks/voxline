@@ -29,10 +29,22 @@ struct LLMRequest: Equatable {
     /// Optional sampling temperature. nil means "use provider default".
     let temperature: Double?
 
-    /// Default max output tokens for cleanup-style use. Cleaned text is
-    /// almost never longer than the input transcript by much; 1024 is a
-    /// generous ceiling without paying for cap-stretching latency.
+    /// Default max output tokens for callers that don't size the budget from
+    /// their input.
     var maxOutputTokens: Int = 1024
+
+    private static let reasoningModelPrefixes = ["o1", "o3", "o4", "gpt-5"]
+
+    /// Output budget for transcript cleanup: 1.5x the transcript's estimated
+    /// token count plus 256, clamped to 256...4096. Reasoning models draw
+    /// hidden thinking tokens from the same cap, so they get 4,096 more.
+    static func cleanupBudget(transcript: String, model: String) -> Int {
+        let estimatedTokens = Double(transcript.utf8.count) / 4
+        let base = min(max(Int((estimatedTokens * 1.5).rounded(.up)) + 256, 256), 4096)
+        let lowered = model.lowercased()
+        let reasoningHeadroom = reasoningModelPrefixes.contains { lowered.hasPrefix($0) } ? 4096 : 0
+        return base + reasoningHeadroom
+    }
 }
 
 enum LLMError: Error, LocalizedError {
@@ -42,6 +54,8 @@ enum LLMError: Error, LocalizedError {
     case network(Error)
     case badStatus(code: Int, body: String)
     case badResponseShape(reason: String)
+    case truncated
+    case refused
 
     var errorDescription: String? {
         switch self {
@@ -59,6 +73,10 @@ enum LLMError: Error, LocalizedError {
             return "Provider returned HTTP \(code)."
         case .badResponseShape(let reason):
             return "Could not parse provider response: \(reason)"
+        case .truncated:
+            return "The model ran out of output tokens before finishing."
+        case .refused:
+            return "The model declined to process this text."
         }
     }
 }

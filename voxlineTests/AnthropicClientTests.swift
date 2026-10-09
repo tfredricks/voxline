@@ -67,6 +67,63 @@ import Foundation
         #expect(out == "hello world")
     }
 
+    private func cleanupError(forBody json: String) async -> LLMError? {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Data(json.utf8), status: 200)
+        let client = AnthropicClient(apiKey: "k", http: mock)
+        do {
+            _ = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+            return nil
+        } catch let e as LLMError {
+            return e
+        } catch {
+            return nil
+        }
+    }
+
+    @Test func refusal_stop_reason_with_no_blocks_throws_refused() async {
+        let e = await cleanupError(forBody: #"{"content":[],"stop_reason":"refusal"}"#)
+        #expect(e == .refused)
+    }
+
+    @Test func max_tokens_stop_reason_with_text_throws_truncated() async {
+        let e = await cleanupError(forBody: #"{"content":[{"type":"text","text":"partial"}],"stop_reason":"max_tokens"}"#)
+        #expect(e == .truncated)
+    }
+
+    @Test func end_turn_stop_reason_returns_the_text() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"}"#.data(using: .utf8)!,
+            status: 200
+        )
+        let client = AnthropicClient(apiKey: "k", http: mock)
+        let out = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+        #expect(out == "done")
+    }
+
+    @Test func empty_content_with_end_turn_keeps_the_no_text_blocks_error() async {
+        let e = await cleanupError(forBody: #"{"content":[],"stop_reason":"end_turn"}"#)
+        #expect(e == .badResponseShape(reason: "no text blocks in response"))
+    }
+
+    @Test func missing_stop_reason_keeps_the_existing_behavior() async {
+        let e = await cleanupError(forBody: #"{"content":[]}"#)
+        #expect(e == .badResponseShape(reason: "no text blocks in response"))
+    }
+
+    @Test func max_output_tokens_from_the_request_reach_the_body() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"content":[{"type":"text","text":"x"}]}"#.data(using: .utf8)!,
+            status: 200
+        )
+        let client = AnthropicClient(apiKey: "k", http: mock)
+        _ = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil, maxOutputTokens: 406))
+        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
+        #expect(body["max_tokens"] as? Int == 406)
+    }
+
     @Test func http_401_maps_to_invalidAPIKey() async throws {
         let mock = MockHTTPClient()
         mock.stubResponse = (data: Data("nope".utf8), status: 401)
@@ -123,6 +180,9 @@ extension LLMError: Equatable {
             return lc == rc && lb == rb
         case (.badResponseShape(let lr), .badResponseShape(let rr)):
             return lr == rr
+        case (.truncated, .truncated),
+             (.refused, .refused):
+            return true
         case (.network, .network):
             return true   // Sufficient for tests; we don't compare inner errors.
         default:
