@@ -320,9 +320,13 @@ LLM plumbing:
 - `LLMRequest` gains `structuredOutput: StructuredOutput?`, holding a name and
   the schema JSON.
 - `LLMClient.cleanup(_:)` becomes `complete(_:)`.
-- Commands send no `temperature`, `thinking`, or `effort`.
-- Commands set `maxOutputTokens = 8192`. Phase 2's +4,096 for OpenAI
-  reasoning models still applies.
+- Commands send no `temperature` or `thinking`. Effort follows Phase 2's
+  rule for every Anthropic request: models that think by default
+  (`claude-fable-*`, `claude-mythos-*`, `claude-opus-5*`, `claude-sonnet-5*`,
+  `claude-haiku-5*`) get `output_config.effort = "low"`; older models get no
+  effort field (Haiku 4.5 and Sonnet 4.5 reject it).
+- Commands set `maxOutputTokens = 8192`. Phase 2's +4,096 headroom for OpenAI
+  reasoning models and for thinking-by-default Claude models still applies.
 
 Every request uses this schema:
 
@@ -344,7 +348,8 @@ Allowed actions, stated in the prompt:
 Provider requests:
 
 - **Anthropic** adds
-  `"output_config": {"format": {"type": "json_schema", "schema": …}}`, and the
+  `"output_config": {"format": {"type": "json_schema", "schema": …}}`, merged
+  into the same `output_config` object as `effort` when both apply, and the
   JSON comes back in the text block.
 - **OpenAI** adds
   `"response_format": {"type": "json_schema", "json_schema": {"name": "edit", "strict": true, "schema": …}}`,
