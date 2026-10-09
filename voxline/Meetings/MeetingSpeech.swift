@@ -19,12 +19,35 @@ protocol MeetingTranscribing: Sendable {
     func release() async
 }
 
+/// Returns `[]` only when the transcript has no segments (nothing to diarize).
+/// Throws `MeetingDiarizationError` when diarization was impossible or its
+/// output could not be matched to the transcript.
 protocol MeetingDiarizing: Sendable {
     func diarize(_ samples: [Float], transcript: TrackTranscript) async throws -> [SpeakerSegmentText]
     func release() async
 }
 
+enum MeetingDiarizationError: LocalizedError, Equatable {
+    case noWordTimings
+    case speakersNotMatched
+
+    var errorDescription: String? {
+        switch self {
+        case .noWordTimings: "the transcript had no word timings to align speakers to."
+        case .speakersNotMatched: "speakers couldn't be matched to the transcript."
+        }
+    }
+}
+
 enum MeetingSpeechConversion {
+
+    static func requireWordTimings(wordCount: Int) throws {
+        if wordCount == 0 { throw MeetingDiarizationError.noWordTimings }
+    }
+
+    static func requireMatched(transcriptSegments: Int, speakerSegments: Int) throws {
+        if transcriptSegments > 0, speakerSegments == 0 { throw MeetingDiarizationError.speakersNotMatched }
+    }
 
     struct RawSegment {
         var start: Float

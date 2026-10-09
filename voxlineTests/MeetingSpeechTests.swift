@@ -27,4 +27,19 @@ import Testing
         let transcript = TrackTranscript(segments: [TimedSegment(start: 0, end: 1, text: "a")])
         #expect(transcript.results.isEmpty)
     }
+
+    @Test func zero_words_means_no_word_timings() {
+        #expect(throws: MeetingDiarizationError.noWordTimings) {
+            try MeetingSpeechConversion.requireWordTimings(wordCount: 0)
+        }
+        #expect(throws: Never.self) { try MeetingSpeechConversion.requireWordTimings(wordCount: 3) }
+    }
+
+    @Test func empty_output_for_non_empty_transcript_is_not_matched() {
+        #expect(throws: MeetingDiarizationError.speakersNotMatched) {
+            try MeetingSpeechConversion.requireMatched(transcriptSegments: 2, speakerSegments: 0)
+        }
+        #expect(throws: Never.self) { try MeetingSpeechConversion.requireMatched(transcriptSegments: 0, speakerSegments: 0) }
+        #expect(throws: Never.self) { try MeetingSpeechConversion.requireMatched(transcriptSegments: 2, speakerSegments: 1) }
+    }
 }
