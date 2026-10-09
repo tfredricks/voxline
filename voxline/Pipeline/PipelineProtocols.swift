@@ -41,10 +41,7 @@ protocol FocusedFieldInspecting: Sendable {
 }
 
 protocol LLMServing: Sendable {
-    /// - Parameter refinement: nil for a normal first-pass cleanup (prompt is
-    ///   byte-identical to before this parameter existed); a directive for a
-    ///   post-dictation refine pass.
-    func cleanup(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?) async throws -> String
+    func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String
     func transform(instruction: String, selection: String, mode: Mode) async throws -> String
 }
 
@@ -52,10 +49,6 @@ protocol LLMServing: Sendable {
 protocol ClipboardInjecting: AnyObject {
     @discardableResult
     func inject(_ text: String) async throws -> TextInsertionOutcome
-    /// Replace an exact prior insertion in place. Degrades to leaving `new` on
-    /// the clipboard (returning `.fallbackClipboard`) when the swap can't be
-    /// verified — never throws, never mangles the field.
-    func replace(_ old: String, with new: String) async -> ReplaceOutcome
 }
 
 protocol FrontmostAppProviding: Sendable {

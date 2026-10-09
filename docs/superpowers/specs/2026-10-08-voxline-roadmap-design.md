@@ -389,6 +389,7 @@ obvious.
 
 ### Removed
 
+Done early, in 0.4.0.
 The post-dictation review session: `ReviewSession`, `RefinementDirective`,
 `PillReviewActions`, `CapturePipeline.refine`, the hover-pause timers, and the
 Shorter / Longer / Clearer buttons. "Shorter" becomes either "hold the command

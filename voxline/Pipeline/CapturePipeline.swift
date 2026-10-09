@@ -19,8 +19,6 @@ final class CapturePipeline {
     private var contextTask: Task<CapturedContext, Never>?
     private let selectionSnapshot: SelectionSnapshotting
     private var selectionTask: Task<String?, Never>?
-    private var reviewExpiryTask: Task<Void, Never>?
-    private let reviewLingerDuration: TimeInterval
     private let now: @Sendable () -> Date
     let metrics: DictationMetricsStore
     private let llmModelID: @Sendable () -> String
@@ -53,7 +51,6 @@ final class CapturePipeline {
         selectionSnapshot: SelectionSnapshotting = DefaultSelectionSnapshot(),
         metrics: DictationMetricsStore = DictationMetricsStore(),
         llmModelID: @escaping @Sendable () -> String = { AppSettings().llmModel },
-        reviewLingerDuration: TimeInterval = 7,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.state = state
@@ -69,7 +66,6 @@ final class CapturePipeline {
         self.selectionSnapshot = selectionSnapshot
         self.metrics = metrics
         self.llmModelID = llmModelID
-        self.reviewLingerDuration = reviewLingerDuration
         self.now = now
 
         capture.onLevel = { [weak self] level in
@@ -107,8 +103,6 @@ final class CapturePipeline {
         case .idle, .error:
             break
         }
-        // A new dictation supersedes any pending refinement offer.
-        clearReviewSession()
         do {
             try capture.start()
         } catch {
@@ -250,7 +244,7 @@ final class CapturePipeline {
         let cleaned: String
         let cleanupStart = Date()
         do {
-            cleaned = try await llm.cleanup(transcript: transcript, mode: mode, context: context, refinement: nil)
+            cleaned = try await llm.cleanup(transcript: transcript, mode: mode, context: context)
         } catch let e as LLMError {
             transcriptFallback(transcript)
             return setError("\(e.errorDescription ?? "LLM cleanup failed.") Raw transcript copied to the clipboard — paste to recover it.")
@@ -281,14 +275,11 @@ final class CapturePipeline {
             return setError("Text insertion failed: \(error.localizedDescription)")
         }
         recordMetrics(kind: .dictation, timing: timing, cleanupMs: cleanupMs, insertMs: Self.milliseconds(since: insertStart), mode: mode, text: cleaned)
-
-        // Offer quick refinements: keep the pill alive for a few seconds.
-        startReviewSession(kind: .dictation, transcript: transcript, mode: mode, context: context, insertedText: cleaned)
         resetIdle()
     }
 
-    /// Rewrite the user's selection according to the spoken command, paste it
-    /// over the (still-live) selection, and open a transform review session.
+    /// Rewrite the user's selection according to the spoken command and paste
+    /// it over the (still-live) selection.
     /// Owns its terminal state — callers must not call `resetIdle` afterward.
     private func performTransform(command: String, selection: String, mode: Mode, context: CapturedContext, field: FocusedField?, timing: PipelineTiming) async {
         // The AX reader returns the FULL live selection (no truncation), and
@@ -353,116 +344,12 @@ final class CapturePipeline {
             // still replaces the selection.
             transcriptFallback(transformed)
             recordMetrics(kind: .command, timing: timing, cleanupMs: cleanupMs, insertMs: 0, mode: mode, text: transformed)
-            startReviewSession(kind: .transform, transcript: command, mode: mode, context: context, insertedText: transformed)
             resetIdle()
             showToast("Copied — ⌘V to replace")
             return
         }
         recordMetrics(kind: .command, timing: timing, cleanupMs: cleanupMs, insertMs: Self.milliseconds(since: insertStart), mode: mode, text: transformed)
-
-        startReviewSession(kind: .transform, transcript: command, mode: mode, context: context, insertedText: transformed)
         resetIdle()
-    }
-
-    /// Re-run cleanup on the current review session's transcript with a
-    /// refinement directive, then swap the result in place. No-op unless a
-    /// session is open and we're idle. On failure the session and the pasted
-    /// text are left untouched so the click is retryable.
-    func refine(_ directive: RefinementDirective) async {
-        guard let session = state.reviewSession, case .idle = state.status else { return }
-        pauseReviewExpiry()
-        state.status = .thinking
-
-        let cleaned: String
-        do {
-            switch session.kind {
-            case .dictation:
-                cleaned = try await llm.cleanup(
-                    transcript: session.transcript, mode: session.mode,
-                    context: session.context, refinement: directive
-                )
-            case .transform:
-                // Chain on the current text, applying the directive as the
-                // instruction — not a re-run of the original spoken command.
-                cleaned = try await llm.transform(
-                    instruction: directive.promptText,
-                    selection: session.insertedText, mode: session.mode
-                )
-            }
-        } catch let e as LLMError {
-            state.status = .idle
-            showToast(e.errorDescription ?? "Refinement failed.")
-            resumeReviewExpiry()
-            return
-        } catch {
-            state.status = .idle
-            showToast("Refinement failed: \(error.localizedDescription)")
-            resumeReviewExpiry()
-            return
-        }
-
-        // The session may have been dismissed/scrubbed during the await
-        // (MainActor reentrancy). Don't paste or record against a session
-        // the user has already dismissed.
-        guard state.reviewSession != nil else {
-            state.status = .idle
-            return
-        }
-
-        let outcome = await injector.replace(session.insertedText, with: cleaned)
-        state.status = .idle
-        historyStore.updateMostRecent(cleanedText: cleaned)
-        state.reviewSession?.insertedText = cleaned
-        if case .fallbackClipboard = outcome {
-            showToast("Copied — ⌘V to replace")
-        }
-        resumeReviewExpiry()
-    }
-
-    /// Dismiss the refinement offer (pill × button).
-    func dismissReview() { expireReview() }
-
-    /// Scrub the session and its expiry timer. Idempotent.
-    func expireReview() {
-        reviewExpiryTask?.cancel()
-        reviewExpiryTask = nil
-        state.reviewSession = nil
-    }
-
-    /// Suspend the expiry countdown (pill hover-in) so a session isn't scrubbed
-    /// out from under the pointer.
-    func pauseReviewExpiry() {
-        reviewExpiryTask?.cancel()
-        reviewExpiryTask = nil
-    }
-
-    /// Resume the countdown from a full window (pill hover-out, or after a
-    /// refine completes). No-op if no session is open.
-    func resumeReviewExpiry() {
-        guard state.reviewSession != nil else { return }
-        state.reviewSession?.expiresAt = now().addingTimeInterval(reviewLingerDuration)
-        scheduleReviewExpiry()
-    }
-
-    private func startReviewSession(kind: ReviewKind, transcript: String, mode: Mode, context: CapturedContext, insertedText: String) {
-        state.reviewSession = ReviewSession(
-            kind: kind, transcript: transcript, mode: mode, context: context,
-            insertedText: insertedText, expiresAt: now().addingTimeInterval(reviewLingerDuration)
-        )
-        scheduleReviewExpiry()
-    }
-
-    private func clearReviewSession() { expireReview() }
-
-    private func scheduleReviewExpiry() {
-        reviewExpiryTask?.cancel()
-        let duration = reviewLingerDuration
-        // Created in a @MainActor context, so the closure hops back to MainActor.
-        reviewExpiryTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(duration))
-            guard !Task.isCancelled else { return }
-            self?.expireReview()
-        }
     }
 
     private struct PipelineTiming {

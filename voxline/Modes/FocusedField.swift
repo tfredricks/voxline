@@ -16,7 +16,7 @@ enum FieldKind: String, Codable, Equatable, Sendable, CaseIterable {
 }
 
 /// Snapshot of the currently focused UI element's identity. Carries raw AX
-/// role/subrole strings so future heuristics can refine `kind` without
+/// role/subrole strings so future heuristics can adjust `kind` without
 /// breaking the inspector contract.
 struct FocusedField: Equatable, Sendable {
     let role: String?

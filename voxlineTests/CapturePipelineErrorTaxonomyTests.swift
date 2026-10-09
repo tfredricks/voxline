@@ -166,7 +166,7 @@ private final class FakeTranscriber: Transcribing {
 private final class FakeLLM: LLMServing, @unchecked Sendable {
     let handler: (String, Mode, CapturedContext) async throws -> String
     init(handler: @escaping (String, Mode, CapturedContext) async throws -> String) { self.handler = handler }
-    func cleanup(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?) async throws -> String {
+    func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String {
         try await handler(transcript, mode, context)
     }
     func transform(instruction: String, selection: String, mode: Mode) async throws -> String {
@@ -193,5 +193,4 @@ private final class FakeInjector: ClipboardInjecting {
     let handler: (String) async throws -> TextInsertionOutcome
     init(handler: @escaping (String) async throws -> TextInsertionOutcome) { self.handler = handler }
     func inject(_ text: String) async throws -> TextInsertionOutcome { try await handler(text) }
-    func replace(_ old: String, with new: String) async -> ReplaceOutcome { .fallbackClipboard }
 }

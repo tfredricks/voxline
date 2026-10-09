@@ -30,6 +30,12 @@ once it reaches its first tagged release.
 - Command mode reads the selection through Accessibility; the synthetic
   copy is now only a fallback for apps that expose no selection.
 
+### Removed
+
+- The post-dictation Shorter / Longer / Clearer pill. The pill now disappears
+  as soon as text lands. Edit-by-voice stays available through command mode;
+  keyboard presets for common edits arrive with the command-mode rewrite.
+
 ### Fixed
 
 - A hung target app can no longer stall voxline: every Accessibility request

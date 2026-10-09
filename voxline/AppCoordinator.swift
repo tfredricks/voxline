@@ -178,17 +178,7 @@ final class AppCoordinator {
 
         let pill = RecordingPillWindow()
         pillWindow = pill
-        let pillActions = PillReviewActions(
-            refine: { [weak self] directive in
-                Task { @MainActor in await self?.pipeline?.refine(directive) }
-            },
-            dismiss: { [weak self] in self?.pipeline?.dismissReview() },
-            hoverChanged: { [weak self] hovering in
-                if hovering { self?.pipeline?.pauseReviewExpiry() }
-                else { self?.pipeline?.resumeReviewExpiry() }
-            }
-        )
-        pill.show(state: state, actions: pillActions)
+        pill.show(state: state)
         observeToastChanges(state: state)
     }
 
@@ -249,7 +239,6 @@ final class AppCoordinator {
             state.status = .permissionsError("Hotkey monitoring requires Accessibility permission. Grant it in System Settings → Privacy & Security — Voxline will pick it up automatically.")
         }
 
-        observeReviewSessionChanges(state: state)
         startPermissionAndStateLoop(state: state)
 
         // Startup guard: if a required permission (Accessibility / Microphone)
@@ -350,21 +339,6 @@ final class AppCoordinator {
                 guard let self, let state else { return }
                 self.pillWindow?.updateVisibility(state: state)
                 self.observeToastChanges(state: state)
-            }
-        }
-    }
-
-    /// Re-runs `pillWindow.updateVisibility` whenever `state.reviewSession`
-    /// changes, so the pill flips clickable/sized when a refinement offer opens
-    /// and back to click-through when it's scrubbed.
-    private func observeReviewSessionChanges(state: AppState) {
-        withObservationTracking {
-            _ = state.reviewSession
-        } onChange: { [weak self, weak state] in
-            Task { @MainActor in
-                guard let self, let state else { return }
-                self.pillWindow?.updateVisibility(state: state)
-                self.observeReviewSessionChanges(state: state)
             }
         }
     }

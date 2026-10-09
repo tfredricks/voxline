@@ -178,6 +178,8 @@ the user waits, nothing pastes, an empty history entry is recorded.
 
 ## Follow-ups from the pill refine-actions feature (2026-07-10)
 
+Resolved in 0.4.0 by removing the feature.
+
 Non-blocking items surfaced by the whole-branch review of the post-dictation
 refine pill (commits `7e88720..67958b6`). None block shipping; the feature is on
 `main` with the full suite green.

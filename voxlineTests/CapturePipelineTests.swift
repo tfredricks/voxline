@@ -34,15 +34,15 @@ import Foundation
 
     final class FakeLLM: LLMServing, @unchecked Sendable {
         var nextResult: Result<String, Error> = .success("cleaned")
-        var calls: [(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?)] = []
+        var calls: [(transcript: String, mode: Mode, context: CapturedContext)] = []
         var transformResult: Result<String, Error> = .success("transformed")
         var transformCalls: [(instruction: String, selection: String, mode: Mode)] = []
         /// Invoked during `cleanup`/`transform`, after the call is recorded and
         /// before the result is returned — lets tests simulate MainActor
-        /// reentrancy (e.g. the review session being dismissed mid-flight).
+        /// reentrancy (e.g. the selection changing mid-flight).
         var onCleanup: (() -> Void)? = nil
-        func cleanup(transcript: String, mode: Mode, context: CapturedContext, refinement: RefinementDirective?) async throws -> String {
-            calls.append((transcript, mode, context, refinement))
+        func cleanup(transcript: String, mode: Mode, context: CapturedContext) async throws -> String {
+            calls.append((transcript, mode, context))
             onCleanup?()
             return try nextResult.get()
         }
@@ -66,16 +66,10 @@ import Foundation
     final class FakeInjector: ClipboardInjecting {
         var injected: [String] = []
         var nextError: Error?
-        var replaceCalls: [(old: String, new: String)] = []
-        var replaceOutcome: ReplaceOutcome = .replaced(TextInsertionOutcome(strategy: .clipboardPaste, verification: .confirmed))
         func inject(_ text: String) async throws -> TextInsertionOutcome {
             if let nextError { throw nextError }
             injected.append(text)
             return TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
-        }
-        func replace(_ old: String, with new: String) async -> ReplaceOutcome {
-            replaceCalls.append((old, new))
-            return replaceOutcome
         }
     }
 
@@ -410,7 +404,6 @@ import Foundation
         #expect(copied.read() == ["cleaned"])
         #expect(state.toastMessage == "No text field focused — copied")
         #expect(state.status == .idle)
-        #expect(state.reviewSession == nil)
         #expect(history.items.first?.cleanedText == "cleaned")
     }
 
@@ -510,43 +503,10 @@ import Foundation
         #expect(fallbackCalls == 0)
     }
 
-    // MARK: - Review session + refine
-
-    private func makeRefinePipeline(
-        now: Date = Date(timeIntervalSince1970: 10_000),
-        linger: TimeInterval = 7
-    ) -> (CapturePipeline, AppState, FakeLLM, FakeInjector, DictationHistoryStore) {
-        let state = AppState()
-        let capture = FakeCapture()
-        let transcriber = FakeTranscriber()
-        let llm = FakeLLM()
-        let front = FakeFrontmost(); front.bundleID = "com.tinyspeck.slackmacgap"
-        let inspector = FakeFieldInspector()
-        let injector = FakeInjector()
-        let router = ModeRouter(modes: [
-            Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "Slack", prompt: "slack-prompt", model: nil, temperature: nil, category: .chat),
-            Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil, category: .general)
-        ])
-        let name = "voxline-test-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: name)!
-        defaults.removePersistentDomain(forName: name)
-        let history = DictationHistoryStore(defaults: defaults)
-        let pipe = CapturePipeline(
-            state: state, capture: capture, transcriber: transcriber,
-            llm: llm, modes: router, frontmost: front,
-            fieldInspector: inspector, injector: injector,
-            historyStore: history, contextCapture: FakeContextCapture(),
-            selectionSnapshot: FakeSelectionSnapshot(),
-            llmModelID: { "test-model" },
-            reviewLingerDuration: linger, now: { now }
-        )
-        return (pipe, state, llm, injector, history)
-    }
+    // MARK: - Selection detection + transform
 
     private func makeTransformPipeline(
         selection: String,
-        now: Date = Date(timeIntervalSince1970: 10_000),
-        linger: TimeInterval = 7,
         focusedField: FocusedField? = nil
     ) -> (CapturePipeline, AppState, FakeLLM, FakeInjector, DictationHistoryStore) {
         let state = AppState()
@@ -571,123 +531,12 @@ import Foundation
             fieldInspector: inspector, injector: injector,
             historyStore: history, contextCapture: FakeContextCapture(),
             selectionSnapshot: snap,
-            llmModelID: { "test-model" },
-            reviewLingerDuration: linger, now: { now }
+            llmModelID: { "test-model" }
         )
         return (pipe, state, llm, injector, history)
     }
 
-    @Test func finalize_success_opensReviewSessionWithExpiry() async {
-        let now = Date(timeIntervalSince1970: 10_000)
-        let (pipe, state, _, _, _) = makeRefinePipeline(now: now, linger: 7)
-        pipe.startRecording()
-        state.lastPeakLevel = 0.5
-        await pipe.finalizeRecording()
-
-        let session = state.reviewSession
-        #expect(session != nil)
-        #expect(session?.transcript == "hello world")   // FakeTranscriber default
-        #expect(session?.insertedText == "cleaned")      // FakeLLM default
-        #expect(session?.expiresAt == now.addingTimeInterval(7))
-    }
-
-    @Test func startRecording_clearsAnyReviewSession() async {
-        let (pipe, state, _, _, _) = makeRefinePipeline()
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
-        #expect(state.reviewSession != nil)
-        pipe.startRecording()
-        #expect(state.reviewSession == nil)
-    }
-
-    @Test func expireReview_scrubsSession() async {
-        let (pipe, state, _, _, _) = makeRefinePipeline()
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
-        pipe.expireReview()
-        #expect(state.reviewSession == nil)
-    }
-
-    @Test func refine_success_replacesUpdatesHistoryAndKeepsSession() async {
-        let (pipe, state, llm, injector, history) = makeRefinePipeline()
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
-        #expect(history.items.first?.cleanedText == "cleaned")
-
-        llm.nextResult = .success("tighter")
-        await pipe.refine(.terser)
-
-        #expect(llm.calls.last?.refinement == .terser)
-        #expect(llm.calls.last?.transcript == "hello world")   // from transcript, not cleaned output
-        #expect(injector.replaceCalls.last?.old == "cleaned")
-        #expect(injector.replaceCalls.last?.new == "tighter")
-        #expect(state.reviewSession?.insertedText == "tighter")
-        #expect(history.items.count == 1)
-        #expect(history.items.first?.cleanedText == "tighter")
-        if case .idle = state.status {} else { Issue.record("expected .idle after refine") }
-    }
-
-    @Test func refine_fallbackClipboard_setsToastAndUpdatesText() async {
-        let (pipe, state, llm, injector, _) = makeRefinePipeline()
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
-        injector.replaceOutcome = .fallbackClipboard
-        llm.nextResult = .success("tighter")
-
-        await pipe.refine(.terser)
-
-        #expect(state.reviewSession?.insertedText == "tighter")
-        #expect(state.toastMessage == "Copied — ⌘V to replace")
-    }
-
-    @Test func refine_llmError_keepsSessionAndSurfacesToast() async {
-        let (pipe, state, llm, injector, _) = makeRefinePipeline()
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
-        llm.nextResult = .failure(LLMError.missingAPIKey)
-
-        await pipe.refine(.longer)
-
-        #expect(state.reviewSession != nil)
-        #expect(state.reviewSession?.insertedText == "cleaned")  // unchanged
-        #expect(injector.replaceCalls.isEmpty)
-        #expect(state.toastMessage != nil)
-        if case .idle = state.status {} else { Issue.record("expected .idle after refine error") }
-    }
-
-    @Test func refine_noSession_isNoOp() async {
-        let (pipe, state, llm, _, _) = makeRefinePipeline()
-        #expect(state.reviewSession == nil)
-        await pipe.refine(.terser)
-        #expect(llm.calls.isEmpty)
-    }
-
-    @Test func refine_wrongStatus_isNoOp() async {
-        let (pipe, state, llm, injector, _) = makeRefinePipeline()
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
-        #expect(state.reviewSession != nil)
-
-        state.status = .recording
-        let callCountBefore = llm.calls.count
-        await pipe.refine(.terser)
-
-        #expect(llm.calls.count == callCountBefore)
-        #expect(injector.replaceCalls.isEmpty)
-    }
-
-    @Test func refine_sessionDismissedDuringCleanup_doesNotPaste() async {
-        let (pipe, state, llm, injector, _) = makeRefinePipeline()
-        pipe.startRecording(); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
-        #expect(state.reviewSession != nil)
-
-        llm.onCleanup = { pipe.dismissReview() }
-        llm.nextResult = .success("tighter")
-
-        await pipe.refine(.terser)
-
-        #expect(state.reviewSession == nil)
-        #expect(injector.replaceCalls.isEmpty)
-        if case .idle = state.status {} else { Issue.record("expected .idle after refine on dismissed session") }
-    }
-
-    // MARK: - Selection detection + transform
-
-    @Test func finalize_withSelection_transformsAndOpensTransformReview() async {
+    @Test func finalize_withSelection_transformsAndInjectsOverSelection() async {
         let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
         pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
 
@@ -695,10 +544,7 @@ import Foundation
         #expect(llm.transformCalls.last?.instruction == "hello world")   // the spoken command
         #expect(llm.calls.isEmpty)                                       // dictation cleanup NOT called
         #expect(injector.injected.last == "transformed")                 // pasted over the live selection
-        #expect(injector.replaceCalls.isEmpty)                           // initial transform uses inject, not replace
         #expect(history.items.first?.cleanedText == "transformed")
-        #expect(state.reviewSession?.kind == .transform)
-        #expect(state.reviewSession?.insertedText == "transformed")
         if case .idle = state.status {} else { Issue.record("expected .idle after transform") }
     }
 
@@ -736,28 +582,8 @@ import Foundation
         #expect(copied.read() == ["transformed"])
         #expect(state.toastMessage == "Copied — ⌘V to replace")
         #expect(state.status == .idle)
-        #expect(state.reviewSession == nil)
         #expect(history.items.first?.cleanedText == "transformed")
         #expect(pipe.metrics.items.first?.kind == .command)
-    }
-
-    @Test func refine_onTransformSession_usesTransformOnCurrentText() async {
-        let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
-        pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
-        #expect(state.reviewSession?.kind == .transform)
-
-        llm.transformResult = .success("tighter")
-        await pipe.refine(.terser)
-
-        #expect(llm.transformCalls.last?.instruction == RefinementDirective.terser.promptText)
-        #expect(llm.transformCalls.last?.selection == "transformed")   // acts on current inserted text, not the command
-        #expect(llm.calls.isEmpty)                                     // cleanup never used for a transform session
-        #expect(injector.replaceCalls.last?.old == "transformed")
-        #expect(injector.replaceCalls.last?.new == "tighter")
-        #expect(state.reviewSession?.insertedText == "tighter")
-        #expect(history.items.count == 1)
-        #expect(history.items.first?.cleanedText == "tighter")
-        if case .idle = state.status {} else { Issue.record("expected .idle after transform refine") }
     }
 
     @Test func finalize_withSelection_unchangedResult_showsToastNoWrite() async {
@@ -767,7 +593,6 @@ import Foundation
 
         #expect(injector.injected.isEmpty)
         #expect(history.items.isEmpty)
-        #expect(state.reviewSession == nil)
         #expect(state.toastMessage == "Couldn't apply that")
         if case .idle = state.status {} else { Issue.record("expected .idle") }
     }
@@ -778,7 +603,6 @@ import Foundation
         pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
 
         #expect(injector.injected.isEmpty)
-        #expect(state.reviewSession == nil)
         if case .error = state.status {} else { Issue.record("expected .error status") }
     }
 
@@ -791,8 +615,6 @@ import Foundation
 
         #expect(fallbackText == "transformed")
         #expect(state.toastMessage == "Copied — ⌘V to replace")
-        #expect(state.reviewSession?.kind == .transform)
-        #expect(state.reviewSession?.insertedText == "transformed")
     }
 
     @Test func finalize_withEmptySelection_usesDictationPath() async {
@@ -802,7 +624,6 @@ import Foundation
         #expect(llm.transformCalls.isEmpty)
         #expect(llm.calls.count == 1)                    // dictation cleanup called
         #expect(injector.injected.last == "cleaned")
-        #expect(state.reviewSession?.kind == .dictation)
     }
 
     @Test func finalize_withSelection_overLimit_refusesWithToast() async {
@@ -813,7 +634,6 @@ import Foundation
         #expect(llm.transformCalls.isEmpty)
         #expect(injector.injected.isEmpty)
         #expect(history.items.isEmpty)
-        #expect(state.reviewSession == nil)
         #expect(state.toastMessage == "Selection too long to transform")
         if case .idle = state.status {} else { Issue.record("expected .idle after over-limit refusal") }
     }
@@ -841,8 +661,7 @@ import Foundation
             fieldInspector: inspector, injector: injector,
             historyStore: history, contextCapture: FakeContextCapture(),
             selectionSnapshot: snap,
-            llmModelID: { "test-model" },
-            reviewLingerDuration: 7, now: { Date(timeIntervalSince1970: 10_000) }
+            llmModelID: { "test-model" }
         )
         // Focus/selection moves mid-await: flip the snapshot from inside
         // `transform` (which fires `onCleanup` before returning).
@@ -855,7 +674,6 @@ import Foundation
         #expect(injector.injected.isEmpty)          // did NOT paste over the wrong target
         #expect(fallbackText == "transformed")       // result left on clipboard
         #expect(state.toastMessage == "Copied — ⌘V to replace")
-        #expect(state.reviewSession == nil)
         #expect(history.items.isEmpty)               // focus guard is before history.record
         if case .idle = state.status {} else { Issue.record("expected .idle after focus-moved fallback") }
     }
@@ -868,7 +686,6 @@ import Foundation
         #expect(llm.calls.isEmpty)               // no dictation cleanup either
         #expect(injector.injected.isEmpty)
         #expect(history.items.isEmpty)
-        #expect(state.reviewSession == nil)
         #expect(state.toastMessage == "Select text to transform")
         if case .idle = state.status {} else { Issue.record("expected .idle") }
     }
@@ -905,7 +722,6 @@ import Foundation
         #expect(llm.transformCalls.isEmpty)
         #expect(llm.calls.count == 1)            // dictation cleanup ran
         #expect(injector.injected.last == "cleaned")
-        #expect(state.reviewSession?.kind == .dictation)
     }
 
     @Test func startRecording_command_sets_recordingIsCommand_flag() {

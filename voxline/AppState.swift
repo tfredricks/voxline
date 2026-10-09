@@ -90,10 +90,4 @@ final class AppState {
     /// transcript was empty).
     var lastCleanupDuration: TimeInterval?
 
-    /// Non-nil while a just-completed dictation is offering quick refinements
-    /// (Shorter / Longer / Clearer). Drives `RecordingPillWindow`'s visibility
-    /// and interactivity, exactly like `toastMessage` drives the toast pill.
-    /// Owned and expired by `CapturePipeline`; the view only reads it.
-    var reviewSession: ReviewSession?
-
 }
