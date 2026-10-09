@@ -60,26 +60,22 @@ final class AppCoordinator {
     /// against each other over the same eventTap.
     private var permissionPollTimer: Timer?
     private var firstRunWindow: FirstRunWindowController?
-    private let permissionsWindow = PermissionsWindowController()
     /// Tracks the required-permission state across reconcile ticks so we can
     /// raise the permissions window on a granted→missing transition (runtime
     /// revocation) without re-raising it every tick while it stays missing.
     private var lastRequiredGranted: Bool?
 
-    /// Raise the standalone permissions panel. Called from the menu-bar
-    /// "Fix permissions…" item and from the startup / revocation guards.
-    func showPermissionsWindow() {
-        permissionsWindow.show()
-    }
+    /// Brings up the main window; set by `AppDelegate` before `startIfNeeded`.
+    var presentMainWindow: (MainWindowPage) -> Void = { _ in }
 
-    /// Starts a meeting recording, or raises the permissions window instead
+    /// Starts a meeting recording, or opens Home instead
     /// when the microphone isn't allowed. The notification permission prompt
     /// waits for the first recording that actually starts.
     func startMeetingRecording() {
         guard let meetings = appState?.meetings else { return }
         guard PermissionsService().microphoneStatus == .granted else {
             AppLog.meetings.notice("meeting start blocked: microphone not allowed")
-            showPermissionsWindow()
+            presentMainWindow(.home)
             return
         }
         meetings.start()
@@ -107,7 +103,7 @@ final class AppCoordinator {
         Task { await pipeline.retryLastDictation() }
     }
 
-    func startIfNeeded(state: AppState, historyStore: DictationHistoryStore, migration: ContainerMigration.Report? = nil) {
+    func startIfNeeded(state: AppState, historyStore: DictationHistoryStore, migration: ContainerMigration.Report? = nil, launchedAtLogin: Bool = false) {
         AXMessagingTimeout.install()
         guard !didStart else { return }
         didStart = true
@@ -126,9 +122,19 @@ final class AppCoordinator {
         var settings = AppSettings()
         settings.migrateCommandChordIfNeeded()
         logLaunchTrace(settings: settings)
-        if !settings.hasCompletedFirstRun {
+        let presentation = LaunchPresentation.decide(
+            firstRunComplete: settings.hasCompletedFirstRun,
+            requiredPermissionsGranted: PermissionsService().summary().requiredGranted,
+            launchedAtLogin: launchedAtLogin
+        )
+        AppLog.pipeline.info("launch presentation: \(String(describing: presentation), privacy: .public)")
+        switch presentation {
+        case .wizard:
             startWizardThenApp(state: state, settings: settings, historyStore: historyStore)
-        } else {
+        case .home:
+            startApp(state: state, settings: settings, historyStore: historyStore)
+            presentMainWindow(.home)
+        case .none:
             startApp(state: state, settings: settings, historyStore: historyStore)
         }
 
@@ -157,6 +163,7 @@ final class AppCoordinator {
                     guard let self else { return }
                     self.firstRunWindow = nil
                     self.installHotkey(state: state, settings: settings)
+                    self.presentMainWindow(.home)
                 }
             )
         }
@@ -344,15 +351,8 @@ final class AppCoordinator {
 
         startPermissionAndStateLoop(state: state)
 
-        // Startup guard: if a required permission (Accessibility / Microphone)
-        // is missing, raise the permissions panel so the user gets a clear,
-        // actionable prompt instead of a silently non-functional hotkey. The
-        // panel polls and closes itself once the required set is granted.
         let summary = perms.summary()
         lastRequiredGranted = summary.requiredGranted
-        if !summary.requiredGranted {
-            permissionsWindow.show()
-        }
     }
 
     /// Single source of truth for "should the tap be installed right now?".
@@ -378,13 +378,13 @@ final class AppCoordinator {
         let perms = PermissionsService()
         let ax = perms.accessibilityStatus
 
-        // Raise the permissions panel on a granted→missing transition (runtime
+        // Open Home on a granted→missing transition (runtime
         // revocation). Gated on the previous tick's state so it isn't re-raised
         // every second while permissions stay missing — which would fight a
         // user who deliberately closed it.
         let requiredGranted = (ax == .granted && perms.microphoneStatus == .granted)
         if lastRequiredGranted == true && !requiredGranted {
-            permissionsWindow.show()
+            presentMainWindow(.home)
         }
         lastRequiredGranted = requiredGranted
 
