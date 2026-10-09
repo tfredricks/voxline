@@ -310,11 +310,12 @@ import Foundation
     }
 
     @Test func an_on_device_engine_failure_does_not_fall_back() async {
-        let apple = FakeTranscriptionEngine(id: .apple, metricsID: "fake:apple")
+        let otherOnDevice = EngineID.allCases.first { $0.isOnDevice && $0 != .onDeviceDefault }!
+        let onDevice = FakeTranscriptionEngine(id: otherOnDevice, metricsID: "fake:on-device")
         let session = FakeTranscriptionSession()
         session.finishResult = .failure(Boom())
-        apple.nextSessions = [session]
-        let h = makeHarness(current: apple)
+        onDevice.nextSessions = [session]
+        let h = makeHarness(current: onDevice)
         await dictate(h)
 
         #expect(h.local.openedConfigs.isEmpty)

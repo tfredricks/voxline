@@ -11,8 +11,10 @@ once it reaches its first tagged release.
 ### Added
 
 - **Choice of speech engine.** Settings → General → Recognition has an Engine
-  picker: Apple Speech (on-device, fastest), Whisper (on-device, still the
-  default), or OpenAI (cloud). Switching prepares the new engine in the
+  picker: Apple Speech (on-device, fastest, now the default), Whisper
+  (on-device), or OpenAI (cloud). Apple Speech won the bake-off on real
+  recordings, so if you never picked an engine, voxline switches to it; your
+  Whisper model stays downloaded, and you can pick Whisper again in Settings. Switching prepares the new engine in the
   background; if it needs a download, the menu bar shows progress and
   dictation is unavailable until it finishes. The Whisper model picker shows
   only while Whisper is selected.

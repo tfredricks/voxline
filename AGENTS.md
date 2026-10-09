@@ -7,7 +7,7 @@ Guidance for coding agents working in this repo. Human contributors should read 
 voxline is a native macOS menu-bar app (SwiftUI + AppKit, Swift Package Manager dependencies, no CocoaPods/Carthage). Hold a hotkey, speak, and it inserts cleaned-up text into the focused field:
 
 1. `Audio/` captures mic input while the hotkey is held.
-2. `Transcription/` turns the audio into text with the selected engine: Apple Speech, Whisper on-device via [WhisperKit](https://github.com/argmaxinc/WhisperKit) (SPM dep: `argmaxinc/argmax-oss-swift`; the default), or OpenAI Realtime (cloud, opt-in).
+2. `Transcription/` turns the audio into text with the selected engine: Apple Speech (the default), Whisper on-device via [WhisperKit](https://github.com/argmaxinc/WhisperKit) (SPM dep: `argmaxinc/argmax-oss-swift`), or OpenAI Realtime (cloud, opt-in).
 3. `Context/` assembles a context block (per-app mode prompt, focused-field AX info, custom vocabulary).
 4. `LLM/` sends the transcript + context to Anthropic or OpenAI for cleanup (`AnthropicClient.swift` / `OpenAIClient.swift` behind `LLMService.swift`).
 5. `Output/` inserts the result through Accessibility, or pastes and restores the clipboard.

@@ -122,7 +122,7 @@ several items below check it.
 
 ## Live text in the pill
 
-- [ ] On the default engine (Whisper), hold the chord in Notes and speak 15–20
+- [ ] On the default engine (Apple Speech), and again on Whisper, hold the chord in Notes and speak 15–20
       words. Within about a second the pill shows your words under the
       waveform: settled text bright, the last few words dimmer and still
       changing.
@@ -195,8 +195,9 @@ several items below check it.
 
 - [ ] Settings → General → Recognition → Engine lists "Apple Speech —
       on-device, fastest", "Whisper — on-device", and "OpenAI — cloud, audio
-      leaves your Mac". A fresh install has Whisper selected, and the Whisper
-      model picker shows only while Whisper is selected.
+      leaves your Mac". A fresh install has Apple Speech selected, and the
+      Whisper model picker shows only while Whisper is selected. Upgrading
+      from 0.4.0 without ever picking an engine also lands on Apple Speech.
 - [ ] Select Apple Speech and dictate in Notes. Text lands. Select Whisper and
       dictate again. Text lands.
 - [ ] Choose a Whisper model that is not downloaded yet (for example small.en
@@ -282,7 +283,7 @@ several items below check it.
 
 ## Latency targets
 
-- [ ] Record 20 dictations on the default engine (Whisper) with the same LLM
+- [ ] Record 20 dictations on the default engine (Apple Speech) with the same LLM
       model as the baseline (`gpt-4.1-nano`): 10–30-word sentences in Notes,
       Slack, and a browser field. In About Voxline → Diagnostics, write down
       the medians for transcribe, total, and "First words", and compare them
@@ -300,7 +301,7 @@ several items below check it.
 - [ ] Follow `docs/bakeoff.md`: turn on `voxline.debug.saveBakeoffClips`,
       dictate at least 20 clips, correct each `.txt`, write `terms.txt`, and
       run the bake-off. Record the verdict. If it names an engine other than
-      Whisper, flip the default in a follow-up change.
+      Apple Speech, flip the default in a follow-up change.
 - [ ] Turn the flag off and delete the clips as that doc describes. After new
       dictations, `find ~/Library/Application\ Support/voxline -name '*.wav'`
       prints nothing.

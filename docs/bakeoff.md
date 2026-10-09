@@ -4,8 +4,10 @@ The bake-off runs each speech engine over the same recordings and picks the
 default by a rule written down before any run (the "Decision rule" in
 `docs/superpowers/specs/2026-10-08-transcription-engine-design.md`). It measures
 word error rate (WER), dictionary-term misses, and how long each engine takes
-after the last audio arrives. A synthetic text-to-speech run set the
-provisional default; your own recordings are the real test.
+after the last audio arrives. A synthetic text-to-speech run set a
+provisional default (Whisper); the first run on real recordings (10 clips,
+2026-10-09) chose Apple Speech, the current default. Your own recordings are
+the real test.
 
 ## 1. Capture real clips
 

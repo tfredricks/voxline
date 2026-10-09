@@ -26,6 +26,11 @@ import Foundation
         #expect(EngineID.openAIRealtime.rawValue == "openai-realtime")
     }
 
+    @Test func apple_speech_is_the_default_engine() {
+        #expect(EngineID.default == .apple)
+        #expect(EngineID.onDeviceDefault == .apple)
+    }
+
     @Test func default_engine_is_on_device() {
         #expect(EngineID.default.isOnDevice)
         #expect(EngineID.onDeviceDefault.isOnDevice)

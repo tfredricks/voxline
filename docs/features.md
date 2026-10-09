@@ -10,7 +10,7 @@
 | Auto language detection | Useful for multilingual users |
 | Offline transcription | Privacy and travel support — Whisper and Apple Speech run on-device |
 | Streaming transcription | Low perceived latency — a live transcript in the pill while you speak (stable text bright, still-changing text dim) |
-| Choice of speech engine | Trade speed, accuracy, and privacy — Apple Speech (fastest), Whisper (default), or OpenAI, picked in Settings |
+| Choice of speech engine | Trade speed, accuracy, and privacy — Apple Speech (fastest, the default), Whisper, or OpenAI, picked in Settings |
 | Cloud speech-to-text | Hosted recognition for users who accept audio leaving the device — OpenAI (opt-in, your own key), with an on-device fallback if the cloud fails |
 | Cancel in flight | Drop a bad take before it is inserted — Esc while recording, transcribing, or cleaning up |
 | Speaker adaptation | Learns your voice over time |

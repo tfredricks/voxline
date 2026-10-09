@@ -60,7 +60,7 @@ Measured on the default engine, 20 dictations, same LLM model as the baseline:
 | Parakeet / FluidAudio | Not built this phase | It adds a new dependency and another ~600 MB model to compete in a slot Apple already fills on latency and Whisper fills on biasing. The engine protocol makes it a one-file adapter later if both shipping engines miss the targets. |
 | Deepgram | Not built | One cloud provider is enough. OpenAI reuses the OpenAI key most users already store for cleanup, so there is no new key UI. |
 | Bake-off decision rule | See "Decision rule" below; latency margin **300 ms** | Written before any run, as the roadmap requires. |
-| Default engine | Chosen by the rule. A synthetic smoke run (TTS clips) sets it provisionally tonight; Todd's real clips confirm or flip it | No real recordings exist yet. |
+| Default engine | **Apple Speech** (decided 2026-10-09 on Todd's real clips; the synthetic run had provisionally kept Whisper) | By the decision rule on 10 real clips: Apple WER 3.5% vs Whisper 4.9%, term misses 5/17 vs 6/17, finish median ~0.1 s vs 0.2–0.6 s. Upgraders who never picked an engine switch too. See "Real-clip bake-off result". |
 | Apple vocabulary hints | Passed through `AnalysisContext` anyway; capability flag off | Harmless if ignored; the bake-off measures whether they help. |
 | WhisperKit vocabulary hints (amended during implementation) | Not sent; capability flag off | WhisperKit 1.0's `TextDecoder` runs its stop checks while forcing prompt tokens, so any `promptTokens` make large-v3 turbo return empty text (token trace in the Task 5a report). A local workaround also disabled timestamp rules and broke streaming confirmation. LLM cleanup applies the vocabulary for every engine. Revisit when WhisperKit fixes prompting upstream. |
 | Esc: swallow or pass through | **Swallowed**, only while voxline is recording or thinking | Passing Esc to the frontmost app would close compose windows and popovers in Slack, Mail, and IDEs exactly when the user is dictating into them. A separate active event tap on its own thread does the swallowing, so a busy main thread cannot stall the keyboard. Phase 3's preset shortcuts reuse it. |
@@ -593,3 +593,23 @@ was also found to clip up to ~64 ms off each clip and was fixed (Task 13), so
 earlier numbers ran on slightly shortened audio. The ≤ 300 ms target is
 still missed with WhisperKit; Apple Speech meets it (~120 ms) but loses the
 accuracy comparison on these clips.
+
+## Real-clip bake-off result (2026-10-09)
+
+10 clips of Todd's own dictation (2.5–24 s, 286 reference words), 15
+dictionary terms, references corrected by Todd (the drafts were Whisper's
+output, so uncorrected they favored Whisper). WER below is after one more
+correction (clip 3's "Monday to Thursday", which only Apple heard); the
+harness's own run reported 4.6% / 3.9% before it.
+
+| Engine | WER % | Term miss | Finish median, 600 ms tail | Finish median, no tail |
+|---|---|---|---|---|
+| Apple Speech | 3.5 | 5/17 (29.4%) | 90 ms | 111 ms |
+| WhisperKit (large-v3 turbo) | 4.9 | 6/17 (35.3%) | 182 ms | 605 ms |
+
+Verdict by the rule: Apple Speech (lowest term miss rate, and faster).
+The margin on terms is one occurrence, so a larger set of clips should
+confirm it. Both engines missed "Dobby", "Hightower", and "Claude Code";
+cleanup with the custom vocabulary repairs those in the app. Whisper dropped
+the final word of the 2.5 s clip ("Todd") in both runs, which is worth a
+look at the end-of-utterance path.

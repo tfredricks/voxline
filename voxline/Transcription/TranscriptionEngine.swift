@@ -7,7 +7,7 @@ enum EngineID: String, Codable, CaseIterable, Sendable {
 
     /// Engine used when the user has not picked one. Set by the bake-off
     /// decision rule (spec, "Decision rule"); never a cloud engine.
-    static let `default`: EngineID = .whisperKit
+    static let `default`: EngineID = .apple
 
     /// On-device engine the pipeline falls back to when a cloud session fails.
     static var onDeviceDefault: EngineID { EngineID.default.isOnDevice ? EngineID.default : .whisperKit }
