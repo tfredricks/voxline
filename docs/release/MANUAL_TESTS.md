@@ -643,3 +643,22 @@ Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meeti
 - [ ] Meeting shortcut starts and stops a recording from any app.
 - [ ] Retention "Don't keep": no `.pcm`/`.m4a` remain in `~/Library/Application Support/voxline/meetings/<id>/` after notes are written.
 - [ ] One-hour real meeting: note the time from Stop to "Meeting notes ready" (spike target ≤ 4 min on synthetic audio with small.en; record the real number).
+
+## Learning
+
+Watch `scripts/tail-logs.sh learning` throughout: every line carries counts and reasons only, never text.
+
+- [ ] **Word, Cocoa.** In TextEdit, dictate "ask Cooper Nettis to review". Change it to "Kubernetes" in the field and wait 30 s. "Learned: Kubernetes" appears with Undo, and Settings → Custom vocabulary lists it as Learned. Dictate the sentence again: it comes out right.
+- [ ] **Fix then send.** In Messages, dictate "ask Cooper Nettis", fix it to "Kubernetes", wait 2 s, and press Return. "Learned: Kubernetes" appears (log: `source=lastGood`). Repeat in a Mail compose: fix, then click Send.
+- [ ] **Fix then dictate at once.** As in the first check, but start the next dictation within 5 s of the fix. The toast appears after that dictation inserts, and that dictation already has the word right.
+- [ ] **Undo.** Click Undo on the toast. The word leaves the list. Make the same fix again: nothing is learned.
+- [ ] **Not vocabulary.** Change "Tuesday" to "Thursday", "there" to "their", and the case of a word: nothing is learned.
+- [ ] **Focus leaves.** Dictate in Notes, click into another app, and edit nothing: the log shows `end=focusLeft region=unchanged`.
+- [ ] **Electron and web.** Dictate and fix a word in Slack, then in Gmail in Safari. Learning either works or logs `valueUnreadable`. No wrong toast, no slowdown. Record which apps learn.
+- [ ] **Skipped fields.** Terminal, VS Code, and a password field log a skip and never toast.
+- [ ] **Style.** After 20 Slack dictations, Settings → Learning → Chat shows a sensible note. With `VOXLINE_TRACE_LLM=1`, the next Slack dictation's system prompt carries the note and at most two quoted Slack examples, and its output follows the note.
+- [ ] **Edited note.** Edit the Chat note. After 20 more Slack dictations it is unchanged and says "Edited by you". Regenerate asks, then replaces it.
+- [ ] **Both off.** Turn both toggles off. A traced dictation's system prompt has no "Learned style" or "Examples" block, `log stream` shows no `learning` lines, and a fix in the field learns nothing.
+- [ ] **Issue 15.** Reset to Defaults leaves Custom vocabulary and Learning alone. Clear All asks before removing anything.
+- [ ] **Reset Learning.** It asks, then empties the notes and removes only the learned words; words added by hand stay.
+- [ ] **Latency.** 20 Slack dictations with both toggles off, then 20 with both on: the Diagnostics `totalMs` median is within 5%.

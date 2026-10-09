@@ -89,6 +89,19 @@ app that is no longer sandboxed.
   and LLM notes written as Markdown to a folder you choose. Start and stop
   from the menu or a shortcut; recovery after a quit or crash; Regenerate
   Notes; an audio retention setting.
+- **Learning from your corrections.** Fix a misheard name in the field after
+  dictating it and voxline adds it to Custom vocabulary, with Undo in the
+  pill; a word you remove is not learned again. To see the fix, voxline reads
+  the field for up to 30 seconds after each dictation, never in password
+  fields or terminals, and still catches a fix you made before dictating
+  again.
+- **Style notes.** voxline keeps a short note on how you write in each kind of
+  app (chat, email, writing, code, general), refreshed every 20 dictations,
+  and sends it with cleanup together with two recent dictations from the same
+  app. Settings → Learning has a switch for words and one for style (both on),
+  the notes, which you can edit (an edited note is never overwritten unless
+  you choose Regenerate), and Reset Learning. A refresh still in flight when
+  you reset or turn style learning off is dropped.
 
 ### Changed
 
@@ -143,6 +156,8 @@ app that is no longer sandboxed.
   to the clipboard instead of reporting success.
 - Command mode reads the selection through Accessibility; the synthetic
   copy is now only a fallback for apps that expose no selection.
+- **Custom vocabulary** marks the words voxline learned, and has Clear All,
+  which asks first.
 
 ### Removed
 
@@ -207,6 +222,7 @@ app that is no longer sandboxed.
   times out after half a second.
 - A keychain read failure no longer looks like "no key configured", and the
   setup wizard can no longer delete saved keys over a transient read error.
+- **Reset to Defaults no longer clears your custom vocabulary** (issue 15).
 
 ## [0.3.1] - 2026-07-12
 

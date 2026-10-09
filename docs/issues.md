@@ -12,6 +12,9 @@ rework (new hotkey state machine, key interceptor, and text-insertion types in p
 `ClipboardInjector`); their descriptions are kept as written, with the pre-phase-3 line
 numbers. The carry-overs from phase 1 are fixed too (see the note near the end).
 
+Item 15 was fixed in phase 5 (Learning): Reset to Defaults no longer touches the
+custom vocabulary, and the vocabulary list's Clear All asks first.
+
 ## Open — found 2026-10-09
 
 29. **High: the Dock icon gets stuck with no window behind it.** voxline often
