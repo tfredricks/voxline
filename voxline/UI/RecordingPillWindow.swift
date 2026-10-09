@@ -1,11 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// Hosts RecordingPillView in a click-through, non-activating NSPanel.
+/// Hosts RecordingPillView in a click-through, non-activating NSPanel anchored
+/// bottom-center on the screen that held the mouse when the pill appeared.
 @MainActor
 final class RecordingPillWindow {
     private var panel: NSPanel?
     private var hostingView: NSHostingView<RecordingPillView>?
+    private var anchorScreen: NSScreen?
 
     func show(state: AppState) {
         if panel != nil {
@@ -15,24 +17,23 @@ final class RecordingPillWindow {
 
         let view = RecordingPillView(state: state)
         let host = NSHostingView(rootView: view)
+        host.sizingOptions = []
         hostingView = host
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 140, height: 32),
+            contentRect: NSRect(origin: .zero, size: PillLayout.size(showsText: false, toastWidth: nil)),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
         panel.isFloatingPanel = true
         panel.level = .statusBar
-        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
         panel.ignoresMouseEvents = true   // click-through
         panel.contentView = host
-
-        repositionNearMouse(panel: panel)
 
         self.panel = panel
         updateVisibility(state: state)
@@ -40,28 +41,23 @@ final class RecordingPillWindow {
 
     func updateVisibility(state: AppState) {
         guard let panel else { return }
-        let recordingOrThinking: Bool = {
-            switch state.status {
-            case .recording, .thinking: return true
-            default: return false
-            }
-        }()
-        let hasToast = (state.toastMessage != nil)
-
-        let width: CGFloat = hasToast ? 240 : 140
-        if panel.frame.width != width {
-            var frame = panel.frame
-            frame.size.width = width
-            panel.setFrame(frame, display: false)
+        let content = PillLayout.content(status: state.status, hasToast: state.toastMessage != nil)
+        guard content != .hidden else {
+            panel.orderOut(nil)
+            anchorScreen = nil
+            return
         }
 
-        if recordingOrThinking || hasToast {
-            if !panel.isVisible {
-                repositionNearMouse(panel: panel)
-                panel.orderFrontRegardless()
-            }
-        } else {
-            panel.orderOut(nil)
+        let showsText = PillLayout.showsText(content: content, hasText: state.liveTranscript?.isEmpty == false)
+        let toastWidth = content == .toast ? state.toastMessage.map(Self.toastTextWidth) : nil
+        let size = PillLayout.size(showsText: showsText, toastWidth: toastWidth)
+
+        if !panel.isVisible {
+            anchorScreen = Self.screenUnderMouse()
+            anchor(panel, size: size)
+            panel.orderFrontRegardless()
+        } else if panel.frame.size != size {
+            anchor(panel, size: size)
         }
     }
 
@@ -69,13 +65,29 @@ final class RecordingPillWindow {
         panel?.orderOut(nil)
         panel = nil
         hostingView = nil
+        anchorScreen = nil
     }
 
-    private func repositionNearMouse(panel: NSPanel) {
-        let mouse = NSEvent.mouseLocation
-        let size = panel.frame.size
-        // Place pill just below the cursor, horizontally centered.
-        let origin = NSPoint(x: mouse.x - size.width / 2, y: mouse.y - size.height - 24)
-        panel.setFrameOrigin(origin)
+    private func anchor(_ panel: NSPanel, size: CGSize) {
+        if let screen = anchorScreen, !NSScreen.screens.contains(screen) {
+            anchorScreen = Self.screenUnderMouse()
+        }
+        guard let visibleFrame = anchorScreen?.visibleFrame else {
+            panel.setContentSize(size)
+            return
+        }
+        let origin = PillLayout.origin(for: size, in: visibleFrame)
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
+    }
+
+    private static func screenUnderMouse() -> NSScreen? {
+        NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
+    }
+
+    private static func toastTextWidth(_ toast: String) -> CGFloat {
+        NSAttributedString(
+            string: toast,
+            attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium)]
+        ).size().width
     }
 }

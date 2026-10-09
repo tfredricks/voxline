@@ -1,50 +1,100 @@
 import SwiftUI
 
-/// Small floating pill showing recording state, an animated waveform, or a
-/// transient toast.
+/// Floating pill showing the recording state with the live transcript, the
+/// post-recording phase, or a transient toast.
 struct RecordingPillView: View {
     @Bindable var state: AppState
+    /// Invoked by the pill's Retry button; nil while nothing can be retried.
+    var onRetry: (() -> Void)? = nil
+    /// Whether the window is currently offering Retry for the last dictation.
+    var retryVisible: Bool = false
 
     var body: some View {
+        let content = PillLayout.content(status: state.status, hasToast: state.toastMessage != nil)
+        let showsText = PillLayout.showsText(content: content, hasText: transcript != nil)
         Group {
-            switch state.status {
-            case .recording:
-                HStack(spacing: 10) {
-                    WaveformBars(level: state.audioLevel)
-                    if state.recordingIsCommand {
-                        Text("Command")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-                    Text(elapsed)
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .monospacedDigit()
-                }
-            case .thinking:
-                HStack(spacing: 10) {
-                    ProgressView().controlSize(.small)
-                    Text("Transcribing…")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                }
-            default:
-                if let toast = state.toastMessage {
-                    Text(toast)
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                } else {
-                    EmptyView()
-                }
+            switch content {
+            case .recording: recordingView
+            case .thinking:  thinkingView
+            case .toast:     toastView
+            case .hidden:    EmptyView()
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(.ultraThinMaterial, in: Capsule())
-        .frame(height: 32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: showsText ? .topLeading : .center)
+        .background(.ultraThinMaterial, in: showsText ? AnyShape(RoundedRectangle(cornerRadius: 14)) : AnyShape(Capsule()))
+    }
+
+    private var transcript: TranscriptPartial? {
+        guard let partial = state.liveTranscript, !partial.isEmpty else { return nil }
+        return partial
+    }
+
+    private var recordingView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                WaveformBars(level: state.audioLevel)
+                if state.recordingIsCommand {
+                    Text("Command")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Text(elapsed)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .monospacedDigit()
+            }
+            if let transcript {
+                transcriptText(transcript)
+            }
+        }
+    }
+
+    private var thinkingView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                ProgressView().controlSize(.small)
+                Text(phaseLabel)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+            }
+            if let transcript {
+                Text(transcript.text)
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.head)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var toastView: some View {
+        if let toast = state.toastMessage {
+            Text(toast)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+        }
+    }
+
+    private func transcriptText(_ partial: TranscriptPartial) -> some View {
+        let segments = PillLayout.transcriptSegments(partial)
+        return Text("\(Text(segments.primary))\(Text(segments.secondary).foregroundStyle(.secondary))")
+            .font(.system(size: 12, weight: .regular, design: .rounded))
+            .lineLimit(2)
+            .truncationMode(.head)
+    }
+
+    private var phaseLabel: String {
+        switch state.pipelinePhase {
+        case .transcribing, nil: return "Transcribing…"
+        case .cleaning:          return "Cleaning up…"
+        case .inserting:         return "Inserting…"
+        }
     }
 
     private var elapsed: String {
-        guard let startedAt = state.recordingStartedAt else { return "0.0s" }
-        let s = Date().timeIntervalSince(startedAt)
-        return String(format: "%.1fs", s)
+        guard let startedAt = state.recordingStartedAt else { return PillLayout.elapsedLabel(0) }
+        return PillLayout.elapsedLabel(Date().timeIntervalSince(startedAt))
     }
 }
 

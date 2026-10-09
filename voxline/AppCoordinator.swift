@@ -188,6 +188,7 @@ final class AppCoordinator {
         pillWindow = pill
         pill.show(state: state)
         observeToastChanges(state: state)
+        observePillContentChanges(state: state)
     }
 
     private func installHotkey(state: AppState, settings: AppSettings) {
@@ -347,6 +348,23 @@ final class AppCoordinator {
                 guard let self, let state else { return }
                 self.pillWindow?.updateVisibility(state: state)
                 self.observeToastChanges(state: state)
+            }
+        }
+    }
+
+    /// Re-runs `pillWindow.updateVisibility` whenever the live transcript,
+    /// pipeline phase, or status changes, so the pill grows to show text as
+    /// soon as the first partial arrives and re-anchors bottom-center.
+    private func observePillContentChanges(state: AppState) {
+        withObservationTracking {
+            _ = state.liveTranscript
+            _ = state.pipelinePhase
+            _ = state.status
+        } onChange: { [weak self, weak state] in
+            Task { @MainActor in
+                guard let self, let state else { return }
+                self.pillWindow?.updateVisibility(state: state)
+                self.observePillContentChanges(state: state)
             }
         }
     }
