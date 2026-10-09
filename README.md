@@ -83,7 +83,7 @@ voxline writes the result into the focused field through Accessibility where the
 
 ### Command mode
 
-There are two chords: **dictation** (Left Shift + Left Control by default) and **command** (Left Shift + Left Option by default). Change either, or turn command mode off, in Settings → General → Hotkey. With ⇧⌥ as the command chord, typing a ⇧⌥ character such as an em dash briefly starts and discards a recording (you hear the start sound and see the microphone indicator), and a slowly pressed ⌥-digit preset can light the microphone indicator for a moment.
+There are two chords: **dictation** (Left Shift + Left Control by default) and **command** (Left Shift + Left Option by default). Change the dictation chord in Settings → Dictation, and the command chord (or turn command mode off) in Settings → Commands. With ⇧⌥ as the command chord, typing a ⇧⌥ character such as an em dash briefly starts and discards a recording (you hear the start sound and see the microphone indicator), and a slowly pressed ⌥-digit preset can light the microphone indicator for a moment.
 
 Hold the command chord, say what to do, and let go:
 
@@ -167,7 +167,7 @@ Build and run from Xcode (⌘R), or use `./scripts/build-local.sh` to build Rele
 On first launch:
 
 1. Grant **Microphone** and **Accessibility** when prompted (the app will guide you).
-2. Pick your hotkeys, mic, speech engine, and (for Whisper) model in the main window's Settings pages (open Voxline from the menu bar → Settings, or ⌘,): General for hotkeys and mic, Dictation for the speech engine and Whisper model. The default dictation hotkey is **Left Shift + Left Control** and the default command hotkey is **Left Shift + Left Option** — change either if you'd rather use something else.
+2. Pick your hotkeys, mic, speech engine, and (for Whisper) model in the main window's Settings pages (open Voxline from the menu bar → Settings, or ⌘,): Dictation for the dictation hotkey, mic, speech engine, and Whisper model, and Commands for the command hotkey. The default dictation hotkey is **Left Shift + Left Control** and the default command hotkey is **Left Shift + Left Option** — change either if you'd rather use something else.
 3. Drop in an Anthropic or OpenAI API key on the **AI Provider** page.
 4. Hold the dictation hotkey anywhere on your Mac and start talking. To edit text instead, select it, hold the command hotkey, and say what to change.
 

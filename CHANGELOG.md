@@ -13,13 +13,12 @@ choice of speech engine with live text while you speak, command mode that
 edits text in place, preset shortcuts, meeting recording and notes, and an
 app that is no longer sandboxed.
 
-Settings is now six pages in the main window's sidebar — General, Dictation,
-AI Provider, Commands, Vocabulary, Meetings — with marks on pages that need
-setup and a Setup section on Home. Fixes the narrow Settings column and style
-notes that captured scrolling.
-
 ### Added
 
+- **Settings pages.** Settings is now six pages in the main window's sidebar —
+  General, Dictation, AI Provider, Commands, Vocabulary, Meetings — with marks
+  on pages that need setup and a Setup section on Home. Fixes the narrow
+  Settings column and style notes that captured scrolling.
 - **Choice of speech engine.** Settings → Dictation has an Engine
   picker: Apple Speech (on-device, fastest, now the default), Whisper
   (on-device), or OpenAI (cloud). Apple Speech won the bake-off on real

@@ -170,7 +170,7 @@ If I were advising a new entrant, I'd look beyond matching competitors and build
 - **Voice macros** – Turn spoken commands into multi-step workflows.
 - **Real-time coaching** – Suggest clearer wording while dictating.
 - **Meeting continuity** – Seamlessly move from meeting capture to summaries, action items, and follow-up drafts.
-- **Model choice** – Let users select AI models based on speed, quality, privacy, or cost. (voxline: provider and cleanup model, plus a separate command model for edits in Settings → Command.)
+- **Model choice** – Let users select AI models based on speed, quality, privacy, or cost. (voxline: provider and cleanup model, plus a separate command model for edits in Settings → Commands.)
 - **Knowledge grounding** – Use company documents, CRM data, or project context when rewriting.
 - **Cross-device continuity** – Continue dictation sessions across desktop and mobile.
 - **Adaptive UI** – Surface controls and suggestions based on the current application and task.

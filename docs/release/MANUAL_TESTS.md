@@ -12,7 +12,7 @@ Configure a staging appcast by setting `SUFeedURL` in a debug build's `Info.plis
 
 ## End-to-end happy path
 
-- [ ] Launch the previous release. Confirm `Settings → Software Updates` shows "Automatically check for updates" enabled.
+- [ ] Launch the previous release. Confirm `Settings → General` shows "Automatically check for updates" enabled.
 - [ ] Force a scheduled check: from the menu, click "Check for updates…".
 - [ ] Sparkle's modal appears, says a new version is available, shows the release notes from the appcast.
 - [ ] Click Install. Sparkle downloads from the GitHub Release URL, verifies the EdDSA signature, replaces the app, relaunches.
@@ -57,7 +57,7 @@ Sparkle running unsandboxed.
       two custom vocabulary terms, dictate three times (so history is non-empty).
 - [ ] Install the current build over it (DMG drag, or Sparkle from a staging appcast). Launch.
 - [ ] No wizard appears. Settings → the hotkey, provider, and model are unchanged.
-- [ ] Settings → API Keys shows the saved key (no re-entry).
+- [ ] Settings → AI Provider shows the saved key (no re-entry).
 - [ ] Custom vocabulary still lists both terms. Show history… lists the three dictations.
 - [ ] No model download happens. `ls ~/Library/Application\ Support/voxline/huggingface/models/argmaxinc/whisperkit-coreml/` lists the variant.
 - [ ] `ls ~/Library/Containers/com.voxline.app/Data/Documents/` no longer contains `huggingface`.
@@ -182,7 +182,7 @@ several items below check it.
 
 ## Microphone disconnected
 
-- [ ] Settings → General → Microphone: pick a USB mic, not the built-in one.
+- [ ] Settings → Dictation → Microphone: pick a USB mic, not the built-in one.
       Hold the chord, speak half a sentence, and unplug the mic while still
       holding. The pill says "Microphone disconnected — stopped recording" and
       what you said before the unplug is transcribed and inserted. Switch the
@@ -193,7 +193,7 @@ several items below check it.
 
 ## Switching engines
 
-- [ ] Settings → General → Recognition → Engine lists "Apple Speech —
+- [ ] Settings → Dictation → Engine lists "Apple Speech —
       on-device, fastest", "Whisper — on-device", and "OpenAI — cloud, audio
       leaves your Mac". A fresh install has Apple Speech selected, and the
       Whisper model picker shows only while Whisper is selected. Upgrading
@@ -320,8 +320,8 @@ Left Shift + Left Control (dictation) and Left Shift + Left Option (command).
 ## Upgrade from 0.3.1: command chord
 
 For each case, install 0.3.1, set the state described, quit it, install the
-current build over it, and launch. Settings → General → Hotkey must show a Dictation
-recorder and a "Command mode" toggle with its own recorder, and no command
+current build over it, and launch. Settings → Dictation must show a dictation
+recorder, and Settings → Commands a "Command mode" toggle with its own recorder, and no command
 modifier picker. Before each upgrade, set the dictation chord to Left Shift +
 Left Control.
 
@@ -418,7 +418,7 @@ blip may play on the discarded ones.
 
 - [ ] Hold the dictation chord, then add ⌘ within a second. Repeat holding ⌘
       first, then the chord keys.
-- [ ] Settings → General → Hotkey: set the dictation chord to Left Cmd + Left
+- [ ] Settings → Dictation: set the dictation chord to Left Cmd + Left
       Shift. Press ⌘⇧4. The screenshot crosshair appears (Esc to dismiss) and
       no recording starts. Restore the chord.
 - [ ] In Safari with several tabs open, press ⌃⇧Tab with the default
@@ -434,7 +434,7 @@ blip may play on the discarded ones.
 
 ## Preset shortcuts
 
-- [ ] Settings → Command lists ⌥1 Fix grammar, ⌥2 Make concise, and ⌥3 Make
+- [ ] Settings → Commands lists ⌥1 Fix grammar, ⌥2 Make concise, and ⌥3 Make
       professional, with the caption about ¡ ™ £. The recorder warns that ⌥2
       types “™” on your keyboard.
 - [ ] Select a paragraph in Notes and press ⌥2. Nothing records (no waveform,
@@ -465,12 +465,12 @@ blip may play on the discarded ones.
 
 ## Command model
 
-- [ ] Settings → Command → Command model is empty with the cleanup model as its
+- [ ] Settings → Commands → Command model is empty with the cleanup model as its
       placeholder. Run a command: it works.
 - [ ] Enter a larger model id from the same provider and run a command: it
       works, with a slower response. Enter an invalid id: the pill shows the
       provider's error followed by "Nothing was changed." Clear the field.
-- [ ] Type a model id, then change the provider in Settings → Cleanup. The
+- [ ] Type a model id, then change the provider in Settings → AI Provider. The
       Command model field is empty again.
 - [ ] Reset to Defaults clears the Command model.
 
@@ -523,7 +523,7 @@ joins the paste-first list before release.
 
 ## Issues 10, 12, 20, and 22
 
-- [ ] Issue 10: open Settings → General → Hotkey, start recording a new
+- [ ] Issue 10: open Settings → Dictation, start recording a new
       dictation chord, and press and hold the old chord keys. No dictation
       starts, no pill appears, and nothing is pasted into the Settings page.
       Start recording a chord again, then switch to another app or close the
@@ -558,7 +558,7 @@ joins the paste-first list before release.
       recording is not interrupted: the pill keeps recording until you
       release. Then hold Left Shift alone, click the toggle back (a
       shift-click), and add Left Control: a dictation starts.
-- [ ] Open Settings → General, hold the command chord, speak, then turn
+- [ ] Open Settings → Commands, hold the command chord, speak, then turn
       command mode off while still holding (click the Command mode toggle):
       nothing is sent and no command runs. The recording finishes at once
       (stop sound, microphone indicator off) with no toast, the clipboard is
@@ -648,7 +648,7 @@ Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meeti
 
 Watch `scripts/tail-logs.sh learning` throughout: every line carries counts and reasons only, never text.
 
-- [ ] **Word, Cocoa.** In TextEdit, dictate "ask Cooper Nettis to review". Change it to "Kubernetes" in the field and wait 30 s. "Learned: Kubernetes" appears with Undo, and Settings → Custom vocabulary lists it as Learned. Dictate the sentence again: it comes out right.
+- [ ] **Word, Cocoa.** In TextEdit, dictate "ask Cooper Nettis to review". Change it to "Kubernetes" in the field and wait 30 s. "Learned: Kubernetes" appears with Undo, and Settings → Vocabulary lists it as Learned. Dictate the sentence again: it comes out right.
 - [ ] **Fix then send.** In Messages, dictate "ask Cooper Nettis", fix it to "Kubernetes", wait 2 s, and press Return. "Learned: Kubernetes" appears (log: `source=lastGood`). After sending, type a follow-up message in the same input within 30 s: Kubernetes is still learned (log: `end=regionGone`) and the follow-up is not recorded. Repeat in a Mail compose: fix, then click Send.
 - [ ] **Fix then dictate at once.** As in the first check, but start the next dictation within 5 s of the fix. The toast appears after that dictation inserts, and that dictation already has the word right.
 - [ ] **Undo.** Click Undo on the toast. The word leaves the list. Make the same fix again: nothing is learned.
@@ -656,7 +656,7 @@ Watch `scripts/tail-logs.sh learning` throughout: every line carries counts and 
 - [ ] **Focus leaves.** Dictate in Notes, click into another app, and edit nothing: the log shows `end=focusLeft region=unchanged`.
 - [ ] **Electron and web.** Dictate and fix a word in Slack, then in Gmail in Safari. Learning either works or logs `valueUnreadable`. No wrong toast, no slowdown. Record which apps learn.
 - [ ] **Skipped fields.** Terminal, VS Code, and a password field log a skip and never toast.
-- [ ] **Style.** After 20 Slack dictations, Settings → Learning → Chat shows a sensible note. With `VOXLINE_TRACE_LLM=1`, the next Slack dictation's system prompt carries the note and at most two quoted Slack examples, and its output follows the note.
+- [ ] **Style.** After 20 Slack dictations, Settings → Vocabulary → Chat shows a sensible note. With `VOXLINE_TRACE_LLM=1`, the next Slack dictation's system prompt carries the note and at most two quoted Slack examples, and its output follows the note.
 - [ ] **Edited note.** Edit the Chat note. After 20 more Slack dictations it is unchanged and says "Edited by you". Regenerate asks, then replaces it.
 - [ ] **Both off.** Turn both toggles off. A traced dictation's system prompt has no "Learned style" or "Examples" block, `log stream` shows no `learning` lines, and a fix in the field learns nothing.
 - [ ] **Issue 15.** Reset to Defaults leaves Custom vocabulary and Learning alone. Clear All asks before removing anything.
