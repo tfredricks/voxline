@@ -28,4 +28,4 @@ struct EditContext: Equatable, Sendable {
     var needsCopyFallback: Bool
 }
 
-enum EditContextRefusal: Error, Equatable, Sendable { case secureField, notResponding, selectionTooLong }
+enum EditContextRefusal: Error, Equatable, Sendable { case secureField, notResponding, selectionTooLong, accessibilityNotGranted }

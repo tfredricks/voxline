@@ -19,6 +19,9 @@ protocol EditContextReading: Sendable {
 /// Reads the focused element, its field window, selection, and cursor through
 /// the `AXTextElement` seam. Synchronous; callers run it off the main actor.
 ///
+/// - Without Accessibility trust it refuses with `.accessibilityNotGranted`
+///   before reading anything, so a command never reaches the LLM only to
+///   fail at insert.
 /// - The secure check fails closed: a secure subrole refuses with
 ///   `.secureField`, an unreadable subrole with `.notResponding`.
 /// - The selection is resolved from kAXSelectedTextRange (R), kAXValue (V),
@@ -44,9 +47,8 @@ struct EditContextReader: EditContextReading {
 
     func read() -> Result<EditContext, EditContextRefusal> {
         guard isAXTrusted() else {
-            return .success(EditContext(
-                isEditable: true, element: nil, field: nil, selection: nil, cursor: nil, needsCopyFallback: false
-            ))
+            AppLog.context.info("edit context: accessibility not granted")
+            return .failure(.accessibilityNotGranted)
         }
 
         let snapshot: FocusedElementSnapshot

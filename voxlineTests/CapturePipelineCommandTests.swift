@@ -465,6 +465,35 @@ import Testing
         #expect(h.pipe.metrics.items.isEmpty)
     }
 
+    @Test func missing_accessibility_is_the_permissions_error_before_the_llm() async {
+        let h = makeHarness(reader: FakeEditContextReader(.failure(.accessibilityNotGranted)))
+        await runCommand(h)
+
+        #expect(h.state.status == .permissionsError(TextInsertionError.accessibilityNotGranted.errorDescription!))
+        #expect(h.state.toastMessage == nil)
+        #expect(h.llm.commandRequests.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
+        #expect(h.copies.reads.read() == 0)
+        #expect(h.copied.read().isEmpty)
+        #expect(h.history.items.isEmpty)
+        #expect(h.pipe.metrics.items.isEmpty)
+    }
+
+    @Test func accessibility_lost_before_the_live_reread_is_the_permissions_error() async {
+        let h = makeHarness(reader: FakeEditContextReader(
+            .success(Self.unavailableContext(selection: "abc")),
+            .failure(.accessibilityNotGranted)
+        ))
+        answer(h, .replaceSelection, "xyz")
+        await runCommand(h)
+
+        #expect(h.state.status == .permissionsError(TextInsertionError.accessibilityNotGranted.errorDescription!))
+        #expect(h.inserter.calls.isEmpty)
+        #expect(h.copied.read().isEmpty)
+        #expect(h.history.items.isEmpty)
+        #expect(h.pipe.metrics.items.isEmpty)
+    }
+
     @Test(arguments: [
         (NotInsertedReason.fieldChanged, "Field changed — copied, ⌘V to apply"),
         (.focusMoved, "Field changed — copied, ⌘V to apply"),
@@ -798,6 +827,16 @@ import Testing
         #expect(h.state.status == .idle)
         #expect(h.state.activityLabel == nil)
         #expect(h.llm.commandRequests.isEmpty)
+    }
+
+    @Test func preset_without_accessibility_is_the_permissions_error() async {
+        let h = makeHarness(reader: FakeEditContextReader(.failure(.accessibilityNotGranted)))
+        await h.pipe.runPreset(Self.makeConcise)
+
+        #expect(h.state.status == .permissionsError(TextInsertionError.accessibilityNotGranted.errorDescription!))
+        #expect(h.state.activityLabel == nil)
+        #expect(h.llm.commandRequests.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
     }
 
     @Test func preset_ignored_while_recording() async {

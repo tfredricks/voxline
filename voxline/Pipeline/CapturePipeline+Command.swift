@@ -29,11 +29,14 @@ extension CapturePipeline {
 
     // MARK: - Toasts
 
+    /// `accessibilityNotGranted` ends the run as the permissions error
+    /// instead (`endRefused`); its text is that error's.
     static func toast(for refusal: EditContextRefusal) -> String {
         switch refusal {
         case .secureField: return "Command mode is off in password fields"
         case .notResponding: return "The app isn't responding — try again"
         case .selectionTooLong: return "Selection too long — 8,000 characters max"
+        case .accessibilityNotGranted: return TextInsertionError.accessibilityNotGranted.errorDescription!
         }
     }
 
@@ -76,9 +79,7 @@ extension CapturePipeline {
         let target: ResolvedEditContext
         switch resolved {
         case .failure(let refusal):
-            resetIdle()
-            showToast(Self.toast(for: refusal))
-            return
+            return endRefused(refusal)
         case .success(let value):
             target = value
         }
@@ -161,9 +162,7 @@ extension CapturePipeline {
         let target: ResolvedEditContext
         switch resolved {
         case .failure(let refusal):
-            resetIdle()
-            showToast(Self.toast(for: refusal))
-            return
+            return endRefused(refusal)
         case .success(let value):
             target = value
         }
@@ -183,6 +182,16 @@ extension CapturePipeline {
             snapshot: snapshot
         )
         await edit(request, target: target, run: run, generation: generation)
+    }
+
+    /// Missing Accessibility is the permissions error, as at insert; every
+    /// other refusal is a toast. Nothing reached the LLM.
+    private func endRefused(_ refusal: EditContextRefusal) {
+        if refusal == .accessibilityNotGranted {
+            return setError(TextInsertionError.accessibilityNotGranted.errorDescription!, permissions: true)
+        }
+        resetIdle()
+        showToast(Self.toast(for: refusal))
     }
 
     // MARK: - Shared edit
@@ -273,6 +282,8 @@ extension CapturePipeline {
                 mismatch = .notResponding
             case .failure(.selectionTooLong):
                 mismatch = .fieldChanged
+            case .failure(.accessibilityNotGranted):
+                return finishInsert(.failed(.accessibilityNotGranted), text: text, insertMs: 0, edit)
             }
         }
         if let mismatch {

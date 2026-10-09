@@ -425,19 +425,20 @@ import Testing
         #expect(!field.cutAfter)
     }
 
-    @Test func not_trusted_returns_bare_editable_context() throws {
+    @Test func not_trusted_refuses_without_reading() {
         let fake = makeFake()
         fake.setValue("hello")
+        let sourceReads = LockedBox(0)
         let reader = EditContextReader(
-            source: { .value(FocusedElementSnapshot(element: fake, appName: "Notes", bundleID: "com.apple.Notes", windowTitle: "Trip plan")) },
+            source: {
+                sourceReads.mutate { $0 += 1 }
+                return .value(FocusedElementSnapshot(element: fake, appName: "Notes", bundleID: "com.apple.Notes", windowTitle: "Trip plan"))
+            },
             isAXTrusted: { false }
         )
 
-        let context = try reader.read().get()
-
-        #expect(context == EditContext(
-            isEditable: true, element: nil, field: nil, selection: nil, cursor: nil, needsCopyFallback: false
-        ))
+        #expect(reader.read() == .failure(.accessibilityNotGranted))
+        #expect(sourceReads.read() == 0)
         #expect(fake.reads.isEmpty)
     }
 }
