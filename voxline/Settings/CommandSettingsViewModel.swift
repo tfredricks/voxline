@@ -68,11 +68,16 @@ final class CommandSettingsViewModel {
         commit()
     }
 
-    /// The row's combo validated against the other rows and the current
-    /// chords: the typed-character warning, or a conflict that appeared after
-    /// it was recorded. Nil for a clean combo or one not yet recorded.
+    /// A blank instruction first: the key interceptor leaves such a row out,
+    /// so its combo captures nothing. Otherwise the row's combo
+    /// validated against the other rows and the current chords: the
+    /// typed-character warning, or a conflict that appeared after it was
+    /// recorded. Nil for a clean combo or one not yet recorded, which the
+    /// recorder already shows as "None".
     func warning(for id: PresetShortcut.ID) -> String? {
-        guard let preset = presets.first(where: { $0.id == id }), !preset.needsShortcut else { return nil }
+        guard let preset = presets.first(where: { $0.id == id }) else { return nil }
+        if preset.instruction.isBlank { return "This preset has no instruction, so its shortcut does nothing." }
+        guard !preset.needsShortcut else { return nil }
         switch validate(preset.combo, for: id) {
         case .ok: return nil
         case .warning(let message), .rejected(let message): return message

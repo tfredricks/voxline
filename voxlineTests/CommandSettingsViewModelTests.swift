@@ -245,10 +245,25 @@ import Testing
         #expect(vm.warning(for: twin.id) == "Another preset already uses this shortcut.")
     }
 
-    @Test func unrecorded_row_has_no_warning() {
+    @Test func unrecorded_row_with_an_instruction_has_no_warning() {
         let vm = make(suite(), translate: { _, _ in "a" })
         vm.addPreset()
+        vm.updateInstruction("Do it.", for: vm.presets[3].id)
         #expect(vm.warning(for: vm.presets[3].id) == nil)
+    }
+
+    @Test func new_preset_warns_that_it_has_no_instruction() {
+        let vm = make(suite())
+        vm.addPreset()
+        #expect(vm.warning(for: vm.presets[3].id) == "This preset has no instruction, so its shortcut does nothing.")
+    }
+
+    @Test func blank_instruction_warning_wins_over_the_combo_warning() {
+        let d = suite()
+        let row = PresetShortcut(id: UUID(), combo: KeyCombo(keyCode: 0, modifiers: [.control, .option]), name: "Empty", instruction: " \n ")
+        PresetStore(defaults: d).save([row])
+        let vm = make(d, translate: { _, _ in "å" })
+        #expect(vm.warning(for: row.id) == "This preset has no instruction, so its shortcut does nothing.")
     }
 
     @Test func warning_follows_the_current_chords() {
