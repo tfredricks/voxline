@@ -50,7 +50,11 @@ audio length per engine. Whisper large-v3 turbo runs only if it is already
 downloaded. Optional variables, each with the `TEST_RUNNER_` prefix:
 `VOXLINE_BAKEOFF_DIR=<dir>` reads clips from another folder;
 `VOXLINE_BAKEOFF_CLOUD=1` adds OpenAI (it sends the clips to OpenAI with your
-saved key, is reported, and can never win).
+saved key, is reported, and can never win);
+`VOXLINE_BAKEOFF_TAIL_MS=600` appends that many milliseconds of silence to each
+clip before `finish()`, to simulate the pause people leave before releasing the
+hotkey. 600 is a realistic value; leave it at 0 to measure worst-case finish
+latency.
 
 ## 5. Read the verdict
 
