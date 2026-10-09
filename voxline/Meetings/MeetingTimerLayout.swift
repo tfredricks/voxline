@@ -36,4 +36,14 @@ enum MeetingTimerLayout {
         let y = min(max(saved.minY, visibleFrame.minY), visibleFrame.maxY - size.height)
         return CGRect(origin: CGPoint(x: x, y: y), size: size)
     }
+
+    /// The expanded live-transcript body under the chip.
+    static let bodySize = CGSize(width: 360, height: 150)
+
+    /// Resizes a frame while keeping its top-left corner, so the panel grows
+    /// downward from the chip, then clamps to the visible frame.
+    static func resized(_ frame: CGRect, to size: CGSize, visibleFrame: CGRect) -> CGRect {
+        let topLeft = CGPoint(x: frame.minX, y: frame.maxY - size.height)
+        return self.frame(size: size, saved: CGRect(origin: topLeft, size: size), visibleFrame: visibleFrame)
+    }
 }

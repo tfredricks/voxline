@@ -68,4 +68,29 @@ import CoreGraphics
         )
         #expect(frame == CGRect(x: 0, y: 25 + 850 - 28, width: 110, height: 28))
     }
+
+    // MARK: - resized
+
+    @Test func resized_keeps_the_top_left_corner_and_grows_downward() {
+        let chip = CGRect(x: 400, y: 600, width: 110, height: 28)
+        let frame = MeetingTimerLayout.resized(chip, to: CGSize(width: 360, height: 178), visibleFrame: screen)
+        #expect(frame == CGRect(x: 400, y: 600 + 28 - 178, width: 360, height: 178))
+    }
+
+    @Test func resized_back_to_the_chip_returns_the_corner() {
+        let chip = CGRect(x: 400, y: 600, width: 110, height: 28)
+        let expanded = MeetingTimerLayout.resized(chip, to: CGSize(width: 360, height: 178), visibleFrame: screen)
+        let collapsed = MeetingTimerLayout.resized(expanded, to: CGSize(width: 110, height: 28), visibleFrame: screen)
+        #expect(collapsed == chip)
+    }
+
+    @Test func resized_clamps_at_the_bottom_and_right_edges() {
+        let chip = CGRect(x: 1440 - 110 - 16, y: 25 + 40, width: 110, height: 28)
+        let frame = MeetingTimerLayout.resized(chip, to: CGSize(width: 360, height: 178), visibleFrame: screen)
+        #expect(frame == CGRect(x: 1440 - 360, y: 25, width: 360, height: 178))
+    }
+
+    @Test func body_size_is_the_spec_size() {
+        #expect(MeetingTimerLayout.bodySize == CGSize(width: 360, height: 150))
+    }
 }
