@@ -301,6 +301,24 @@ import Testing
         #expect(h.board.string(forType: .string) == "ORIGINAL")
     }
 
+    @Test func an_unreadable_baseline_never_skips_the_paste() async {
+        let h = makeHarness()
+        defer { h.board.releaseGlobally() }
+        let other = FakeAXTextElement(pid: 9191).ref
+        let calls = LockedBox(0)
+        let focused: @Sendable () -> AXElementRef? = {
+            calls.mutate { $0 += 1 }
+            return calls.read() == 1 ? nil : other
+        }
+        let task = await startPaste(h, focused: focused)
+
+        await h.clock.advance(by: .milliseconds(300))
+
+        #expect(await task.value == .pasted(verified: false))
+        #expect(h.posts.read() == 1)
+        await finish(h, task)
+    }
+
     @Test func an_abandoned_paste_releases_its_slot() async {
         let h = makeHarness()
         defer { h.board.releaseGlobally() }

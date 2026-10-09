@@ -72,6 +72,11 @@ final class TextInserter: TextInserting {
     /// moves before the Cmd+V is posted is `focusMoved`. Only a rejected AX
     /// write, a refused clipboard snapshot, or typing that left the value
     /// unchanged moves on to the next strategy.
+    ///
+    /// An app that exposes no focused element (a terminal like Alacritty, a
+    /// VM or remote-desktop window) gets an unverified paste, then typing, as
+    /// 0.5.0 did, unless `expectedElement` was given (`focusMoved`) or the
+    /// target is a range it can't check (`cannotTarget`).
     func insert(_ text: String, at target: InsertTarget, expectedElement: AXElementRef?,
                 bundleID: String?, trigger: ModifierFamilies) async -> InsertOutcome {
         guard isAccessibilityTrusted() else { return .failed(.accessibilityNotGranted) }
@@ -79,7 +84,9 @@ final class TextInserter: TextInserting {
         let element: any AXTextElement
         switch focused() {
         case .value(let focusedElement): element = focusedElement
-        case .absent: return notInserted(.focusMoved)
+        case .absent:
+            guard expectedElement == nil else { return notInserted(.focusMoved) }
+            return await insertWithoutFocus(text, at: target, trigger: trigger)
         case .failed: return notInserted(.notResponding)
         }
         if let expectedElement, element.ref != expectedElement { return notInserted(.focusMoved) }
@@ -105,11 +112,32 @@ final class TextInserter: TextInserting {
         var plan = InsertionPlan.strategies(for: traits, overrides: overrides())
         if target == .afterLiveSelection { plan.removeAll { $0 == .accessibility } }
         AppLog.paste.debug("insert plan: \(plan.map(\.rawValue).joined(separator: ", "), privacy: .public)")
+        return await run(plan, text: text, element: element, trigger: trigger)
+    }
 
+    private func insertWithoutFocus(_ text: String, at target: InsertTarget, trigger: ModifierFamilies) async -> InsertOutcome {
+        switch target {
+        case .liveSelection:
+            break
+        case .afterLiveSelection:
+            try? await gate.wait(for: trigger)
+            postRightArrow()
+        case .range:
+            return notInserted(.cannotTarget)
+        }
+        AppLog.paste.debug("insert: no focused element; pasting unverified")
+        return await run([.paste, .typing], text: text, element: nil, trigger: trigger)
+    }
+
+    /// With no `element`, nothing can be verified: a posted paste or typed
+    /// text is `inserted(_, verified: false)`, and an AX write is skipped.
+    private func run(_ plan: [InsertStrategy], text: String, element: (any AXTextElement)?,
+                     trigger: ModifierFamilies) async -> InsertOutcome {
         var failures: [String] = []
         for strategy in plan {
             switch strategy {
             case .accessibility:
+                guard let element else { continue }
                 switch await axEditor.replaceSelection(of: element, with: text) {
                 case .applied(let verified):
                     return inserted(.accessibility, verified: verified)
@@ -136,10 +164,10 @@ final class TextInserter: TextInserting {
                 }
             case .typing:
                 try? await gate.wait(for: trigger)
-                let before = element.string(kAXValueAttribute).value
+                let before = element?.string(kAXValueAttribute).value
                 typing.type(text)
                 try? await sleep(typingVerifyDelay)
-                let after = element.string(kAXValueAttribute).value
+                let after = element?.string(kAXValueAttribute).value
                 guard let before, let after else { return inserted(.typing, verified: false) }
                 if before != after { return inserted(.typing, verified: true) }
                 failures.append("Typing produced no change")

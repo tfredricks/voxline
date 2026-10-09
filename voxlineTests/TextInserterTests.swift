@@ -277,16 +277,82 @@ import Testing
         #expect(h.events.read().isEmpty)
     }
 
-    @Test func focus_absent_is_focus_moved_and_failed_is_not_responding() async {
-        let absent = makeHarness(focused: { .absent })
-        defer { absent.board.releaseGlobally() }
-        #expect(await insert(absent) == .notInserted(.focusMoved))
-        #expect(absent.events.read().isEmpty)
+    @Test func focus_absent_with_an_expected_element_is_focus_moved() async {
+        let h = makeHarness(focused: { .absent })
+        defer { h.board.releaseGlobally() }
+        #expect(await insert(h, expectedElement: FakeAXTextElement().ref) == .notInserted(.focusMoved))
+        #expect(h.events.read().isEmpty)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
 
-        let failed = makeHarness(focused: { .failed })
-        defer { failed.board.releaseGlobally() }
-        #expect(await insert(failed) == .notInserted(.notResponding))
-        #expect(failed.events.read().isEmpty)
+    @Test(arguments: [nil, FakeAXTextElement().ref] as [AXElementRef?])
+    func failed_focus_read_is_not_responding(expectedElement: AXElementRef?) async {
+        let h = makeHarness(focused: { .failed })
+        defer { h.board.releaseGlobally() }
+        #expect(await insert(h, expectedElement: expectedElement) == .notInserted(.notResponding))
+        #expect(h.events.read().isEmpty)
+    }
+
+    // MARK: - No accessible focus
+
+    @Test func no_accessible_focus_pastes_blind() async {
+        let h = makeHarness(focused: { .absent }, flags: [.maskShift, []])
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, bundleID: "org.alacritty", trigger: [.shift])
+
+        #expect(outcome == .inserted(.paste, verified: false))
+        #expect(h.pastes.read() == 1)
+        #expect(h.typed.read().isEmpty)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
+    @Test func no_accessible_focus_pastes_blind_even_for_ax_first_apps() async {
+        let h = makeHarness(focused: { .absent })
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, bundleID: Self.notes)
+
+        #expect(outcome == .inserted(.paste, verified: false))
+        #expect(h.pastes.read() == 1)
+    }
+
+    @Test func no_accessible_focus_types_blind_when_the_snapshot_is_refused() async {
+        let h = makeHarness(focused: { .absent }, snapshotter: ThrowingSnapshotter())
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h)
+
+        #expect(outcome == .inserted(.typing, verified: false))
+        #expect(h.pastes.read() == 0)
+        #expect(h.typed.read() == [Array(" world".utf16)])
+    }
+
+    @Test func no_accessible_focus_after_live_selection_posts_the_arrow_then_pastes() async {
+        let h = makeHarness(focused: { .absent })
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, at: .afterLiveSelection)
+
+        #expect(outcome == .inserted(.paste, verified: false))
+        #expect(h.events.read() == ["arrow", "paste"])
+    }
+
+    @Test func no_accessible_focus_cannot_target_a_range() async {
+        let h = makeHarness(focused: { .absent })
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "hi", at: .range(UTF16Range(location: 0, length: 5), expected: "hello"))
+
+        #expect(outcome == .notInserted(.cannotTarget))
+        #expect(h.events.read().isEmpty)
+    }
+
+    @Test func no_accessible_focus_still_needs_accessibility_trust() async {
+        let h = makeHarness(focused: { .absent }, trusted: false)
+        defer { h.board.releaseGlobally() }
+        #expect(await insert(h) == .failed(.accessibilityNotGranted))
+        #expect(h.events.read().isEmpty)
     }
 
     @Test func secure_and_failed_checks() async {
