@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Settings → Learning. Toggles write through to `AppSettings`; note edits
+/// Settings → Vocabulary (Learning). Toggles write through to `AppSettings`; note edits
 /// are held as drafts and saved after `noteSaveDelay` of no typing, which
 /// marks the note as the user's so automatic refreshes leave it alone.
 @Observable

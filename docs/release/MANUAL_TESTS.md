@@ -672,7 +672,6 @@ Show Voxline in Dock is off unless a step says otherwise.
 - [ ] Settings → Meetings → choose the notes folder, then Cancel the picker → after closing the main window, no Dock icon is left.
 - [ ] With no window open, open voxline from Spotlight → Home opens.
 - [ ] Minimize the main window → the Dock icon and the minimized tile stay. Restore it from the Dock.
-- [ ] Menu bar → Settings… opens Settings. With the main window key, ⌘, switches to Settings.
 - [ ] Put Safari in full screen, then menu bar → Open Voxline → the window appears over the full-screen Space.
 - [ ] Turn Show Voxline in Dock on → close the window → the Dock icon stays. Click it → Home opens. Turn it off with no window open → the icon goes.
 - [ ] Launch at login on, log out and back in → no window and no Dock icon. The menu bar works.
@@ -681,3 +680,13 @@ Show Voxline in Dock is off unless a step says otherwise.
 - [ ] Open Settings, close the window → the mic indicator turns off immediately; dictate once with the window closed → it stays off.
 - [ ] Edit a preset instruction and a style note, close the window with the field focused, reopen → both edits kept.
 - [ ] Reopen the window → Settings shows current Launch at Login approval state.
+
+### Settings pages
+
+- [ ] Each page fits at 720×480 and at full screen, with the scroll bar at the window edge.
+- [ ] Scrolling over a style note on Vocabulary scrolls the page.
+- [ ] The mic-in-use indicator is on only on Dictation.
+- [ ] An API key typed and left by switching pages shows as Saved on return.
+- [ ] ⌘, opens General.
+- [ ] Removing the API key shows an orange mark on AI Provider and a Setup row on Home, whose button opens AI Provider.
+- [ ] Reset to Defaults… asks before resetting.

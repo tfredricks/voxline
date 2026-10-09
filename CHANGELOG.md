@@ -13,9 +13,14 @@ choice of speech engine with live text while you speak, command mode that
 edits text in place, preset shortcuts, meeting recording and notes, and an
 app that is no longer sandboxed.
 
+Settings is now six pages in the main window's sidebar — General, Dictation,
+AI Provider, Commands, Vocabulary, Meetings — with marks on pages that need
+setup and a Setup section on Home. Fixes the narrow Settings column and style
+notes that captured scrolling.
+
 ### Added
 
-- **Choice of speech engine.** Settings → General → Recognition has an Engine
+- **Choice of speech engine.** Settings → Dictation has an Engine
   picker: Apple Speech (on-device, fastest, now the default), Whisper
   (on-device), or OpenAI (cloud). Apple Speech won the bake-off on real
   recordings, so if you never picked an engine, voxline switches to it; your
@@ -72,10 +77,10 @@ app that is no longer sandboxed.
   microphone indicator for a moment.
 - **Preset edit shortcuts.** Select text anywhere and press ⌥1 (Fix grammar),
   ⌥2 (Make concise), or ⌥3 (Make professional) to run a stored instruction
-  with no recording. Settings → Command has an editable table: record any
+  with no recording. Settings → Commands has an editable table: record any
   shortcut that includes ⌘, ⌥, or ⌃, rename a preset, rewrite its instruction,
   add or remove rows, or restore the defaults.
-- **Command model.** Settings → Command → Command model picks a separate
+- **Command model.** Settings → Commands → Command model picks a separate
   model for commands. Leave it empty to use the cleanup model; it is cleared
   when you change provider.
 - Command and preset runs get their own median lines in About Voxline →
@@ -100,7 +105,7 @@ app that is no longer sandboxed.
 - **Style notes.** voxline keeps a short note on how you write in each kind of
   app (chat, email, writing, code, general), refreshed every 20 dictations,
   and sends it with cleanup together with two recent dictations from the same
-  app. Settings → Learning has a switch for words and one for style (both on),
+  app. Settings → Vocabulary has a switch for words and one for style (both on),
   the notes, which you can edit (an edited note is never overwritten unless
   you choose Regenerate), and Reset Learning. A refresh still in flight when
   you reset or turn style learning off is dropped.

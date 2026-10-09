@@ -83,7 +83,7 @@ import Testing
     }
 
     @Test func only_an_openai_key_error_is_cleared_before_the_recheck() {
-        #expect(!EnginePrep.isOpenAIKeyError(.error("Transcription failed. Try again or pick a different engine in Settings → General.")))
+        #expect(!EnginePrep.isOpenAIKeyError(.error("Transcription failed. Try again or pick a different engine in Settings → Dictation.")))
         #expect(!EnginePrep.isOpenAIKeyError(.permissionsError(OpenAIRealtimeEngine.missingKeyReason)))
         #expect(!EnginePrep.isOpenAIKeyError(.idle))
         #expect(!EnginePrep.isOpenAIKeyError(.thinking))
@@ -91,7 +91,7 @@ import Testing
 
     // MARK: Stale engine error
 
-    private static let pipelineError = "Transcription failed. Try again or pick a different engine in Settings → General."
+    private static let pipelineError = "Transcription failed. Try again or pick a different engine in Settings → Dictation."
     private static let setupFailed = "Model setup failed: The Internet connection appears to be offline.. Try Retry or relaunch Voxline."
 
     /// Switching from OpenAI without a usable key to an engine that only

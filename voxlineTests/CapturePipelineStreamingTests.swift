@@ -380,7 +380,7 @@ import Foundation
         h.session.finishResult = .failure(Boom())
         h.pipe.startRecording()
         await h.pipe.finalizeRecording()
-        #expect(h.state.status == .error("Transcription failed. Try again or pick a different engine in Settings → General."))
+        #expect(h.state.status == .error("Transcription failed. Try again or pick a different engine in Settings → Dictation."))
         #expect(h.state.liveTranscript == nil)
         #expect(h.state.isCancellable == false)
     }

@@ -473,7 +473,7 @@ final class CapturePipeline {
             return Transcription(text: text, engineID: live.engine.metricsID, duration: start.duration(to: .now), firstPartial: live.timeToFirstPartial)
         } catch {
             guard generation == self.generation else { return nil }
-            let message = "Transcription failed. Try again or pick a different engine in Settings → General."
+            let message = "Transcription failed. Try again or pick a different engine in Settings → Dictation."
             return await transcribeOnDevice(after: error, live: live, start: start, failureMessage: message, generation: generation)
         }
     }

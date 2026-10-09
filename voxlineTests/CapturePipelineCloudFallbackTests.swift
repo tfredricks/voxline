@@ -28,7 +28,7 @@ import Foundation
 
     nonisolated static let slack = "com.tinyspeck.slackmacgap"
     static let fellBack = "Cloud transcription failed — used on-device"
-    static let transcriptionFailed = "Transcription failed. Try again or pick a different engine in Settings → General."
+    static let transcriptionFailed = "Transcription failed. Try again or pick a different engine in Settings → Dictation."
 
     /// A cloud fake is current unless `current` replaces it; the on-device
     /// default is a fake whose session returns "local text".

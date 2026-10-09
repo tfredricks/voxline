@@ -52,7 +52,7 @@ typealias RealtimeTransportFactory = @Sendable (URLRequest) -> any RealtimeTrans
 final class OpenAIRealtimeEngine: TranscriptionEngine {
     nonisolated static let model = "gpt-4o-transcribe"
     nonisolated static let endpoint = URL(string: "wss://api.openai.com/v1/realtime?intent=transcription")!
-    nonisolated static let missingKeyReason = "Add an OpenAI API key in Settings → General → Recognition to use OpenAI transcription."
+    nonisolated static let missingKeyReason = "Add an OpenAI API key in Settings → Dictation to use OpenAI transcription."
     nonisolated static let keychainReadFailedReason = "Couldn't read the OpenAI API key from the keychain."
     nonisolated static let errorDomain = "com.voxline.openai-realtime"
 

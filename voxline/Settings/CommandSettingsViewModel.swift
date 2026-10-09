@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Settings → Command's preset rows. Every mutation saves to `PresetStore`
+/// Settings → Commands' preset rows. Every mutation saves to `PresetStore`
 /// and then calls `onChange`, so the key interceptor picks up the new
 /// shortcuts at once. A commit that changes nothing is not a mutation.
 @Observable

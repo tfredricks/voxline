@@ -39,7 +39,7 @@ extension KeychainError: LocalizedError {
         case .dataProtectionKeychainUnavailable:
             return "Voxline can't reach its keychain. The app's signature may be damaged — reinstall it from the Releases page."
         case .unexpectedDataFormat:
-            return "The saved API key is in an unexpected format. Re-enter it in Settings → API Keys."
+            return "The saved API key is in an unexpected format. Re-enter it in Settings → AI Provider."
         case .unhandledStatus(let status):
             return "The keychain returned an error (\(status))."
         }

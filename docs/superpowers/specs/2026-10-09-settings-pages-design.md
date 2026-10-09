@@ -1,7 +1,7 @@
 # Settings pages: split Settings into sidebar pages
 
 **Date:** 2026-10-09
-**Status:** Approved design; not yet planned.
+**Status:** Approved; implemented (see plan 2026-10-09-settings-pages.md).
 **Builds on:** `2026-10-09-main-window-design.md` (the main window and its sidebar).
 
 ## Goal

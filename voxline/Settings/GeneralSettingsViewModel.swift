@@ -232,7 +232,7 @@ final class GeneralSettingsViewModel {
     /// Performs one batched commit so the applier sees a single coherent
     /// snapshot rather than several partial ones.
     /// Launch-at-Login, Show in Dock, the presets (`PresetStore`), the custom vocabulary, and
-    /// everything in Settings → Learning are intentionally left untouched —
+    /// everything in Settings → Vocabulary (Learning) are intentionally left untouched —
     /// Reset is for pipeline settings, not user data or OS-level integration.
     func resetToDefaults() {
         withoutCommitting {

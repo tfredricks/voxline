@@ -227,7 +227,7 @@ private func type(_ event: [String: Any]) -> String? { event["type"] as? String 
     }
 
     @Test func no_key_is_unavailable() async {
-        let reason = "Add an OpenAI API key in Settings → General → Recognition to use OpenAI transcription."
+        let reason = "Add an OpenAI API key in Settings → Dictation to use OpenAI transcription."
         #expect(await engine(key: nil).readiness() == .unavailable(reason))
         #expect(await engine(key: "   ").readiness() == .unavailable(reason))
     }

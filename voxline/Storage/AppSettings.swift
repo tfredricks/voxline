@@ -208,7 +208,7 @@ struct AppSettings {
         set { defaults.set(newValue, forKey: Key.saveBakeoffClips) }
     }
 
-    /// Settings → Learning: add words the user fixes after a dictation to
+    /// Settings → Vocabulary (Learning): add words the user fixes after a dictation to
     /// the custom vocabulary. Absent reads as on.
     var learnWords: Bool {
         get { defaults.object(forKey: Key.learnWords) == nil ? true : defaults.bool(forKey: Key.learnWords) }
@@ -222,7 +222,7 @@ struct AppSettings {
         set { defaults.set(newValue, forKey: Key.showInDock) }
     }
 
-    /// Settings → Learning: keep recent dictations and edits per category
+    /// Settings → Vocabulary (Learning): keep recent dictations and edits per category
     /// and send a learned style note with cleanup. Absent reads as on.
     var learnStyle: Bool {
         get { defaults.object(forKey: Key.learnStyle) == nil ? true : defaults.bool(forKey: Key.learnStyle) }

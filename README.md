@@ -42,12 +42,12 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 - **Esc to cancel, Retry to recover** — Esc throws away a dictation while it is recording or processing; if cleanup fails, Retry in the pill or the menu bar re-runs it on the same transcript.
 - **AI cleanup, not raw dump** — fillers, false starts, and rambling are smoothed out. Punctuation and capitalization are added automatically.
 - **Command mode: edit by voice** — hold the command chord (Left Shift + Left Option by default), say what to do, and let go. With text selected, the selection is replaced: *"make this a bullet list"*, *"translate this to Spanish"*, *"make this shorter"*. With nothing selected, the result goes in at the cursor (*"draft a short reply agreeing to the Thursday time"*), or, for an instruction about existing text (*"make the last paragraph shorter"*), only the part that changed is replaced. An edit is a normal ⌘Z-undoable change.
-- **Preset edit shortcuts** — select text anywhere and press ⌥1, ⌥2, or ⌥3 to fix grammar, make it concise, or make it professional, with no recording. The shortcuts and their instructions are an editable table in Settings → Command.
+- **Preset edit shortcuts** — select text anywhere and press ⌥1, ⌥2, or ⌥3 to fix grammar, make it concise, or make it professional, with no recording. The shortcuts and their instructions are an editable table in Settings → Commands.
 - **Context-aware per-app formatting** — voxline detects the frontmost app and tunes the output for it: terse Slack messages, structured email replies, code-comment style in your IDE, search-box one-liners. Ships with sensible defaults for 28 common apps out of the box.
-- **Learns as you go** — fix a misheard name in the field after a dictation and voxline adds it to your custom vocabulary (with Undo in the pill), so it comes out right the next time. It also keeps a short note on how you write in chat, email, documents, and code, and uses it in cleanup. Read, edit, or reset what it learned in Settings → Learning.
+- **Learns as you go** — fix a misheard name in the field after a dictation and voxline adds it to your custom vocabulary (with Undo in the pill), so it comes out right the next time. It also keeps a short note on how you write in chat, email, documents, and code, and uses it in cleanup. Read, edit, or reset what it learned in Settings → Vocabulary.
 - **Dictation history** — the last 25 dictations, cleaned text and raw transcript side by side, in a History window; click any row to copy it back to the clipboard.
 - **Bring your own LLM key** — Anthropic or OpenAI, your account, your model, your costs. Keys live in macOS Keychain.
-- **Menu-bar native, with a real window when you want it** — a main window with Home (status, permissions, recent meetings) and Settings; close it and voxline keeps running in the menu bar. No Dock icon unless the window is open, or turn on Settings → Show Voxline in Dock.
+- **Menu-bar native, with a real window when you want it** — a main window with Home (status, setup issues, permissions, recent meetings) and six settings pages; close it and voxline keeps running in the menu bar. No Dock icon unless the window is open, or turn on Settings → General → Show Voxline in Dock.
 - **Meeting notes** — record a meeting of up to an hour (your mic plus your Mac's sound output), and get a Markdown file with a summary, decisions, action items, and a speaker-labeled transcript. Transcription and speaker separation run on your Mac; meetings use the Whisper small.en model (English) for speed.
 - **Privacy-aware feedback** — clipboard is restored after paste; the system mic indicator turns off the moment you let go.
 
@@ -92,7 +92,7 @@ Hold the command chord, say what to do, and let go:
 
 Esc cancels a command while it is recording or thinking, as it does for dictation. Selections over 8,000 characters are refused ("Selection too long — 8,000 characters max"), and password fields are never read ("Command mode is off in password fields"). If an edit can't be applied in place, the result is copied instead and the pill says so ("Couldn't edit in place — copied, ⌘V to apply").
 
-Commands use your cleanup model unless you set a **Command model** in Settings → Command. A larger model drafts and answers better but responds more slowly.
+Commands use your cleanup model unless you set a **Command model** in Settings → Commands. A larger model drafts and answers better but responds more slowly.
 
 ### Preset shortcuts
 
@@ -104,11 +104,11 @@ Select text anywhere and press a shortcut: a stored instruction runs on the sele
 | ⌥2 | Make concise | Make this more concise. Keep every fact and the original tone. |
 | ⌥3 | Make professional | Rewrite this in a clear, professional tone. Keep the meaning and every fact. |
 
-Settings → Command holds the table: record a different shortcut, rename a preset, rewrite its instruction, add or remove rows, or restore the defaults. A shortcut must include ⌘, ⌥, or ⌃. Preset shortcuts are captured everywhere, even with nothing selected (you get "Select text to transform"), except while voxline itself is frontmost, so you can still type in its own fields. ⌥1, ⌥2, and ⌥3 normally type ¡, ™, and £, so remap them if you use those characters. A preset sends only the selection to your LLM provider, not the rest of the field.
+Settings → Commands holds the table: record a different shortcut, rename a preset, rewrite its instruction, add or remove rows, or restore the defaults. A shortcut must include ⌘, ⌥, or ⌃. Preset shortcuts are captured everywhere, even with nothing selected (you get "Select text to transform"), except while voxline itself is frontmost, so you can still type in its own fields. ⌥1, ⌥2, and ⌥3 normally type ¡, ™, and £, so remap them if you use those characters. A preset sends only the selection to your LLM provider, not the rest of the field.
 
 ### Speech engines
 
-Pick one in Settings → General → Recognition → Engine.
+Pick one in Settings → Dictation → Engine.
 
 | Engine | Runs | Best for |
 |---|---|---|
@@ -167,8 +167,8 @@ Build and run from Xcode (⌘R), or use `./scripts/build-local.sh` to build Rele
 On first launch:
 
 1. Grant **Microphone** and **Accessibility** when prompted (the app will guide you).
-2. Pick your hotkeys, mic, speech engine, and (for Whisper) model on the main window's Settings page (open Voxline from the menu bar → Settings, or ⌘,). The default dictation hotkey is **Left Shift + Left Control** and the default command hotkey is **Left Shift + Left Option** — change either if you'd rather use something else.
-3. Drop in an Anthropic or OpenAI API key in the **Cleanup (AI)** section.
+2. Pick your hotkeys, mic, speech engine, and (for Whisper) model in the main window's Settings pages (open Voxline from the menu bar → Settings, or ⌘,): General for hotkeys and mic, Dictation for the speech engine and Whisper model. The default dictation hotkey is **Left Shift + Left Control** and the default command hotkey is **Left Shift + Left Option** — change either if you'd rather use something else.
+3. Drop in an Anthropic or OpenAI API key on the **AI Provider** page.
 4. Hold the dictation hotkey anywhere on your Mac and start talking. To edit text instead, select it, hold the command hotkey, and say what to change.
 
 ### Permissions
@@ -188,7 +188,7 @@ What stays local:
 - 🧠 **Speech-to-text with Apple Speech or Whisper** — both run on your Mac (Whisper on the Apple Neural Engine via WhisperKit). With either engine, no audio is sent anywhere.
 - 🔑 **API keys** — stored in macOS Keychain. Not logged, not synced, not visible to other apps.
 - 📜 **History** — the last 25 dictations, including raw transcripts, are stored in the app's preferences on your Mac. Clear them any time from the History window. For a command or preset, History keeps the instruction (or preset name) and the text that was inserted, never the field's contents; a rewrite keeps only the changed part.
-- 🧠 **Learning** — after each dictation, voxline reads the field through Accessibility, once a second for up to 30 seconds, to see whether you corrected the text. Password fields, terminals, VS Code, and Cursor are never read for this. A corrected name goes into your custom vocabulary. With style learning on, the last 20 dictations and up to 10 before-and-after corrections for each kind of app, and the style notes, are kept in `~/Library/Application Support/voxline/learning.json`. None of it is logged or added to History, and Clear History doesn't touch it. Turning a switch off in Settings → Learning stops it but keeps what was learned until you choose Reset Learning, which deletes the data and the learned words. Text you type right after a dictation at the end of a field can be counted as part of it.
+- 🧠 **Learning** — after each dictation, voxline reads the field through Accessibility, once a second for up to 30 seconds, to see whether you corrected the text. Password fields, terminals, VS Code, and Cursor are never read for this. A corrected name goes into your custom vocabulary. With style learning on, the last 20 dictations and up to 10 before-and-after corrections for each kind of app, and the style notes, are kept in `~/Library/Application Support/voxline/learning.json`. None of it is logged or added to History, and Clear History doesn't touch it. Turning a switch off in Settings → Vocabulary stops it but keeps what was learned until you choose Reset Learning, which deletes the data and the learned words. Text you type right after a dictation at the end of a field can be counted as part of it.
 - ⌨️ **Key presses** — to tell your hotkey from OS shortcuts such as ⌘⇧4, the hotkey listener also notices that a non-modifier key went down, never which character. The listener for Esc and your preset shortcuts compares each key press only against those shortcuts and passes every other key through untouched.
 
 - 🗓 **Meetings** — audio is recorded only after you choose Start Meeting Recording (or press your meeting shortcut), stays on this Mac, and is deleted after the retention period you pick (14 days by default). Transcription and speaker separation run on-device. The transcript and your custom vocabulary are sent to your LLM provider to write the notes, as dictation transcripts are. Many places require telling participants they're being recorded; Voxline doesn't announce anything into the call. Headphones give the cleanest call transcripts.
@@ -212,7 +212,7 @@ voxline has **no telemetry, no analytics, and no first-party server**. The only 
 ## Good to know
 
 - **Not sandboxed, on purpose** — voxline reads the focused field through the Accessibility API, which the App Sandbox blocks. The app ships notarized with the hardened runtime, and its data lives in `~/Library/Application Support/voxline`.
-- **Settings live in one place** — the main window's Settings page, with a status strip up top showing what's wired up. Switching providers keeps both keys around for fast toggling.
+- **Settings live in one place** — six pages in the main window's sidebar, with orange marks on pages that need setup and a Setup section on Home. Switching providers keeps both keys around for fast toggling.
 - **Resilient hotkey** — when permissions are revoked or restored, voxline reconciles automatically without a relaunch. OS shortcuts that include your hotkey's keys, like ⌘⇧4, don't start a recording.
 - **Open source** — read the code, audit the data path, file an issue, send a PR.
 

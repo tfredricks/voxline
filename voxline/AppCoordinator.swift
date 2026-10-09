@@ -453,7 +453,7 @@ final class AppCoordinator {
         )
     }
 
-    /// Settings → Command saved the presets.
+    /// Settings → Commands saved the presets.
     func presetsDidChange() {
         presetMap = KeyInterceptor.presetMap(presetStore.load())
         refreshInterceptorConfig()

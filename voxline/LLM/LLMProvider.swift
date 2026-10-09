@@ -107,7 +107,7 @@ enum LLMError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            return "No API key configured. Open Settings → API Keys to set one."
+            return "No API key configured. Open Settings → AI Provider to set one."
         case .invalidAPIKey:
             return "API key was rejected by the provider."
         case .rateLimited:

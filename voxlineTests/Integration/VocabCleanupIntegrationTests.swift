@@ -116,7 +116,7 @@ struct VocabCleanupIntegrationTests {
         if let key, !key.isEmpty {
             return true
         }
-        print("[integration] skipping VocabCleanupIntegrationTests — no API key in Keychain for provider \(provider). Add a key in Settings → API Keys.")
+        print("[integration] skipping VocabCleanupIntegrationTests — no API key in Keychain for provider \(provider). Add a key in Settings → AI Provider.")
         return false
     }
 

@@ -57,7 +57,7 @@ import Foundation
         guard case .error(let msg) = state.status else {
             Issue.record("Expected .error status, got \(state.status)"); return
         }
-        #expect(msg.contains("Settings → API Keys"))
+        #expect(msg.contains("Settings → AI Provider"))
     }
 
     @Test func invalid_api_key_says_so() async {
