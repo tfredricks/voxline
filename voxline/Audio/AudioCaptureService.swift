@@ -197,6 +197,7 @@ final class AudioCaptureService {
     func stop() {
         engine.inputNode.removeTap(onBus: 0)
         delivery?.deliverTail()
+        delivery = nil
         engine.stop()
         isCapturing = false
         currentEpoch &+= 1

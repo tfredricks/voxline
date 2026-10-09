@@ -31,8 +31,7 @@ final class CapturePipeline {
     /// newer recording has taken over.
     private var generation: UInt64 = 0
     private var live: LiveSession?
-    private var snapshotTask: Task<StartSnapshot, Never>?
-    private var selectionTask: Task<String?, Never>?
+    private var startTasks: StartTasks?
 
     /// Invoked with the raw transcript when LLM cleanup fails, so the user's
     /// words survive a provider outage instead of being discarded. The default
@@ -155,7 +154,7 @@ final class CapturePipeline {
         let captor = contextCapture
         let frontmost = frontmost
         let fieldInspector = fieldInspector
-        snapshotTask = Task.detached(priority: .userInitiated) {
+        let snapshotTask = Task.detached(priority: .userInitiated) {
             let bundleID = frontmost.frontmostBundleID()
             let field = fieldInspector.inspect()
             return StartSnapshot(context: await captor.capture(), bundleID: bundleID, field: field)
@@ -163,14 +162,14 @@ final class CapturePipeline {
         // Selection probe runs ONLY in command mode. In dictation the clipboard
         // is never touched — this is the fix for VS Code's line-copy false
         // positive (empty-selection Cmd+C copies the whole line).
+        var selectionTask: Task<String?, Never>?
         if command {
             let snapshotter = selectionSnapshot
             selectionTask = Task.detached(priority: .userInitiated) {
                 await snapshotter.readSelection()
             }
-        } else {
-            selectionTask = nil
         }
+        startTasks = StartTasks(snapshot: snapshotTask, selection: selectionTask)
     }
 
     /// Called when one chord modifier goes down (the "armed" edge). Warms the
@@ -209,6 +208,8 @@ final class CapturePipeline {
         // any non-recording state would race with the in-flight pipeline.
         guard case .recording = state.status, let live else { return }
         let generation = self.generation
+        let startTasks = self.startTasks
+        self.startTasks = nil
         let router = live.router
         let release = ContinuousClock.now
         capture.stop()
@@ -220,7 +221,7 @@ final class CapturePipeline {
         if router.sampleCount == 0 || router.audioDuration < Self.minimumAudioDuration {
             await live.cancel()
             guard generation == self.generation else { return }
-            cancelContextTasks()
+            startTasks?.cancel()
             resetIdle()
             return
         }
@@ -231,7 +232,7 @@ final class CapturePipeline {
         if router.peak == 0 {
             await live.cancel()
             guard generation == self.generation else { return }
-            cancelContextTasks()
+            startTasks?.cancel()
             return setError("No audio captured. Check that Microphone permission is granted and the input device isn't muted.")
         }
 
@@ -240,7 +241,7 @@ final class CapturePipeline {
             session = try await live.session()
         } catch {
             guard generation == self.generation else { return }
-            cancelContextTasks()
+            startTasks?.cancel()
             return setError("Couldn't start \(live.engineName): \(error.localizedDescription)")
         }
         guard generation == self.generation else { return }
@@ -251,7 +252,7 @@ final class CapturePipeline {
             transcript = try await session.finish()
         } catch {
             guard generation == self.generation else { return }
-            cancelContextTasks()
+            startTasks?.cancel()
             return setError("Transcription failed. Try again or pick a different engine in Settings → General.")
         }
         guard generation == self.generation else { return }
@@ -265,7 +266,7 @@ final class CapturePipeline {
 
         if transcript.isEmpty {
             // Nothing to clean / paste — quietly idle out.
-            cancelContextTasks()
+            startTasks?.cancel()
             resetIdle()
             return
         }
@@ -273,11 +274,10 @@ final class CapturePipeline {
 
         // Mode resolution uses the frontmost app and focused field as they
         // were at recording start, not wherever focus drifted since.
-        let snapshot = await snapshotTask?.value ?? .empty
-        snapshotTask = nil
+        let snapshot = await startTasks?.snapshot.value ?? .empty
         guard generation == self.generation else { return }
         guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
-            cancelContextTasks()
+            startTasks?.cancel()
             return setError("No mode for app '\(snapshot.bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes.")
         }
         let timing = PipelineTiming(
@@ -290,8 +290,7 @@ final class CapturePipeline {
 
         // `recordingIsCommand` was latched at recording start.
         if state.recordingIsCommand {
-            let selection = await selectionTask?.value ?? nil
-            selectionTask = nil
+            let selection = await startTasks?.selection?.value ?? nil
             guard generation == self.generation else { return }
             guard let selection, !selection.isEmpty else {
                 // Command gesture but nothing selected: keep the mode boundary
@@ -303,7 +302,7 @@ final class CapturePipeline {
             await performTransform(command: transcript, selection: selection, mode: mode, snapshot: snapshot, timing: timing, generation: generation)
             return
         }
-        // Dictation path: selectionTask was never spawned, so the clipboard was
+        // Dictation path: no selection probe was spawned, so the clipboard was
         // never touched.
         await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: timing, generation: generation)
     }
@@ -457,6 +456,18 @@ final class CapturePipeline {
 
     // MARK: - Snapshot and metrics
 
+    /// Work started alongside a recording. Finalize takes ownership before its
+    /// first await, so it can never cancel or clear a later recording's tasks.
+    private struct StartTasks {
+        let snapshot: Task<StartSnapshot, Never>
+        let selection: Task<String?, Never>?
+
+        func cancel() {
+            snapshot.cancel()
+            selection?.cancel()
+        }
+    }
+
     private struct StartSnapshot: Sendable {
         let context: CapturedContext
         let bundleID: String?
@@ -511,13 +522,6 @@ final class CapturePipeline {
         }
     }
 
-    private func cancelContextTasks() {
-        snapshotTask?.cancel()
-        snapshotTask = nil
-        selectionTask?.cancel()
-        selectionTask = nil
-    }
-
     private func resetIdle() {
         clearRecordingState()
         state.status = .idle
@@ -529,10 +533,11 @@ final class CapturePipeline {
     }
 
     /// Stops feeding and observing the current session, which must already be
-    /// finished or cancelled.
+    /// finished or cancelled, and lets go of its router.
     private func endLiveSession() {
         live?.close()
         live = nil
+        capture.onSamples = nil
     }
 
     /// Shared by idle and error. `retryTranscript` survives both.

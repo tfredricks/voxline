@@ -39,6 +39,12 @@ import Foundation
         }
     }
 
+    @MainActor
+    final class Flag {
+        private(set) var isSet = false
+        func set() { isSet = true }
+    }
+
     struct Observation: Equatable {
         let isCancellable: Bool
         let phase: PipelinePhase?
@@ -202,6 +208,36 @@ import Foundation
         #expect(h.state.pipelinePhase == nil)
     }
 
+    @Test func late_partial_from_previous_session_does_not_touch_next_recording() async {
+        let h = makeHarness()
+        h.session.keepsPartialsOpen = true
+        let second = FakeTranscriptionSession()
+        h.engine.nextSessions.append(second)
+        h.pipe.startRecording()
+        await h.pipe.finalizeRecording()
+        #expect(h.state.status == .idle)
+
+        h.pipe.startRecording()
+        #expect(await eventually { h.engine.sessions.count == 2 })
+        h.session.emit(.init(stable: "stale", volatile: ""))
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(h.state.liveTranscript == nil)
+
+        second.emit(.init(stable: "fresh", volatile: ""))
+        #expect(await eventually { h.state.liveTranscript?.text == "fresh" })
+        h.session.emit(.init(stable: "stale again", volatile: ""))
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(h.state.liveTranscript?.text == "fresh")
+    }
+
+    @Test func teardown_releases_the_sample_sink() async {
+        let h = makeHarness()
+        h.pipe.startRecording()
+        #expect(h.capture.onSamples != nil)
+        await h.pipe.finalizeRecording()
+        #expect(h.capture.onSamples == nil)
+    }
+
     @Test func next_start_clears_previous_live_transcript() async {
         let h = makeHarness()
         h.state.liveTranscript = TranscriptPartial(stable: "stale")
@@ -324,6 +360,32 @@ import Foundation
         #expect(other.openedConfigs.isEmpty)
         let row = try #require(h.pipe.metrics.items.first)
         #expect(row.engineID == "fake:engine")
+    }
+
+    @Test func overlapping_finalize_calls_run_the_pipeline_once() async {
+        let h = makeHarness()
+        h.session.holdFinish = true
+        h.pipe.startRecording()
+        let firstDone = Flag(), racingDone = Flag(), lateDone = Flag()
+        Task { await h.pipe.finalizeRecording(); firstDone.set() }
+        Task { await h.pipe.finalizeRecording(); racingDone.set() }
+        #expect(await eventually { h.session.finishCount == 1 })
+        Task { await h.pipe.finalizeRecording(); lateDone.set() }
+
+        #expect(await eventually { racingDone.isSet && lateDone.isSet }, "overlapping calls return without joining the in-flight one")
+        #expect(!firstDone.isSet)
+        #expect(h.state.status == .thinking)
+        #expect(h.session.finishCount == 1)
+        #expect(h.capture.stopCallCount == 1)
+
+        h.session.releaseFinish()
+        #expect(await eventually { firstDone.isSet })
+        #expect(h.session.finishCount == 1)
+        #expect(h.capture.stopCallCount == 1)
+        #expect(h.llm.calls.count == 1)
+        #expect(h.injector.injected == ["cleaned"])
+        #expect(h.pipe.metrics.items.count == 1)
+        #expect(h.state.status == .idle)
     }
 
     @Test func phase_is_transcribing_while_finish_runs() async {
