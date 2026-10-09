@@ -5,12 +5,18 @@ import Darwin
 /// while the open-application Apple event is still current.
 enum LoginLaunchDetector {
     @MainActor static func capture() -> Bool {
+        let appleEvent = appleEventSaysLogin()
+        let sessionStart = consoleSessionStart()
+        let now = Date()
         let result = LoginLaunch.isLoginLaunch(
-            appleEventSaysLogin: appleEventSaysLogin(),
-            sessionStart: consoleSessionStart(),
-            launchedAt: Date()
+            appleEventSaysLogin: appleEvent,
+            sessionStart: sessionStart,
+            launchedAt: now
         )
-        AppLog.pipeline.info("launch: atLogin=\(result, privacy: .public)")
+        let sessionAge = sessionStart.map { String(Int(now.timeIntervalSince($0))) } ?? "none"
+        AppLog.pipeline.info(
+            "launch: appleEvent=\(appleEvent, privacy: .public) sessionAge=\(sessionAge, privacy: .public) atLogin=\(result, privacy: .public)"
+        )
         return result
     }
 
