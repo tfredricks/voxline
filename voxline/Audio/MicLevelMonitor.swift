@@ -64,11 +64,15 @@ final class MicLevelMonitor {
         running = true
     }
 
+    /// Safe to call when not running, and then never touches audio: reading
+    /// `inputNode` binds the input device, which can block on a microphone
+    /// permission prompt.
     func stop() {
-        // Unconditional removeTap + stop makes stop() idempotent — safe to call when not running.
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
-        running = false
+        if running {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+            running = false
+        }
         level = 0
     }
 
