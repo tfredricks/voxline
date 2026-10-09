@@ -343,3 +343,18 @@ Timestamps on lines, selectable or copyable live text, a full-transcript
 window, speaker names live, a live transcript when the timer chip is hidden,
 live text from the cloud engine, and any change to the post-stop pipeline or
 the Markdown output.
+
+## Spike results (2026-10-09)
+
+Machine: Apple M3 Pro, 36 GB. Audio: four `say` sentences in two voices, tiled to 60 min.
+
+| Gate | Result | Pass |
+|---|---|---|
+| Hour-long session: finals in minutes 55–60 | yes; stable length 49,277 (minute 54) → 53,935 chars (minute 60) | ✓ |
+| Hour-long session: resident memory | 168 → 111 MB | ✓ |
+| Hour-long session: `cancel()` | 1 ms | ✓ |
+| Two sessions + recorder, 5 min real time | 3 % of one core; no samples lost | ✓ |
+
+The hour of audio was fed in 958 s wall (about 3.8x real time). Stable text grew by about 880 characters every minute through the whole hour.
+
+Decision: sessions run uninterrupted for the hour; live transcript defaults on.
