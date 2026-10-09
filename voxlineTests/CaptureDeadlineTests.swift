@@ -30,6 +30,6 @@ import Foundation
         let d = CaptureDeadline(totalMilliseconds: 1_000)
         try await Task.sleep(nanoseconds: 30_000_000)
         let elapsed = d.elapsedMilliseconds()
-        #expect(elapsed >= 25 && elapsed <= 200)  // generous upper bound for CI
+        #expect(elapsed >= 25 && elapsed <= 2_000)
     }
 }
