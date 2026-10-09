@@ -9,6 +9,11 @@ import Foundation
 /// `attach` forwards pending chunks while holding the lock, which keeps
 /// ordering airtight against a concurrent `append`. A session's `append`
 /// must therefore never call back into the router.
+///
+/// Expects a single producer: one capture tap thread calls `append`.
+/// Concurrent producers stay safe for the tallies but can reorder chunks
+/// delivered to the session. `attach` after `close()` ignores the session
+/// without cancelling it; the caller owns cancelling it.
 final class StreamingSampleRouter: @unchecked Sendable {
     private let lock = NSLock()
     private var session: (any TranscriptionSession)?

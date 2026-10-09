@@ -10,8 +10,9 @@ final class FakeTranscriptionSession: TranscriptionSession, @unchecked Sendable 
     /// When true, finish() suspends until `releaseFinish()` or `cancel()`.
     var holdFinish = false
     private var finishWaiter: CheckedContinuation<Void, Never>?
-    private(set) var cancelCount = 0
-    private(set) var finishCount = 0
+    private var released = false
+    private var _cancelCount = 0
+    private var _finishCount = 0
 
     init() {
         var c: AsyncStream<TranscriptPartial>.Continuation!
@@ -21,25 +22,33 @@ final class FakeTranscriptionSession: TranscriptionSession, @unchecked Sendable 
 
     var appended: [[Float]] { lock.withLock { _appended } }
     var appendedSampleCount: Int { appended.reduce(0) { $0 + $1.count } }
+    var cancelCount: Int { lock.withLock { _cancelCount } }
+    var finishCount: Int { lock.withLock { _finishCount } }
 
     func append(_ samples: [Float]) { lock.withLock { _appended.append(samples) } }
 
     func emit(_ partial: TranscriptPartial) { continuation?.yield(partial) }
 
     func finish() async throws -> String {
-        lock.withLock { finishCount += 1 }
-        if holdFinish {
+        lock.withLock { _finishCount += 1 }
+        if holdFinish, !lock.withLock({ released }) {
             await withCheckedContinuation { (k: CheckedContinuation<Void, Never>) in
-                lock.withLock { finishWaiter = k }
+                let alreadyReleased = lock.withLock { () -> Bool in
+                    if released { return true }
+                    finishWaiter = k
+                    return false
+                }
+                if alreadyReleased { k.resume() }
             }
         }
-        if lock.withLock({ cancelCount }) > 0 { throw CancellationError() }
+        if lock.withLock({ _cancelCount > 0 }) { throw CancellationError() }
         continuation?.finish()
         return try finishResult.get()
     }
 
     func releaseFinish() {
         let k = lock.withLock { () -> CheckedContinuation<Void, Never>? in
+            released = true
             defer { finishWaiter = nil }
             return finishWaiter
         }
@@ -47,7 +56,7 @@ final class FakeTranscriptionSession: TranscriptionSession, @unchecked Sendable 
     }
 
     func cancel() {
-        lock.withLock { cancelCount += 1 }
+        lock.withLock { _cancelCount += 1 }
         continuation?.finish()
         releaseFinish()
     }

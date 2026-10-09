@@ -52,6 +52,17 @@ import Foundation
         #expect(router.sampleCount == 1)
     }
 
+    @Test func append_close_attach_delivers_nothing() {
+        let router = StreamingSampleRouter(retainsAudio: false)
+        router.append([1, 2])
+        router.close()
+        let session = FakeTranscriptionSession()
+        router.attach(session)
+        router.append([3])
+        #expect(session.appended.isEmpty)
+        #expect(session.cancelCount == 0)
+    }
+
     @Test func audioDuration_is_count_over_16k() {
         let router = StreamingSampleRouter(retainsAudio: false)
         router.append([Float](repeating: 0, count: 8_000))
