@@ -5,7 +5,7 @@ enum LaunchEnvironment {
 
     /// True when this process is the host app of an XCTest / Swift Testing run.
     /// The test bundle loads into the real app, so launch-time side effects —
-    /// data migration, the hotkey tap, model preparation — must not run against
+    /// the hotkey tap, model preparation — must not run against
     /// the developer's real data.
     static let isRunningTests: Bool = {
         let env = ProcessInfo.processInfo.environment

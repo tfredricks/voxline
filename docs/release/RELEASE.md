@@ -6,7 +6,7 @@ These steps create the trust roots and infrastructure the release pipeline depen
 
 ### 1. Install Sparkle's CLI tools
 
-Download Sparkle 2.6.x or later from `https://github.com/sparkle-project/Sparkle/releases` and extract `bin/generate_keys` and `bin/sign_update`. Place them somewhere on PATH (e.g. `/usr/local/bin`) or keep them in a known directory like `~/voxline-sparkle-tools/`.
+Download Sparkle 2.9.2 (the version `release.yml` pins; a newer release is fine for generating keys) from `https://github.com/sparkle-project/Sparkle/releases` and extract `bin/generate_keys` and `bin/sign_update`. Place them somewhere on PATH (e.g. `/usr/local/bin`) or keep them in a known directory like `~/voxline-sparkle-tools/`.
 
 ### 2. Generate the EdDSA keypair
 
@@ -24,20 +24,15 @@ This emits the base64 public key on stdout and stores the private key in your lo
 
 Keep this file out of git. Store a backup somewhere durable (a password manager or hardware token works). Losing this key means rotating to a new keypair, which forces every existing user to re-download manually — see "Key rotation" below.
 
-### 4. Replace the placeholder `SUPublicEDKey` in `voxline/Info.plist`
+### 4. Verify `SUPublicEDKey` in `voxline/Info.plist`
 
-Edit `voxline/Info.plist` and replace:
-```xml
-<key>SUPublicEDKey</key>
-<string>REPLACE_WITH_REAL_KEY_IN_TASK_8</string>
-```
-with the base64 public key from step 2. Then validate:
+`voxline/Info.plist` already contains the real public key. Check that it matches the key from step 2 (`generate_keys -p` prints the public key for the private key in your keychain):
 
 ```bash
-plutil -lint voxline/Info.plist
+plutil -extract SUPublicEDKey raw voxline/Info.plist
 ```
 
-Commit the change on `main`.
+If you generated a new keypair, replace the value, run `plutil -lint voxline/Info.plist`, and commit on `main`.
 
 ### 5. Provision GitHub Actions secrets
 
@@ -51,6 +46,7 @@ At `https://github.com/tfredricks/voxline/settings/secrets/actions`, add:
 | `APPLE_NOTARY_API_KEY_P8` | Contents of the `AuthKey_XXX.p8` file from App Store Connect |
 | `DEVELOPER_ID_CERT_P12` | Base64-encoded `.p12` of your Developer ID Application cert: `base64 -i cert.p12 \| pbcopy` |
 | `DEVELOPER_ID_CERT_PASSWORD` | Password used when exporting the `.p12` |
+| `DEVELOPER_ID_PROFILE` | Base64-encoded Developer ID provisioning profile (`.provisionprofile`) for `com.voxline.app`: `base64 -i voxline.provisionprofile \| pbcopy`. `release.yml` installs it and signs the archive with it. |
 
 ### 6. Create the `gh-pages` branch with an initial empty appcast
 

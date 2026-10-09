@@ -68,12 +68,6 @@ import Foundation
         #expect(url.standardizedFileURL.path == BakeoffFixtures.directory(environment: [:]).standardizedFileURL.path)
     }
 
-    @Test func legacyContainerDataDirectory_pointsInsideTheOldSandbox() {
-        let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
-        let url = AppPaths.legacyContainerDataDirectory(home: home)
-        #expect(url.path == "/Users/example/Library/Containers/com.voxline.app/Data")
-    }
-
     @Test func learning_file_lives_in_the_app_directory() {
         let dir = URL(filePath: "/tmp/voxline-paths-test", directoryHint: .isDirectory)
         #expect(AppPaths.learningFile(inAppDirectory: dir).path == "/tmp/voxline-paths-test/learning.json")

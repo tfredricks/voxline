@@ -82,10 +82,6 @@ final class SettingsStatusViewModel {
         return result
     }
 
-    func needsSetup(_ page: MainWindowPage) -> Bool {
-        issues.contains { $0.page == page }
-    }
-
     private var currentReadiness: EngineReadiness? {
         guard let checked, checked.key == readinessKey else { return nil }
         return checked.readiness

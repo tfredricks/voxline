@@ -79,6 +79,11 @@ final class CapturePipeline {
     /// release that follows an Esc can skip the stop sound.
     private(set) var wasCancelled = false
 
+    /// Fires on the main actor once the first audio of a recording has been
+    /// captured, while it is still recording: the moment a start cue is
+    /// honest. Never fires for a recording that failed to start.
+    var onRecordingStarted: (() -> Void)?
+
     /// Set when the recording cap stopped the current recording. The finalize
     /// that follows says so once it ends, unless it showed a toast of its own.
     var capHit = false
@@ -190,7 +195,15 @@ final class CapturePipeline {
             config: SessionConfig(vocabularyHints: vocabulary()),
             savesBakeoffClip: saveBakeoffClips()
         )
-        capture.onSamples = { [router = live.router] in router.append($0) }
+        let generation = self.generation
+        let firstChunk = OnceFlag()
+        capture.onSamples = { [router = live.router, weak self] samples in
+            router.append(samples)
+            guard firstChunk.trySet() else { return }
+            Task { @MainActor [weak self] in
+                self?.noteFirstAudio(generation: generation)
+            }
+        }
         do {
             try capture.start()
         } catch {
@@ -215,7 +228,6 @@ final class CapturePipeline {
         state.isCancellable = true
         state.recordingKind = kind
         state.status = .recording
-        let generation = self.generation
         live.open { [weak self] partial in
             guard let self, self.generation == generation else { return }
             self.state.liveTranscript = partial
@@ -229,6 +241,11 @@ final class CapturePipeline {
             let editContextTask = Task.detached(priority: .userInitiated) { reader.read() }
             startTasks = StartTasks(snapshot: snapshotFocus(capturesContext: false), editContext: editContextTask)
         }
+    }
+
+    private func noteFirstAudio(generation: UInt64) {
+        guard generation == self.generation, case .recording = state.status else { return }
+        onRecordingStarted?()
     }
 
     /// Called when one chord modifier goes down (the "armed" edge). Warms the
@@ -555,7 +572,7 @@ final class CapturePipeline {
     }
 
     private static func noModeMessage(bundleID: String?) -> String {
-        "No mode for app '\(bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes."
+        "No mode for app '\(bundleID ?? "unknown")' and no '*' fallback in modes.json. Add a '*' mode, or delete ~/Library/Application Support/voxline/modes.json and relaunch Voxline to restore the defaults."
     }
 
     /// Clean up the transcript (or pass it through on the fast path) and

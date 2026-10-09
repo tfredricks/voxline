@@ -6,7 +6,7 @@
 
 **Hold a key. Speak. Get polished writing.**
 
-A native macOS dictation app that turns your voice into clean, written text — anywhere on your Mac. Speech runs on-device by default, via Apple Speech or Whisper. Cleanup runs through your own LLM API key, so you control the model, the cost, and the data path.
+A native macOS dictation app that turns your voice into clean, written text — anywhere on your Mac. Speech runs on-device by default, via Apple Speech or Whisper. Cleanup runs through your own LLM API key, so you control the provider, the cost, and the data path.
 
 macOS 26+ · Apple Silicon · Bring your own API key
 
@@ -43,13 +43,13 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 - **AI cleanup, not raw dump** — fillers, false starts, and rambling are smoothed out. Punctuation and capitalization are added automatically.
 - **Command mode: edit by voice** — hold the command chord (Left Shift + Left Option by default), say what to do, and let go. With text selected, the selection is replaced: *"make this a bullet list"*, *"translate this to Spanish"*, *"make this shorter"*. With nothing selected, the result goes in at the cursor (*"draft a short reply agreeing to the Thursday time"*), or, for an instruction about existing text (*"make the last paragraph shorter"*), only the part that changed is replaced. An edit is a normal ⌘Z-undoable change.
 - **Preset edit shortcuts** — select text anywhere and press ⌥1, ⌥2, or ⌥3 to fix grammar, make it concise, or make it professional, with no recording. The shortcuts and their instructions are an editable table in Settings → Commands.
-- **Context-aware per-app formatting** — voxline detects the frontmost app and tunes the output for it: terse Slack messages, structured email replies, code-comment style in your IDE, search-box one-liners. Ships with sensible defaults for 28 common apps out of the box.
+- **Context-aware per-app formatting** — voxline detects the frontmost app and tunes the output for it: terse Slack messages, structured email replies, code-comment style in your IDE, search-box one-liners. Ships with sensible defaults for 27 common apps out of the box.
 - **Learns as you go** — fix a misheard name in the field after a dictation and voxline adds it to your custom vocabulary (with Undo in the pill), so it comes out right the next time. It also keeps a short note on how you write in chat, email, documents, and code, and uses it in cleanup. Read, edit, or reset what it learned in Settings → Vocabulary.
 - **Dictation history** — the last 25 dictations, cleaned text and raw transcript side by side, in a History window; click any row to copy it back to the clipboard.
-- **Bring your own LLM key** — Anthropic or OpenAI, your account, your model, your costs. Keys live in macOS Keychain.
+- **Bring your own LLM key** — Anthropic or OpenAI, your account, your costs. Keys live in macOS Keychain.
 - **Menu-bar native, with a real window when you want it** — a main window with Home (status, setup issues, permissions, recent meetings) and six settings pages; close it and voxline keeps running in the menu bar. No Dock icon unless the window is open, or turn on Settings → General → Show Voxline in Dock.
 - **Meeting notes** — record a meeting of up to an hour (your mic plus your Mac's sound output), and get a Markdown file with a summary, decisions, action items, and a speaker-labeled transcript. While it records, the timer chip can expand to show the last few lines live. Transcription and speaker separation run on your Mac; meetings use the Whisper small.en model (English) for speed.
-- **Privacy-aware feedback** — clipboard is restored after paste; the system mic indicator turns off the moment you let go.
+- **Privacy-aware feedback** — clipboard is restored after paste. The microphone stays open for 90 seconds after a dictation so the next one captures from the first syllable, then the system mic indicator turns off; nothing is captured while it idles.
 
 ## How it works
 
@@ -83,7 +83,7 @@ voxline writes the result into the focused field through Accessibility where the
 
 ### Command mode
 
-There are two chords: **dictation** (Left Shift + Left Control by default) and **command** (Left Shift + Left Option by default). Change the dictation chord in Settings → Dictation, and the command chord (or turn command mode off) in Settings → Commands. With ⇧⌥ as the command chord, typing a ⇧⌥ character such as an em dash briefly starts and discards a recording (you hear the start sound and see the microphone indicator), and a slowly pressed ⌥-digit preset can light the microphone indicator for a moment.
+There are two chords: **dictation** (Left Shift + Left Control by default) and **command** (Left Shift + Left Option by default). Change the dictation chord in Settings → Dictation, and the command chord (or turn command mode off) in Settings → Commands. With ⇧⌥ as the command chord, typing a ⇧⌥ character such as an em dash briefly starts and discards a recording (you hear the start sound and see the microphone indicator), and an ⌥-digit preset lights the microphone indicator for a moment, since holding a chord key that is not Shift or Command warms the microphone at once so the first word is never clipped.
 
 Hold the command chord, say what to do, and let go:
 
@@ -92,7 +92,7 @@ Hold the command chord, say what to do, and let go:
 
 Esc cancels a command while it is recording or thinking, as it does for dictation. Selections over 8,000 characters are refused ("Selection too long — 8,000 characters max"), and password fields are never read ("Command mode is off in password fields"). If an edit can't be applied in place, the result is copied instead and the pill says so ("Couldn't edit in place — copied, ⌘V to apply").
 
-Commands use your cleanup model unless you set a **Command model** in Settings → Commands. A larger model drafts and answers better but responds more slowly.
+Commands use the provider's default model unless you set a **Command model** in Settings → Commands. A larger model drafts and answers better but responds more slowly.
 
 ### Preset shortcuts
 
@@ -133,6 +133,8 @@ Models download on first use via [WhisperKit](https://github.com/argmaxinc/Whisp
 |---|---|---|
 | **Anthropic** | claude-haiku-4-5 | https://console.anthropic.com/settings/keys |
 | OpenAI | gpt-4.1-nano | https://platform.openai.com/api-keys |
+
+Cleanup always uses the provider's default model; there is no setting for it. A hidden defaults key, `voxline.llm.model`, overrides it. The command model (Settings → Commands) and the meeting notes model (Settings → Meetings) are set in the app.
 
 Why cloud cleanup instead of a local model? Because the gap between a frontier LLM and what fits on a laptop is still enormous for prose quality. voxline's bet: trust on-device for the audio (which is sensitive), and let you pick best-in-class for the cleanup (which only sees a transcript). You decide which provider.
 
@@ -178,7 +180,7 @@ On first launch:
 | Microphone | Capture your voice while the hotkey is held. Audio stays on your Mac unless you select the OpenAI engine. |
 | Accessibility | Detect the global hotkey, read the focused field, and edit it in place or paste into it. |
 
-Input Monitoring is **not** required — Accessibility alone is enough for the global hotkey. macOS may still surface an Input Monitoring entry for voxline; you can leave it off (if macOS withholds key events from the hotkey listener, voxline falls back to watching modifier keys only). The Debug pane shows its status for diagnostics only.
+Input Monitoring is **not** required — Accessibility alone is enough for the global hotkey. macOS may still surface an Input Monitoring entry for voxline; you can leave it off (if macOS withholds key events from the hotkey listener, voxline falls back to watching modifier keys only). Its status shows as the Recommended row in Home's Permissions section, for diagnostics only.
 
 ## Privacy
 
@@ -203,9 +205,9 @@ What goes to your LLM provider:
 - 🎨 **Your style note and two examples** — with style learning on, each cleanup also sends that kind of app's style note (up to 600 characters) and up to two of your recent dictations in the same app (up to 400 characters each). Every 20 dictations of a kind, voxline sends up to 20 recent dictations and 10 corrections of that kind plus the current note (about 14,600 characters at most) to write the note. Turn style learning off to send none of this.
 - ✂️ **Command mode sends more of the field** — every command sends your spoken instruction, the app, window, and kind of field, your custom vocabulary, **the text of the focused field around the cursor or selection (up to 12,000 characters)**, and the selection (up to 8,000 characters) to your provider. A preset sends only the selection. Secure (password) fields are never read.
 
-A hidden developer flag:
+Hidden developer flag:
 
-- 💾 **`voxline.debug.saveBakeoffClips`** — when switched on, voxline saves each dictation's audio (as a WAV) and cleaned text under `~/Library/Application Support/voxline/bakeoff`, to build recordings for the [engine bake-off](docs/bakeoff.md). It is the **only** thing in voxline that writes audio to disk. It has no entry in Settings and is **off by default**; the bake-off doc shows how to turn it off and delete the clips.
+- 💾 **`voxline.debug.saveBakeoffClips`** — when switched on, voxline saves each dictation's audio (as a WAV) and cleaned text under `~/Library/Application Support/voxline/bakeoff`, to build recordings for the [engine bake-off](docs/bakeoff.md). Apart from meeting recordings, it is the **only** thing in voxline that writes audio to disk. It has no entry in Settings and is **off by default**; the bake-off doc shows how to turn it off and delete the clips.
 
 voxline has **no telemetry, no analytics, and no first-party server**. The only network traffic is to whichever LLM provider you choose, OpenAI if you select its speech engine, and the one-time model downloads (Hugging Face for Whisper; Apple's own language assets for Apple Speech, if macOS lacks them).
 
@@ -242,12 +244,12 @@ The build number (`CFBundleVersion`) is the commit count on `main` and stamps it
 1. Update `MARKETING_VERSION` in `voxline.xcodeproj/project.pbxproj` (one line).
 2. In `CHANGELOG.md`, move `[Unreleased]` items under a new `[X.Y.Z] - YYYY-MM-DD` heading.
 3. Commit: `chore: release vX.Y.Z`.
-4. Tag and push:
+4. Tag with an annotated tag whose message is the release notes (paste the CHANGELOG entry), and push:
    ```bash
-   git tag vX.Y.Z
+   git tag -a vX.Y.Z    # opens an editor for the notes
    git push origin main --tags
    ```
-5. Create a GitHub Release from the tag; paste the CHANGELOG entry as the body.
+5. The tag push runs `release.yml`, which signs, notarizes, builds the DMG, creates the GitHub Release (the tag message is its body), and publishes the Sparkle appcast. Don't create the Release by hand. See `docs/release/RELEASE.md`.
 
 That's the whole flow. Between releases, `MARKETING_VERSION` stays put — every dev build reports the last released version with a higher commit-count build number.
 

@@ -57,7 +57,7 @@ import Testing
         let log: LockedBox<[String]>
     }
 
-    static let defaultModes = [
+    nonisolated static let defaultModes = [
         Mode(bundleID: notes, displayName: "Notes", prompt: "notes-prompt", model: nil, temperature: nil, category: .writing),
         Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil, category: .general)
     ]

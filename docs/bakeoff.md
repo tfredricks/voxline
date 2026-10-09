@@ -21,8 +21,8 @@ defaults write ~/Library/Preferences/com.voxline.app voxline.debug.saveBakeoffCl
 Quit and relaunch voxline, then dictate as you normally do: 20 or more clips of
 3 to 30 seconds, with the names and jargon you actually say. Each successful
 dictation writes `<timestamp>.wav` (16 kHz mono) and `<timestamp>.txt` to
-`~/Library/Application Support/voxline/bakeoff/`. Nothing else in voxline writes
-audio to disk.
+`~/Library/Application Support/voxline/bakeoff/`. Apart from meeting recordings, nothing else
+in voxline writes audio to disk.
 
 ## 2. Correct the references
 
@@ -51,6 +51,9 @@ Clips play in real time, one engine after another, so expect about the total
 audio length per engine. Whisper large-v3 turbo runs only if it is already
 downloaded. Optional variables, each with the `TEST_RUNNER_` prefix:
 `VOXLINE_BAKEOFF_DIR=<dir>` reads clips from another folder;
+`VOXLINE_BAKEOFF_SPEED=<n>` is a pacing multiplier for how fast clips play
+(default 1; keep it at 1 for numbers that feed the decision rule, use a higher
+value only for quick smoke runs);
 `VOXLINE_BAKEOFF_CLOUD=1` adds OpenAI (it sends the clips to OpenAI with your
 saved key, is reported, and can never win);
 `VOXLINE_BAKEOFF_TAIL_MS=600` appends that many milliseconds of silence to each

@@ -4,7 +4,6 @@ import Foundation
 @MainActor
 protocol AudioCapturing: AnyObject {
     var onLevel: ((Float) -> Void)? { get set }
-    var onTapCallback: ((Int) -> Void)? { get set }
     /// Receives each converted 16 kHz chunk synchronously, in order, on the
     /// audio thread, then the flushed tail during stop(). Read once per
     /// start(); must never wait on the main actor, since stop() waits for an

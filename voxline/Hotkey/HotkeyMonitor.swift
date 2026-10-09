@@ -35,9 +35,22 @@ final class HotkeyMonitor {
     /// A key or an extra modifier this soon after a recording starts means
     /// the chord was the start of an OS shortcut, and the recording is dropped.
     static let shortcutWindow: Duration = .seconds(1)
-    /// Arming waits this long before warming the microphone, so a capital
-    /// letter typed with a shared Shift never starts it.
-    static let prewarmDelay: Duration = .milliseconds(150)
+    /// Arming on Shift or Command waits this long before warming the
+    /// microphone, so a capital letter or a ⌘ shortcut never starts it.
+    nonisolated static let prewarmDelay: Duration = .milliseconds(150)
+
+    private nonisolated static let typingModifiers: Set<HotkeyChord.Modifier> = [
+        .leftShift, .rightShift, .leftCommand, .rightCommand,
+    ]
+
+    /// How long `held`'s armed edge waits before warming the microphone.
+    /// Shift and Command are typed with other keys all day, so they wait
+    /// out `prewarmDelay`; any other modifier warms at once, since a chord
+    /// pressed as one gesture lands its second key within tens of
+    /// milliseconds and the engine needs ~200 ms to deliver its first buffer.
+    nonisolated static func prewarmDelay(for held: Set<HotkeyChord.Modifier>) -> Duration {
+        held.isDisjoint(with: typingModifiers) ? .zero : prewarmDelay
+    }
 
     private nonisolated static let escapeKeyCode: Int64 = 53
     private nonisolated static let flagsChangedMask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
@@ -57,8 +70,9 @@ final class HotkeyMonitor {
     /// The recording was the start of a shortcut. Runs with the machine
     /// already `blocked`; nothing about it should reach the user.
     var onDiscardRecording: ((CaptureKind) -> Void)?
-    /// Fires `prewarmDelay` after arming, unless a key, a release, or the
-    /// full chord comes first. Runs on the main actor.
+    /// Fires on arming, after `prewarmDelay(for:)` when that is not zero,
+    /// unless a key, a release, or the full chord comes first. Runs on the
+    /// main actor.
     var onBeginPrewarm: (() -> Void)?
     /// Arming ended without a recording after `onBeginPrewarm` had fired.
     var onCancelPrewarm: (() -> Void)?
@@ -300,7 +314,13 @@ final class HotkeyMonitor {
     private func schedulePrewarm() {
         cancelPrewarmTimer()
         prewarmFired = false
-        prewarmTimer = scheduler.schedule(after: Self.prewarmDelay) { [weak self] in
+        let delay = Self.prewarmDelay(for: tracker.held)
+        guard delay > .zero else {
+            prewarmFired = true
+            onBeginPrewarm?()
+            return
+        }
+        prewarmTimer = scheduler.schedule(after: delay) { [weak self] in
             guard let self else { return }
             self.prewarmTimer = nil
             self.prewarmFired = true

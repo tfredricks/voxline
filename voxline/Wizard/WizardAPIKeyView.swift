@@ -8,7 +8,7 @@ struct WizardAPIKeyView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Set up your API key").font(.title.bold())
-            Text("You only need a key for one provider — Voxline uses it for the cleanup step. You can add the other later in Settings.")
+            Text("You only need a key for one provider — Voxline uses it for the cleanup step. You can add the other later in Settings → AI Provider.")
                 .foregroundStyle(.secondary)
 
             Picker("Provider", selection: $selectedProvider) {

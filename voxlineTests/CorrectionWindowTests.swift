@@ -5,8 +5,8 @@ import Testing
 
 @Suite(.timeLimit(.minutes(1))) @MainActor struct CorrectionWindowTests {
 
-    static let original = "ask Cooper Nettis to review"
-    static let fixed = "ask Kubernetes to review"
+    nonisolated static let original = "ask Cooper Nettis to review"
+    nonisolated static let fixed = "ask Kubernetes to review"
 
     struct Harness {
         let window: CorrectionWindow

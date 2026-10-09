@@ -41,8 +41,8 @@ final class MainWindowSelection {
 
 /// The app's one primary window: a sidebar with Home and the settings pages.
 /// Built fresh from `content` on each `show` after a close, and released on
-/// close so the SwiftUI content disappears (its `.task`s cancel,
-/// `onDisappear` runs) the way a SwiftUI `Settings` scene does.
+/// close so the SwiftUI content disappears: its `.task`s cancel and
+/// `onDisappear` runs.
 @MainActor
 final class MainWindowController {
     private(set) var window: NSWindow?

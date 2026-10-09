@@ -459,9 +459,9 @@ import Foundation
     }
 }
 
-/// LLMError needs Equatable for these tests AND for tests in OpenAIClientTests
-/// and LLMServiceTests later in this branch. Keep this conformance test-only.
-extension LLMError: Equatable {
+/// Test-only: `.network` cases compare equal whatever the inner error, which
+/// is enough for tests but not for app code.
+extension LLMError: @retroactive Equatable {
     public static func == (lhs: LLMError, rhs: LLMError) -> Bool {
         switch (lhs, rhs) {
         case (.missingAPIKey, .missingAPIKey),

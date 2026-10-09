@@ -64,6 +64,9 @@ final class AppCoordinator {
     /// open Home on a granted→missing transition (runtime revocation)
     /// without reopening it every tick while it stays missing.
     private var lastRequiredGranted: Bool?
+    /// The capture engine binds its input device once, as soon as the
+    /// microphone is granted, so the first keypress after launch doesn't.
+    private var didWarmUpCapture = false
 
     /// Brings up the main window; set by `AppDelegate` before `startIfNeeded`.
     var presentMainWindow: (MainWindowPage) -> Void = { _ in }
@@ -103,24 +106,13 @@ final class AppCoordinator {
         Task { await pipeline.retryLastDictation() }
     }
 
-    func startIfNeeded(state: AppState, historyStore: DictationHistoryStore, migration: ContainerMigration.Report? = nil, launchedAtLogin: Bool = false) {
+    func startIfNeeded(state: AppState, historyStore: DictationHistoryStore, launchedAtLogin: Bool = false) {
         AXMessagingTimeout.install()
         guard !didStart else { return }
         didStart = true
         self.appState = state
 
-        if let migration {
-            AppLog.pipeline.info("container migration: prefs=\(migration.preferencesCopied) modes=\(migration.movedModes) models=\(migration.movedModelCache) ane=\(migration.movedANECache)")
-            for skipped in migration.skipped {
-                AppLog.pipeline.notice("container migration skipped: \(skipped, privacy: .public)")
-            }
-            for failure in migration.failures {
-                AppLog.pipeline.error("container migration failed: \(failure, privacy: .public)")
-            }
-        }
-
-        var settings = AppSettings()
-        settings.migrateCommandChordIfNeeded()
+        let settings = AppSettings()
         logLaunchTrace(settings: settings)
         let presentation = LaunchPresentation.decide(
             firstRunComplete: settings.hasCompletedFirstRun,
@@ -137,10 +129,6 @@ final class AppCoordinator {
         case .none:
             startApp(state: state, settings: settings, historyStore: historyStore)
         }
-
-        if let migration, !migration.failures.isEmpty {
-            state.flashToast("Couldn't move old data — see log", for: .seconds(4))
-        }
     }
 
     private func startWizardThenApp(state: AppState, settings: AppSettings, historyStore: DictationHistoryStore) {
@@ -155,8 +143,8 @@ final class AppCoordinator {
                 settings: settings,
                 engine: engine,
                 chord: settings.hotkeyChord,
-                onRetryDownload: { [weak self, weak state] in
-                    guard let self, let state, let engine = self.engines?.current else { return }
+                onRetryDownload: { [weak self] in
+                    guard let self, let engine = self.engines?.current else { return }
                     self.prepareIfNeeded(state: state, engine: engine)
                 },
                 onComplete: { [weak self] in
@@ -241,6 +229,11 @@ final class AppCoordinator {
         )
         self.pipeline = pipeline
         capture.onInterrupted = { [weak pipeline] in pipeline?.handleCaptureInterrupted() }
+        // The start cue plays once the first tap buffer is in, so hearing it
+        // means the mic is capturing; played on the keypress it led the mic
+        // by ~200 ms on a cold engine, and the first word's onset was lost.
+        pipeline.onRecordingStarted = { [weak self] in self?.soundPlayer?.playStart() }
+        soundPlayer?.prime()
 
         let pill = RecordingPillWindow()
         pillWindow = pill
@@ -254,7 +247,6 @@ final class AppCoordinator {
         let monitor = HotkeyMonitor()
         monitor.chords = settings.chords
         monitor.onStartRecording = { [weak self, weak state] kind in
-            self?.soundPlayer?.playStart()
             self?.pipeline?.startRecording(kind: kind)
             if let state { self?.pillWindow?.updateVisibility(state: state) }
         }
@@ -382,11 +374,16 @@ final class AppCoordinator {
         // revocation). Gated on the previous tick's state so the main window
         // isn't reopened every second while permissions stay missing — which
         // would fight a user who deliberately closed it.
-        let requiredGranted = (ax == .granted && perms.microphoneStatus == .granted)
+        let microphoneGranted = perms.microphoneStatus == .granted
+        let requiredGranted = (ax == .granted && microphoneGranted)
         if lastRequiredGranted == true && !requiredGranted {
             presentMainWindow(.home)
         }
         lastRequiredGranted = requiredGranted
+        if microphoneGranted && !didWarmUpCapture {
+            didWarmUpCapture = true
+            capture?.warmUp()
+        }
 
         guard let monitor = hotkeyMonitor else { return }
         // Accessibility is the hard gate. Input Monitoring is informational

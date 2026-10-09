@@ -69,7 +69,9 @@ extension UpdateService {
     }
 }
 
-extension UpdateService: SPUStandardUserDriverDelegate {
+/// `@preconcurrency`: the main-actor-only `SPUStandardUserDriver` calls these
+/// on the main thread, and the conformance checks that at runtime.
+extension UpdateService: @preconcurrency SPUStandardUserDriverDelegate {
 
     /// Tell Sparkle we support gentle scheduled-update reminders.
     var supportsGentleScheduledUpdateReminders: Bool { true }

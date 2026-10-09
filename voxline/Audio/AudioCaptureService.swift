@@ -6,7 +6,9 @@ import Foundation
 /// Captures audio from the system input device, resamples to Whisper's format
 /// (16 kHz mono Float32), and hands each converted chunk to `onSamples` on the
 /// audio thread as it arrives. stop() flushes the resampler's tail through the
-/// same path before it returns.
+/// same path before it returns, then leaves the engine running for
+/// `CaptureWarmth.keepWarmDuration` so the next capture starts from its first
+/// tap buffer; nothing is delivered while it idles.
 ///
 /// Audio is *never* written to disk, and this service keeps none of it: each
 /// chunk lives only as long as `onSamples` holds it.
@@ -20,12 +22,6 @@ final class AudioCaptureService {
     /// Called periodically (~60 Hz) with the current peak level [0, 1] of the
     /// most recently captured chunk. Used by the recording pill's waveform.
     var onLevel: ((Float) -> Void)?
-
-    /// Optional debug observer — fires once per AVAudioEngine tap callback
-    /// with the buffer's frame count. Lets the Debug window distinguish
-    /// "engine stalled after one buffer" from "many buffers but converter
-    /// is dropping samples".
-    var onTapCallback: ((Int) -> Void)?
 
     /// Receives every converted 16 kHz chunk, synchronously and in order, on
     /// the audio tap thread; the flushed tail arrives on the main actor inside
@@ -53,6 +49,9 @@ final class AudioCaptureService {
     /// stopPrewarm() so a disarm edge can never kill a live recording.
     private var isCapturing = false
 
+    private var warmth = CaptureWarmth()
+    private var keepWarmStop: Task<Void, Never>?
+
     init() {
         configurationObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
@@ -79,6 +78,18 @@ final class AudioCaptureService {
         AudioDeviceEnumerator.route(engine.inputNode, toDeviceUID: uid)
     }
 
+    /// Binds the input device and pre-allocates the engine ahead of the first
+    /// capture, so neither cost lands on the first keypress after launch.
+    /// Reading `inputNode` can block on the microphone permission prompt, so
+    /// callers gate this on permission already granted. No-op while the
+    /// engine runs.
+    func warmUp() {
+        guard !engine.isRunning else { return }
+        applyPreferredDevice()
+        _ = engine.inputNode.inputFormat(forBus: 0)
+        engine.prepare()
+    }
+
     /// Best-effort engine spin-up on the chord's armed edge (one modifier
     /// down). Starting AVAudioEngine is the expensive part of start() —
     /// hundreds of ms on Bluetooth inputs — so paying it before the second
@@ -103,15 +114,17 @@ final class AudioCaptureService {
 
     /// Stop an engine that was prewarmed but never used (armed edge released
     /// without completing the chord, or recording was refused). No-op while a
-    /// real capture is running.
+    /// real capture is running, and while a keep-warm window is open: that
+    /// engine stops when the window ends.
     func stopPrewarm() {
         guard !isCapturing else { return }
-        engine.stop()
+        apply(warmth.handle(.prewarmCancelled))
     }
 
     /// Begin capture. Throws if the input device is unavailable or sample-rate
     /// negotiation fails.
     func start() throws {
+        apply(warmth.handle(.captureStarted))
         let input = engine.inputNode
         input.removeTap(onBus: 0)
 
@@ -142,7 +155,6 @@ final class AudioCaptureService {
         let bufferSize = max(1, AVAudioFrameCount(hwFormat.sampleRate * 0.02))
 
         input.installTap(onBus: 0, bufferSize: bufferSize, format: hwFormat) { [weak self] buffer, _ in
-            let frames = Int(buffer.frameLength)
             let chunk = delivery.deliver(buffer)
             let level = chunk.isEmpty
                 ? nil
@@ -150,7 +162,6 @@ final class AudioCaptureService {
             guard let self else { return }
             Task { @MainActor [weak self] in
                 guard let self, self.currentEpoch == epoch else { return }
-                self.onTapCallback?(frames)
                 if let level {
                     self.onLevel?(level)
                 }
@@ -181,19 +192,42 @@ final class AudioCaptureService {
         }
     }
 
-    /// Stop capture. Removes the tap, flushes the resampler's tail to
-    /// `onSamples`, then stops the engine so the system mic indicator turns
-    /// off. Every converted sample has been delivered when this returns.
+    /// Stop capture. Removes the tap and flushes the resampler's tail to
+    /// `onSamples`; every converted sample has been delivered when this
+    /// returns. The engine keeps running for the keep-warm window, and the
+    /// system mic indicator turns off when that ends.
     func stop() {
         engine.inputNode.removeTap(onBus: 0)
         delivery?.deliverTail()
         delivery = nil
-        engine.stop()
         isCapturing = false
         currentEpoch &+= 1
+        apply(warmth.handle(.captureStopped))
     }
 
     // MARK: - Private
+
+    private func apply(_ actions: [CaptureWarmth.Action]) {
+        for action in actions {
+            switch action {
+            case .scheduleKeepWarmStop:
+                keepWarmStop?.cancel()
+                keepWarmStop = Task { [weak self] in
+                    try? await Task.sleep(for: CaptureWarmth.keepWarmDuration)
+                    guard !Task.isCancelled, let self else { return }
+                    self.keepWarmStop = nil
+                    self.apply(self.warmth.handle(.keepWarmElapsed))
+                }
+            case .cancelKeepWarmStop:
+                keepWarmStop?.cancel()
+                keepWarmStop = nil
+            case .stopEngine:
+                engine.stop()
+                // A prepared engine starts in about half the time.
+                engine.prepare()
+            }
+        }
+    }
 
     private func handleConfigurationChange() {
         guard isCapturing else { return }

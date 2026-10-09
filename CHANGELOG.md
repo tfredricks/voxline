@@ -49,8 +49,8 @@ app that is no longer sandboxed.
   your own recordings and applies a fixed decision rule to pick the default
   (see `docs/bakeoff.md`). A hidden developer flag,
   `voxline.debug.saveBakeoffClips`, saves your dictations' audio and text as
-  clips for it; it is off by default and is the only thing in voxline that
-  writes audio to disk. `scripts/make-synthetic-bakeoff.sh` renders
+  clips for it; it is off by default and is the only thing in voxline, other
+  than meeting recordings, that writes audio to disk. `scripts/make-synthetic-bakeoff.sh` renders
   text-to-speech clips for smoke runs.
 - About Voxline → Diagnostics shows "First words", the median time to the
   first live text.
@@ -80,8 +80,8 @@ app that is no longer sandboxed.
   shortcut that includes ⌘, ⌥, or ⌃, rename a preset, rewrite its instruction,
   add or remove rows, or restore the defaults.
 - **Command model.** Settings → Commands → Command model picks a separate
-  model for commands. Leave it empty to use the cleanup model; it is cleared
-  when you change provider.
+  model for commands. Leave it empty to use the provider's default model; it is
+  cleared when you change provider.
 - Command and preset runs get their own median lines in About Voxline →
   Diagnostics, and the metrics log line records how each insert landed
   (`strategy=`) and what the edit did (`action=`).
@@ -152,11 +152,8 @@ app that is no longer sandboxed.
   (an array of bundle IDs) adds paste-first apps. Neither has a setting.
 - **The command modifier picker is replaced by a second chord.** Settings →
   Dictation has the dictation recorder and Settings → Commands the Command
-  mode toggle with its own recorder. On upgrade your old setting carries
-  over: a modifier you had chosen becomes the command chord's second key,
-  beside the dictation chord's first key. "Off", or a modifier that is
-  already one of your dictation keys, gives the default Left Shift + Left
-  Option, or turns command mode off if that is your dictation chord.
+  mode toggle with its own recorder. The default command chord is Left
+  Shift + Left Option.
 - **A chord held with another key no longer starts a recording.** Pressing
   Cmd+Shift+4 or Ctrl+Shift+Tab when a hotkey uses those modifiers does
   nothing; if a key or an extra modifier arrives in the first second of a
@@ -166,9 +163,8 @@ app that is no longer sandboxed.
 - **voxline is no longer sandboxed.** The App Sandbox blocked reading the
   focused field through Accessibility, which forced clipboard tricks for
   selection reads and left cursor context empty. The app now ships with the
-  hardened runtime only. On first launch it copies settings, history, and
-  vocabulary into the new preferences domain and moves custom modes and the
-  cached Whisper model out of the old container, so nothing re-downloads.
+  hardened runtime only. Its data lives in
+  `~/Library/Application Support/voxline`.
 - **Minimum macOS is now 26.** Older systems stay on 0.3.1.
 - Dictating with no editable field focused now says so and copies the text
   to the clipboard instead of reporting success.

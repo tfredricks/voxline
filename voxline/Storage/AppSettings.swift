@@ -2,14 +2,14 @@ import Foundation
 
 /// Thin wrapper around UserDefaults for non-secret user preferences.
 /// Secrets live in the data-protection keychain (see `KeychainStorage`).
-struct AppSettings {
+/// `@unchecked Sendable`: its only state is a `UserDefaults`, which is documented thread-safe.
+struct AppSettings: @unchecked Sendable {
 
     enum Key {
         static let provider = "voxline.llm.provider"
         static let model = "voxline.llm.model"
         static let hotkeyChord = "voxline.hotkey.chord"
         static let commandChord = "voxline.hotkey.commandChord"
-        static let legacyCommandModifier = "voxline.hotkey.commandModifier"
         static let commandModel = "voxline.llm.commandModel"
         static let audioInputDeviceUID = "voxline.audio.inputDeviceUID"
         static let whisperModel = "voxline.whisper.model"
@@ -33,8 +33,7 @@ struct AppSettings {
         static let showInDock = "voxline.showInDock"
     }
 
-    /// Stored under `Key.commandChord` for "command mode off". The legacy
-    /// `Key.legacyCommandModifier` used the same string.
+    /// Stored under `Key.commandChord` for "command mode off".
     static let commandChordOff = "off"
 
     let defaults: UserDefaults
@@ -132,18 +131,6 @@ struct AppSettings {
                 defaults.removeObject(forKey: Key.commandModel)
             }
         }
-    }
-
-    /// Writes `commandChord` from the legacy command modifier
-    /// (`CommandChordMigration`) and removes the legacy key. Does nothing
-    /// once `commandChord` is stored, so it runs at most once per install.
-    mutating func migrateCommandChordIfNeeded() {
-        guard defaults.object(forKey: Key.commandChord) == nil else { return }
-        let stored = defaults.string(forKey: Key.legacyCommandModifier)
-        let migrated = CommandChordMigration.commandChord(dictation: hotkeyChord, stored: stored)
-        commandChord = migrated
-        defaults.removeObject(forKey: Key.legacyCommandModifier)
-        AppLog.hotkey.info("migrated command modifier \(stored ?? "(absent)", privacy: .public) → \(migrated?.displayName ?? "off", privacy: .public)")
     }
 
     var audioInputDeviceUID: String? {

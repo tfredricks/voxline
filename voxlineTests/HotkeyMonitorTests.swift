@@ -173,6 +173,49 @@ import CoreGraphics
         #expect(log.events == ["start:dictation"])
     }
 
+    @Test func prewarm_delay_applies_to_shift_and_command_only() {
+        #expect(HotkeyMonitor.prewarmDelay(for: [.leftShift]) == HotkeyMonitor.prewarmDelay)
+        #expect(HotkeyMonitor.prewarmDelay(for: [.rightShift]) == HotkeyMonitor.prewarmDelay)
+        #expect(HotkeyMonitor.prewarmDelay(for: [.leftCommand]) == HotkeyMonitor.prewarmDelay)
+        #expect(HotkeyMonitor.prewarmDelay(for: [.rightCommand]) == HotkeyMonitor.prewarmDelay)
+        #expect(HotkeyMonitor.prewarmDelay(for: [.leftControl]) == .zero)
+        #expect(HotkeyMonitor.prewarmDelay(for: [.leftOption]) == .zero)
+        #expect(HotkeyMonitor.prewarmDelay(for: [.rightControl]) == .zero)
+        #expect(HotkeyMonitor.prewarmDelay(for: [.rightOption]) == .zero)
+    }
+
+    @Test func arming_with_control_prewarms_at_once() {
+        let (monitor, timers, log) = makeMonitor()
+        press(monitor, [.leftControl], keyCode: 59)
+        #expect(monitor.state == .armed)
+        #expect(log.events == ["prewarm"])
+        #expect(timers.pending.isEmpty)
+    }
+
+    @Test func release_after_an_immediate_prewarm_cancels_it() {
+        let (monitor, _, log) = makeMonitor()
+        press(monitor, [.leftControl], keyCode: 59)
+        press(monitor, [], keyCode: 59)
+        #expect(monitor.state == .idle)
+        #expect(log.events == ["prewarm", "cancelPrewarm"])
+    }
+
+    @Test func completing_the_chord_after_an_immediate_prewarm_hands_the_engine_to_start() {
+        let (monitor, _, log) = makeMonitor()
+        press(monitor, [.leftControl], keyCode: 59)
+        press(monitor, d, keyCode: 56)
+        press(monitor, [.leftControl], keyCode: 56)
+        #expect(log.events == ["prewarm", "start:dictation", "finalize:dictation"])
+    }
+
+    @Test func a_key_after_an_immediate_prewarm_blocks_and_cancels_it() {
+        let (monitor, _, log) = makeMonitor()
+        press(monitor, [.leftControl], keyCode: 59)
+        keyDown(monitor, 8)
+        #expect(monitor.state == .blocked)
+        #expect(log.events == ["prewarm", "cancelPrewarm"])
+    }
+
     @Test func completing_the_chord_after_the_prewarm_hands_the_engine_to_start() {
         let (monitor, timers, log) = makeMonitor()
         press(monitor, [.leftShift])
@@ -329,11 +372,20 @@ import CoreGraphics
 
     @Test func swallowed_key_before_the_delay_never_prewarms() {
         let (monitor, timers, log) = makeMonitor()
-        press(monitor, [.leftOption], keyCode: 58)
+        press(monitor, [.leftShift], keyCode: 56)
         monitor.noteSwallowedKeyDown()
         #expect(monitor.state == .blocked)
         #expect(timers.pending.isEmpty)
         #expect(log.events.isEmpty)
+    }
+
+    @Test func swallowed_key_after_an_immediate_prewarm_cancels_it() {
+        let (monitor, timers, log) = makeMonitor()
+        press(monitor, [.leftOption], keyCode: 58)
+        monitor.noteSwallowedKeyDown()
+        #expect(monitor.state == .blocked)
+        #expect(timers.pending.isEmpty)
+        #expect(log.events == ["prewarm", "cancelPrewarm"])
     }
 
     @Test func swallowed_key_inside_the_window_discards() {
