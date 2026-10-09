@@ -59,7 +59,10 @@ struct CleanupSection: View {
                 testing: keys.testing,
                 testResult: keys.testResult,
                 lastError: keys.lastError,
-                onCommit: { keys.commitOpenAI() },
+                onCommit: {
+                    keys.commitOpenAI()
+                    general.openAIKeyDidChange()
+                },
                 onTest: { Task { await keys.testConnection(.openai) } }
             )
         }

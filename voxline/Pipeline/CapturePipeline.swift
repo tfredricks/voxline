@@ -242,7 +242,7 @@ final class CapturePipeline {
         } catch {
             guard generation == self.generation else { return }
             startTasks?.cancel()
-            return setError("Couldn't start \(live.engineName): \(error.localizedDescription)")
+            return setError("Couldn't start \(live.engine.id.shortName): \(error.localizedDescription)")
         }
         guard generation == self.generation else { return }
 

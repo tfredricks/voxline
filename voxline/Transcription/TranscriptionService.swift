@@ -61,6 +61,7 @@ final class TranscriptionService {
 
     /// True if the model variant for `model` is present in the standard
     /// Hub cache directory. Checked synchronously; safe to call on launch.
+    /// Never creates the cache directory.
     static func isModelCached(_ model: WhisperModel) -> Bool {
         cachedModelFolder(for: model) != nil
     }
@@ -132,7 +133,7 @@ final class TranscriptionService {
     /// Standard Hub cache layout used by huggingface-swift: returns the model
     /// directory if it exists and is non-empty, otherwise nil.
     private static func cachedModelFolder(for model: WhisperModel) -> URL? {
-        guard let base = try? AppPaths.modelCacheDirectory() else { return nil }
+        guard let base = AppPaths.modelCacheDirectoryIfPresent() else { return nil }
         let path = base
             .appending(path: "models", directoryHint: .isDirectory)
             .appending(path: "argmaxinc", directoryHint: .isDirectory)

@@ -20,14 +20,6 @@ extension CapturePipeline {
             router = StreamingSampleRouter(retainsAudio: engine.capabilities.contains(.sendsAudioOffDevice))
         }
 
-        var engineName: String {
-            switch engine.id {
-            case .apple:          return "Apple Speech"
-            case .whisperKit:     return "Whisper"
-            case .openAIRealtime: return "OpenAI"
-            }
-        }
-
         /// Recording start → first non-empty partial, or nil if none arrived.
         var timeToFirstPartial: Duration? {
             guard let startedAt, let firstPartialAt else { return nil }

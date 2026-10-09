@@ -3,13 +3,13 @@ import SwiftUI
 
 struct WizardModelDownloadView: View {
     @Bindable var state: AppState
-    let model: WhisperModel
+    let engineName: String
     let onRetry: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Download speech recognition model").font(.title.bold())
-            Text("\(model.displayName) — about \(model.approxSizeMB) MB. Runs entirely on your Mac; audio never leaves the device.")
+            Text("Speech engine").font(.title.bold())
+            Text("Preparing \(engineName)…")
                 .foregroundStyle(.secondary)
 
             if let message = state.status.errorMessage {

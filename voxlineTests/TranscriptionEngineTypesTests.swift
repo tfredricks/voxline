@@ -30,4 +30,16 @@ import Foundation
         #expect(EngineID.default.isOnDevice)
         #expect(EngineID.onDeviceDefault.isOnDevice)
     }
+
+    @Test func display_names_match_the_settings_picker_copy() {
+        #expect(EngineID.apple.displayName == "Apple Speech — on-device, fastest")
+        #expect(EngineID.whisperKit.displayName == "Whisper — on-device")
+        #expect(EngineID.openAIRealtime.displayName == "OpenAI — cloud, audio leaves your Mac")
+    }
+
+    @Test func short_names_are_the_bare_engine_names() {
+        #expect(EngineID.apple.shortName == "Apple Speech")
+        #expect(EngineID.whisperKit.shortName == "Whisper")
+        #expect(EngineID.openAIRealtime.shortName == "OpenAI")
+    }
 }

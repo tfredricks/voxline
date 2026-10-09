@@ -73,6 +73,6 @@ struct AboutView: View {
         appVersion: "1.0",
         buildNumber: "1",
         osVersion: "Version 14.5 (Build 23F79)",
-        whisperModel: "large-v3-turbo"
+        speechEngine: "whisperkit:openai_whisper-large-v3-v20240930_turbo"
     ))
 }

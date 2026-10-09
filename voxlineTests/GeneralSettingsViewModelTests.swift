@@ -136,6 +136,109 @@ import Foundation
         #expect(recorder.applied?.provider == .anthropic)
     }
 
+    @Test func engine_loads_from_settings_on_init() {
+        var settings = AppSettings(defaults: defaults())
+        settings.transcriptionEngine = .apple
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
+        #expect(vm.engine == .apple)
+    }
+
+    @Test func engine_change_persists_and_reaches_the_snapshot() {
+        let d = defaults()
+        let recorder = ApplyRecorder()
+        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: d), onApply: { recorder.record($0) })
+
+        vm.engine = .apple
+        #expect(recorder.applied?.engine == .apple)
+        #expect(AppSettings(defaults: d).transcriptionEngine == .apple)
+
+        vm.engine = .openAIRealtime
+        #expect(recorder.applied?.engine == .openAIRealtime)
+        #expect(AppSettings(defaults: d).transcriptionEngine == .openAIRealtime)
+    }
+
+    @Test func engine_refreshes_from_writes_made_elsewhere() {
+        let d = defaults()
+        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: d), onApply: noopApply)
+        var elsewhere = AppSettings(defaults: d)
+        elsewhere.transcriptionEngine = .apple
+        vm.refreshFromUserDefaults()
+        #expect(vm.engine == .apple)
+    }
+
+    @Test func reset_restores_the_default_engine() {
+        let d = defaults()
+        var settings = AppSettings(defaults: d)
+        settings.transcriptionEngine = .openAIRealtime
+        let recorder = ApplyRecorder()
+        let vm = GeneralSettingsViewModel(
+            settings: settings,
+            onApply: { recorder.record($0) },
+            loginItemService: LoginItemService(),
+            vocabulary: CustomVocabularyStore(defaults: d),
+            hasOpenAIKey: { true }
+        )
+        vm.resetToDefaults()
+        #expect(vm.engine == EngineID.default)
+        #expect(recorder.applied?.engine == EngineID.default)
+        #expect(AppSettings(defaults: d).transcriptionEngine == EngineID.default)
+    }
+
+    @Test func openai_engine_without_a_key_shows_the_key_warning() {
+        var settings = AppSettings(defaults: defaults())
+        settings.transcriptionEngine = .openAIRealtime
+        let vm = GeneralSettingsViewModel(
+            settings: settings,
+            onApply: noopApply,
+            loginItemService: LoginItemService(),
+            hasOpenAIKey: { false }
+        )
+        #expect(vm.showsOpenAIKeyWarning)
+    }
+
+    @Test func openai_engine_with_a_key_hides_the_key_warning() {
+        var settings = AppSettings(defaults: defaults())
+        settings.transcriptionEngine = .openAIRealtime
+        let vm = GeneralSettingsViewModel(
+            settings: settings,
+            onApply: noopApply,
+            loginItemService: LoginItemService(),
+            hasOpenAIKey: { true }
+        )
+        #expect(!vm.showsOpenAIKeyWarning)
+    }
+
+    @Test func on_device_engines_never_show_the_key_warning() {
+        var keyChecks = 0
+        let vm = GeneralSettingsViewModel(
+            settings: AppSettings(defaults: defaults()),
+            onApply: noopApply,
+            loginItemService: LoginItemService(),
+            hasOpenAIKey: { keyChecks += 1; return false }
+        )
+        vm.engine = .apple
+        #expect(!vm.showsOpenAIKeyWarning)
+        vm.engine = .whisperKit
+        #expect(!vm.showsOpenAIKeyWarning)
+        #expect(keyChecks == 0)
+    }
+
+    @Test func key_warning_follows_the_stored_key() {
+        var stored = false
+        var settings = AppSettings(defaults: defaults())
+        settings.transcriptionEngine = .openAIRealtime
+        let vm = GeneralSettingsViewModel(
+            settings: settings,
+            onApply: noopApply,
+            loginItemService: LoginItemService(),
+            hasOpenAIKey: { stored }
+        )
+        #expect(vm.showsOpenAIKeyWarning)
+        stored = true
+        vm.openAIKeyDidChange()
+        #expect(!vm.showsOpenAIKeyWarning)
+    }
+
     @Test func provider_change_persists_and_calls_applier() {
         let d = defaults()
         let settings = AppSettings(defaults: d)

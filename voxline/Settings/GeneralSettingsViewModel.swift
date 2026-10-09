@@ -6,6 +6,7 @@ struct GeneralSettingsSnapshot: Equatable {
     let chord: HotkeyChord
     let commandModifier: HotkeyChord.Modifier?
     let audioInputDeviceUID: String?
+    let engine: EngineID
     let whisperModel: WhisperModel
     let playHotkeySounds: Bool
     let provider: LLMProvider
@@ -24,6 +25,7 @@ final class GeneralSettingsViewModel {
     var chord: HotkeyChord { didSet { if loaded { commit() } } }
     var commandModifier: HotkeyChord.Modifier? { didSet { if loaded { commit() } } }
     var audioInputDeviceUID: String? { didSet { if loaded { commit() } } }
+    var engine: EngineID { didSet { if loaded { commit() } } }
     var whisperModel: WhisperModel { didSet { if loaded { commit() } } }
     var playHotkeySounds: Bool { didSet { if loaded { commit() } } }
     var provider: LLMProvider { didSet { if loaded { commit() } } }
@@ -44,6 +46,10 @@ final class GeneralSettingsViewModel {
     private var deviceListener: AudioDeviceListener?
     private let loginItemService: LoginItemService
     private let vocabulary: CustomVocabularyStore
+    private let hasOpenAIKey: () -> Bool
+    /// Bumped by `openAIKeyDidChange()` so views reading
+    /// `showsOpenAIKeyWarning` re-check the stored key.
+    private var openAIKeyRevision = 0
     private var loaded = false
 
     /// Convenience init that constructs the default `LoginItemService` and
@@ -69,16 +75,19 @@ final class GeneralSettingsViewModel {
         onApply: @escaping (GeneralSettingsSnapshot) -> Void,
         deviceEnumerator: @escaping () -> [AudioDevice] = AudioDeviceEnumerator.inputDevices,
         loginItemService: LoginItemService,
-        vocabulary: CustomVocabularyStore = CustomVocabularyStore()
+        vocabulary: CustomVocabularyStore = CustomVocabularyStore(),
+        hasOpenAIKey: @escaping () -> Bool = GeneralSettingsViewModel.storedOpenAIKeyExists
     ) {
         self.settings = settings
         self.onApply = onApply
         self.deviceEnumerator = deviceEnumerator
         self.loginItemService = loginItemService
         self.vocabulary = vocabulary
+        self.hasOpenAIKey = hasOpenAIKey
         self.chord = settings.hotkeyChord
         self.commandModifier = settings.commandModifier
         self.audioInputDeviceUID = settings.audioInputDeviceUID
+        self.engine = settings.transcriptionEngine
         self.whisperModel = settings.whisperModel
         self.playHotkeySounds = settings.playHotkeySounds
         self.provider = settings.llmProvider
@@ -102,6 +111,26 @@ final class GeneralSettingsViewModel {
             rows.append(AudioDeviceRow(uid: uid, label: "(disconnected) previously selected"))
         }
         return rows
+    }
+
+    /// True when the OpenAI engine is selected but no OpenAI key is stored.
+    /// Reads the keychain only while that engine is selected.
+    var showsOpenAIKeyWarning: Bool {
+        guard engine == .openAIRealtime else { return false }
+        _ = openAIKeyRevision
+        return !hasOpenAIKey()
+    }
+
+    /// Call after the stored OpenAI key may have changed.
+    func openAIKeyDidChange() {
+        openAIKeyRevision &+= 1
+    }
+
+    /// Production `hasOpenAIKey`: a non-blank OpenAI key is in the keychain.
+    /// A keychain read error counts as no key.
+    nonisolated static func storedOpenAIKeyExists() -> Bool {
+        let key = (try? DataProtectionKeychain().string(forKey: KeychainAccount.openai)) ?? nil
+        return !(key ?? "").isBlank
     }
 
     /// Soft warning for the current command-modifier choice, or nil when clean.
@@ -136,6 +165,7 @@ final class GeneralSettingsViewModel {
             chord = settings.hotkeyChord
             commandModifier = settings.commandModifier
             audioInputDeviceUID = settings.audioInputDeviceUID
+            engine = settings.transcriptionEngine
             whisperModel = settings.whisperModel
             playHotkeySounds = settings.playHotkeySounds
             provider = settings.llmProvider
@@ -143,8 +173,9 @@ final class GeneralSettingsViewModel {
     }
 
     /// Restore Spec defaults: hotkey to Left Shift + Left Control, system-default
-    /// mic, large-v3-turbo, sounds on. Performs one batched commit so the
-    /// applier sees a single coherent snapshot rather than four partial ones.
+    /// mic, the default engine, large-v3-turbo, sounds on. Performs one batched
+    /// commit so the applier sees a single coherent snapshot rather than
+    /// several partial ones.
     /// Launch-at-Login is intentionally left untouched — Reset is for pipeline
     /// settings, not OS-level integration.
     func resetToDefaults() {
@@ -152,6 +183,7 @@ final class GeneralSettingsViewModel {
             chord = .default
             commandModifier = AppSettings.defaultCommandModifier
             audioInputDeviceUID = nil
+            engine = .default
             whisperModel = .default
             playHotkeySounds = true
             provider = .anthropic
@@ -172,6 +204,7 @@ final class GeneralSettingsViewModel {
         s.hotkeyChord = chord
         s.commandModifier = commandModifier
         s.audioInputDeviceUID = audioInputDeviceUID
+        s.transcriptionEngine = engine
         s.whisperModel = whisperModel
         s.playHotkeySounds = playHotkeySounds
         s.llmProvider = provider
@@ -180,6 +213,7 @@ final class GeneralSettingsViewModel {
             chord: chord,
             commandModifier: commandModifier,
             audioInputDeviceUID: audioInputDeviceUID,
+            engine: engine,
             whisperModel: whisperModel,
             playHotkeySounds: playHotkeySounds,
             provider: provider

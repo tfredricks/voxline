@@ -12,7 +12,7 @@ enum AppPaths {
             appropriateFor: nil,
             create: true
         )
-        let dir = base.appending(path: "voxline", directoryHint: .isDirectory)
+        let dir = appDirectory(in: base)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
@@ -24,9 +24,36 @@ enum AppPaths {
     /// Root WhisperKit downloads into. The Hub layout underneath is
     /// `models/argmaxinc/whisperkit-coreml/<variant>`.
     static func modelCacheDirectory() throws -> URL {
-        let dir = try applicationSupportDirectory().appending(path: "huggingface", directoryHint: .isDirectory)
+        let dir = modelCacheDirectory(inAppDirectory: try applicationSupportDirectory())
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
+    }
+
+    /// The model cache root if it already exists; nil otherwise. Never
+    /// creates a directory, so cache checks leave the disk untouched.
+    static func modelCacheDirectoryIfPresent() -> URL? {
+        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return modelCacheDirectoryIfPresent(base: base)
+    }
+
+    /// `base` stands in for `~/Library/Application Support`.
+    static func modelCacheDirectoryIfPresent(base: URL) -> URL? {
+        let dir = modelCacheDirectory(inAppDirectory: appDirectory(in: base))
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return nil
+        }
+        return dir
+    }
+
+    private static func appDirectory(in applicationSupport: URL) -> URL {
+        applicationSupport.appending(path: "voxline", directoryHint: .isDirectory)
+    }
+
+    private static func modelCacheDirectory(inAppDirectory appDirectory: URL) -> URL {
+        appDirectory.appending(path: "huggingface", directoryHint: .isDirectory)
     }
 
     /// Where sandboxed 0.3.x builds kept everything. Read only by `ContainerMigration`.

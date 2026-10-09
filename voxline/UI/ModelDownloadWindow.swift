@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Hosts ModelDownloadView in a regular activating NSWindow. Shown on launch
-/// only when the speech-recognition model isn't yet cached on disk.
+/// Hosts ModelDownloadView in a regular activating NSWindow. Shown only while
+/// the selected speech engine downloads or installs what it needs.
 @MainActor
 final class ModelDownloadWindow {
     private var window: NSWindow?
@@ -71,14 +71,14 @@ struct ModelDownloadView: View {
     }
 
     private var headline: String {
-        isPreparing ? "Preparing model…" : "Downloading speech recognition model"
+        isPreparing ? "Preparing speech engine…" : "Downloading speech engine"
     }
 
     private var detail: String {
         if isPreparing {
-            return "Compiling for Apple Neural Engine. This can take up to a minute on first launch — subsequent launches are fast."
+            return "This can take up to a minute the first time — later launches are fast."
         }
-        return "One-time download (~1.5 GB) used to transcribe your voice. Voxline can stay open while it completes."
+        return "One-time download used to transcribe your voice. Voxline can stay open while it completes."
     }
 
     private var progress: Double {

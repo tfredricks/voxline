@@ -7,24 +7,37 @@ final class FirstRunWindowController {
 
     private var window: NSWindow?
 
+    /// Checks `engine`'s readiness first, so the window appears once that
+    /// check returns; a ready engine skips the speech-engine step.
     func show(
         state: AppState,
         settings: AppSettings,
-        model: WhisperModel,
+        engine: any TranscriptionEngine,
         chord: HotkeyChord,
         onRetryDownload: @escaping () -> Void,
         onComplete: @escaping () -> Void
-    ) {
+    ) async {
         if let window {
             window.presentInAccessoryApp()
             return
         }
-        let vm = WizardViewModel(settings: settings)
+        let skipEngineStep = await engine.readiness() == .ready
+        if let window {
+            window.presentInAccessoryApp()
+            return
+        }
+        let vm = WizardViewModel(settings: settings, skipEngineStep: skipEngineStep)
         vm.onComplete = { [weak self] in
             self?.close()
             onComplete()
         }
-        let root = WizardRootView(vm: vm, state: state, model: model, chord: chord, onRetryDownload: onRetryDownload)
+        let root = WizardRootView(
+            vm: vm,
+            state: state,
+            engineName: engine.id.shortName,
+            chord: chord,
+            onRetryDownload: onRetryDownload
+        )
         let host = NSHostingView(rootView: root)
 
         // Hide close + minimize so the user can't dismiss without completing.

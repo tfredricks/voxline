@@ -23,4 +23,20 @@ import Testing
         #expect(WizardStep.modelDownload.previous == .apiKey)
         #expect(WizardStep.done.previous == .modelDownload)
     }
+
+    @Test func full_sequence_includes_every_step() {
+        #expect(WizardStep.sequence(skippingEngineStep: false) == WizardStep.allCases)
+    }
+
+    @Test func skipping_the_engine_step_removes_only_that_step() {
+        #expect(WizardStep.sequence(skippingEngineStep: true) == [.welcome, .permissions, .apiKey, .done])
+    }
+
+    @Test func navigation_follows_the_given_sequence() {
+        let steps = WizardStep.sequence(skippingEngineStep: true)
+        #expect(WizardStep.apiKey.next(in: steps) == .done)
+        #expect(WizardStep.done.previous(in: steps) == .apiKey)
+        #expect(WizardStep.done.next(in: steps) == nil)
+        #expect(WizardStep.welcome.previous(in: steps) == nil)
+    }
 }

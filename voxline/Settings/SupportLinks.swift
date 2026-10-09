@@ -4,18 +4,18 @@ struct SupportEnvironment: Equatable {
     let appVersion: String
     let buildNumber: String
     let osVersion: String
-    let whisperModel: String
+    let speechEngine: String
 
     var bodyMarkdown: String {
         """
         **Environment**
         - Voxline version: \(appVersion) (\(buildNumber))
         - macOS: \(osVersion)
-        - Whisper model: \(whisperModel)
+        - Speech engine: \(speechEngine)
         """
     }
 
-    static func current(whisperModel: String) -> SupportEnvironment {
+    static func current(speechEngine: String) -> SupportEnvironment {
         let info = Bundle.main.infoDictionary ?? [:]
         let appVersion = (info["CFBundleShortVersionString"] as? String) ?? "?"
         let buildNumber = (info["CFBundleVersion"] as? String) ?? "?"
@@ -24,7 +24,7 @@ struct SupportEnvironment: Equatable {
             appVersion: appVersion,
             buildNumber: buildNumber,
             osVersion: osVersion,
-            whisperModel: whisperModel
+            speechEngine: speechEngine
         )
     }
 }

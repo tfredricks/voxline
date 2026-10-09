@@ -32,6 +32,22 @@ import Foundation
         #expect(vm.currentStep == .done)
     }
 
+    @Test func ready_engine_skips_the_engine_step() {
+        let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: InMemoryKeychain(), skipEngineStep: true)
+        #expect(!vm.steps.contains(.modelDownload))
+        vm.advance(); vm.advance()
+        #expect(vm.currentStep == .apiKey)
+        vm.advance()
+        #expect(vm.currentStep == .done)
+        vm.goBack()
+        #expect(vm.currentStep == .apiKey)
+    }
+
+    @Test func engine_step_is_shown_unless_skipped() {
+        let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: InMemoryKeychain(), skipEngineStep: false)
+        #expect(vm.steps == WizardStep.allCases)
+    }
+
     @Test func go_back_steps_backwards() {
         let vm = WizardViewModel(settings: AppSettings(defaults: defaults()), keychain: InMemoryKeychain())
         vm.advance(); vm.advance()

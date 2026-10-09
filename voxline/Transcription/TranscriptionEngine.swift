@@ -17,8 +17,17 @@ enum EngineID: String, Codable, CaseIterable, Sendable {
     var displayName: String {
         switch self {
         case .apple:          return "Apple Speech — on-device, fastest"
-        case .whisperKit:     return "Whisper — on-device, learns your vocabulary"
+        case .whisperKit:     return "Whisper — on-device"
         case .openAIRealtime: return "OpenAI — cloud, audio leaves your Mac"
+        }
+    }
+
+    /// The bare engine name for inline copy, e.g. "Couldn't start Whisper".
+    var shortName: String {
+        switch self {
+        case .apple:          return "Apple Speech"
+        case .whisperKit:     return "Whisper"
+        case .openAIRealtime: return "OpenAI"
         }
     }
 }
@@ -81,6 +90,8 @@ protocol TranscriptionEngine: AnyObject {
     var capabilities: EngineCapabilities { get }
     func readiness() async -> EngineReadiness
     /// Download / install / warm. Idempotent; cheap when already ready.
+    /// `progress` reports 1 once any download or install is done; warming
+    /// may continue after that.
     func prepare(progress: @escaping @Sendable (Double) -> Void) async throws
     func openSession(_ config: SessionConfig) async throws -> any TranscriptionSession
 }

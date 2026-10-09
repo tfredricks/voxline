@@ -9,7 +9,7 @@ import Foundation
             appVersion: "1.0",
             buildNumber: "1",
             osVersion: "Version 14.5 (Build 23F79)",
-            whisperModel: "large-v3-turbo"
+            speechEngine: "whisperkit:openai_whisper-large-v3-v20240930_turbo"
         )
         let url = SupportLinks.bugReportURL(env: env)
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
@@ -23,6 +23,6 @@ import Foundation
         let body = query.first { $0.name == "body" }?.value ?? ""
         #expect(body.contains("Voxline version: 1.0 (1)"))
         #expect(body.contains("macOS: Version 14.5 (Build 23F79)"))
-        #expect(body.contains("Whisper model: large-v3-turbo"))
+        #expect(body.contains("Speech engine: whisperkit:openai_whisper-large-v3-v20240930_turbo"))
     }
 }

@@ -1,10 +1,11 @@
 // voxline/Wizard/WizardRootView.swift
+import AppKit
 import SwiftUI
 
 struct WizardRootView: View {
     @Bindable var vm: WizardViewModel
     @Bindable var state: AppState
-    let model: WhisperModel
+    let engineName: String
     let chord: HotkeyChord
     let onRetryDownload: () -> Void
     @State private var permissionsGranted = false
@@ -17,6 +18,9 @@ struct WizardRootView: View {
             Divider()
 
             HStack {
+                if showsQuit {
+                    Button("Quit Voxline") { NSApp.terminate(nil) }
+                }
                 if vm.canGoBack {
                     Button("Back") { vm.goBack() }
                 }
@@ -37,9 +41,14 @@ struct WizardRootView: View {
             vm: vm.apiKeyVM,
             selectedProvider: $vm.selectedProvider
         )
-        case .modelDownload: WizardModelDownloadView(state: state, model: model, onRetry: onRetryDownload)
+        case .modelDownload: WizardModelDownloadView(state: state, engineName: engineName, onRetry: onRetryDownload)
         case .done: WizardDoneView(chord: chord)
         }
+    }
+
+    private var showsQuit: Bool {
+        guard vm.currentStep == .modelDownload, case .error = state.status else { return false }
+        return true
     }
 
     @ViewBuilder

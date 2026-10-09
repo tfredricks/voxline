@@ -119,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func showAboutWindow() {
         let env = SupportEnvironment.current(
-            whisperModel: coordinator.engines?.current.metricsID ?? "(unknown)"
+            speechEngine: coordinator.engines?.current.metricsID ?? "(unknown)"
         )
         aboutWindow.show(env: env, metrics: coordinator.pipeline?.metrics)
     }

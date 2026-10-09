@@ -23,6 +23,14 @@ final class AppCoordinator {
     /// if its captured token still matches, preventing a late-completing
     /// task from clobbering its successor's registration.
     private var modelPrepTaskToken: UInt64 = 0
+    /// True while the in-flight prep task reports into `AppState` and owns
+    /// the download window (launch and wizard-retry paths). A settings-driven
+    /// engine or model switch in that time inherits both, so the status is
+    /// never left stuck on a cancelled task's value.
+    private var modelPrepOwnsLaunchUI = false
+    /// The engine selection last prepared for; `apply(_:)` re-prepares only
+    /// when the selection changes.
+    private var appliedEngine: EngineID?
     private var didStart = false
     /// Held weakly so a settings-driven model swap can route status updates
     /// through the same `AppState` the launch path is using. The AppDelegate
@@ -85,40 +93,38 @@ final class AppCoordinator {
 
     private func startWizardThenApp(state: AppState, settings: AppSettings, historyStore: DictationHistoryStore) {
         buildServices(state: state, settings: settings, historyStore: historyStore)
-        guard let transcriber = self.transcriber else { return }
+        guard let engine = engines?.current else { return }
 
         let wizard = FirstRunWindowController()
         self.firstRunWindow = wizard
-        wizard.show(
-            state: state,
-            settings: settings,
-            model: settings.whisperModel,
-            chord: settings.hotkeyChord,
-            onRetryDownload: { [weak self, weak state] in
-                guard let self, let state else { return }
-                // Reset the error before retrying so the download progress UI shows again.
-                state.status = TranscriptionService.isModelCached(settings.whisperModel)
-                    ? .preparingModel
-                    : .downloadingModel(progress: 0)
-                self.prepareIfNeeded(state: state, transcriber: transcriber)
-            },
-            onComplete: { [weak self] in
-                guard let self else { return }
-                self.firstRunWindow = nil
-                self.installHotkey(state: state, settings: settings)
-            }
-        )
+        Task { @MainActor [weak self] in
+            await wizard.show(
+                state: state,
+                settings: settings,
+                engine: engine,
+                chord: settings.hotkeyChord,
+                onRetryDownload: { [weak self, weak state] in
+                    guard let self, let state, let engine = self.engines?.current else { return }
+                    self.prepareIfNeeded(state: state, engine: engine)
+                },
+                onComplete: { [weak self] in
+                    guard let self else { return }
+                    self.firstRunWindow = nil
+                    self.installHotkey(state: state, settings: settings)
+                }
+            )
+        }
 
-        // Eagerly start the model download so by the time the user reaches the
-        // download step, progress is already advancing.
-        prepareIfNeeded(state: state, transcriber: transcriber)
+        // Eagerly start preparing the engine so by the time the user reaches
+        // the speech-engine step, progress is already advancing.
+        prepareIfNeeded(state: state, engine: engine)
     }
 
     private func startApp(state: AppState, settings: AppSettings, historyStore: DictationHistoryStore) {
         buildServices(state: state, settings: settings, historyStore: historyStore)
-        guard let transcriber = self.transcriber else { return }
+        guard let engine = engines?.current else { return }
         installHotkey(state: state, settings: settings)
-        prepareIfNeeded(state: state, transcriber: transcriber)
+        prepareIfNeeded(state: state, engine: engine)
     }
 
     private func buildServices(state: AppState, settings: AppSettings, historyStore: DictationHistoryStore) {
@@ -133,6 +139,7 @@ final class AppCoordinator {
             whisperKit: WhisperKitEngine(service: transcriber)
         )
         self.engines = engines
+        self.appliedEngine = settings.transcriptionEngine
 
         // Modes
         let modes: [Mode]
@@ -369,90 +376,115 @@ final class AppCoordinator {
         }
     }
 
-    private func prepareIfNeeded(state: AppState, transcriber: TranscriptionService) {
-        let needsDownload = !TranscriptionService.isModelCached(transcriber.model)
-        state.status = needsDownload ? .downloadingModel(progress: 0) : .preparingModel
-        let window = ModelDownloadWindow()
-        downloadWindow = window
-        window.show(state: state)
-        runModelPrepTask(state: state, transcriber: transcriber, managesDownloadWindow: true)
+    private func prepareIfNeeded(state: AppState, engine: any TranscriptionEngine) {
+        runModelPrepTask(state: state, engine: engine, managesDownloadWindow: true)
     }
 
-    /// Single-flight prepare + prewarm. Cancels any in-flight task before
-    /// starting a new one so a settings-driven model swap during launch download
-    /// doesn't race against the launch-path prepareIfNeeded.
+    /// Single-flight readiness check + prepare. Cancels any in-flight task
+    /// before starting a new one so a settings-driven engine or model switch
+    /// during launch prep doesn't race against the launch-path prepareIfNeeded.
+    ///
+    /// The plan comes from `engine.readiness()`: `.download` shows progress
+    /// (and the download window), `.warm` shows "preparing" while `prepare`
+    /// warms the engine, `.fail` surfaces the engine's reason as an error.
     ///
     /// - Parameters:
     ///   - state: `AppState` to update with progress/idle/error status, or `nil`
-    ///     for the settings-swap path which performs a silent background swap.
-    ///   - transcriber: The `TranscriptionService` to prepare.
-    ///   - managesDownloadWindow: When `true`, closes `downloadWindow` on
-    ///     completion or failure (launch path). When `false`, the download window
-    ///     is not touched (settings-swap path).
+    ///     for the settings-swap path which performs a silent background prepare.
+    ///   - engine: The engine to bring to ready.
+    ///   - managesDownloadWindow: When `true`, shows `downloadWindow` for a
+    ///     download and closes it on completion or failure (launch path). When
+    ///     `false`, the download window is not touched (settings-swap path).
     private func runModelPrepTask(
         state: AppState?,
-        transcriber: TranscriptionService,
+        engine: any TranscriptionEngine,
         managesDownloadWindow: Bool
     ) {
         modelPrepTask?.cancel()
         modelPrepTaskToken &+= 1
         let myToken = modelPrepTaskToken
+        modelPrepOwnsLaunchUI = managesDownloadWindow
         // When the caller passes `state`, this task takes ownership of
-        // `state.status` for its duration. Reset it to match what's about
-        // to happen so a stale value (e.g. an inherited
-        // `.downloadingModel(progress: 0.37)` from a cancelled launch task
-        // after a settings-driven model swap) doesn't surface as a frozen
-        // progress bar at the old percentage.
+        // `state.status` for its duration. Reset it right away so a stale
+        // value (an error being retried, or an inherited
+        // `.downloadingModel(progress: 0.37)` from a cancelled task) doesn't
+        // linger while readiness is checked.
         if let state {
-            state.status = TranscriptionService.isModelCached(transcriber.model)
-                ? .preparingModel
-                : .downloadingModel(progress: 0)
+            state.status = .preparingModel
         }
-        modelPrepTask = Task { @MainActor [weak self, weak state, weak transcriber] in
-            guard let transcriber else { return }
+        modelPrepTask = Task { @MainActor [weak self, weak state] in
             do {
-                if !TranscriptionService.isModelCached(transcriber.model) {
-                    try await transcriber.prepareModel { progress in
-                        Task { @MainActor in
-                            if let state, case .downloadingModel = state.status {
-                                state.status = .downloadingModel(progress: progress)
-                            }
-                        }
+                let plan = EnginePrep.plan(for: await engine.readiness())
+                try Task.checkCancellation()
+                switch plan {
+                case .fail(let reason):
+                    AppLog.pipeline.error("engine \(engine.id.rawValue, privacy: .public) unavailable: \(reason, privacy: .public)")
+                    if let state {
+                        state.status = .error(reason)
                     }
-                    if let state, case .downloadingModel = state.status {
-                        state.status = .preparingModel
+                    if managesDownloadWindow {
+                        self?.closeDownloadWindow()
+                    }
+                    self?.finishModelPrepTask(token: myToken)
+                    return
+                case .download:
+                    if let state, case .preparingModel = state.status {
+                        state.status = .downloadingModel(progress: 0)
+                    }
+                    if managesDownloadWindow, let state {
+                        self?.showDownloadWindow(state: state)
+                    }
+                case .warm:
+                    break
+                }
+                try await engine.prepare { progress in
+                    Task { @MainActor in
+                        guard let state, case .downloadingModel = state.status else { return }
+                        state.status = progress >= 1 ? .preparingModel : .downloadingModel(progress: progress)
                     }
                 }
-                try await transcriber.prewarm()
-                if let state, case .preparingModel = state.status {
+                try Task.checkCancellation()
+                if let state, state.status.blocksRecording {
                     state.status = .idle
                 }
                 if managesDownloadWindow {
-                    self?.downloadWindow?.close()
-                    self?.downloadWindow = nil
+                    self?.closeDownloadWindow()
                 }
             } catch is CancellationError {
                 // A newer prep task superseded this one. Don't surface as a
                 // user-facing error.
                 return
             } catch {
-                AppLog.whisper.error("model prep failed: \(error.localizedDescription)")
+                AppLog.pipeline.error("engine \(engine.id.rawValue, privacy: .public) prep failed: \(error.localizedDescription)")
                 if let state {
                     state.status = .error("Model setup failed: \(error.localizedDescription). Try Retry or relaunch Voxline.")
                 }
                 if managesDownloadWindow {
-                    self?.downloadWindow?.close()
-                    self?.downloadWindow = nil
+                    self?.closeDownloadWindow()
                 }
             }
-            // Only clear modelPrepTask if no newer task has replaced us.
-            // Without this guard, a late-finishing prior task would null
-            // out the successor's registration, leaving it unreachable
-            // for cancel().
-            if self?.modelPrepTaskToken == myToken {
-                self?.modelPrepTask = nil
-            }
+            self?.finishModelPrepTask(token: myToken)
         }
+    }
+
+    /// Only clears the registration if no newer task has replaced this one.
+    /// Without this guard, a late-finishing prior task would null out the
+    /// successor's registration, leaving it unreachable for cancel().
+    private func finishModelPrepTask(token: UInt64) {
+        guard modelPrepTaskToken == token else { return }
+        modelPrepTask = nil
+        modelPrepOwnsLaunchUI = false
+    }
+
+    private func showDownloadWindow(state: AppState) {
+        let window = downloadWindow ?? ModelDownloadWindow()
+        downloadWindow = window
+        window.show(state: state)
+    }
+
+    private func closeDownloadWindow() {
+        downloadWindow?.close()
+        downloadWindow = nil
     }
 
     deinit {
@@ -465,7 +497,7 @@ final class AppCoordinator {
         let version = (info["CFBundleShortVersionString"] as? String) ?? "?"
         let build = (info["CFBundleVersion"] as? String) ?? "?"
         AppLog.pipeline.info("launch: voxline \(version) (build \(build))")
-        AppLog.pipeline.info("launch: hotkey=\(settings.hotkeyChord.displayName), llm=\(settings.llmProvider.rawValue)/\(settings.llmModel), whisper=\(settings.whisperModel.rawValue)")
+        AppLog.pipeline.info("launch: hotkey=\(settings.hotkeyChord.displayName), llm=\(settings.llmProvider.rawValue)/\(settings.llmModel), engine=\(settings.transcriptionEngine.rawValue), whisper=\(settings.whisperModel.rawValue)")
         let perms = PermissionsService()
         AppLog.permissions.info("launch: mic=\(String(describing: perms.microphoneStatus)), ax=\(String(describing: perms.accessibilityStatus)), im=\(String(describing: perms.inputMonitoringStatus))")
     }
@@ -483,25 +515,34 @@ extension AppCoordinator {
         // takes effect on the next dictation.
         capture?.preferredInputDeviceUID = snapshot.audioInputDeviceUID
 
-        // Switching Whisper model: invalidate the loaded pipeline; the next
-        // transcribe re-loads from the (possibly cached) new variant. Trigger
-        // a single-flight background prepare/prewarm so the user doesn't pay
-        // it on next dictation. Shares modelPrepTask with the launch path so
-        // mid-download swaps cancel cleanly.
+        guard let engines else { return }
+        let engineChanged = snapshot.engine != appliedEngine
+        appliedEngine = snapshot.engine
+        let selected = engines.engine(for: snapshot.engine)
+
+        // Switching Whisper model invalidates the loaded pipeline; the next
+        // transcribe re-loads from the (possibly cached) new variant.
+        var whisperModelChanged = false
         if let transcriber, transcriber.model != snapshot.whisperModel {
             transcriber.model = snapshot.whisperModel
-            // If the launch-path download is still on screen (window not yet
-            // dismissed), the new task must take over its state + window
-            // ownership. Otherwise the download window would be orphaned and
-            // state.status would freeze at the old model's progress
-            // percentage. After the launch flow has completed, do a quiet
-            // background swap with no UI.
-            let inheritsLaunchUI = (downloadWindow != nil)
-            runModelPrepTask(
-                state: inheritsLaunchUI ? appState : nil,
-                transcriber: transcriber,
-                managesDownloadWindow: inheritsLaunchUI
-            )
+            whisperModelChanged = true
         }
+
+        // A new engine, or a new model for the selected WhisperKit engine,
+        // gets a single-flight background prepare so the user doesn't pay
+        // for it on the next dictation. `engines.current` already follows
+        // the setting. Shares modelPrepTask with the launch path so a
+        // mid-prep switch cancels cleanly.
+        guard engineChanged || (whisperModelChanged && selected.id == .whisperKit) else { return }
+        // If the launch-path prep still owns the status (and possibly the
+        // download window), the new task takes both over; otherwise the
+        // status would freeze at the cancelled task's value. After the launch
+        // flow has completed, do a quiet background prepare with no UI.
+        let inheritsLaunchUI = modelPrepOwnsLaunchUI
+        runModelPrepTask(
+            state: inheritsLaunchUI ? appState : nil,
+            engine: selected,
+            managesDownloadWindow: inheritsLaunchUI
+        )
     }
 }

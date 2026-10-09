@@ -9,6 +9,8 @@ final class WizardViewModel {
     var currentStep: WizardStep = .first
     var onComplete: (() -> Void)?
 
+    let steps: [WizardStep]
+
     /// The API-key step reuses APIKeysSettingsViewModel directly.
     let apiKeyVM: APIKeysSettingsViewModel
 
@@ -20,11 +22,15 @@ final class WizardViewModel {
 
     private var settings: AppSettings
 
+    /// `skipEngineStep` drops the speech-engine step; pass true when the
+    /// selected engine is already ready at wizard start.
     init(
         settings: AppSettings = AppSettings(),
-        keychain: any KeychainStorage = DataProtectionKeychain()
+        keychain: any KeychainStorage = DataProtectionKeychain(),
+        skipEngineStep: Bool = false
     ) {
         self.settings = settings
+        self.steps = WizardStep.sequence(skippingEngineStep: skipEngineStep)
         let vm = APIKeysSettingsViewModel(keychain: keychain)
         self.apiKeyVM = vm
         // Pre-select the picker based on what's already in the keychain,
@@ -53,7 +59,7 @@ final class WizardViewModel {
         }
     }
 
-    var canGoBack: Bool { currentStep.previous != nil }
+    var canGoBack: Bool { currentStep.previous(in: steps) != nil }
 
     /// Persist all in-progress wizard state — keys to keychain, picker choice
     /// to UserDefaults. Called on every advance and on completion so the
@@ -79,11 +85,11 @@ final class WizardViewModel {
 
     func advance() {
         commitProgress()
-        if let next = currentStep.next { currentStep = next }
+        if let next = currentStep.next(in: steps) { currentStep = next }
     }
 
     func goBack() {
-        if let prev = currentStep.previous { currentStep = prev }
+        if let prev = currentStep.previous(in: steps) { currentStep = prev }
     }
 
     func complete() {

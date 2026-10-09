@@ -98,18 +98,37 @@ struct SettingsView: View {
                     .id(SettingsAnchor.microphone)
 
                     Section("Recognition") {
-                        Picker("Whisper model", selection: $generalVM.whisperModel) {
-                            ForEach(WhisperModel.allCases, id: \.self) { m in
-                                let cached = TranscriptionService.isModelCached(m)
-                                let label = cached
-                                    ? "\(m.displayName) — ✓ downloaded"
-                                    : "\(m.displayName) — to download · \(m.approxSizeMB) MB"
-                                Text(label).tag(m)
+                        Picker("Engine", selection: $generalVM.engine) {
+                            ForEach(EngineID.allCases, id: \.self) { e in
+                                Text(e.displayName).tag(e)
                             }
                         }
-                        Text("Switching downloads the new model on demand.")
-                            .foregroundStyle(.secondary)
-                            .font(.callout)
+                        switch generalVM.engine {
+                        case .whisperKit:
+                            Picker("Whisper model", selection: $generalVM.whisperModel) {
+                                ForEach(WhisperModel.allCases, id: \.self) { m in
+                                    let cached = TranscriptionService.isModelCached(m)
+                                    let label = cached
+                                        ? "\(m.displayName) — ✓ downloaded"
+                                        : "\(m.displayName) — to download · \(m.approxSizeMB) MB"
+                                    Text(label).tag(m)
+                                }
+                            }
+                            Text("Switching downloads the new model on demand.")
+                                .foregroundStyle(.secondary)
+                                .font(.callout)
+                        case .openAIRealtime:
+                            Text("Audio is sent to OpenAI and transcribed with your OpenAI API key.")
+                                .foregroundStyle(.secondary)
+                                .font(.callout)
+                            if generalVM.showsOpenAIKeyWarning {
+                                Text("Add an OpenAI API key in API Keys to use this engine.")
+                                    .foregroundStyle(.orange)
+                                    .font(.callout)
+                            }
+                        case .apple:
+                            EmptyView()
+                        }
                     }
                     .id(SettingsAnchor.recognition)
 
@@ -140,6 +159,7 @@ struct SettingsView: View {
         .task {
             generalVM.refreshFromUserDefaults()
             generalVM.refreshLoginItemStatus()
+            generalVM.openAIKeyDidChange()
         }
         .onAppear {
             levelMonitor.preferredInputDeviceUID = generalVM.audioInputDeviceUID
