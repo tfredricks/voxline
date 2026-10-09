@@ -146,6 +146,13 @@ once it reaches its first tagged release.
   menu-bar menu is open (issue 20).
 - The hotkey works over Screen Sharing and other remote or synthetic input
   (issue 22).
+- voxline's own ⌘C and ⌘V keystrokes no longer turn into other shortcuts on
+  layouts that switch to QWERTY while ⌘ is held, such as "Dvorak – QWERTY ⌘".
+- The microphone permission prompt and the About window no longer claim that
+  audio never leaves your Mac: they say it stays on your Mac unless you choose
+  the OpenAI cloud engine.
+- An OpenAI API key that can't be read from the keychain is reported as a
+  keychain error, not as a missing key.
 - Brief status messages in the pill now all appear and clear the same way
   (issue 26).
 - Command mode no longer copies the whole line in editors such as VS Code

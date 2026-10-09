@@ -25,7 +25,7 @@ struct AboutView: View {
 
             VStack(spacing: 2) {
                 Text("Local-first dictation for Mac.")
-                Text("Audio never leaves your Mac.")
+                Text("Audio stays on your Mac unless you choose the OpenAI engine.")
             }
             .font(.callout)
             .foregroundStyle(.secondary)

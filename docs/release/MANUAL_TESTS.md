@@ -518,9 +518,6 @@ joins the paste-first list before release.
       comes back inconclusive, as in some Electron apps), start a command,
       and press Esc right after releasing the chord. The pill says
       "Cancelled", nothing is inserted, and the previous clipboard is intact.
-- [ ] Switch the input source to Dvorak – QWERTY ⌘ and run a command that needs
-      the ⌘C fallback, and a dictation into a paste-first app. Known risk:
-      note whether voxline's ⌘C and ⌘V still reach the app.
 
 ## Safety
 
