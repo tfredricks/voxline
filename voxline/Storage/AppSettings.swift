@@ -18,6 +18,14 @@ struct AppSettings {
         static let transcriptionEngine = "voxline.transcription.engine"
         static let skipShortUtterances = "voxline.llm.skipShortUtterances"
         static let saveBakeoffClips = "voxline.debug.saveBakeoffClips"
+        static let meetingNotesFolder = "voxline.meetings.notesFolder"
+        static let meetingShortcut = "voxline.meetings.shortcut"
+        static let meetingNotesModel = "voxline.meetings.notesModel"
+        static let meetingAudioRetention = "voxline.meetings.audioRetention"
+        static let meetingShowTimer = "voxline.meetings.showTimer"
+        static let meetingConsentNoticeShown = "voxline.meetings.consentNoticeShown"
+        static let meetingSilentSystemNoticeShown = "voxline.meetings.silentSystemNoticeShown"
+        static let meetingCapSeconds = "voxline.debug.meetingCapSeconds"
     }
 
     /// Stored under `Key.commandChord` for "command mode off". The legacy
@@ -31,7 +39,7 @@ struct AppSettings {
     }
 
     /// LLM provider choice. Defaults to .anthropic.
-    /// Changing the provider clears the model override and `commandModel` so
+    /// Changing the provider clears the model override, `commandModel` and `meetingNotesModel` so
     /// the spec default for the new provider takes over (a model id from one
     /// provider is almost never valid for another). Re-assigning the same
     /// provider is a no-op — the overrides survive.
@@ -56,6 +64,7 @@ struct AppSettings {
                 AppLog.llm.info("provider changed: \(previous?.rawValue ?? "(none)") → \(newValue.rawValue)")
                 defaults.removeObject(forKey: Key.model)
                 defaults.removeObject(forKey: Key.commandModel)
+                defaults.removeObject(forKey: Key.meetingNotesModel)
             }
         }
     }
@@ -194,5 +203,81 @@ struct AppSettings {
     var saveBakeoffClips: Bool {
         get { defaults.bool(forKey: Key.saveBakeoffClips) }
         set { defaults.set(newValue, forKey: Key.saveBakeoffClips) }
+    }
+
+    /// Where meeting notes files are written.
+    var meetingNotesFolder: URL {
+        get {
+            if let path = defaults.string(forKey: Key.meetingNotesFolder), !path.isBlank {
+                return URL(fileURLWithPath: path, isDirectory: true)
+            }
+            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+                ?? URL(fileURLWithPath: NSHomeDirectory()).appending(path: "Documents")
+            return documents.appending(path: "voxline Meetings", directoryHint: .isDirectory)
+        }
+        set { defaults.set(newValue.path, forKey: Key.meetingNotesFolder) }
+    }
+
+    /// Start/stop shortcut for meeting recording; nil when not set.
+    var meetingShortcut: KeyCombo? {
+        get {
+            guard let data = defaults.data(forKey: Key.meetingShortcut) else { return nil }
+            return try? JSONDecoder().decode(KeyCombo.self, from: data)
+        }
+        set {
+            if let newValue, let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Key.meetingShortcut)
+            } else {
+                defaults.removeObject(forKey: Key.meetingShortcut)
+            }
+        }
+    }
+
+    /// Model id for meeting notes; nil means the command model, then the
+    /// cleanup model. A blank value is stored as absent.
+    var meetingNotesModel: String? {
+        get {
+            guard let raw = defaults.string(forKey: Key.meetingNotesModel), !raw.isBlank else { return nil }
+            return raw.trimmed
+        }
+        set {
+            if let newValue, !newValue.isBlank {
+                defaults.set(newValue.trimmed, forKey: Key.meetingNotesModel)
+            } else {
+                defaults.removeObject(forKey: Key.meetingNotesModel)
+            }
+        }
+    }
+
+    var resolvedMeetingNotesModel: String { meetingNotesModel ?? commandModel ?? llmModel }
+
+    var meetingAudioRetention: MeetingAudioRetention {
+        get { defaults.string(forKey: Key.meetingAudioRetention).flatMap(MeetingAudioRetention.init(rawValue:)) ?? .default }
+        set { defaults.set(newValue.rawValue, forKey: Key.meetingAudioRetention) }
+    }
+
+    var showMeetingTimer: Bool {
+        get {
+            guard defaults.object(forKey: Key.meetingShowTimer) != nil else { return true }
+            return defaults.bool(forKey: Key.meetingShowTimer)
+        }
+        set { defaults.set(newValue, forKey: Key.meetingShowTimer) }
+    }
+
+    var meetingConsentNoticeShown: Bool {
+        get { defaults.bool(forKey: Key.meetingConsentNoticeShown) }
+        set { defaults.set(newValue, forKey: Key.meetingConsentNoticeShown) }
+    }
+
+    var meetingSilentSystemNoticeShown: Bool {
+        get { defaults.bool(forKey: Key.meetingSilentSystemNoticeShown) }
+        set { defaults.set(newValue, forKey: Key.meetingSilentSystemNoticeShown) }
+    }
+
+    /// Hidden developer override (no Settings UI) of the 60-minute meeting
+    /// cap, in seconds, for manual tests. Nil when unset or not positive.
+    var meetingCapSeconds: Int? {
+        let value = defaults.integer(forKey: Key.meetingCapSeconds)
+        return value > 0 ? value : nil
     }
 }
