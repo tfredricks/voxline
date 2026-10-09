@@ -37,7 +37,9 @@ Two facts from a spike against the macOS 26.6 SDK shape the design:
   `SpeechTranscriber`'s output ("LangGraph" still came out "land graph",
   "Fredricks" as "Fredericks"). Treat Apple's engine as having no vocabulary
   biasing until the bake-off says otherwise. Whisper's prompt tokens are the
-  only real biasing mechanism on the table.
+  only real biasing mechanism on the table. (Amended: WhisperKit 1.0's
+  prompting turned out to be broken, so no on-device engine biases; see
+  Decisions.)
 
 ## Targets
 
@@ -54,12 +56,13 @@ Measured on the default engine, 20 dictations, same LLM model as the baseline:
 
 | Question (roadmap "deferred to phase spec") | Decision | Why |
 |---|---|---|
-| Engines that ship | Apple `SpeechTranscriber`, WhisperKit (streaming), OpenAI Realtime transcription (cloud, opt-in) | Apple is the latency winner and needs no 1.5 GB model; WhisperKit is the only on-device engine with real vocabulary biasing; one cloud option covers "best accuracy, audio leaves the Mac". |
+| Engines that ship | Apple `SpeechTranscriber`, WhisperKit (streaming), OpenAI Realtime transcription (cloud, opt-in) | Apple is the latency winner and needs no 1.5 GB model; WhisperKit is the incumbent on-device engine and the accuracy reference (its prompt biasing turned out to be broken in WhisperKit 1.0; see the amended row below); one cloud option covers "best accuracy, audio leaves the Mac". |
 | Parakeet / FluidAudio | Not built this phase | It adds a new dependency and another ~600 MB model to compete in a slot Apple already fills on latency and Whisper fills on biasing. The engine protocol makes it a one-file adapter later if both shipping engines miss the targets. |
 | Deepgram | Not built | One cloud provider is enough. OpenAI reuses the OpenAI key most users already store for cleanup, so there is no new key UI. |
 | Bake-off decision rule | See "Decision rule" below; latency margin **300 ms** | Written before any run, as the roadmap requires. |
 | Default engine | Chosen by the rule. A synthetic smoke run (TTS clips) sets it provisionally tonight; Todd's real clips confirm or flip it | No real recordings exist yet. |
 | Apple vocabulary hints | Passed through `AnalysisContext` anyway; capability flag off | Harmless if ignored; the bake-off measures whether they help. |
+| WhisperKit vocabulary hints (amended during implementation) | Not sent; capability flag off | WhisperKit 1.0's `TextDecoder` runs its stop checks while forcing prompt tokens, so any `promptTokens` make large-v3 turbo return empty text (token trace in the Task 5a report). A local workaround also disabled timestamp rules and broke streaming confirmation. LLM cleanup applies the vocabulary for every engine. Revisit when WhisperKit fixes prompting upstream. |
 | Esc: swallow or pass through | **Swallowed**, only while voxline is recording or thinking | Passing Esc to the frontmost app would close compose windows and popovers in Slack, Mail, and IDEs exactly when the user is dictating into them. A separate active event tap on its own thread does the swallowing, so a busy main thread cannot stall the keyboard. Phase 3's preset shortcuts reuse it. |
 | Short-utterance fast path threshold | ≤ 6 words, no filler tokens; hidden defaults flag, off | Ships as the roadmap's experiment. Not exposed in Settings. |
 | Recording cap | 5 minutes, with a toast when it hits | Roadmap. |
@@ -260,10 +263,9 @@ because it owns the mic.
 - `finish()` waits for any in-flight pass, then runs one final pass from
   `lastConfirmedEnd` over the complete buffer and returns confirmed text plus
   the final segments.
-- Vocabulary: hints are tokenized as `" " + hints.joined(separator: ", ")`,
-  special tokens are filtered out, the result is capped at 128 tokens, and it
-  is passed as `promptTokens` with `usePrefillPrompt: true`.
-- Capabilities: `.streamingPartials` and `.vocabularyHints`.
+- Vocabulary: hints are ignored (see the amended decision row; WhisperKit
+  1.0 prompting is broken).
+- Capabilities: `.streamingPartials`.
 
 **`OpenAIRealtimeEngine`.** A WebSocket transcription session against OpenAI's
 Realtime API with `gpt-4o-transcribe`, authenticated with the OpenAI key
@@ -306,7 +308,7 @@ Settings → General → Recognition:
 
 - An **Engine** picker:
   - "Apple Speech — on-device, fastest"
-  - "Whisper — on-device, learns your vocabulary"
+  - "Whisper — on-device"
   - "OpenAI — cloud, audio leaves your Mac"
 - The Whisper model picker shows only when Whisper is selected.
 - With OpenAI selected, a caption says audio is sent to OpenAI with the user's
