@@ -3,18 +3,12 @@ import ApplicationServices
 import CoreGraphics
 import Foundation
 
-/// Reads the current selection from the frontmost app for the "transform
-/// selection by voice" path, by synthesizing a Cmd+C and reading the copied
-/// string back off the pasteboard.
-///
-/// Why a clipboard round-trip instead of the Accessibility API? voxline runs
-/// in the macOS App Sandbox, which lets it POST events (so Cmd+C / Cmd+V
-/// work) but blocks it from READING another process's AX element tree —
-/// `kAXSelectedTextAttribute` on another app's focused element comes back nil
-/// even with Accessibility granted. A synthetic copy is the sandbox-compatible
-/// way to capture a cross-app selection. The user's clipboard is snapshotted
-/// and always restored, and Cmd+C in a secure (password) field is a no-op on
-/// macOS, so a selected password is never copied out.
+/// Reads the current selection by synthesizing a Cmd+C and reading the copied
+/// string back off the pasteboard. This is the fallback behind
+/// `AXSelectionReader` for apps whose AX tree exposes no selected text (some
+/// Electron and web views). The user's clipboard is snapshotted and always
+/// restored, and Cmd+C in a secure (password) field is a no-op on macOS, so a
+/// selected password is never copied out.
 protocol SelectionSnapshotting: Sendable {
     /// The current selection, or nil when nothing is selected (the synthetic
     /// Cmd+C didn't change the pasteboard), the copied string is empty, or the

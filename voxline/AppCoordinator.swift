@@ -171,7 +171,8 @@ final class AppCoordinator {
             fieldInspector: fieldInspector,
             injector: injector,
             historyStore: historyStore,
-            contextCapture: contextCapture
+            contextCapture: contextCapture,
+            selectionSnapshot: AXSelectionReader()
         )
         self.pipeline = pipeline
 
