@@ -607,24 +607,56 @@ import Testing
         #expect(h.events.read() == ["delete"])
     }
 
-    @Test func empty_text_with_nothing_selected_posts_no_delete() async {
+    @Test func empty_text_with_nothing_selected_posts_nothing() async {
         let fake = editableFake()
         fake.strings[kAXSelectedTextAttribute] = [.value("")]
         let h = makeHarness(element: fake)
         defer { h.board.releaseGlobally() }
 
-        _ = await insert(h, "", bundleID: Self.slack)
+        let outcome = await insert(h, "", bundleID: Self.slack)
 
-        #expect(!h.events.read().contains("delete"))
+        #expect(outcome == .notInserted(.cannotTarget))
+        #expect(h.events.read().isEmpty)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
     }
 
-    @Test func empty_text_without_accessible_focus_posts_no_delete() async {
+    @Test func a_selection_only_cmd_c_could_read_is_never_pasted_over_or_deleted() async {
+        let fake = editableFake()
+        fake.ranges[kAXSelectedTextRangeAttribute] = .absent
+        let h = makeHarness(element: fake)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "", bundleID: Self.slack)
+
+        #expect(outcome == .notInserted(.cannotTarget))
+        #expect(h.events.read().isEmpty)
+        #expect(h.typed.read().isEmpty)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
+    @Test func empty_text_without_accessible_focus_posts_nothing() async {
         let h = makeHarness(focused: { .absent })
         defer { h.board.releaseGlobally() }
 
-        _ = await insert(h, "", bundleID: Self.slack)
+        let outcome = await insert(h, "", bundleID: Self.slack)
 
-        #expect(!h.events.read().contains("delete"))
+        #expect(outcome == .notInserted(.cannotTarget))
+        #expect(h.events.read().isEmpty)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
+    @Test func a_rejected_ax_write_of_nothing_is_not_pasted() async {
+        let fake = editableFake()
+        fake.setResults = [.failure]
+        let h = makeHarness(element: fake)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "")
+
+        #expect(outcome == .notInserted(.cannotTarget))
+        #expect(fake.stringSets.map(\.value) == [""])
+        #expect(h.events.read().isEmpty)
+        #expect(h.typed.read().isEmpty)
     }
 
     @Test func empty_replacement_on_an_ax_first_app_writes_through_ax() async {

@@ -88,15 +88,16 @@ final class TextInserter: TextInserting {
     /// 0.5.0 did, unless `expectedElement` was given (`focusMoved`) or the
     /// target is a range it can't check (`cannotTarget`).
     ///
-    /// An empty `text` that replaces a selection the element shows as
-    /// non-empty (a `.range` of non-zero length, or a live selection) is a
-    /// deletion. An AX write of "" deletes it as usual, but paste and typing
-    /// can't express one, so the first of them in the plan posts a single
+    /// An empty `text` is never pasted or typed. When it replaces a selection
+    /// the element shows as non-empty (a `.range` of non-zero length, or a
+    /// live selection) it is a deletion: an AX write of "" deletes it as
+    /// usual, and the first paste or typing step in the plan posts a single
     /// Backspace instead, after the release gate. It is verified like typing,
-    /// reported as `.typing`, and never falls through. An empty `text` with
-    /// no selection, or no accessible focus, posts no Backspace. In a
-    /// terminal (`InsertionPlan.isTerminal`) an empty `text` is
-    /// `cannotTarget` before anything is read: its selection is scrollback.
+    /// reported as `.typing`, and never falls through. With no selection the
+    /// element shows (one only Cmd+C could read), or no accessible focus,
+    /// that step is `cannotTarget` and posts nothing. In a terminal
+    /// (`InsertionPlan.isTerminal`) an empty `text` is `cannotTarget` before
+    /// anything is read: the selection there is scrollback.
     ///
     /// Once the calling task is cancelled nothing more is selected, posted, or
     /// written: the insert checks on entry, before each strategy, and after
@@ -172,7 +173,11 @@ final class TextInserter: TextInserting {
         var failures: [String] = []
         for strategy in plan {
             guard !Task.isCancelled else { return notInserted(.cancelled) }
-            if deletesSelection, strategy != .accessibility, let element {
+            if text.isEmpty, strategy != .accessibility {
+                guard deletesSelection, let element else {
+                    AppLog.paste.debug("insert: no selection to delete; posting nothing")
+                    return notInserted(.cannotTarget)
+                }
                 return await deleteSelection(in: element, trigger: trigger)
             }
             switch strategy {
