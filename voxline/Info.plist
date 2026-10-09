@@ -30,6 +30,8 @@
 	<string></string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Voxline records audio while you hold the dictation hotkey, transcribes it locally, and discards the audio. Audio never leaves your device.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Voxline transcribes your speech on this Mac when Apple Speech is the selected engine.</string>
 	<key>SUFeedURL</key>
 	<string>https://tfredricks.github.io/voxline/appcast.xml</string>
 	<key>SUPublicEDKey</key>
