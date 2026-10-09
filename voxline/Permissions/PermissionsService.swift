@@ -49,7 +49,8 @@ struct PermissionsService {
     /// Best-effort, not required: a session-level CGEventTap with .listenOnly
     /// on .flagsChanged generally works with Accessibility alone. We still
     /// read and prompt because some macOS configurations report a more
-    /// reliable tap once IM is also granted. Surfaced in the Debug pane.
+    /// reliable tap once IM is also granted. Shown as the Recommended row in
+    /// Home's Permissions section.
     var inputMonitoringStatus: PermissionStatus {
         let result = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent)
         if result == kIOHIDAccessTypeGranted { return .granted }

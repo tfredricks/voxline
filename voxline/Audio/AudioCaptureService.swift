@@ -21,12 +21,6 @@ final class AudioCaptureService {
     /// most recently captured chunk. Used by the recording pill's waveform.
     var onLevel: ((Float) -> Void)?
 
-    /// Optional debug observer — fires once per AVAudioEngine tap callback
-    /// with the buffer's frame count. Lets the Debug window distinguish
-    /// "engine stalled after one buffer" from "many buffers but converter
-    /// is dropping samples".
-    var onTapCallback: ((Int) -> Void)?
-
     /// Receives every converted 16 kHz chunk, synchronously and in order, on
     /// the audio tap thread; the flushed tail arrives on the main actor inside
     /// stop(). Read once per start(). Must be cheap and must never wait on the
@@ -142,7 +136,6 @@ final class AudioCaptureService {
         let bufferSize = max(1, AVAudioFrameCount(hwFormat.sampleRate * 0.02))
 
         input.installTap(onBus: 0, bufferSize: bufferSize, format: hwFormat) { [weak self] buffer, _ in
-            let frames = Int(buffer.frameLength)
             let chunk = delivery.deliver(buffer)
             let level = chunk.isEmpty
                 ? nil
@@ -150,7 +143,6 @@ final class AudioCaptureService {
             guard let self else { return }
             Task { @MainActor [weak self] in
                 guard let self, self.currentEpoch == epoch else { return }
-                self.onTapCallback?(frames)
                 if let level {
                     self.onLevel?(level)
                 }

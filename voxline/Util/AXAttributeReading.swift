@@ -35,14 +35,4 @@ extension AXUIElement {
         }
         return (value as! AXUIElement)
     }
-
-    /// Read a Bool-valued attribute. Returns nil on AX failure or non-Bool
-    /// payload.
-    func boolAttribute(_ attribute: CFString) -> Bool? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(self, attribute, &value) == .success else {
-            return nil
-        }
-        return value as? Bool
-    }
 }

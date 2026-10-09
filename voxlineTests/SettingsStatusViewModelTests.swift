@@ -68,13 +68,13 @@ import Foundation
         #expect(f.status.issues.isEmpty)
 
         await f.status.refreshEngineReadiness()
-        #expect(f.status.needsSetup(.dictation))
+        #expect(f.status.issues.contains { $0.page == .dictation })
     }
 
     @Test func switching_whisper_models_drops_the_old_check() async throws {
         let f = try makeFixtures(engine: .whisperKit, model: .smallEn, readiness: { _ in .needsPreparation(downloadMB: nil) })
         await f.status.refreshEngineReadiness()
-        #expect(f.status.needsSetup(.dictation))
+        #expect(f.status.issues.contains { $0.page == .dictation })
 
         f.general.whisperModel = .largeV3Turbo
         #expect(f.status.issues.isEmpty)
@@ -122,11 +122,11 @@ import Foundation
         await gate.waitUntilBlocked()
         f.general.engine = .whisperKit
         await f.status.refreshEngineReadiness()
-        #expect(f.status.needsSetup(.dictation))
+        #expect(f.status.issues.contains { $0.page == .dictation })
 
         gate.release(.ready)
         await stale.value
-        #expect(f.status.needsSetup(.dictation))
+        #expect(f.status.issues.contains { $0.page == .dictation })
     }
 
     @Test func setup_needed_when_no_devices_and_no_uid() async throws {
@@ -192,11 +192,11 @@ import Foundation
     @Test func saving_the_provider_key_clears_the_ai_provider_issue() async throws {
         let f = try makeFixtures(provider: .anthropic, anthropicKey: "")
         await f.status.refreshEngineReadiness()
-        #expect(f.status.needsSetup(.aiProvider))
+        #expect(f.status.issues.contains { $0.page == .aiProvider })
 
         f.keys.anthropicKey = "sk-ant-new"
         f.keys.commitAnthropic()
-        #expect(!f.status.needsSetup(.aiProvider))
+        #expect(!f.status.issues.contains { $0.page == .aiProvider })
         #expect(f.status.issues.isEmpty)
     }
 
@@ -222,7 +222,7 @@ import Foundation
         )
         await f.status.refreshEngineReadiness()
         #expect(f.status.issues == [SetupIssue(text: "No OpenAI API key", page: .aiProvider)])
-        #expect(!f.status.needsSetup(.dictation))
+        #expect(!f.status.issues.contains { $0.page == .dictation })
     }
 
     @Test func openai_engine_without_a_key_under_another_provider_is_a_dictation_issue() async throws {
@@ -234,14 +234,6 @@ import Foundation
         )
         await f.status.refreshEngineReadiness()
         #expect(f.status.issues == [SetupIssue(text: OpenAIRealtimeEngine.missingKeyReason, page: .dictation)])
-    }
-
-    @Test func needs_setup_maps_issues_to_their_pages() async throws {
-        let f = try makeFixtures(provider: .openai, openaiKey: "")
-        await f.status.refreshEngineReadiness()
-        #expect(f.status.needsSetup(.aiProvider))
-        #expect(!f.status.needsSetup(.dictation))
-        #expect(!f.status.needsSetup(.home))
     }
 }
 

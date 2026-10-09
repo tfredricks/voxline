@@ -160,7 +160,6 @@ import Foundation
 private final class FakeCapture: AudioCapturing {
     var pendingSamples: [Float] = [Float](repeating: 0.1, count: 8_000)
     var onLevel: ((Float) -> Void)?
-    var onTapCallback: ((Int) -> Void)?
     var onSamples: (@Sendable ([Float]) -> Void)?
     var onInterrupted: (() -> Void)?
     func prewarm() {}

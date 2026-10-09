@@ -33,8 +33,6 @@ enum BakeoffFixtures {
         return support.appending(path: "voxline/bakeoff", directoryHint: .isDirectory)
     }
 
-    static var isPresent: Bool { !clipURLs(in: directory).isEmpty }
-
     /// The bake-off runs real-time engines and rewrites the report, so having
     /// fixtures on disk is not enough: `VOXLINE_BAKEOFF=1` must also be set.
     static var isEnabled: Bool { isEnabled(environment: ProcessInfo.processInfo.environment) }
