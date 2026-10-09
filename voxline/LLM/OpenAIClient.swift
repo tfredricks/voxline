@@ -50,6 +50,7 @@ struct OpenAIClient: LLMClient {
                 let finishReason: String?
                 struct Message: Decodable {
                     let content: String?
+                    let refusal: String?
                 }
             }
         }
@@ -68,6 +69,9 @@ struct OpenAIClient: LLMClient {
         case "length":         throw LLMError.truncated
         case "content_filter": throw LLMError.refused
         default:               break
+        }
+        if let refusal = first.message.refusal, !refusal.isEmpty {
+            throw LLMError.refused
         }
         guard let content = first.message.content,
               !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

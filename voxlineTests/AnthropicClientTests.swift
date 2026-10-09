@@ -56,6 +56,39 @@ import Foundation
         #expect(body["temperature"] == nil)
     }
 
+    @Test func thinking_by_default_models_get_low_effort_and_no_temperature_or_thinking() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"content":[{"type":"text","text":"x"}]}"#.data(using: .utf8)!,
+            status: 200
+        )
+        let client = AnthropicClient(apiKey: "k", http: mock)
+
+        _ = try await client.cleanup(LLMRequest(model: "claude-sonnet-5-5", systemPrompt: "s", userPrompt: "u", temperature: 0.3))
+
+        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
+        let outputConfig = try #require(body["output_config"] as? [String: Any])
+        #expect(outputConfig["effort"] as? String == "low")
+        #expect(body["temperature"] == nil)
+        #expect(body["thinking"] == nil)
+    }
+
+    @Test func models_that_do_not_think_by_default_keep_temperature_and_get_no_output_config() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"content":[{"type":"text","text":"x"}]}"#.data(using: .utf8)!,
+            status: 200
+        )
+        let client = AnthropicClient(apiKey: "k", http: mock)
+
+        _ = try await client.cleanup(LLMRequest(model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: 0.3))
+
+        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
+        #expect(body["temperature"] as? Double == 0.3)
+        #expect(body["output_config"] == nil)
+        #expect(body["thinking"] == nil)
+    }
+
     @Test func returns_concatenated_text_blocks() async throws {
         let mock = MockHTTPClient()
         mock.stubResponse = (

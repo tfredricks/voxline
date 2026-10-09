@@ -34,16 +34,29 @@ struct LLMRequest: Equatable {
     var maxOutputTokens: Int = 1024
 
     private static let reasoningModelPrefixes = ["o1", "o3", "o4", "gpt-5"]
+    private static let anthropicDefaultThinkingPrefixes = [
+        "claude-fable", "claude-mythos", "claude-opus-5", "claude-sonnet-5", "claude-haiku-5"
+    ]
+
+    /// Claude models that think when no `thinking` parameter is sent. Their
+    /// thinking tokens count toward `max_tokens`, and they reject non-default
+    /// sampling, so the Anthropic client treats them differently.
+    static func anthropicThinksByDefault(_ model: String) -> Bool {
+        let lowered = model.lowercased()
+        return anthropicDefaultThinkingPrefixes.contains { lowered.hasPrefix($0) }
+    }
 
     /// Output budget for transcript cleanup: 1.5x the transcript's estimated
-    /// token count plus 256, clamped to 256...4096. Reasoning models draw
-    /// hidden thinking tokens from the same cap, so they get 4,096 more.
+    /// token count plus 256, clamped to 256...4096. Models that think by
+    /// default draw hidden thinking tokens from the same cap, so they get
+    /// 4,096 more.
     static func cleanupBudget(transcript: String, model: String) -> Int {
         let estimatedTokens = Double(transcript.utf8.count) / 4
         let base = min(max(Int((estimatedTokens * 1.5).rounded(.up)) + 256, 256), 4096)
         let lowered = model.lowercased()
-        let reasoningHeadroom = reasoningModelPrefixes.contains { lowered.hasPrefix($0) } ? 4096 : 0
-        return base + reasoningHeadroom
+        let isOpenAIReasoning = reasoningModelPrefixes.contains { lowered.hasPrefix($0) }
+        let thinkingHeadroom = isOpenAIReasoning || anthropicThinksByDefault(model) ? 4096 : 0
+        return base + thinkingHeadroom
     }
 }
 

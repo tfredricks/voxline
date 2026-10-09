@@ -120,6 +120,22 @@ import Foundation
         #expect(e == .refused)
     }
 
+    @Test func refusal_message_with_null_content_throws_refused() async {
+        let e = await cleanupError(forBody: #"{"choices":[{"message":{"content":null,"refusal":"I can't help with that."},"finish_reason":"stop"}]}"#)
+        #expect(e == .refused)
+    }
+
+    @Test func null_refusal_does_not_mask_the_content() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"choices":[{"message":{"content":"fine","refusal":null},"finish_reason":"stop"}]}"#.data(using: .utf8)!,
+            status: 200
+        )
+        let client = OpenAIClient(apiKey: "k", http: mock)
+        let out = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+        #expect(out == "fine")
+    }
+
     @Test func null_content_with_stop_throws_badResponseShape() async {
         let e = await cleanupError(forBody: #"{"choices":[{"message":{"role":"assistant","content":null},"finish_reason":"stop"}]}"#)
         #expect(e == .badResponseShape(reason: "empty message content"))

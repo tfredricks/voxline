@@ -85,4 +85,23 @@ import Foundation
             #expect(LLMRequest.cleanupBudget(transcript: "", model: model) == 256, "\(model)")
         }
     }
+
+    @Test func anthropic_thinks_by_default_for_the_five_family_fable_and_mythos() {
+        for model in ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1", "claude-mythos-5-1", "CLAUDE-OPUS-5"] {
+            #expect(LLMRequest.anthropicThinksByDefault(model), "\(model)")
+        }
+    }
+
+    @Test func anthropic_does_not_think_by_default_for_older_models() {
+        for model in ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-8", "claude-3-5-haiku-latest"] {
+            #expect(!LLMRequest.anthropicThinksByDefault(model), "\(model)")
+        }
+    }
+
+    @Test func cleanup_budget_adds_headroom_for_anthropic_models_that_think_by_default() {
+        #expect(LLMRequest.cleanupBudget(transcript: "", model: "claude-sonnet-5-5") == 256 + 4096)
+        let long = String(repeating: "a", count: 20_000)
+        #expect(LLMRequest.cleanupBudget(transcript: long, model: "claude-fable-5-1") == 8192)
+        #expect(LLMRequest.cleanupBudget(transcript: "", model: "claude-haiku-4-5") == 256)
+    }
 }

@@ -26,7 +26,11 @@ struct AnthropicClient: LLMClient {
             "system": request.systemPrompt,
             "messages": [["role": "user", "content": request.userPrompt]]
         ]
-        if let t = request.temperature { body["temperature"] = t }
+        if LLMRequest.anthropicThinksByDefault(request.model) {
+            body["output_config"] = ["effort": "low"]
+        } else if let t = request.temperature {
+            body["temperature"] = t
+        }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         AppLog.llm.debug("anthropic POST model=\(request.model)")
