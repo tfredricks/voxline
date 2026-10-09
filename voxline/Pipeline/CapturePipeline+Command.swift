@@ -136,13 +136,15 @@ extension CapturePipeline {
         return .success(ResolvedEditContext(context: context, selectionFromCopy: true))
     }
 
-    /// Cmd+C, after `trigger` is released and after any earlier paste has put
-    /// the user's clipboard back: snapshotting voxline's own promised item
-    /// would later restore pasted text over the user's clipboard. Nil once a
-    /// cancel or a newer run has taken over.
+    /// Cmd+C, once any earlier paste has put the user's clipboard back
+    /// (snapshotting voxline's own promised item would later restore pasted
+    /// text over the user's clipboard) and then `trigger` is released, so the
+    /// gate is fresh right before the copy. Nil once a cancel or a newer run
+    /// has taken over.
     private func copySelection(trigger: ModifierFamilies, generation: UInt64) async -> String? {
-        try? await releaseGate.wait(for: trigger)
         await inserter.waitForClipboardRestore()
+        guard generation == self.generation, !Task.isCancelled else { return nil }
+        try? await releaseGate.wait(for: trigger)
         guard generation == self.generation, !Task.isCancelled else { return nil }
         return await selectionSnapshot.readSelection()
     }
@@ -204,9 +206,10 @@ extension CapturePipeline {
         state.isCancellable = false
         let isPreset = run.kind == .preset
         let plan = EditPlanner.plan(result: result, context: target.context, isPreset: isPreset)
+        let action = isPreset ? CommandAction.replaceSelection : result.action
         let performed = PerformedEdit(
-            request: request, target: target, run: run, llmMs: llmMs,
-            action: (isPreset ? CommandAction.replaceSelection : result.action).rawValue
+            request: request, target: target, run: run, llmMs: llmMs, action: action.rawValue,
+            fullRewrite: action == .rewrite ? EditPlanner.stripMarkers(result.text) : nil
         )
         await act(plan, performed, generation: generation)
     }
@@ -217,7 +220,12 @@ extension CapturePipeline {
         let run: CommandRun
         let llmMs: Int
         let action: String
+        /// A rewrite's complete new text. A rewrite inserts only its hunk, but
+        /// a hunk on the clipboard is useless for ⌘V, so a copy takes this.
+        let fullRewrite: String?
         var context: EditContext { target.context }
+
+        func clipboardText(for inserted: String) -> String { fullRewrite ?? inserted }
     }
 
     private func act(_ plan: PlannedEdit, _ edit: PerformedEdit, generation: UInt64) async {
@@ -294,14 +302,23 @@ extension CapturePipeline {
             resetIdle()
             showToast(Self.toast(for: reason))
         case .notInserted(let reason):
-            transcriptFallback(text)
-            recordCommandMetrics(edit, insertMs: 0, strategy: .copy, text: text)
-            recordCommandHistory(text, edit)
-            resetIdle()
-            showToast(Self.toast(for: reason))
+            copyInstead(text, edit, toast: Self.toast(for: reason))
+        case .failed(.accessibilityNotGranted):
+            setError(TextInsertionError.accessibilityNotGranted.errorDescription!, permissions: true)
         case .failed(let error):
-            setError(error.errorDescription ?? "Text insertion failed.", permissions: error == .accessibilityNotGranted)
+            AppLog.pipeline.info("command: insert failed, copied instead: \(error.errorDescription ?? "unknown", privacy: .public)")
+            copyInstead(text, edit, toast: "Couldn't edit in place — copied, ⌘V to apply")
         }
+    }
+
+    /// History keeps the inserted text (a rewrite's hunk, never field text);
+    /// the clipboard gets what ⌘V should apply.
+    private func copyInstead(_ text: String, _ edit: PerformedEdit, toast: String) {
+        transcriptFallback(edit.clipboardText(for: text))
+        recordCommandMetrics(edit, insertMs: 0, strategy: .copy, text: text)
+        recordCommandHistory(text, edit)
+        resetIdle()
+        showToast(toast)
     }
 
     // MARK: - History and metrics

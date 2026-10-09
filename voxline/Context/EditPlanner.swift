@@ -13,8 +13,12 @@ enum PlannedEdit: Equatable {
 enum EditPlanner {
     static let markers = [CommandPrompt.cursorMarker, CommandPrompt.selectionStart, CommandPrompt.selectionEnd, CommandPrompt.cutMarker]
 
+    static func stripMarkers(_ text: String) -> String {
+        markers.reduce(text) { $0.replacingOccurrences(of: $1, with: "") }
+    }
+
     static func plan(result: CommandResult, context: EditContext, isPreset: Bool) -> PlannedEdit {
-        let text = markers.reduce(result.text) { $0.replacingOccurrences(of: $1, with: "") }
+        let text = stripMarkers(result.text)
         let action: CommandAction = isPreset ? .replaceSelection : result.action
 
         guard context.isEditable else {

@@ -308,7 +308,7 @@ import Testing
         let h = makeHarness(reader: .needingCopy(), copies: ["quoted"], gate: gate, log: log)
         await runCommand(h)
 
-        #expect(Array(log.read().prefix(4)) == ["held", "clipboard", "copy", "command"])
+        #expect(Array(log.read().prefix(4)) == ["clipboard", "held", "copy", "command"])
         let request = try #require(h.llm.commandRequests.first)
         #expect(request.context.selection == SelectionInfo(text: "quoted", range: nil))
         #expect(request.context.needsCopyFallback == false)
@@ -366,6 +366,39 @@ import Testing
         #expect(h.copies.reads.read() == 0)
         #expect(h.llm.commandRequests.isEmpty)
         #expect(h.inserter.calls.isEmpty)
+        #expect(h.state.status == .idle)
+        #expect(h.state.toastMessage == "Cancelled")
+    }
+
+    @Test func esc_during_a_held_modifier_wait_never_force_clears() async {
+        let clock = ManualClock()
+        let clears = LockedBox(0)
+        let polls = LockedBox(0)
+        var gate = ModifierReleaseGate()
+        gate.flagsState = {
+            polls.mutate { $0 += 1 }
+            return .maskAlternate
+        }
+        gate.forceClear = { clears.mutate { $0 += 1 } }
+        gate.sleep = { @MainActor in try await clock.sleep($0) }
+        let h = makeHarness(reader: .needingCopy(), copies: ["quoted"], gate: gate)
+        h.session.holdFinish = true
+        h.session.ignoresCancel = true
+        defer { h.session.releaseFinish() }
+        h.pipe.startRecording(kind: .command)
+        let finalize = Task { await h.pipe.finalizeRecording() }
+        #expect(await eventually { clock.pendingCount == 1 })
+        #expect(polls.read() >= 1)
+
+        h.pipe.cancel()
+        #expect(await finishes(finalize, within: .milliseconds(500)))
+        await clock.advance(by: .seconds(5))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(clears.read() == 0)
+        #expect(clock.pendingCount == 0)
+        #expect(h.copies.reads.read() == 0)
+        #expect(h.llm.commandRequests.isEmpty)
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
     }
@@ -535,6 +568,46 @@ import Testing
         #expect(h.inserter.calls.isEmpty)
     }
 
+    @Test(arguments: [
+        TextInsertionError.pasteVerificationFailed,
+        .allStrategiesFailed(["Accessibility write rejected", "Typing produced no change"]),
+        .secureFieldUnsupported,
+    ])
+    func failed_insert_copies_instead(error: TextInsertionError) async throws {
+        let h = makeHarness(reader: reader(Self.notesContext(selecting: Self.cat)))
+        answer(h, .replaceSelection, "dog")
+        h.inserter.outcomes = [.failed(error)]
+        await runCommand(h)
+
+        #expect(h.copied.read() == ["dog"])
+        #expect(h.state.toastMessage == "Couldn't edit in place — copied, ⌘V to apply")
+        #expect(h.state.status == .idle)
+        let row = try #require(h.pipe.metrics.items.first)
+        #expect(row.insertStrategy == .copy)
+        #expect(row.insertMs == 0)
+        #expect(row.editAction == "replace_selection")
+        #expect(h.history.items.first?.cleanedText == "dog")
+        #expect(h.history.items.first?.rawTranscript == Self.instruction)
+    }
+
+    @Test(arguments: [
+        InsertOutcome.notInserted(.fieldChanged),
+        .notInserted(.cannotTarget),
+        .failed(.pasteVerificationFailed),
+    ])
+    func a_rewrite_that_cannot_land_copies_the_whole_rewritten_text(outcome: InsertOutcome) async throws {
+        let h = makeHarness(reader: reader(Self.notesContext()))
+        answer(h, .rewrite, "\(CommandPrompt.cutMarker)the dog sat\(CommandPrompt.cursorMarker)")
+        h.inserter.outcomes = [outcome]
+        await runCommand(h)
+
+        #expect(h.inserter.calls.first?.text == "dog")
+        #expect(h.copied.read() == ["the dog sat"])
+        #expect(h.history.items.first?.cleanedText == "dog")
+        #expect(try #require(h.pipe.metrics.items.first).insertStrategy == .copy)
+        #expect(h.state.status == .idle)
+    }
+
     @Test func insert_failure_is_phase_2s_error_path() async {
         let h = makeHarness(reader: reader(Self.notesContext(selecting: Self.cat)))
         h.inserter.outcomes = [.failed(.accessibilityNotGranted)]
@@ -701,7 +774,7 @@ import Testing
         let h = makeHarness(reader: .needingCopy(), copies: ["quoted"], gate: gate, log: log)
         await h.pipe.runPreset(Self.makeConcise)
 
-        #expect(Array(log.read().prefix(4)) == ["held", "clipboard", "copy", "command"])
+        #expect(Array(log.read().prefix(4)) == ["clipboard", "held", "copy", "command"])
         #expect(h.llm.commandRequests.first?.context.selection == SelectionInfo(text: "quoted", range: nil))
         let call = try #require(h.inserter.calls.first)
         #expect(call.target == .liveSelection)

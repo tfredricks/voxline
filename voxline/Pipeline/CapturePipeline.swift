@@ -55,6 +55,10 @@ final class CapturePipeline {
     private(set) var generation: UInt64 = 0
     private var live: LiveSession?
     private var startTasks: StartTasks?
+    /// The command recording's EditContext and Cmd+C fallback, started at
+    /// release. `cancel()` cancels it so a cancelled run stops waiting on
+    /// the release gate and never force-clears modifiers.
+    private var copyFallbackTask: Task<Result<ResolvedEditContext, EditContextRefusal>, Never>?
     /// The finalize or retry in flight, and the signal its caller awaits.
     /// `cancel()` cancels the one and fires the other, so the caller returns
     /// at once even when the engine or the provider ignores cancellation.
@@ -305,6 +309,8 @@ final class CapturePipeline {
             generation &+= 1
             finalizeWork?.cancel()
             finalizeWork = nil
+            copyFallbackTask?.cancel()
+            copyFallbackTask = nil
             live?.discard()
             if let dictation = cancellableDictation, !dictation.transcript.isEmpty {
                 historyStore.record(cleanedText: dictation.transcript, rawTranscript: dictation.transcript, mode: dictation.mode, context: dictation.context)
@@ -331,8 +337,7 @@ final class CapturePipeline {
         default:
             return
         }
-        generation &+= 1
-        let generation = self.generation
+        let generation = beginRun()
         state.status = .thinking
         state.pipelinePhase = .cleaning
         state.isCancellable = true
@@ -367,6 +372,7 @@ final class CapturePipeline {
         defer {
             startTasks?.cancel()
             commandContext?.cancel()
+            if let commandContext, copyFallbackTask == commandContext { copyFallbackTask = nil }
         }
         guard generation == self.generation else { return }
         let router = live.router
@@ -389,6 +395,7 @@ final class CapturePipeline {
 
         if let editContext = startTasks?.editContext {
             commandContext = resolveEditContext(editContext, trigger: chords().command?.families ?? [], generation: generation)
+            copyFallbackTask = commandContext
         }
 
         guard let transcription = await transcribe(live, generation: generation) else { return }
