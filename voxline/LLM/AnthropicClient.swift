@@ -7,31 +7,37 @@ struct AnthropicClient: LLMClient {
 
     let apiKey: String
     let http: HTTPClient
+    let support: StructuredOutputSupport
 
-    init(apiKey: String, http: HTTPClient = URLSessionHTTPClient()) {
+    init(apiKey: String, http: HTTPClient = URLSessionHTTPClient(), structuredOutput: StructuredOutputSupport = .shared) {
         self.apiKey = apiKey
         self.http = http
+        self.support = structuredOutput
     }
 
-    func cleanup(_ request: LLMRequest) async throws -> String {
+    /// Sends `request`, with `output_config.format` when it carries a
+    /// structured output the model hasn't rejected. A 400 naming the field
+    /// marks the model in `support` and retries once prompt-only.
+    func complete(_ request: LLMRequest) async throws -> String {
+        let sendsFormat = request.structuredOutput != nil && !support.rejects(request.model)
+        do {
+            return try await send(request)
+        } catch let error as LLMError where sendsFormat && StructuredOutputSupport.isStructuredOutputRejection(error) {
+            support.markRejected(request.model)
+            AppLog.llm.notice("\(request.model, privacy: .public) rejected structured output; retrying prompt-only")
+            var promptOnly = request
+            promptOnly.structuredOutput = nil
+            return try await send(promptOnly)
+        }
+    }
+
+    private func send(_ request: LLMRequest) async throws -> String {
         var req = URLRequest(url: Self.endpoint)
         req.httpMethod = "POST"
         req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         req.setValue(Self.apiVersion, forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "content-type")
-
-        var body: [String: Any] = [
-            "model": request.model,
-            "max_tokens": request.maxOutputTokens,
-            "system": request.systemPrompt,
-            "messages": [["role": "user", "content": request.userPrompt]]
-        ]
-        if LLMRequest.anthropicThinksByDefault(request.model) {
-            body["output_config"] = ["effort": "low"]
-        } else if let t = request.temperature {
-            body["temperature"] = t
-        }
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        req.httpBody = try JSONSerialization.data(withJSONObject: body(for: request))
 
         AppLog.llm.debug("anthropic POST model=\(request.model)")
         let (data, response): (Data, HTTPURLResponse)
@@ -44,6 +50,23 @@ struct AnthropicClient: LLMClient {
         try mapHTTPStatus(response, body: data, provider: .anthropic)
 
         return try parseTextBlocks(from: data)
+    }
+
+    private func body(for request: LLMRequest) throws -> [String: Any] {
+        var body: [String: Any] = [
+            "model": request.model,
+            "max_tokens": request.maxOutputTokens,
+            "system": request.systemPrompt,
+            "messages": [["role": "user", "content": request.userPrompt]]
+        ]
+        var outputConfig: [String: Any] = [:]
+        if LLMRequest.anthropicThinksByDefault(request.model) { outputConfig["effort"] = "low" }
+        if let structured = request.structuredOutput, !support.rejects(request.model) {
+            outputConfig["format"] = ["type": "json_schema", "schema": try structured.schemaObject()]
+        }
+        if !outputConfig.isEmpty { body["output_config"] = outputConfig }
+        if let t = request.temperature, !LLMRequest.anthropicThinksByDefault(request.model) { body["temperature"] = t }
+        return body
     }
 
     private func parseTextBlocks(from data: Data) throws -> String {

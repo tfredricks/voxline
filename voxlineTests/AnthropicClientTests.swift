@@ -12,7 +12,7 @@ import Foundation
         )
         let client = AnthropicClient(apiKey: "sk-test", http: mock)
 
-        _ = try await client.cleanup(LLMRequest(model: "claude-haiku-4-5", systemPrompt: "sys", userPrompt: "usr", temperature: nil))
+        _ = try await client.complete(LLMRequest(model: "claude-haiku-4-5", systemPrompt: "sys", userPrompt: "usr", temperature: nil))
 
         let req = try #require(mock.capturedRequest)
         #expect(req.httpMethod == "POST")
@@ -30,7 +30,7 @@ import Foundation
         )
         let client = AnthropicClient(apiKey: "k", http: mock)
 
-        _ = try await client.cleanup(LLMRequest(model: "claude-haiku-4-5", systemPrompt: "S", userPrompt: "U", temperature: 0.4))
+        _ = try await client.complete(LLMRequest(model: "claude-haiku-4-5", systemPrompt: "S", userPrompt: "U", temperature: 0.4))
 
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         #expect(body["model"] as? String == "claude-haiku-4-5")
@@ -51,7 +51,7 @@ import Foundation
         )
         let client = AnthropicClient(apiKey: "k", http: mock)
 
-        _ = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+        _ = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         #expect(body["temperature"] == nil)
     }
@@ -64,7 +64,7 @@ import Foundation
         )
         let client = AnthropicClient(apiKey: "k", http: mock)
 
-        _ = try await client.cleanup(LLMRequest(model: "claude-sonnet-5-5", systemPrompt: "s", userPrompt: "u", temperature: 0.3))
+        _ = try await client.complete(LLMRequest(model: "claude-sonnet-5-5", systemPrompt: "s", userPrompt: "u", temperature: 0.3))
 
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         let outputConfig = try #require(body["output_config"] as? [String: Any])
@@ -81,7 +81,7 @@ import Foundation
         )
         let client = AnthropicClient(apiKey: "k", http: mock)
 
-        _ = try await client.cleanup(LLMRequest(model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: 0.3))
+        _ = try await client.complete(LLMRequest(model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: 0.3))
 
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         #expect(body["temperature"] as? Double == 0.3)
@@ -96,7 +96,7 @@ import Foundation
             status: 200
         )
         let client = AnthropicClient(apiKey: "k", http: mock)
-        let out = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+        let out = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
         #expect(out == "hello world")
     }
 
@@ -105,7 +105,7 @@ import Foundation
         mock.stubResponse = (data: Data(json.utf8), status: 200)
         let client = AnthropicClient(apiKey: "k", http: mock)
         do {
-            _ = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+            _ = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
             return nil
         } catch let e as LLMError {
             return e
@@ -131,7 +131,7 @@ import Foundation
             status: 200
         )
         let client = AnthropicClient(apiKey: "k", http: mock)
-        let out = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+        let out = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
         #expect(out == "done")
     }
 
@@ -152,7 +152,7 @@ import Foundation
             status: 200
         )
         let client = AnthropicClient(apiKey: "k", http: mock)
-        _ = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil, maxOutputTokens: 406))
+        _ = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil, maxOutputTokens: 406))
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         #expect(body["max_tokens"] as? Int == 406)
     }
@@ -162,7 +162,7 @@ import Foundation
         mock.stubResponse = (data: Data("nope".utf8), status: 401)
         let client = AnthropicClient(apiKey: "k", http: mock)
         do {
-            _ = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+            _ = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
             Issue.record("expected throw")
         } catch let e as LLMError {
             #expect(e == .invalidAPIKey)
@@ -174,7 +174,7 @@ import Foundation
         mock.stubResponse = (data: Data(), status: 429)
         let client = AnthropicClient(apiKey: "k", http: mock)
         do {
-            _ = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+            _ = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
             Issue.record("expected throw")
         } catch let e as LLMError {
             #expect(e == .rateLimited)
@@ -186,7 +186,7 @@ import Foundation
         mock.stubResponse = (data: Data("kaboom".utf8), status: 503)
         let client = AnthropicClient(apiKey: "k", http: mock)
         do {
-            _ = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+            _ = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
             Issue.record("expected throw")
         } catch let e as LLMError {
             switch e {
@@ -197,6 +197,276 @@ import Foundation
                 Issue.record("expected .badStatus, got \(e)")
             }
         }
+    }
+
+    // MARK: Structured output
+
+    private static let okBody = Data(#"{"content":[{"type":"text","text":"{\"action\":\"insert\",\"text\":\"hi\"}"}]}"#.utf8)
+    private static let formatRejection = Data(#"{"error":{"message":"output_config.format is not supported"}}"#.utf8)
+
+    private func requestBody(_ request: URLRequest?) throws -> [String: Any] {
+        let data = try #require(request?.httpBody)
+        return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    private func expectCommandSchema(_ format: [String: Any]) throws {
+        #expect(format["type"] as? String == "json_schema")
+        let schema = try #require(format["schema"] as? NSDictionary)
+        let expected = try #require(try StructuredOutput.commandEdit.schemaObject() as? NSDictionary)
+        #expect(schema.isEqual(expected))
+    }
+
+    @Test func thinking_model_with_structured_output_merges_effort_and_format() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Self.okBody, status: 200)
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: StructuredOutputSupport())
+
+        _ = try await client.complete(LLMRequest(
+            model: "claude-sonnet-5-5", systemPrompt: "s", userPrompt: "u", temperature: nil,
+            maxOutputTokens: 12_288, structuredOutput: .commandEdit
+        ))
+
+        let body = try requestBody(mock.capturedRequest)
+        let outputConfig = try #require(body["output_config"] as? [String: Any])
+        #expect(Set(outputConfig.keys) == ["effort", "format"])
+        #expect(outputConfig["effort"] as? String == "low")
+        try expectCommandSchema(try #require(outputConfig["format"] as? [String: Any]))
+        #expect(body["temperature"] == nil)
+        #expect(body["thinking"] == nil)
+        #expect(body["tools"] == nil)
+        #expect(body["tool_choice"] == nil)
+        #expect(mock.capturedRequest?.value(forHTTPHeaderField: "anthropic-beta") == nil)
+    }
+
+    @Test func haiku_4_5_with_structured_output_sends_format_without_effort() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Self.okBody, status: 200)
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: StructuredOutputSupport())
+
+        _ = try await client.complete(LLMRequest(
+            model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: nil,
+            structuredOutput: .commandEdit
+        ))
+
+        let body = try requestBody(mock.capturedRequest)
+        let outputConfig = try #require(body["output_config"] as? [String: Any])
+        #expect(Set(outputConfig.keys) == ["format"])
+        try expectCommandSchema(try #require(outputConfig["format"] as? [String: Any]))
+        #expect(body["temperature"] == nil)
+    }
+
+    @Test func haiku_4_5_with_structured_output_keeps_a_requested_temperature() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Self.okBody, status: 200)
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: StructuredOutputSupport())
+
+        _ = try await client.complete(LLMRequest(
+            model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: 0.2,
+            structuredOutput: .commandEdit
+        ))
+
+        let body = try requestBody(mock.capturedRequest)
+        #expect(body["temperature"] as? Double == 0.2)
+        #expect((body["output_config"] as? [String: Any])?["format"] != nil)
+    }
+
+    @Test func haiku_4_5_without_structured_output_sends_no_output_config_and_keeps_temperature() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Self.okBody, status: 200)
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: StructuredOutputSupport())
+
+        _ = try await client.complete(LLMRequest(model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: 0.3))
+
+        let body = try requestBody(mock.capturedRequest)
+        #expect(body["output_config"] == nil)
+        #expect(body["temperature"] as? Double == 0.3)
+    }
+
+    @Test func structured_output_json_comes_back_from_the_text_block() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Self.okBody, status: 200)
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: StructuredOutputSupport())
+
+        let out = try await client.complete(LLMRequest(
+            model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: nil,
+            structuredOutput: .commandEdit
+        ))
+
+        #expect(out == #"{"action":"insert","text":"hi"}"#)
+    }
+
+    @Test func format_rejection_retries_once_prompt_only_and_remembers_the_model() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponses = [(Self.formatRejection, 400), (Self.okBody, 200)]
+        let support = StructuredOutputSupport()
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: support)
+
+        let out = try await client.complete(LLMRequest(
+            model: "claude-sonnet-5-5", systemPrompt: "s", userPrompt: "u", temperature: nil,
+            maxOutputTokens: 12_288, structuredOutput: .commandEdit
+        ))
+
+        #expect(out == #"{"action":"insert","text":"hi"}"#)
+        #expect(mock.capturedRequests.count == 2)
+        let first = try requestBody(mock.capturedRequests.first)
+        #expect((first["output_config"] as? [String: Any])?["format"] != nil)
+        let second = try requestBody(mock.capturedRequests.last)
+        let secondConfig = try #require(second["output_config"] as? [String: Any])
+        #expect(secondConfig["format"] == nil)
+        #expect(secondConfig["effort"] as? String == "low")
+        #expect(second["max_tokens"] as? Int == 12_288)
+        #expect(second["system"] as? String == "s")
+        #expect(support.rejects("claude-sonnet-5-5"))
+    }
+
+    @Test func format_rejection_on_haiku_retries_with_no_output_config() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponses = [(Self.formatRejection, 400), (Self.okBody, 200)]
+        let support = StructuredOutputSupport()
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: support)
+
+        _ = try await client.complete(LLMRequest(
+            model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: nil,
+            structuredOutput: .commandEdit
+        ))
+
+        #expect(mock.capturedRequests.count == 2)
+        #expect(try requestBody(mock.capturedRequests.last)["output_config"] == nil)
+        #expect(support.rejects("claude-haiku-4-5"))
+    }
+
+    @Test func a_second_failure_after_the_prompt_only_retry_is_thrown() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponses = [(Self.formatRejection, 400), (Data("still bad".utf8), 400)]
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: StructuredOutputSupport())
+
+        do {
+            _ = try await client.complete(LLMRequest(
+                model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: nil,
+                structuredOutput: .commandEdit
+            ))
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .badStatus(code: 400, body: "still bad"))
+        }
+        #expect(mock.capturedRequests.count == 2)
+    }
+
+    @Test func unrelated_400_throws_after_one_request_and_does_not_mark_the_model() async throws {
+        let mock = MockHTTPClient()
+        let unrelated = #"{"error":{"message":"messages: at least one message is required"}}"#
+        mock.stubResponses = [(Data(unrelated.utf8), 400), (Self.okBody, 200)]
+        let support = StructuredOutputSupport()
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: support)
+
+        do {
+            _ = try await client.complete(LLMRequest(
+                model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: nil,
+                structuredOutput: .commandEdit
+            ))
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .badStatus(code: 400, body: unrelated))
+        }
+        #expect(mock.capturedRequests.count == 1)
+        #expect(!support.rejects("claude-haiku-4-5"))
+    }
+
+    @Test func format_rejection_without_structured_output_does_not_retry() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponses = [(Self.formatRejection, 400), (Self.okBody, 200)]
+        let support = StructuredOutputSupport()
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: support)
+
+        do {
+            _ = try await client.complete(LLMRequest(model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: nil))
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .badStatus(code: 400, body: String(decoding: Self.formatRejection, as: UTF8.self)))
+        }
+        #expect(mock.capturedRequests.count == 1)
+        #expect(!support.rejects("claude-haiku-4-5"))
+    }
+
+    @Test func a_model_already_marked_sends_no_format_and_makes_one_request() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponses = [(Self.formatRejection, 400), (Self.okBody, 200)]
+        let support = StructuredOutputSupport()
+        support.markRejected("claude-sonnet-5-5")
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: support)
+
+        do {
+            _ = try await client.complete(LLMRequest(
+                model: "claude-sonnet-5-5", systemPrompt: "s", userPrompt: "u", temperature: nil,
+                structuredOutput: .commandEdit
+            ))
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .badStatus(code: 400, body: String(decoding: Self.formatRejection, as: UTF8.self)))
+        }
+        #expect(mock.capturedRequests.count == 1)
+        let outputConfig = try #require(try requestBody(mock.capturedRequest)["output_config"] as? [String: Any])
+        #expect(Set(outputConfig.keys) == ["effort"])
+    }
+
+    @Test func a_model_already_marked_succeeds_prompt_only_in_one_request() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Self.okBody, status: 200)
+        let support = StructuredOutputSupport()
+        support.markRejected("claude-haiku-4-5")
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: support)
+
+        _ = try await client.complete(LLMRequest(
+            model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: nil,
+            structuredOutput: .commandEdit
+        ))
+
+        #expect(mock.capturedRequests.count == 1)
+        #expect(try requestBody(mock.capturedRequest)["output_config"] == nil)
+    }
+
+    @Test func refusal_with_structured_output_maps_to_refused_before_parsing() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Data(#"{"content":[{"type":"text","text":"I can't help with that."}],"stop_reason":"refusal"}"#.utf8), status: 200)
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: StructuredOutputSupport())
+
+        do {
+            _ = try await client.complete(LLMRequest(
+                model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: nil,
+                structuredOutput: .commandEdit
+            ))
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .refused)
+        }
+    }
+
+    @Test func truncation_with_structured_output_maps_to_truncated() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Data(#"{"content":[{"type":"text","text":"{\"action\":\"ins"}],"stop_reason":"max_tokens"}"#.utf8), status: 200)
+        let client = AnthropicClient(apiKey: "k", http: mock, structuredOutput: StructuredOutputSupport())
+
+        do {
+            _ = try await client.complete(LLMRequest(
+                model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: nil,
+                structuredOutput: .commandEdit
+            ))
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .truncated)
+        }
+        #expect(mock.capturedRequests.count == 1)
+    }
+
+    @Test func cleanup_alias_forwards_to_complete() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Data(#"{"content":[{"type":"text","text":"aliased"}]}"#.utf8), status: 200)
+        let client = AnthropicClient(apiKey: "k", http: mock)
+
+        let out = try await client.cleanup(LLMRequest(model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: nil))
+
+        #expect(out == "aliased")
+        #expect(mock.capturedRequests.count == 1)
     }
 }
 

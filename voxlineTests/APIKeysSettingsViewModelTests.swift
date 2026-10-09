@@ -180,7 +180,7 @@ import Foundation
 private struct StubClient: LLMClient {
     enum Mode { case ok, fail(LLMError) }
     let mode: Mode
-    func cleanup(_ request: LLMRequest) async throws -> String {
+    func complete(_ request: LLMRequest) async throws -> String {
         switch mode {
         case .ok: return "ok"
         case .fail(let err): throw err

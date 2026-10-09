@@ -438,4 +438,151 @@ import Foundation
         #expect(out == "   \n ")
         #expect(mock.capturedRequest == nil)
     }
+
+    // MARK: Command
+
+    private func commandRequest(model: String = "claude-haiku-4-5") -> CommandRequest {
+        let field = FieldWindowText(text: "Hello", range: UTF16Range(location: 0, length: 5), fullLength: 5)
+        let context = EditContext(
+            appName: "Notes", bundleID: "com.apple.Notes", windowTitle: nil, role: "AXTextArea", subrole: nil,
+            isEditable: true, element: nil, field: field, selection: nil, cursor: 5, needsCopyFallback: false
+        )
+        return CommandRequest(
+            instruction: "say hi", context: context, actions: [.insert, .rewrite],
+            vocabulary: [], model: model, includesField: true
+        )
+    }
+
+    private func commandService(provider: LLMProvider, key: String?, http: MockHTTPClient) throws -> LLMService {
+        var settings = AppSettings(defaults: defaultsSuite())
+        settings.llmProvider = provider
+        settings.llmModel = provider == .anthropic ? "claude-sonnet-4-5" : "gpt-4o-mini"
+        let kc = InMemoryKeychain()
+        if let key {
+            try kc.set(key, forKey: provider == .anthropic ? KeychainAccount.anthropic : KeychainAccount.openai)
+        }
+        return LLMService(settings: settings, keychain: kc, http: http)
+    }
+
+    private static func anthropicText(_ text: String, stopReason: String = "end_turn") -> Data {
+        let envelope: [String: Any] = ["content": [["type": "text", "text": text]], "stop_reason": stopReason]
+        return try! JSONSerialization.data(withJSONObject: envelope)
+    }
+
+    @Test func command_sends_structured_request_and_parses_result() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"content":[{"type":"text","text":"{\"action\":\"insert\",\"text\":\"hi\"}"}]}"#.data(using: .utf8)!,
+            status: 200
+        )
+        let service = try commandService(provider: .anthropic, key: "k", http: mock)
+        let request = commandRequest()
+
+        let result = try await service.command(request)
+
+        #expect(result == CommandResult(action: .insert, text: "hi"))
+        #expect(mock.capturedRequest?.url?.host == "api.anthropic.com")
+        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
+        #expect(body["model"] as? String == "claude-haiku-4-5")
+        #expect(body["system"] as? String == CommandPrompt.system)
+        #expect(body["max_tokens"] as? Int == 8192)
+        #expect(body["temperature"] == nil)
+        let messages = try #require(body["messages"] as? [[String: Any]])
+        let user = try #require(messages.first?["content"] as? String)
+        #expect(user.hasPrefix("INSTRUCTION:"))
+        #expect(user == CommandPrompt.user(request))
+        let outputConfig = try #require(body["output_config"] as? [String: Any])
+        let format = try #require(outputConfig["format"] as? [String: Any])
+        #expect(format["type"] as? String == "json_schema")
+        #expect(outputConfig["effort"] == nil)
+    }
+
+    @Test func command_gives_thinking_models_the_headroom_and_low_effort() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Self.anthropicText(#"{"action":"rewrite","text":"Hi"}"#), status: 200)
+        let service = try commandService(provider: .anthropic, key: "k", http: mock)
+
+        let result = try await service.command(commandRequest(model: "claude-sonnet-5-5"))
+
+        #expect(result == CommandResult(action: .rewrite, text: "Hi"))
+        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
+        #expect(body["max_tokens"] as? Int == 12_288)
+        let outputConfig = try #require(body["output_config"] as? [String: Any])
+        #expect(outputConfig["effort"] as? String == "low")
+        #expect(outputConfig["format"] != nil)
+        #expect(body["temperature"] == nil)
+    }
+
+    @Test func command_routes_to_openai_with_a_strict_response_format() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: #"{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"insert\",\"text\":\"hi\"}"},"finish_reason":"stop"}]}"#.data(using: .utf8)!,
+            status: 200
+        )
+        let service = try commandService(provider: .openai, key: "k", http: mock)
+
+        let result = try await service.command(commandRequest(model: "gpt-5-mini"))
+
+        #expect(result == CommandResult(action: .insert, text: "hi"))
+        #expect(mock.capturedRequest?.url?.host == "api.openai.com")
+        let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
+        #expect(body["model"] as? String == "gpt-5-mini")
+        #expect(body["max_completion_tokens"] as? Int == 12_288)
+        #expect(body["temperature"] == nil)
+        let responseFormat = try #require(body["response_format"] as? [String: Any])
+        let jsonSchema = try #require(responseFormat["json_schema"] as? [String: Any])
+        #expect(jsonSchema["name"] as? String == "edit")
+        #expect(jsonSchema["strict"] as? Bool == true)
+    }
+
+    @Test func command_without_key_throws_missingAPIKey() async throws {
+        let mock = MockHTTPClient()
+        let service = try commandService(provider: .anthropic, key: nil, http: mock)
+        do {
+            _ = try await service.command(commandRequest())
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .missingAPIKey)
+        }
+        #expect(mock.capturedRequest == nil)
+    }
+
+    @Test func command_malformed_result_throws_badResponseShape() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Self.anthropicText("Sure! Here is a greeting: hi"), status: 200)
+        let service = try commandService(provider: .anthropic, key: "k", http: mock)
+        do {
+            _ = try await service.command(commandRequest())
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            guard case .badResponseShape = e else {
+                Issue.record("expected .badResponseShape, got \(e)")
+                return
+            }
+        }
+    }
+
+    @Test func command_refusal_throws_refused_before_parsing() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Self.anthropicText("I can't help with that.", stopReason: "refusal"), status: 200)
+        let service = try commandService(provider: .anthropic, key: "k", http: mock)
+        do {
+            _ = try await service.command(commandRequest())
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .refused)
+        }
+    }
+
+    @Test func command_truncation_throws_truncated() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Self.anthropicText(#"{"action":"insert","text":"hel"#, stopReason: "max_tokens"), status: 200)
+        let service = try commandService(provider: .anthropic, key: "k", http: mock)
+        do {
+            _ = try await service.command(commandRequest())
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .truncated)
+        }
+    }
 }

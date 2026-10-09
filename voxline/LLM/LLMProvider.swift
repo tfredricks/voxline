@@ -20,6 +20,19 @@ enum LLMProvider: String, CaseIterable, Codable {
     }
 }
 
+/// A JSON schema the reply must match, sent through each provider's
+/// structured-output field (`output_config.format` / `response_format`).
+struct StructuredOutput: Equatable, Sendable {
+    let name: String
+    let schemaJSON: String
+
+    func schemaObject() throws -> Any {
+        try JSONSerialization.jsonObject(with: Data(schemaJSON.utf8))
+    }
+
+    static let commandEdit = StructuredOutput(name: "edit", schemaJSON: CommandResult.schemaJSON)
+}
+
 /// Provider-agnostic request shape. The LLMService translates this into the
 /// provider-specific JSON inside each client.
 struct LLMRequest: Equatable {
@@ -32,6 +45,10 @@ struct LLMRequest: Equatable {
     /// Default max output tokens for callers that don't size the budget from
     /// their input.
     var maxOutputTokens: Int = 1024
+
+    /// When set, the client asks the provider to constrain the reply to this
+    /// schema, unless `StructuredOutputSupport` has seen the model reject it.
+    var structuredOutput: StructuredOutput? = nil
 
     private static let reasoningModelPrefixes = ["o1", "o3", "o4", "gpt-5"]
     private static let anthropicDefaultThinkingPrefixes = [
@@ -46,17 +63,28 @@ struct LLMRequest: Equatable {
         return anthropicDefaultThinkingPrefixes.contains { lowered.hasPrefix($0) }
     }
 
+    /// Extra output tokens for models that draw hidden reasoning or thinking
+    /// tokens from the same cap: 4,096 for OpenAI reasoning models and Claude
+    /// models that think by default, 0 otherwise.
+    static func thinkingHeadroom(for model: String) -> Int {
+        let lowered = model.lowercased()
+        let isOpenAIReasoning = reasoningModelPrefixes.contains { lowered.hasPrefix($0) }
+        return isOpenAIReasoning || anthropicThinksByDefault(model) ? 4096 : 0
+    }
+
     /// Output budget for transcript cleanup: 1.5x the transcript's estimated
-    /// token count plus 256, clamped to 256...4096. Models that think by
-    /// default draw hidden thinking tokens from the same cap, so they get
-    /// 4,096 more.
+    /// token count plus 256, clamped to 256...4096, plus `thinkingHeadroom`.
     static func cleanupBudget(transcript: String, model: String) -> Int {
         let estimatedTokens = Double(transcript.utf8.count) / 4
         let base = min(max(Int((estimatedTokens * 1.5).rounded(.up)) + 256, 256), 4096)
-        let lowered = model.lowercased()
-        let isOpenAIReasoning = reasoningModelPrefixes.contains { lowered.hasPrefix($0) }
-        let thinkingHeadroom = isOpenAIReasoning || anthropicThinksByDefault(model) ? 4096 : 0
-        return base + thinkingHeadroom
+        return base + thinkingHeadroom(for: model)
+    }
+
+    /// Output budget for a command: 8,192 plus `thinkingHeadroom`. A rewrite
+    /// returns the whole field window, so the budget does not scale with the
+    /// instruction.
+    static func commandBudget(model: String) -> Int {
+        8192 + thinkingHeadroom(for: model)
     }
 }
 
@@ -96,5 +124,10 @@ enum LLMError: Error, LocalizedError {
 
 /// Internal contract every LLM client conforms to. Visible to LLMService.
 protocol LLMClient: Sendable {
-    func cleanup(_ request: LLMRequest) async throws -> String
+    func complete(_ request: LLMRequest) async throws -> String
+}
+
+extension LLMClient {
+    /// Transitional alias; `APIKeysSettingsViewModel` still calls it. Task 10 deletes both.
+    func cleanup(_ request: LLMRequest) async throws -> String { try await complete(request) }
 }

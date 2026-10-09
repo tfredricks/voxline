@@ -187,11 +187,50 @@ struct LLMService: LLMServing {
         }
         #endif
 
-        return try await client.cleanup(request)
+        return try await client.complete(request)
+    }
+
+    /// Runs a spoken or preset command against `request.model` with the
+    /// `{action, text}` schema. Refusal and truncation surface from the
+    /// client before the reply is parsed.
+    func command(_ request: CommandRequest) async throws -> CommandResult {
+        let model = request.model
+        let req = LLMRequest(
+            model: model,
+            systemPrompt: CommandPrompt.system,
+            userPrompt: CommandPrompt.user(request),
+            temperature: nil,
+            maxOutputTokens: LLMRequest.commandBudget(model: model),
+            structuredOutput: .commandEdit
+        )
+
+        let client = try resolveClient()
+
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["VOXLINE_TRACE_LLM"] == "1" {
+            print("""
+
+            ╔══════════════════════════════════════════════════════════════════╗
+            ║ VOXLINE COMMAND REQUEST  provider=\(settings.llmProvider)  model=\(model)
+            ╠══════════════════════════════════════════════════════════════════╣
+            ║ SYSTEM
+            ╚══════════════════════════════════════════════════════════════════╝
+            \(req.systemPrompt)
+            ╔══════════════════════════════════════════════════════════════════╗
+            ║ USER
+            ╚══════════════════════════════════════════════════════════════════╝
+            \(req.userPrompt)
+            ────────────────────────────────────────────────────────────────────
+            """)
+        }
+        #endif
+
+        let raw = try await client.complete(req)
+        return try CommandResultParser.parse(raw)
     }
 
     /// Resolve the configured provider's API key from the Keychain and return a
-    /// ready client. Shared by `cleanup` and `transform`.
+    /// ready client. Shared by `cleanup`, `command`, and `transform`.
     private func resolveClient() throws -> any LLMClient {
         let provider = settings.llmProvider
         let account: String
@@ -229,6 +268,6 @@ struct LLMService: LLMServing {
             maxOutputTokens: 4096
         )
         let client = try resolveClient()
-        return try await client.cleanup(request)
+        return try await client.complete(request)
     }
 }

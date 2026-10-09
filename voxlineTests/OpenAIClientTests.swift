@@ -13,7 +13,7 @@ import Foundation
         )
         let client = OpenAIClient(apiKey: "sk-openai", http: mock)
 
-        _ = try await client.cleanup(LLMRequest(model: "gpt-4o-mini", systemPrompt: "s", userPrompt: "u", temperature: nil))
+        _ = try await client.complete(LLMRequest(model: "gpt-4o-mini", systemPrompt: "s", userPrompt: "u", temperature: nil))
 
         let req = try #require(mock.capturedRequest)
         #expect(req.httpMethod == "POST")
@@ -30,7 +30,7 @@ import Foundation
         )
         let client = OpenAIClient(apiKey: "k", http: mock)
 
-        _ = try await client.cleanup(LLMRequest(model: "gpt-4o-mini", systemPrompt: "S", userPrompt: "U", temperature: 0.2))
+        _ = try await client.complete(LLMRequest(model: "gpt-4o-mini", systemPrompt: "S", userPrompt: "U", temperature: 0.2))
 
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         #expect(body["model"] as? String == "gpt-4o-mini")
@@ -52,7 +52,7 @@ import Foundation
             status: 200
         )
         let client = OpenAIClient(apiKey: "k", http: mock)
-        let out = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+        let out = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
         #expect(out == "only-this")
     }
 
@@ -61,7 +61,7 @@ import Foundation
         mock.stubResponse = (data: Data(), status: 401)
         let client = OpenAIClient(apiKey: "k", http: mock)
         do {
-            _ = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+            _ = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
             Issue.record("expected throw")
         } catch let e as LLMError {
             #expect(e == .invalidAPIKey)
@@ -76,7 +76,7 @@ import Foundation
         )
         let client = OpenAIClient(apiKey: "k", http: mock)
         do {
-            _ = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+            _ = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
             Issue.record("expected throw")
         } catch let e as LLMError {
             switch e {
@@ -91,7 +91,7 @@ import Foundation
         mock.stubResponse = (data: Data(json.utf8), status: 200)
         let client = OpenAIClient(apiKey: "k", http: mock)
         do {
-            _ = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+            _ = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
             return nil
         } catch let e as LLMError {
             return e
@@ -132,7 +132,7 @@ import Foundation
             status: 200
         )
         let client = OpenAIClient(apiKey: "k", http: mock)
-        let out = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+        let out = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
         #expect(out == "fine")
     }
 
@@ -158,7 +158,7 @@ import Foundation
             status: 200
         )
         let client = OpenAIClient(apiKey: "k", http: mock)
-        let out = try await client.cleanup(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+        let out = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
         #expect(out == "done")
     }
 
@@ -169,8 +169,133 @@ import Foundation
             status: 200
         )
         let client = OpenAIClient(apiKey: "k", http: mock)
-        _ = try await client.cleanup(LLMRequest(model: "gpt-5-mini", systemPrompt: "s", userPrompt: "u", temperature: nil, maxOutputTokens: 4353))
+        _ = try await client.complete(LLMRequest(model: "gpt-5-mini", systemPrompt: "s", userPrompt: "u", temperature: nil, maxOutputTokens: 4353))
         let body = try JSONSerialization.jsonObject(with: try #require(mock.capturedRequest?.httpBody)) as! [String: Any]
         #expect(body["max_completion_tokens"] as? Int == 4353)
+    }
+
+    // MARK: Structured output
+
+    private static let okBody = Data(#"{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"insert\",\"text\":\"hi\"}"},"finish_reason":"stop"}]}"#.utf8)
+    private static let formatRejection = Data(#"{"error":{"message":"Invalid parameter: 'response_format' of type 'json_schema' is not supported with this model.","type":"invalid_request_error","param":"response_format"}}"#.utf8)
+
+    private func requestBody(_ request: URLRequest?) throws -> [String: Any] {
+        let data = try #require(request?.httpBody)
+        return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    private func structuredRequest(model: String = "gpt-4.1-nano") -> LLMRequest {
+        LLMRequest(model: model, systemPrompt: "s", userPrompt: "u", temperature: nil, maxOutputTokens: 8192, structuredOutput: .commandEdit)
+    }
+
+    @Test func structured_output_sends_strict_json_schema_response_format() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Self.okBody, status: 200)
+        let client = OpenAIClient(apiKey: "k", http: mock, structuredOutput: StructuredOutputSupport())
+
+        let out = try await client.complete(structuredRequest())
+
+        #expect(out == #"{"action":"insert","text":"hi"}"#)
+        let body = try requestBody(mock.capturedRequest)
+        let responseFormat = try #require(body["response_format"] as? [String: Any])
+        #expect(responseFormat["type"] as? String == "json_schema")
+        let jsonSchema = try #require(responseFormat["json_schema"] as? [String: Any])
+        #expect(jsonSchema["name"] as? String == "edit")
+        #expect(jsonSchema["strict"] as? Bool == true)
+        let schema = try #require(jsonSchema["schema"] as? NSDictionary)
+        let expected = try #require(try StructuredOutput.commandEdit.schemaObject() as? NSDictionary)
+        #expect(schema.isEqual(expected))
+        #expect(body["temperature"] == nil)
+        #expect(body["max_completion_tokens"] as? Int == 8192)
+    }
+
+    @Test func no_structured_output_sends_no_response_format() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Self.okBody, status: 200)
+        let client = OpenAIClient(apiKey: "k", http: mock, structuredOutput: StructuredOutputSupport())
+
+        _ = try await client.complete(LLMRequest(model: "gpt-4.1-nano", systemPrompt: "s", userPrompt: "u", temperature: 0.2))
+
+        let body = try requestBody(mock.capturedRequest)
+        #expect(body["response_format"] == nil)
+        #expect(body["temperature"] as? Double == 0.2)
+    }
+
+    @Test func response_format_rejection_retries_once_without_it_and_remembers_the_model() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponses = [(Self.formatRejection, 400), (Self.okBody, 200)]
+        let support = StructuredOutputSupport()
+        let client = OpenAIClient(apiKey: "k", http: mock, structuredOutput: support)
+
+        let out = try await client.complete(structuredRequest(model: "gpt-3.5-turbo"))
+
+        #expect(out == #"{"action":"insert","text":"hi"}"#)
+        #expect(mock.capturedRequests.count == 2)
+        #expect(try requestBody(mock.capturedRequests.first)["response_format"] != nil)
+        let second = try requestBody(mock.capturedRequests.last)
+        #expect(second["response_format"] == nil)
+        #expect(second["max_completion_tokens"] as? Int == 8192)
+        #expect(support.rejects("gpt-3.5-turbo"))
+    }
+
+    @Test func unrelated_400_throws_after_one_request_and_does_not_mark_the_model() async throws {
+        let mock = MockHTTPClient()
+        let unrelated = #"{"error":{"message":"The model `gpt-9` does not exist","code":"model_not_found"}}"#
+        mock.stubResponses = [(Data(unrelated.utf8), 400), (Self.okBody, 200)]
+        let support = StructuredOutputSupport()
+        let client = OpenAIClient(apiKey: "k", http: mock, structuredOutput: support)
+
+        do {
+            _ = try await client.complete(structuredRequest(model: "gpt-9"))
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .badStatus(code: 400, body: unrelated))
+        }
+        #expect(mock.capturedRequests.count == 1)
+        #expect(!support.rejects("gpt-9"))
+    }
+
+    @Test func a_model_already_marked_sends_no_response_format_and_makes_one_request() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponses = [(Self.formatRejection, 400), (Self.okBody, 200)]
+        let support = StructuredOutputSupport()
+        support.markRejected("gpt-3.5-turbo")
+        let client = OpenAIClient(apiKey: "k", http: mock, structuredOutput: support)
+
+        do {
+            _ = try await client.complete(structuredRequest(model: "gpt-3.5-turbo"))
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .badStatus(code: 400, body: String(decoding: Self.formatRejection, as: UTF8.self)))
+        }
+        #expect(mock.capturedRequests.count == 1)
+        #expect(try requestBody(mock.capturedRequest)["response_format"] == nil)
+    }
+
+    @Test func refusal_with_structured_output_maps_to_refused() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Data(#"{"choices":[{"message":{"content":null,"refusal":"I can't help with that."},"finish_reason":"stop"}]}"#.utf8), status: 200)
+        let client = OpenAIClient(apiKey: "k", http: mock, structuredOutput: StructuredOutputSupport())
+
+        do {
+            _ = try await client.complete(structuredRequest())
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .refused)
+        }
+    }
+
+    @Test func truncation_with_structured_output_maps_to_truncated() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (data: Data(#"{"choices":[{"message":{"content":"{\"action\":\"ins"},"finish_reason":"length"}]}"#.utf8), status: 200)
+        let client = OpenAIClient(apiKey: "k", http: mock, structuredOutput: StructuredOutputSupport())
+
+        do {
+            _ = try await client.complete(structuredRequest())
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .truncated)
+        }
+        #expect(mock.capturedRequests.count == 1)
     }
 }

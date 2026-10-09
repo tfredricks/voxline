@@ -104,4 +104,50 @@ import Foundation
         #expect(LLMRequest.cleanupBudget(transcript: long, model: "claude-fable-5-1") == 8192)
         #expect(LLMRequest.cleanupBudget(transcript: "", model: "claude-haiku-4-5") == 256)
     }
+
+    @Test func thinking_headroom_covers_openai_reasoning_and_anthropic_thinking_models() {
+        for model in ["o1-mini", "o3-mini", "o4-mini", "gpt-5-mini", "GPT-5", "claude-sonnet-5-5", "claude-fable-5-1"] {
+            #expect(LLMRequest.thinkingHeadroom(for: model) == 4096, "\(model)")
+        }
+        #expect(LLMRequest.thinkingHeadroom(for: "o3-mini") == 4096)
+    }
+
+    @Test func thinking_headroom_is_zero_for_other_models() {
+        for model in ["claude-haiku-4-5", "claude-sonnet-4-5", "gpt-4.1-nano", "gpt-4o-mini"] {
+            #expect(LLMRequest.thinkingHeadroom(for: model) == 0, "\(model)")
+        }
+    }
+
+    @Test func command_budget_is_8192_plus_thinking_headroom() {
+        #expect(LLMRequest.commandBudget(model: "claude-haiku-4-5") == 8192)
+        #expect(LLMRequest.commandBudget(model: "claude-sonnet-5-5") == 12_288)
+        #expect(LLMRequest.commandBudget(model: "gpt-5-mini") == 12_288)
+        #expect(LLMRequest.commandBudget(model: "gpt-4.1-nano") == 8192)
+    }
+
+    @Test func llm_request_has_no_structured_output_by_default() {
+        let req = LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil)
+        #expect(req.structuredOutput == nil)
+        #expect(req.maxOutputTokens == 1024)
+    }
+
+    @Test func command_edit_structured_output_is_named_edit_and_carries_the_command_schema() {
+        #expect(StructuredOutput.commandEdit.name == "edit")
+        #expect(StructuredOutput.commandEdit.schemaJSON == CommandResult.schemaJSON)
+    }
+
+    @Test func command_edit_schema_object_parses() throws {
+        let schema = try #require(try StructuredOutput.commandEdit.schemaObject() as? [String: Any])
+        #expect(schema["type"] as? String == "object")
+        #expect(schema["additionalProperties"] as? Bool == false)
+        #expect(schema["required"] as? [String] == ["action", "text"])
+        let properties = try #require(schema["properties"] as? [String: Any])
+        let action = try #require(properties["action"] as? [String: Any])
+        #expect(action["enum"] as? [String] == ["replace_selection", "insert", "rewrite"])
+    }
+
+    @Test func malformed_schema_json_throws() {
+        let broken = StructuredOutput(name: "x", schemaJSON: "{not json")
+        #expect(throws: (any Error).self) { try broken.schemaObject() }
+    }
 }
