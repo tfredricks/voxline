@@ -48,6 +48,9 @@ final class CapturePipeline {
     /// never saves clips into the developer's real bake-off folder.
     private let saveBakeoffClips: @Sendable () -> Bool
     private let bakeoffClipSink: @Sendable (_ samples: [Float], _ reference: String) -> Void
+    /// Told when a capture starts and when a dictation lands. Nil in tests
+    /// that don't exercise Learning.
+    let learning: (any LearningObserving)?
 
     /// Identifies the current recording or retry; `cancel()` bumps it too.
     /// Work resuming after an `await` compares it with the value it captured
@@ -112,6 +115,7 @@ final class CapturePipeline {
         releaseGate: ModifierReleaseGate = ModifierReleaseGate(),
         saveBakeoffClips: @escaping @Sendable () -> Bool = { !LaunchEnvironment.isRunningTests && AppSettings().saveBakeoffClips },
         bakeoffClipSink: @escaping @Sendable (_ samples: [Float], _ reference: String) -> Void = { CapturePipeline.writeBakeoffClip($0, reference: $1) },
+        learning: (any LearningObserving)? = nil,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.state = state
@@ -135,6 +139,7 @@ final class CapturePipeline {
         self.releaseGate = releaseGate
         self.saveBakeoffClips = saveBakeoffClips
         self.bakeoffClipSink = bakeoffClipSink
+        self.learning = learning
         self.now = now
 
         capture.onLevel = { [weak self] level in
@@ -168,6 +173,7 @@ final class CapturePipeline {
         case .idle, .error:
             break
         }
+        learning?.captureWillStart()
         generation &+= 1
         capHit = false
         // Scrub the prior dictation's text so it doesn't linger in process
@@ -345,6 +351,7 @@ final class CapturePipeline {
 
     /// Starts a run that supersedes the current one; returns its token.
     func beginRun() -> UInt64 {
+        learning?.captureWillStart()
         generation &+= 1
         return generation
     }
@@ -555,7 +562,8 @@ final class CapturePipeline {
     /// paste it. Owns its terminal state. Records metrics only with `timing`,
     /// and a bake-off clip only with `bakeoffAudio`, once the paste succeeds.
     private func performDictation(transcript: String, mode: Mode, snapshot: StartSnapshot, timing: PipelineTiming?, bakeoffAudio: [Float]?, generation: UInt64) async {
-        let context = snapshot.context
+        var context = snapshot.context
+        context.customVocabulary = vocabulary()
         state.pipelinePhase = .cleaning
         if !context.captureNotes.isEmpty {
             AppLog.context.info("context partial: notes=\(context.captureNotes.joined(separator: ",")) durationMs=\(context.captureDurationMs)")
@@ -610,6 +618,7 @@ final class CapturePipeline {
                 bakeoffClipSink(bakeoffAudio, cleaned)
             }
             resetIdle()
+            learning?.didInsert(InsertedDictation(text: cleaned, bundleID: snapshot.bundleID, category: mode.category))
         case .notInserted(.secure):
             setError(TextInsertionError.secureFieldUnsupported.errorDescription!)
         case .notInserted(let reason):

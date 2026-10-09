@@ -230,3 +230,17 @@ final class LearningCoordinator: LearningObserving {
         }
     }
 }
+
+extension LearningCoordinator {
+    /// The app's instance: `learning.json`, the standard vocabulary, live
+    /// AX reads, and the system spelling dictionary.
+    static func live(state: AppState) -> LearningCoordinator {
+        LearningCoordinator(
+            state: state,
+            store: LearningStore.standard(),
+            vocabulary: CustomVocabularyStore(),
+            reader: LiveCorrectionReader(),
+            dictionary: SpellCheckDictionary()
+        )
+    }
+}
