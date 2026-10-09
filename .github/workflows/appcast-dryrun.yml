@@ -25,6 +25,10 @@ jobs:
         run: |
           # shellcheck disable=SC2012
           XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [[ -z "$XCODE" ]]; then
+            echo "No Xcode 26.x found on runner" >&2
+            exit 1
+          fi
           sudo xcode-select -s "$XCODE"
 
       - name: Install xcbeautify
@@ -86,4 +90,6 @@ jobs:
           xmllint --noout "$RUNNER_TEMP/dryrun-appcast.xml"
           grep -q 'sparkle:edSignature="..*"' "$RUNNER_TEMP/dryrun-appcast.xml" \
             || { echo "ERROR: appcast missing edSignature" >&2; cat "$RUNNER_TEMP/dryrun-appcast.xml" >&2; exit 1; }
+          grep -q 'sparkle:minimumSystemVersion>26' "$RUNNER_TEMP/dryrun-appcast.xml" \
+            || { echo "ERROR: appcast missing minimumSystemVersion 26 — 0.3.x users on older macOS would be offered a binary that cannot launch" >&2; cat "$RUNNER_TEMP/dryrun-appcast.xml" >&2; exit 1; }
           echo "Appcast dry-run passed."

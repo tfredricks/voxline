@@ -269,6 +269,8 @@ jobs:
           xmllint --noout "$RUNNER_TEMP/new-appcast.xml"
           grep -q 'sparkle:edSignature="..*"' "$RUNNER_TEMP/new-appcast.xml" \
             || { echo "appcast missing edSignature" >&2; exit 1; }
+          grep -q 'sparkle:minimumSystemVersion>26' "$RUNNER_TEMP/new-appcast.xml" \
+            || { echo "appcast missing minimumSystemVersion 26 — 0.3.x users on older macOS would be offered a binary that cannot launch" >&2; exit 1; }
 
           if [[ "$DRY_RUN" != "true" ]]; then
             cp "$RUNNER_TEMP/new-appcast.xml" gh-pages/appcast.xml
