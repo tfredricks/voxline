@@ -6,7 +6,7 @@
 
 **Hold a key. Speak. Get polished writing.**
 
-A native macOS dictation app that turns your voice into clean, written text — anywhere on your Mac. Speech runs on-device via Whisper. Cleanup runs through your own LLM API key, so you control the model, the cost, and the data path.
+A native macOS dictation app that turns your voice into clean, written text — anywhere on your Mac. Speech runs on-device by default, via Whisper or Apple Speech. Cleanup runs through your own LLM API key, so you control the model, the cost, and the data path.
 
 macOS 26+ · Apple Silicon · Bring your own API key
 
@@ -27,7 +27,7 @@ macOS 26+ · Apple Silicon · Bring your own API key
 
 Most dictation tools dump a raw transcript with `um`, `uh`, half-finished sentences, and zero punctuation. voxline does the second step you actually want:
 
-1. **Speech → text** locally on your Mac via Whisper.
+1. **Speech → text** locally on your Mac via Whisper or Apple Speech (or, if you opt in, OpenAI's cloud transcription).
 2. **Text → polished writing** through a frontier LLM you choose (Claude or GPT).
 
 Result: hold a hotkey, say what you mean — even messily — and watch clean prose appear in whatever field you're typing into.
@@ -36,20 +36,22 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 
 - **Hold to talk** — press your hotkey, speak, release. Text appears in the focused field.
 - **Works in any text field** — browser, email, IDE, terminal, Slack, Notes, Cursor, ChatGPT, anything that accepts a paste.
-- **On-device transcription** — Whisper runs locally on Apple Neural Engine. Audio never leaves your Mac.
+- **Your choice of speech engine** — Whisper (on-device, the default), Apple Speech (on-device, fastest), or OpenAI (cloud, opt-in). With the two on-device engines, audio never leaves your Mac.
+- **Live transcript** — a small pill at the bottom of the screen shows your words as you speak, including over full-screen apps.
+- **Esc to cancel, Retry to recover** — Esc throws away a dictation while it is recording or processing; if cleanup fails, Retry in the pill or the menu bar re-runs it on the same transcript.
 - **AI cleanup, not raw dump** — fillers, false starts, and rambling are smoothed out. Punctuation and capitalization are added automatically.
 - **Transform selected text by voice** — highlight text anywhere, hold your hotkey, and say how to change it: *"make this a bullet list"*, *"make this cleaner"*, *"make this shorter"*. voxline rewrites the selection in place and leaves it as a normal ⌘Z-undoable edit. No selection? It just dictates, as usual.
 - **Context-aware per-app formatting** — voxline detects the frontmost app and tunes the output for it: terse Slack messages, structured email replies, code-comment style in your IDE, search-box one-liners. Ships with sensible defaults for 28 common apps out of the box.
 - **Dictation history** — the last 25 dictations, cleaned text and raw transcript side by side, in a History window; click any row to copy it back to the clipboard.
 - **Bring your own LLM key** — Anthropic or OpenAI, your account, your model, your costs. Keys live in macOS Keychain.
-- **Menu-bar native** — no Dock icon, no clutter. Configurable hotkey, mic, model, and provider.
+- **Menu-bar native** — no Dock icon, no clutter. Configurable hotkey, mic, speech engine, and provider.
 - **Privacy-aware feedback** — clipboard is restored after paste; the system mic indicator turns off the moment you let go.
 
 ## How it works
 
 ```
 ┌──────────────── ON YOUR MAC ─────────────────┐
-│  🎙 audio  →  Whisper (ANE)  →  transcript   │
+│  🎙 audio → Whisper / Apple Speech → text    │
 │                                              │
 │  Context block, assembled at press time:     │
 │  • per-app mode prompt                       │
@@ -70,7 +72,19 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 └──────────────────────────────────────────────┘
 ```
 
-### Speech models (on-device)
+### Speech engines
+
+Pick one in Settings → General → Recognition → Engine.
+
+| Engine | Runs | Best for |
+|---|---|---|
+| **Whisper** (default) | On your Mac | Most accurate in the project's bake-off; shows live text while you speak. Needs a one-time model download (below). |
+| Apple Speech | On your Mac | Fastest: the transcript is ready about 0.1 s after you let go, and there is no model to download if macOS already has the language. Weaker on names and jargon in the project's bake-off. |
+| OpenAI | OpenAI's servers | Cloud transcription (`gpt-4o-transcribe`) with your own OpenAI key. Audio leaves your Mac — see [Privacy](#privacy). Never the default. |
+
+Switching engines prepares the new one in the background; if it needs a download, the menu bar shows progress and dictation waits. If OpenAI fails mid-dictation, voxline transcribes the same audio again on-device. Your custom vocabulary is applied during cleanup whichever engine you use. To measure the engines on your own voice, see [docs/bakeoff.md](docs/bakeoff.md).
+
+### Whisper models (on-device)
 
 | Model | Size | Best for |
 |---|---|---|
@@ -94,9 +108,10 @@ Why cloud cleanup instead of a local model? Because the gap between a frontier L
 |---|---|
 | **macOS** | 26 (Tahoe) or later |
 | **Mac** | Apple Silicon — M1, M2, M3, M4, or any variant. Intel Macs are **not** supported. |
+| **Speech engine** | One of three: Whisper (default) and Apple Speech run on-device; OpenAI is cloud and needs an OpenAI API key. |
 | **RAM** | 8 GB minimum, 16 GB recommended (the default `large-v3-turbo` model is happier with headroom) |
-| **Disk** | ~2 GB free for speech models (`large-v3-turbo` ~1.5 GB, `small.en` ~466 MB). Models cache in `~/Library/Application Support/voxline`. |
-| **Network** | Required on first launch to download the Whisper model, and at runtime for AI cleanup. Pure transcription works offline once the model is cached. |
+| **Disk** | ~2 GB free if you use Whisper (`large-v3-turbo` ~1.5 GB, `small.en` ~466 MB). Models cache in `~/Library/Application Support/voxline`. Apple Speech needs none beyond macOS's own language assets. |
+| **Network** | Required on first launch to download the Whisper model (or Apple's language assets, if macOS lacks them), and at runtime for AI cleanup. Transcription with Whisper or Apple Speech works offline once the model is cached. The OpenAI engine needs a connection for every dictation. |
 | **Microphone** | Any input device macOS recognizes (built-in mic is fine). |
 
 Apple Silicon is non-negotiable: voxline runs Whisper on the Apple Neural Engine via WhisperKit, and there is no ANE on Intel Macs.
@@ -118,7 +133,7 @@ Build and run from Xcode (⌘R), or use `./scripts/build-local.sh` to build Rele
 On first launch:
 
 1. Grant **Microphone** and **Accessibility** when prompted (the app will guide you).
-2. Pick your hotkey, mic, and Whisper model in the Settings window (⌘,). The default hotkey is **Right Cmd + Right Option** — change it if you'd rather use something else.
+2. Pick your hotkey, mic, speech engine, and (for Whisper) model in the Settings window (⌘,). The default hotkey is **Right Cmd + Right Option** — change it if you'd rather use something else.
 3. Drop in an Anthropic or OpenAI API key in the **Cleanup (AI)** section.
 4. Hold the hotkey anywhere on your Mac and start talking.
 
@@ -126,7 +141,7 @@ On first launch:
 
 | Permission | Why |
 |---|---|
-| Microphone | Capture your voice while the hotkey is held. Audio never leaves your Mac. |
+| Microphone | Capture your voice while the hotkey is held. Audio stays on your Mac unless you select the OpenAI engine. |
 | Accessibility | Detect the global hotkey and paste into the focused field. |
 
 Input Monitoring is **not** required — Accessibility alone is enough for the global hotkey. macOS may still surface an Input Monitoring entry for voxline; you can leave it off. The Debug pane shows its status for diagnostics only.
@@ -135,15 +150,24 @@ Input Monitoring is **not** required — Accessibility alone is enough for the g
 
 What stays local:
 
-- 🎙 **Audio capture** — held in memory only, never written to disk, dropped as soon as the transcript exists.
-- 🧠 **Speech-to-text** — runs entirely on Apple Neural Engine via WhisperKit. No audio is sent anywhere.
+- 🎙 **Audio capture** — held in memory only and dropped as soon as the transcript exists. It is not written to disk (the one exception is a hidden developer flag, below).
+- 🧠 **Speech-to-text with Apple Speech or Whisper** — both run on your Mac (Whisper on the Apple Neural Engine via WhisperKit). With either engine, no audio is sent anywhere.
 - 🔑 **API keys** — stored in macOS Keychain. Not logged, not synced, not visible to other apps.
 - 📜 **History** — the last 25 dictations, including raw transcripts, are stored in the app's preferences on your Mac. Clear them any time from the History window.
+
+What goes to OpenAI, only if you select the OpenAI speech engine:
+
+- 🎙 **Your audio** — it is streamed to OpenAI for transcription with your own OpenAI API key, and OpenAI's privacy policy applies. The Settings picker labels this engine "OpenAI — cloud, audio leaves your Mac", and it is never the default. While a cloud dictation is in progress, voxline also keeps that audio in memory so it can transcribe it on-device if the cloud fails; it is never written to disk.
 
 What goes to your LLM provider:
 
 - ✍️ **The transcript plus a small context slice** — voxline sends your transcript to Anthropic or OpenAI for cleanup, together with the frontmost app's name, the window title (up to 200 characters), the focused field's role, up to 500 characters of selected text, 200 characters before the cursor, 100 after it, and your custom vocabulary. Password fields never contribute their contents. Whatever provider's privacy policy applies (use enterprise tier or org-level keys if that matters to you).
-- voxline has **no telemetry, no analytics, and no first-party server**. The only network traffic is to whichever LLM provider you choose and the Hugging Face model download on first use.
+
+A hidden developer flag:
+
+- 💾 **`voxline.debug.saveBakeoffClips`** — when switched on, voxline saves each dictation's audio (as a WAV) and cleaned text under `~/Library/Application Support/voxline/bakeoff`, to build recordings for the [engine bake-off](docs/bakeoff.md). It is the **only** thing in voxline that writes audio to disk. It has no entry in Settings and is **off by default**; the bake-off doc shows how to turn it off and delete the clips.
+
+voxline has **no telemetry, no analytics, and no first-party server**. The only network traffic is to whichever LLM provider you choose, OpenAI if you select its speech engine, and the one-time model downloads (Hugging Face for Whisper; Apple's own language assets for Apple Speech, if macOS lacks them).
 
 ## Good to know
 

@@ -111,3 +111,177 @@ Sparkle running unsandboxed.
       at 0.5 s and a dictation makes several); the pill shows "No text field focused — copied"
       or an error within a few seconds. Run `kill -CONT $(pgrep -x Slack)` afterwards.
 - [ ] Repeat with text selected and the command chord: same bound.
+
+# Manual test pass: 0.5.0 transcription engine
+
+Covers what automated tests cannot: real speech engines, real audio hardware,
+real full-screen Spaces, and real network failure. Use an Apple Silicon Mac and
+a build from `scripts/build-local.sh`, with Anthropic or OpenAI cleanup
+configured. Keep `scripts/tail-logs.sh --last 2m pipeline` open in a terminal;
+several items below check it.
+
+## Live text in the pill
+
+- [ ] On the default engine (Whisper), hold the chord in Notes and speak 15–20
+      words. Within about a second the pill shows your words under the
+      waveform: settled text bright, the last few words dimmer and still
+      changing.
+- [ ] Release. The pill reads "Transcribing…", then "Cleaning up…" with the
+      transcript's last two lines dimmed below it, then "Inserting…", and
+      disappears as the text lands.
+- [ ] Select Apple Speech and repeat. Live text appears while you speak, and
+      the text lands almost immediately after release.
+
+## Pill placement
+
+- [ ] With the mouse on the main display, the pill is centered, just above the
+      bottom edge of the screen.
+- [ ] Dictate into a field near the bottom or right edge of the screen. The
+      pill is fully visible.
+- [ ] Put a browser in macOS full screen (its own Space), click into a text
+      field, and dictate. The pill appears over the full-screen app.
+- [ ] With a second display attached, move the mouse to it and dictate. The
+      pill appears bottom-center on that display, not the first.
+
+## Esc cancels
+
+- [ ] While recording: hold the chord, speak, press Esc without releasing.
+      The pill says "Cancelled", the stop blip does not play, and nothing is
+      inserted or added to History. Release the chord: nothing happens. Hold
+      it again straight away: a new dictation starts normally.
+- [ ] Esc is swallowed only while voxline is busy. In Safari open the find bar
+      (⌘F), then dictate and press Esc mid-recording: the find bar stays open.
+      Once idle, press Esc: the find bar closes.
+- [ ] While transcribing: on Whisper, dictate three to five words and press Esc
+      the instant you release (the window is under a second, so repeat until
+      the pill reads "Transcribing…" when you press). The pill says
+      "Cancelled", nothing is inserted, and no text appears later (wait 5 s).
+- [ ] While cleaning up: dictate about a minute of speech and press Esc when
+      the pill reads "Cleaning up…". The pill says "Cancelled", nothing is
+      inserted, and no text appears later. History has a new entry whose
+      cleaned text equals the raw transcript, and the menu bar's "Retry last
+      dictation" is enabled.
+- [ ] During insert: press Esc while the pill reads "Inserting…" (best effort;
+      the window is short). Esc is ignored and the text lands exactly once.
+- [ ] After every cancel above, a new dictation starts and finishes normally.
+
+## Retry
+
+- [ ] Select Whisper, turn Wi-Fi off, and dictate into Notes. Transcription
+      works on-device, then cleanup fails: the pill shows the error and a Retry
+      button, and the raw transcript is on the clipboard.
+- [ ] Turn Wi-Fi on and click Retry within 8 s. The cleaned text lands in
+      Notes, and the cursor never left the note (the pill did not take focus).
+- [ ] Repeat the failure and let the 8 s pass. The pill goes away, and the
+      menu bar's "Retry last dictation" is enabled. Focus a field in another
+      app (Slack), choose it, and the cleaned text lands there, formatted for
+      that app.
+- [ ] On a fresh launch, "Retry last dictation" is disabled.
+- [ ] Select text, hold the chord and the command modifier, and speak a
+      command with Wi-Fi off. The error appears without a Retry button.
+
+## Microphone disconnected
+
+- [ ] Settings → General → Microphone: pick a USB mic, not the built-in one.
+      Hold the chord, speak half a sentence, and unplug the mic while still
+      holding. The pill says "Microphone disconnected — stopped recording" and
+      what you said before the unplug is transcribed and inserted. Switch the
+      input back and confirm the next dictation works.
+- [ ] If that toast never appears, note the mic and macOS version in the test
+      log instead of failing the pass: the interruption only fires when the
+      audio engine actually stops, and some devices keep it running.
+
+## Switching engines
+
+- [ ] Settings → General → Recognition → Engine lists "Apple Speech —
+      on-device, fastest", "Whisper — on-device", and "OpenAI — cloud, audio
+      leaves your Mac". A fresh install has Whisper selected, and the Whisper
+      model picker shows only while Whisper is selected.
+- [ ] Select Apple Speech and dictate in Notes. Text lands. Select Whisper and
+      dictate again. Text lands.
+- [ ] Choose a Whisper model that is not downloaded yet (for example small.en
+      if only large-v3 turbo is cached). The menu bar shows download progress,
+      and a dictation started meanwhile waits for the download. After it
+      finishes, dictate: text lands.
+- [ ] Select OpenAI with no OpenAI key stored. A caption says audio is sent to
+      OpenAI with your key, and a warning says no key is stored.
+- [ ] Add an OpenAI key (in Recognition when cleanup is not using OpenAI;
+      otherwise in API Keys) and dictate. Live text appears a phrase at a time
+      and the final text is inserted.
+- [ ] `scripts/tail-logs.sh --last 5m metrics` names the engine for each
+      dictation above.
+- [ ] Quit and relaunch: the selected engine is unchanged. Reset to Defaults
+      selects Whisper.
+
+## OpenAI fallback
+
+- [ ] With OpenAI selected and cleanup on Anthropic, change the last character
+      of the stored OpenAI key so it is invalid, and dictate. The dictation
+      still completes with a correct transcript, and the pill shows "Cloud
+      transcription failed — used on-device". Restore the key.
+- [ ] With a valid key, turn Wi-Fi off and dictate five seconds of speech. The
+      on-device fallback transcribes it (the `pipeline` log notes the
+      fallback). Cleanup then fails for lack of network, so you get the Retry
+      error with the correct transcript on the clipboard. Turn Wi-Fi on and
+      click Retry to finish.
+- [ ] `find ~/Library/Application\ Support/voxline -name '*.wav'` prints
+      nothing: the fallback kept the audio in memory only.
+
+## First-run wizard
+
+- [ ] `scripts/reset-local-state.sh --keep-model` (this wipes saved API keys),
+      then launch. With Whisper's model cached, the wizard never shows the
+      "Speech engine" step.
+- [ ] `scripts/reset-local-state.sh` with no flags, Wi-Fi off, then launch. The
+      "Speech engine" step shows the failed download and has a "Quit Voxline"
+      button that quits the app. Turn Wi-Fi on, relaunch, and confirm the
+      download completes and the wizard continues.
+
+## Five-minute cap
+
+- [ ] Hold the chord and keep talking (reading aloud works). Past 60 s the
+      recording continues and the pill shows the elapsed time as `1:00`,
+      `1:01`, and so on.
+- [ ] At 5:00 recording stops on its own, the text is transcribed, cleaned up,
+      and inserted, and the pill says "Stopped at 5 minutes".
+- [ ] Press Esc at about two minutes. The recording is cancelled cleanly.
+
+## Audio edge cases
+
+- [ ] Tap the chord quickly (under half a second) ten times. No "No audio
+      captured" error appears; the pill just goes away.
+- [ ] End a sentence on a distinct word ("…and send it to Dana") and release
+      the chord the instant you finish it. Repeat five times: the last word is
+      never clipped.
+
+## No regressions
+
+- [ ] Select text in Notes, hold the chord and the command modifier, say "make
+      this shorter". The selection is replaced.
+- [ ] With nothing editable focused, dictate. The pill shows "No text field
+      focused — copied".
+- [ ] Show history… lists these dictations with the raw transcript next to the
+      cleaned text.
+
+## Latency targets
+
+- [ ] Record 20 dictations on the default engine (Whisper) with the same LLM
+      model as the baseline (`gpt-4.1-nano`): 10–30-word sentences in Notes,
+      Slack, and a browser field. In About Voxline → Diagnostics, write down
+      the medians for transcribe, total, and "First words", and compare them
+      with the Targets table in
+      `docs/superpowers/specs/2026-10-08-transcription-engine-design.md`
+      (transcribe ≤ 300 ms, total ≤ 1,500 ms, first words within 1 s).
+- [ ] The synthetic bake-off put Whisper's finish median near 730 ms, so expect
+      to miss the transcribe target until the early-finish follow-up listed at
+      the end of that spec lands. Record the number either way.
+
+## Bake-off on real clips
+
+- [ ] Follow `docs/bakeoff.md`: turn on `voxline.debug.saveBakeoffClips`,
+      dictate at least 20 clips, correct each `.txt`, write `terms.txt`, and
+      run the bake-off. Record the verdict. If it names an engine other than
+      Whisper, flip the default in a follow-up change.
+- [ ] Turn the flag off and delete the clips as that doc describes. After new
+      dictations, `find ~/Library/Application\ Support/voxline -name '*.wav'`
+      prints nothing.

@@ -7,7 +7,7 @@ Guidance for coding agents working in this repo. Human contributors should read 
 voxline is a native macOS menu-bar app (SwiftUI + AppKit, Swift Package Manager dependencies, no CocoaPods/Carthage). Hold a hotkey, speak, and it pastes cleaned-up text into the focused field:
 
 1. `Audio/` captures mic input while the hotkey is held.
-2. `Transcription/` runs Whisper on-device via [WhisperKit](https://github.com/argmaxinc/WhisperKit) (SPM dep: `argmaxinc/argmax-oss-swift`).
+2. `Transcription/` turns the audio into text with the selected engine: Apple Speech, Whisper on-device via [WhisperKit](https://github.com/argmaxinc/WhisperKit) (SPM dep: `argmaxinc/argmax-oss-swift`; the default), or OpenAI Realtime (cloud, opt-in).
 3. `Context/` assembles a context block (per-app mode prompt, focused-field AX info, custom vocabulary).
 4. `LLM/` sends the transcript + context to Anthropic or OpenAI for cleanup (`AnthropicClient.swift` / `OpenAIClient.swift` behind `LLMService.swift`).
 5. `Output/` pastes the result into the focused field and restores the clipboard.
@@ -18,12 +18,15 @@ voxline is a native macOS menu-bar app (SwiftUI + AppKit, Swift Package Manager 
 
 - `voxline/Audio`, `Context`, `Diagnostics`, `Hotkey`, `LLM`, `MenuBar`, `Modes`, `Output`, `Permissions`, `Pipeline`, `Settings`, `Storage`, `Transcription`, `UI`, `Updates`, `Util`, `Wizard` — app source, one folder per concern.
 - `voxline/Modes/ModeStore.swift` — the per-app prompt table (28 bundle IDs currently: Slack, Zoom, Teams, Messages, Discord, Mail, Outlook, Spark, Word, Pages, Notes, Excel, PowerPoint, Keynote, Numbers, Terminal, iTerm, VS Code, Cursor, Xcode, and others). Add new apps here.
+- `voxline/Transcription/Engines/` — one adapter per speech engine, each behind the `TranscriptionEngine` / `TranscriptionSession` protocols in `Transcription/TranscriptionEngine.swift`. `Transcription/TranscriptionEngines.swift` owns the instances and the selection; `TranscriptionService.swift` is WhisperKit's model manager.
 - `voxlineTests/` — Swift Testing unit/integration tests, one file per source file roughly 1:1.
+- `voxlineTests/Bakeoff/` — the engine bake-off: fixture loading, `TranscriptScoring`, the decision rule, and `EngineBakeoffTests`, which is opt-in (`TEST_RUNNER_VOXLINE_BAKEOFF=1`) and skipped in CI. Fixtures are never committed. How to capture clips and run it: `docs/bakeoff.md`.
 - `docs/release/RELEASE.md` — one-time Sparkle/notarization setup + release mechanics (maintainer-only, requires secrets you likely don't have).
 - `docs/release/MANUAL_TESTS.md` — manual QA checklist for things automated tests can't cover (permissions dialogs, real hotkey presses, etc.).
 - `docs/features.md` — competitive feature-matrix doc, not architecture.
 - `scripts/build-local.sh` — build Release/Debug and install to `/Applications` with a real git-derived version stamp (plain `⌘R` in Xcode leaves `CFBundleVersion = 1`).
 - `scripts/reset-local-state.sh`, `scripts/tail-logs.sh` — local dev utilities.
+- `scripts/make-synthetic-bakeoff.sh` — renders text lines to `say` clips (WAV + reference `.txt`) for bake-off smoke runs.
 - `scripts/tail-logs.sh` categories include `metrics` (per-dictation timings).
 - `.github/workflows/ci.yml` — build + test on every push/PR.
 - `.github/workflows/release.yml` — sign, notarize, DMG, Sparkle appcast; runs on `v*` tags.
@@ -44,6 +47,8 @@ xcodebuild test \
 
 Requires Xcode 26 and macOS 26 (Apple Silicon) — this is not cross-platform buildable. CI (`ci.yml`) runs the same test command with `CODE_SIGNING_ALLOWED=NO` on `macos-26` runners.
 
+Engine integration tests (real Apple Speech / real WhisperKit) are skipped unless you run `TEST_RUNNER_VOXLINE_ENGINE_TESTS=1 xcodebuild test …`. Env vars reach the test runner only with the `TEST_RUNNER_` prefix.
+
 ## Conventions
 
 - **Commit style**: Conventional Commits (`feat(scope): …`, `fix(scope): …`, `docs(scope): …`, `refactor(scope): …`, `release: …`, `chore: …`). Match `git log`.
@@ -53,6 +58,7 @@ Requires Xcode 26 and macOS 26 (Apple Silicon) — this is not cross-platform bu
 - **No comments explaining what code does** — this codebase favors clear naming; existing doc comments (`///`) are mostly on public-facing types/behavior contracts, not narration.
 - Not sandboxed (hardened runtime only). App data lives in `~/Library/Application Support/voxline`; preferences in the standard defaults domain. `Storage/AppPaths.swift` owns every path and `Storage/ContainerMigration.swift` moves 0.3.x container data on first launch.
 - API keys live in the macOS Keychain via `Storage/KeychainStorage.swift` / `DataProtectionKeychain.swift` — never persist keys anywhere else (UserDefaults, plists, logs).
+- Audio stays in memory. The one thing that writes audio to disk is the hidden `voxline.debug.saveBakeoffClips` capture flag (off by default); the README's Privacy section promises this, so don't add another path.
 
 ## Releasing
 

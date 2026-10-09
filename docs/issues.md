@@ -4,6 +4,9 @@ Ranked by how hard a real user hits them: impact × likelihood. Every item below
 verified against the source; line numbers are from `main` at d0ee62d. A few
 reviewer claims that did **not** survive verification are listed at the bottom.
 
+Items 4, 7, 8, 14, 18, 21 and 23 were fixed in 0.5.0 with the transcription-engine
+rework; their descriptions are kept as written, with the pre-0.5.0 line numbers.
+
 ## High — daily-use pain
 
 ### 1. First words of a dictation can be lost; UI stalls at keypress
@@ -212,10 +215,13 @@ refine pill (commits `7e88720..67958b6`). None block shipping; the feature is on
   can't trigger.** The 60s `maxRecordingDuration` fail-safe caps a dictation at
   ~150-200 spoken words (~250-300 output tokens), far under 1024. Real only if the
   cap is raised or removed; the unchecked `stop_reason` remains item 18.
+  0.5.0 raised the cap to 5 minutes and, to match, scaled the output budget with
+  the transcript length and started checking `stop_reason` (item 18).
 - **"Task cancellation during the restore sleep pastes the old clipboard and
   double-inserts" — no live trigger.** Nothing ever cancels the inject task
   (`CapturePipeline.swift:169` awaits it; only `contextTask` is cancelled).
-  Latent if a cancel affordance is added later (see item 2's fix).
+  Latent if a cancel affordance is added later (see item 2's fix). 0.5.0 added
+  one (Esc), and it is ignored once insert begins for exactly this reason.
 - **"Mic-level monitor keeps running after Settings closes" — not supported.**
   `SettingsView.swift:134` has `.onDisappear { levelMonitor.stop() }`.
 - **"Out-of-order audio chunks from unordered Tasks" — theoretical.** Same-priority

@@ -8,6 +8,81 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
+### Added
+
+- **Choice of speech engine.** Settings → General → Recognition has an Engine
+  picker: Apple Speech (on-device, fastest), Whisper (on-device, still the
+  default), or OpenAI (cloud). Switching prepares the new engine in the
+  background; if it needs a download, the menu bar shows progress and
+  dictation waits for it. The Whisper model picker shows only while Whisper
+  is selected.
+- **Live transcript in the pill.** The words you say appear as you speak:
+  settled text bright, text that may still change dim. After you let go, the
+  pill reads "Transcribing…", "Cleaning up…", or "Inserting…", and past a
+  minute of recording it shows the elapsed time.
+- **Esc cancels a dictation** while it is recording, transcribing, or being
+  cleaned up. The pill says "Cancelled" and the raw transcript, if there is
+  one, goes to History. Esc is swallowed only while voxline is busy and is
+  ignored once text is being inserted; the rest of the time it reaches your
+  app as usual.
+- **Retry.** When a dictation fails after transcription, the pill shows a
+  Retry button for 8 seconds, and the menu bar has "Retry last dictation".
+  Both re-run cleanup on the last raw transcript and insert the result into
+  the focused field.
+- **OpenAI cloud transcription (opt-in).** Pick "OpenAI — cloud, audio leaves
+  your Mac" to transcribe with gpt-4o-transcribe through OpenAI's Realtime
+  API, using your own OpenAI key. If the cloud fails mid-dictation, voxline
+  transcribes the audio again on-device and shows "Cloud transcription
+  failed — used on-device".
+- **Engine bake-off tooling.** An opt-in test suite scores the engines on
+  your own recordings and applies a fixed decision rule to pick the default
+  (see `docs/bakeoff.md`). A hidden developer flag,
+  `voxline.debug.saveBakeoffClips`, saves your dictations' audio and text as
+  clips for it; it is off by default and is the only thing in voxline that
+  writes audio to disk. `scripts/make-synthetic-bakeoff.sh` renders
+  text-to-speech clips for smoke runs.
+- About Voxline → Diagnostics shows "First words", the median time to the
+  first live text.
+- A hidden, experimental flag, `voxline.llm.skipShortUtterances`, skips AI
+  cleanup for dictations of six words or fewer with no filler words. Off by
+  default; there is no setting for it.
+
+### Changed
+
+- **The recording pill sits at the bottom center** of the screen the mouse is
+  on, instead of following the text cursor, and grows to fit the live
+  transcript.
+- **The recording limit is now 5 minutes** (was 60 seconds). When it hits,
+  the dictation is inserted and the pill says "Stopped at 5 minutes".
+- Diagnostics medians now cover dictations only, so command-mode runs no
+  longer skew them, and "transcribe" is measured from release to final
+  text. The metrics log line gains `firstPartial` and `skipCleanup`.
+- The first-run wizard's model-download step is now "Speech engine", and is
+  skipped when the selected engine is already ready.
+- Cleanup requests are leaner: the output limit scales with the length of
+  the dictation, empty context and vocabulary sections are no longer sent,
+  and Claude 5-family models that think by default are asked for low effort.
+- Reset to Defaults also resets the speech engine.
+
+### Fixed
+
+- A quick tap on the hotkey no longer shows a false "No audio captured"
+  (issue 4).
+- The recording pill is no longer pushed off-screen near the bottom or edge
+  of the display, and now appears over full-screen apps (issue 7).
+- Unplugging or losing the mic mid-dictation now finishes what was captured
+  and says "Microphone disconnected — stopped recording", instead of
+  silently dropping the rest (issue 8).
+- OpenAI models that spend their output budget on hidden reasoning no longer
+  paste nothing: truncated or empty responses are reported as errors, the raw
+  transcript is copied to the clipboard, and Retry is offered (issue 14).
+- An Anthropic refusal or truncated response now says so, instead of "Could
+  not parse provider response" (issue 18).
+- The first-run wizard is no longer a dead end offline: a failed download now
+  offers "Quit Voxline" (issue 21).
+- The last syllable of a dictation is no longer clipped when you release the
+  hotkey (issue 23).
+
 ## [0.4.0] - 2026-10-08
 
 ### Added
