@@ -14,6 +14,8 @@ enum InsertTarget: Equatable, Sendable {
 
 enum NotInsertedReason: Equatable, Sendable {
     case focusMoved, fieldChanged, cannotTarget, outcomeUnknown, notResponding, secure
+    /// The calling task was cancelled before anything was posted or written.
+    case cancelled
 }
 
 enum InsertOutcome: Equatable {
@@ -82,9 +84,14 @@ final class TextInserter: TextInserting {
     /// VM or remote-desktop window) gets an unverified paste, then typing, as
     /// 0.5.0 did, unless `expectedElement` was given (`focusMoved`) or the
     /// target is a range it can't check (`cannotTarget`).
+    ///
+    /// Once the calling task is cancelled nothing more is selected, posted, or
+    /// written: the insert checks on entry, before each strategy, and after
+    /// every release-gate wait, and returns `cancelled`.
     func insert(_ text: String, at target: InsertTarget, expectedElement: AXElementRef?,
                 bundleID: String?, trigger: ModifierFamilies) async -> InsertOutcome {
         guard isAccessibilityTrusted() else { return .failed(.accessibilityNotGranted) }
+        guard !Task.isCancelled else { return notInserted(.cancelled) }
 
         let element: any AXTextElement
         switch focused() {
@@ -104,6 +111,7 @@ final class TextInserter: TextInserting {
             break
         case .afterLiveSelection:
             try? await gate.wait(for: trigger)
+            guard !Task.isCancelled else { return notInserted(.cancelled) }
             postRightArrow()
         case .range(let range, let expected):
             if let reason = select(range, expected: expected, in: element) { return notInserted(reason) }
@@ -130,6 +138,7 @@ final class TextInserter: TextInserting {
             break
         case .afterLiveSelection:
             try? await gate.wait(for: trigger)
+            guard !Task.isCancelled else { return notInserted(.cancelled) }
             postRightArrow()
         case .range:
             return notInserted(.cannotTarget)
@@ -144,6 +153,7 @@ final class TextInserter: TextInserting {
                      trigger: ModifierFamilies) async -> InsertOutcome {
         var failures: [String] = []
         for strategy in plan {
+            guard !Task.isCancelled else { return notInserted(.cancelled) }
             switch strategy {
             case .accessibility:
                 guard let element else { continue }
@@ -167,12 +177,15 @@ final class TextInserter: TextInserting {
                     AppLog.paste.debug("insert: paste refused (\(reason, privacy: .public)); moving on")
                 case .focusMovedBeforePaste:
                     return notInserted(.focusMoved)
+                case .cancelled:
+                    return notInserted(.cancelled)
                 case .focusMoved:
                     AppLog.paste.debug("insert: focus moved during the paste")
                     return .failed(.pasteVerificationFailed)
                 }
             case .typing:
                 try? await gate.wait(for: trigger)
+                guard !Task.isCancelled else { return notInserted(.cancelled) }
                 let before = element?.string(kAXValueAttribute).value
                 typing.type(text)
                 try? await sleep(typingVerifyDelay)

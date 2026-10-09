@@ -46,6 +46,7 @@ extension CapturePipeline {
         case .notResponding: return "The app isn't responding — try again"
         case .fieldChanged, .focusMoved: return "Field changed — copied, ⌘V to apply"
         case .cannotTarget, .outcomeUnknown: return "Couldn't edit in place — copied, ⌘V to apply"
+        case .cancelled: return "Cancelled"
         }
     }
 
@@ -309,7 +310,7 @@ extension CapturePipeline {
             recordCommandHistory(text, edit)
             recordCommandMetrics(edit, insertMs: insertMs, strategy: .init(strategy), text: text)
             resetIdle()
-        case .notInserted(let reason) where reason == .secure || reason == .notResponding:
+        case .notInserted(let reason) where reason == .secure || reason == .notResponding || reason == .cancelled:
             resetIdle()
             showToast(Self.toast(for: reason))
         case .notInserted(let reason):

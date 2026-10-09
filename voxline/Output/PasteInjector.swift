@@ -22,12 +22,14 @@ final class PasteInjector {
     /// `pasted` and `focusMoved` mean Cmd+V was posted, so the caller must not
     /// try another strategy. `snapshotRefused` means the board was never
     /// touched. `focusMovedBeforePaste` means focus left the baseline element
-    /// before the Cmd+V, so nothing was posted and the board was restored.
+    /// before the Cmd+V, and `cancelled` that the calling task was cancelled
+    /// before it; in both, nothing was posted and the board was restored.
     enum Outcome: Equatable {
         case pasted(verified: Bool)
         case snapshotRefused(String)
         case focusMovedBeforePaste
         case focusMoved
+        case cancelled
     }
 
     /// The last paste's slot, claimed before its first suspension. It
@@ -69,8 +71,8 @@ final class PasteInjector {
     }
 
     /// Waits for a pending restore, snapshots, writes the promised item, runs
-    /// the gate for `trigger`, settles, checks focus, posts Cmd+V, verifies,
-    /// and schedules the restore tail. `element` is read for verification;
+    /// the gate for `trigger`, settles, checks cancellation and focus, posts
+    /// Cmd+V, verifies, and schedules the restore tail. `element` is read for verification;
     /// `focused` is re-read to detect a focus shift. When `element` is given
     /// it must be the focused element the caller already checked, and its
     /// ref is the focus baseline. Without one, `focused()` read just before
@@ -112,6 +114,11 @@ final class PasteInjector {
 
         try? await gate.wait(for: trigger)
         try? await sleep(settleDelay)
+        if Task.isCancelled {
+            if pasteboard.changeCount == ourChangeCount { snapshot.restore(to: pasteboard) }
+            AppLog.paste.debug("paste skipped: cancelled before the Cmd+V")
+            return .cancelled
+        }
         if let beforeRef, let now = focused(), now != beforeRef {
             if pasteboard.changeCount == ourChangeCount { snapshot.restore(to: pasteboard) }
             AppLog.paste.debug("paste skipped: focus moved before the Cmd+V")
@@ -192,6 +199,7 @@ final class PasteInjector {
         case .snapshotRefused: return "refused"
         case .focusMovedBeforePaste: return "skipped, focus moved"
         case .focusMoved: return "focus moved"
+        case .cancelled: return "cancelled"
         }
     }
 }

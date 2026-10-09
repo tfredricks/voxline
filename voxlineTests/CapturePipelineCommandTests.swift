@@ -520,6 +520,7 @@ import Testing
     @Test(arguments: [
         (NotInsertedReason.secure, "Command mode is off in password fields"),
         (.notResponding, "The app isn't responding — try again"),
+        (.cancelled, "Cancelled"),
     ])
     func not_inserted_without_a_copy(reason: NotInsertedReason, toast: String) async {
         let h = makeHarness(reader: reader(Self.notesContext(selecting: Self.cat)))

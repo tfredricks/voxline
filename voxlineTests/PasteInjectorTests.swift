@@ -81,6 +81,21 @@ import Testing
         await h.injector.pendingRestore?.value
     }
 
+    @Test func cancelled_before_the_cmd_v_posts_nothing_and_restores() async {
+        let h = makeHarness()
+        defer { h.board.releaseGlobally() }
+        let task = Task { await h.injector.paste("PASTED", element: nil, trigger: [], focused: { nil }) }
+        #expect(await eventually { h.clock.pendingCount == 1 })
+        #expect(isOurs(h.board))
+
+        task.cancel()
+
+        #expect(await task.value == .cancelled)
+        #expect(h.posts.read() == 0)
+        #expect(!isOurs(h.board))
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
     @Test func restores_150ms_after_the_provider_is_read() async {
         let h = makeHarness()
         defer { h.board.releaseGlobally() }

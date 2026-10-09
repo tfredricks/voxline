@@ -57,7 +57,8 @@ import Testing
         focused: @escaping @Sendable () -> AXRead<any AXTextElement>,
         trusted: Bool = true,
         snapshotter: PasteboardSnapshotting = DefaultPasteboardSnapshotter(),
-        flags: [CGEventFlags] = [[]]
+        flags: [CGEventFlags] = [[]],
+        cancelInGate: Bool = false
     ) -> Harness {
         let board = NSPasteboard(name: NSPasteboard.Name("voxline-test-\(UUID())"))
         board.clearContents()
@@ -78,10 +79,16 @@ import Testing
             return next
         }
         gate.forceClear = {}
-        gate.sleep = { _ in events.mutate { $0.append("gate") } }
+        gate.sleep = { _ in
+            events.mutate { $0.append("gate") }
+            if cancelInGate { withUnsafeCurrentTask { $0?.cancel() } }
+        }
 
         var pasteGate = gate
-        pasteGate.sleep = { _ in events.mutate { $0.append("paste gate") } }
+        pasteGate.sleep = { _ in
+            events.mutate { $0.append("paste gate") }
+            if cancelInGate { withUnsafeCurrentTask { $0?.cancel() } }
+        }
 
         let paste = PasteInjector(
             pasteboard: board,
@@ -112,8 +119,9 @@ import Testing
 
     private func makeHarness(element: any AXTextElement, trusted: Bool = true,
                              snapshotter: PasteboardSnapshotting = DefaultPasteboardSnapshotter(),
-                             flags: [CGEventFlags] = [[]]) -> Harness {
-        makeHarness(focused: { .value(element) }, trusted: trusted, snapshotter: snapshotter, flags: flags)
+                             flags: [CGEventFlags] = [[]], cancelInGate: Bool = false) -> Harness {
+        makeHarness(focused: { .value(element) }, trusted: trusted, snapshotter: snapshotter, flags: flags,
+                    cancelInGate: cancelInGate)
     }
 
     private func insert(_ h: Harness, _ text: String = " world", at target: InsertTarget = .liveSelection,
@@ -545,6 +553,58 @@ import Testing
         #expect(h.pastes.read() == 0)
         #expect(h.typed.read().isEmpty)
         #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
+    // MARK: - Cancellation
+
+    @Test(arguments: [InsertTarget.liveSelection, .afterLiveSelection])
+    func a_cancelled_insert_posts_nothing(target: InsertTarget) async {
+        let fake = editableFake()
+        let h = makeHarness(element: fake)
+        defer { h.board.releaseGlobally() }
+
+        let task = Task { await insert(h, at: target, bundleID: Self.slack, trigger: []) }
+        task.cancel()
+
+        #expect(await task.value == .notInserted(.cancelled))
+        #expect(h.events.read().isEmpty)
+        #expect(h.pastes.read() == 0)
+        #expect(fake.stringSets.isEmpty)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
+    @Test func cancel_while_waiting_for_the_release_skips_the_paste() async {
+        let h = makeHarness(element: editableFake(), flags: [.maskShift, []], cancelInGate: true)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await Task { await insert(h, bundleID: Self.slack, trigger: [.shift]) }.value
+
+        #expect(outcome == .notInserted(.cancelled))
+        #expect(h.events.read() == ["paste gate"])
+        #expect(h.pastes.read() == 0)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
+    @Test func cancel_while_waiting_for_the_release_skips_typing() async {
+        let h = makeHarness(element: editableFake(value: []), snapshotter: ThrowingSnapshotter(),
+                            flags: [.maskShift, []], cancelInGate: true)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await Task { await insert(h, bundleID: Self.slack, trigger: [.shift]) }.value
+
+        #expect(outcome == .notInserted(.cancelled))
+        #expect(h.events.read() == ["gate"])
+        #expect(h.typed.read().isEmpty)
+    }
+
+    @Test func cancel_while_waiting_for_the_release_posts_no_arrow() async {
+        let h = makeHarness(element: editableFake(), flags: [.maskAlternate, []], cancelInGate: true)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await Task { await insert(h, at: .afterLiveSelection, trigger: [.option]) }.value
+
+        #expect(outcome == .notInserted(.cancelled))
+        #expect(h.events.read() == ["gate"])
     }
 
     // MARK: - Clipboard restore
