@@ -45,6 +45,9 @@ final class LearningCoordinator: LearningObserving {
     /// Bumped whenever Learning changes the vocabulary, so Settings reloads it.
     private(set) var vocabularyRevision = 0
 
+    /// Categories whose style note is being refreshed right now.
+    private(set) var refreshing: Set<ModeCategory> = []
+
     let store: LearningStore
 
     @ObservationIgnored private let state: AppState
@@ -54,6 +57,8 @@ final class LearningCoordinator: LearningObserving {
     @ObservationIgnored private let toggles: () -> LearningToggles
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private let now: () -> Date
+    @ObservationIgnored private let generator: (any StyleNoteGenerating)?
+    @ObservationIgnored private let model: () -> String
     /// Windows whose end is still wanted: running, or ended by a new capture
     /// and reading their final value. A cancelled window leaves this table,
     /// so anything it reports afterward is dropped.
@@ -69,7 +74,9 @@ final class LearningCoordinator: LearningObserving {
          dictionary: any WordDictionary,
          toggles: @escaping () -> LearningToggles = LearningToggles.current,
          sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-         now: @escaping () -> Date = Date.init) {
+         now: @escaping () -> Date = Date.init,
+         generator: (any StyleNoteGenerating)? = nil,
+         model: @escaping () -> String = { AppSettings().llmModel }) {
         self.state = state
         self.store = store
         self.vocabulary = vocabulary
@@ -78,6 +85,8 @@ final class LearningCoordinator: LearningObserving {
         self.toggles = toggles
         self.sleep = sleep
         self.now = now
+        self.generator = generator
+        self.model = model
     }
 
     func captureWillStart() {
@@ -132,6 +141,45 @@ final class LearningCoordinator: LearningObserving {
         store.reject(words)
         vocabularyRevision += 1
         state.flashToast("Removed: \(words.joined(separator: ", "))")
+    }
+
+    /// Settings' Regenerate: refreshes the category's note even when the
+    /// user edited it. nil when there are no texts, no generator, or a
+    /// refresh for the category is already running.
+    @discardableResult
+    func regenerate(_ category: ModeCategory) -> Task<Void, Never>? {
+        refresh(category, replacingEdits: true)
+    }
+
+    /// A user edit made while the request runs wins unless `replacingEdits`.
+    @discardableResult
+    private func refresh(_ category: ModeCategory, replacingEdits: Bool) -> Task<Void, Never>? {
+        guard let generator, !refreshing.contains(category) else { return nil }
+        let request = StyleNotePrompt.request(category: category, data: store.category(category), model: model())
+        guard !request.texts.isEmpty else { return nil }
+        refreshing.insert(category)
+        return Task { [weak self] in
+            let result: Result<String, Error>
+            do {
+                result = .success(try await generator.styleNote(request))
+            } catch {
+                result = .failure(error)
+            }
+            guard let self else { return }
+            self.refreshing.remove(category)
+            switch result {
+            case .success(let note):
+                if !replacingEdits, self.store.category(category).noteEditedByUser {
+                    self.store.restartRefreshCount(category)
+                    return
+                }
+                self.store.setNote(note, category: category, editedByUser: false)
+                AppLog.learning.info("style refreshed for \(category.rawValue, privacy: .public): texts=\(request.texts.count) pairs=\(request.pairs.count)")
+            case .failure(let error):
+                self.store.restartRefreshCount(category)
+                AppLog.learning.error("style refresh failed for \(category.rawValue, privacy: .public): \(String(describing: type(of: error)), privacy: .public)")
+            }
+        }
     }
 
     /// Terminals show scrollback, and these editors expose a hidden input
@@ -203,7 +251,15 @@ final class LearningCoordinator: LearningObserving {
 
     private func recordFinalText(_ text: String, for dictation: InsertedDictation) {
         guard toggles().style else { return }
-        store.recordFinalText(text, bundleID: dictation.bundleID, category: dictation.category)
+        if store.recordFinalText(text, bundleID: dictation.bundleID, category: dictation.category) {
+            refreshIfDue(dictation.category)
+        }
+    }
+
+    private func refreshIfDue(_ category: ModeCategory) {
+        let entry = store.category(category)
+        guard entry.sinceRefresh >= LearningStore.refreshEvery, !entry.noteEditedByUser else { return }
+        refresh(category, replacingEdits: false)
     }
 
     private func announce(_ words: [String]) {
@@ -251,7 +307,8 @@ extension LearningCoordinator {
             store: LearningStore.standard(),
             vocabulary: CustomVocabularyStore(),
             reader: LiveCorrectionReader(),
-            dictionary: SpellCheckDictionary()
+            dictionary: SpellCheckDictionary(),
+            generator: LLMService(settings: AppSettings())
         )
     }
 }

@@ -3,7 +3,7 @@ import Foundation
 /// Single entry point for transcript → LLM-cleaned-text. Picks the right
 /// client based on AppSettings, fetches the corresponding key from Keychain,
 /// applies per-mode overrides, and runs the cleanup request.
-struct LLMService: LLMServing, MeetingNotesGenerating {
+struct LLMService: LLMServing, MeetingNotesGenerating, StyleNoteGenerating {
 
     /// Fixed preamble prepended to every mode prompt. Establishes the model's
     /// role as a transcription post-processor so that questions or
@@ -193,6 +193,23 @@ struct LLMService: LLMServing, MeetingNotesGenerating {
         )
         let raw = try await resolveClient().complete(req)
         return try MeetingNotesParser.parse(raw)
+    }
+
+    /// A style note for one mode category, in plain text, cut to
+    /// `LearningStore.noteCap`. An empty reply is an error.
+    func styleNote(_ request: StyleNoteRequest) async throws -> String {
+        let req = LLMRequest(
+            model: request.model,
+            systemPrompt: StyleNotePrompt.system(categoryName: request.categoryName),
+            userPrompt: StyleNotePrompt.user(request),
+            temperature: nil,
+            maxOutputTokens: LLMRequest.styleNoteBudget(model: request.model)
+        )
+        let raw = try await resolveClient().complete(req)
+        guard let note = StyleNotePrompt.note(fromReply: raw) else {
+            throw LLMError.badResponseShape(reason: "empty style note")
+        }
+        return note
     }
 
     /// An instance for meeting notes: same settings and keychain, but an HTTP

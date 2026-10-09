@@ -25,7 +25,8 @@ import Testing
         values: [AXRead<String>] = [.value(Self.fixed)],
         anchors: [AnchorRead]? = nil,
         toggles: LearningToggles = LearningToggles(words: true, style: true),
-        anchorBlock: DispatchSemaphore? = nil
+        anchorBlock: DispatchSemaphore? = nil,
+        generator: FakeStyleGenerator? = nil
     ) -> Harness {
         let element = FakeAXTextElement()
         let reader = FakeCorrectionReader(
@@ -48,7 +49,8 @@ import Testing
             dictionary: FakeWordDictionary(),
             toggles: { togglesBox.read() },
             sleep: { @MainActor in try await clock.sleep($0) },
-            now: { nowBox.read() }
+            now: { nowBox.read() },
+            generator: generator, model: { "test-model" }
         )
         return Harness(learning: learning, state: state, store: store, vocabulary: vocabulary,
                        reader: reader, clock: clock, toggles: togglesBox, now: nowBox)
@@ -253,5 +255,99 @@ import Testing
         #expect(h.learning.style(for: .email, bundleID: "none") == nil)
         h.toggles.write(LearningToggles(words: true, style: false))
         #expect(h.learning.style(for: .chat, bundleID: Self.messages) == nil)
+    }
+
+    private func seed(_ h: Harness, _ count: Int) {
+        for i in 1...count {
+            h.store.recordFinalText("Earlier message number \(i)", bundleID: Self.messages, category: .chat)
+        }
+    }
+
+    private func dictateUnanchored(_ h: Harness) {
+        h.learning.didInsert(InsertedDictation(text: Self.original, bundleID: Self.messages, category: .chat))
+    }
+
+    @Test func the_twentieth_text_refreshes_the_note() async {
+        let generator = FakeStyleGenerator()
+        let h = makeHarness(anchors: [.skipped(.noElement)], generator: generator)
+        seed(h, 19)
+        dictateUnanchored(h)
+        #expect(await eventually { h.store.category(.chat).note == "- Uses contractions." })
+        #expect(generator.requests.count == 1)
+        #expect(generator.requests.first?.texts.count == 20)
+        #expect(generator.requests.first?.categoryName == "Chat")
+        #expect(generator.requests.first?.model == "test-model")
+        #expect(h.store.category(.chat).sinceRefresh == 0)
+        #expect(!h.store.category(.chat).noteEditedByUser)
+    }
+
+    @Test func an_edited_note_is_not_refreshed() async {
+        let generator = FakeStyleGenerator()
+        let h = makeHarness(anchors: [.skipped(.noElement)], generator: generator)
+        h.store.setNote("Mine", category: .chat, editedByUser: true)
+        seed(h, 19)
+        dictateUnanchored(h)
+        #expect(await eventually { h.store.category(.chat).sinceRefresh == 20 })
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(generator.requests.isEmpty)
+        #expect(h.store.category(.chat).note == "Mine")
+    }
+
+    @Test func a_failed_refresh_keeps_the_note_and_restarts_the_count() async {
+        let generator = FakeStyleGenerator()
+        generator.result = .failure(LLMError.rateLimited)
+        let h = makeHarness(anchors: [.skipped(.noElement)], generator: generator)
+        seed(h, 19)
+        dictateUnanchored(h)
+        #expect(await eventually { generator.requests.count == 1 && h.learning.refreshing.isEmpty })
+        #expect(h.store.category(.chat).note == nil)
+        #expect(h.store.category(.chat).sinceRefresh == 0)
+    }
+
+    @Test func only_one_refresh_runs_per_category() async {
+        let generator = FakeStyleGenerator()
+        generator.hold = true
+        let h = makeHarness(anchors: [.skipped(.noElement)], generator: generator)
+        seed(h, 19)
+        dictateUnanchored(h)
+        #expect(await eventually { generator.requests.count == 1 })
+        dictateUnanchored(h)
+        #expect(await eventually { h.store.category(.chat).sinceRefresh == 21 })
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(generator.requests.count == 1)
+        generator.release()
+        #expect(await eventually { h.store.category(.chat).note == "- Uses contractions." })
+    }
+
+    @Test func an_edit_made_during_a_refresh_wins() async {
+        let generator = FakeStyleGenerator()
+        generator.hold = true
+        let h = makeHarness(anchors: [.skipped(.noElement)], generator: generator)
+        seed(h, 19)
+        dictateUnanchored(h)
+        #expect(await eventually { generator.requests.count == 1 })
+        h.store.setNote("Mine", category: .chat, editedByUser: true)
+        generator.release()
+        #expect(await eventually { h.learning.refreshing.isEmpty })
+        #expect(h.store.category(.chat).note == "Mine")
+        #expect(h.store.category(.chat).noteEditedByUser)
+    }
+
+    @Test func regenerate_replaces_an_edited_note() async {
+        let generator = FakeStyleGenerator()
+        let h = makeHarness(generator: generator)
+        h.store.setNote("Mine", category: .chat, editedByUser: true)
+        seed(h, 3)
+        await h.learning.regenerate(.chat)?.value
+        #expect(h.store.category(.chat).note == "- Uses contractions.")
+        #expect(!h.store.category(.chat).noteEditedByUser)
+    }
+
+    @Test func regenerate_needs_texts_and_a_generator() {
+        let empty = makeHarness(generator: FakeStyleGenerator())
+        #expect(empty.learning.regenerate(.chat) == nil)
+        let noGenerator = makeHarness()
+        seed(noGenerator, 3)
+        #expect(noGenerator.learning.regenerate(.chat) == nil)
     }
 }
