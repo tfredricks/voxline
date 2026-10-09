@@ -15,6 +15,13 @@ numbers. The carry-overs from phase 1 are fixed too (see the note near the end).
 Item 15 was fixed in phase 5 (Learning): Reset to Defaults no longer touches the
 custom vocabulary, and the vocabulary list's Clear All asks first.
 
+Items 1, 2, 5, 9, 13 and 19 are fixed in the current code (a note under each says
+where); their descriptions are kept as written. Item 3 is still open. File names in
+older descriptions (`ClipboardInjector.swift`, `SettingsView.swift`,
+`WindowVisibilityCoordinator`, `MeetingsSection.swift`) no longer exist; text insertion
+now lives in `voxline/Output/` (`TextInserter`, `PasteInjector`), settings in
+`voxline/Settings/Pages/`, and the Dock icon in `ActivationPolicyController`.
+
 Items 28 and 29, found 2026-10-09, were fixed alongside the main window
 (`docs/superpowers/specs/2026-10-09-main-window-design.md`): 29 by the main window
 itself, 28 by sizing the meeting timer chip to its text. Their descriptions are kept
@@ -35,6 +42,9 @@ ms up to ~1s: clipped first words and a visible UI hitch on every press.
 down), or keep the engine warm briefly between dictations; move the device-name
 lookup off the critical path.
 
+**Fixed:** `AudioCaptureService.prewarm()` builds the engine when the chord arms, and
+`CapturePipeline` calls it (`capture.prewarm()`); `start()` reuses the running engine.
+
 ### 2. One LLM hiccup destroys the dictation; a hang freezes dictation for a minute
 - No timeout: `HTTPClient.swift:13` uses `URLSession.shared` with the default 60s
   request timeout, and the `-1005` retry (lines 20-29) can double it.
@@ -51,6 +61,11 @@ lookup off the critical path.
 **Fix direction:** ~15s request timeout, one retry on 429/5xx, and on failure copy
 the raw transcript to the clipboard (or offer it via the pill/menu) instead of
 discarding it.
+
+**Fixed:** `URLSessionHTTPClient.makeSession` uses a 15s request and 30s resource
+timeout; `RetryingHTTPClient` retries once on 429/500/502/503/504/529; on an LLM
+failure `CapturePipeline` copies the raw transcript to the clipboard ("Raw transcript
+copied to the clipboard — paste to recover it."); Esc cancels while thinking (phase 2).
 
 ### 3. Back-to-back dictation is unreliable — presses during processing are silently swallowed
 `HotkeyStateMachine.swift:50-57` — in `.finalizing`, `flagsChanged` hits the
@@ -80,6 +95,10 @@ merely *has* an Edit ▸ Paste menu item (almost every app) or the focused eleme
 a readable `AXValue` (includes read-only static text). Cmd+V then no-ops, verification
 returns `.unchanged` with the same element identity, and that is reported as
 success (`.unverified`). No error, no fallback; the dictation exists only in history.
+
+**Fixed:** with no editable field, `CapturePipeline` copies the text and shows "No text
+field focused — copied" (`showToast`, `CapturePipeline.swift`). `ClipboardInjector` is
+gone; insertion is `TextInserter` / `InsertionPlan`.
 
 ### 6. Clipboard restore races slow apps — the OLD clipboard gets pasted
 `ClipboardInjector.swift:454, 564, 587` — after posting Cmd+V the code sleeps a fixed
@@ -114,6 +133,9 @@ healthy. Related: `PasteboardSnapshot.capture` (`PasteboardSnapshot.swift:31-37`
 forces promised/lazy pasteboard data synchronously — dictating right after copying
 something huge (Photoshop/Office) freezes the app while the payload materializes.
 
+**Fixed:** `AXMessagingTimeout.install()` (called from `AppCoordinator`) sets a global
+AX messaging timeout, and the paste-menu walk is gone with `ClipboardInjector`.
+
 ### 10. Re-recording the hotkey in Settings can trigger a live dictation
 `ChordRecorderView.swift:45-61` — the recorder installs only local `NSEvent`
 monitors; the global CGEventTap is never suspended. Pressing the *current* chord's
@@ -143,6 +165,10 @@ The key-up is never seen: mic stays hot, pill stuck on screen, status stuck at
 `WizardViewModel.commitProgress()` commits those fields on every advance, and
 committing `""` deletes the stored key — a transient read failure during a re-run
 wizard permanently deletes both keys on one click.
+
+**Fixed:** `DataProtectionKeychain` now throws `KeychainError.dataProtectionKeychainUnavailable`
+for `errSecMissingEntitlement` on reads, and `APIKeysSettingsViewModel` records a failed
+read (`anthropicReadFailed` / `openaiReadFailed`) and leaves the stored key untouched.
 
 ### 14. OpenAI reasoning models can paste nothing — empty output treated as success
 `OpenAIClient.swift:25-27, 46-64` — `max_completion_tokens: 1024` is shared with
@@ -174,6 +200,8 @@ the user waits, nothing pastes, an empty history entry is recorded.
     user's entire modes.json (silent fallback to shipped defaults,
     `voxlineApp.swift:211-218`). All tagged releases already write `category`, so
     this is latent today.
+    **Fixed:** `Mode.init(from:)` (an extension in `Mode.swift`) decodes `model`,
+    `temperature`, `fieldKind` and `category` with `decodeIfPresent`.
 20. **Fail-safe and reconcile timers stall while the menu-bar menu is open** —
     `HotkeyMonitor.swift:133` and `voxlineApp.swift:323` use
     `Timer.scheduledTimer` (`.default` run-loop mode only; the tap source is in
