@@ -15,39 +15,10 @@ numbers. The carry-overs from phase 1 are fixed too (see the note near the end).
 Item 15 was fixed in phase 5 (Learning): Reset to Defaults no longer touches the
 custom vocabulary, and the vocabulary list's Clear All asks first.
 
-## Open — found 2026-10-09
-
-29. **Fixed (main window): the Dock icon got stuck with no window behind it.** voxline often
-    shows in the Dock with no visible UI; clicking the icon does nothing and
-    there is no way to hide it short of quitting. Suspected cause, from reading
-    the code (not yet reproduced): `WindowVisibilityCoordinator` switches to
-    `.regular` when any `.titled` window becomes key and back to `.accessory`
-    only on `NSWindow.willCloseNotification`. Modal `NSAlert`s and the
-    `NSOpenPanel` folder picker are titled, become key, and are *ordered out*
-    rather than closed after `runModal()`, so they never leave the tracked set
-    — the quit confirmation (`voxlineApp.swift:150`), the three meeting alerts
-    (`MeetingNotifier.swift:125, 135, 145`), and the meeting-folder picker
-    (`MeetingsSection.swift:49`). Any SwiftUI window hidden rather than closed
-    would leak the same way. Separately, the app delegate has no
-    `applicationShouldHandleReopen(_:hasVisibleWindows:)`, so a Dock click has
-    nothing to show. Likely fix: derive the policy from the windows that are
-    actually visible (re-evaluate on key/close/occlusion changes instead of
-    keeping a set), keep the 0↔1-edge rule that avoids the activation flicker,
-    and handle reopen by opening Settings.
-
-    Fixed by the main window (`docs/superpowers/specs/2026-10-09-main-window-design.md`):
-    the Dock icon is worked out from visible non-panel windows on every window event, and a
-    Dock click opens Home.
-
-28. **Meeting timer chip truncates the elapsed time** — while a meeting records,
-    the chip reads "1:…" instead of the time. `MeetingTimerPanel.swift:16` gives
-    the panel a fixed 96 × 28 pt frame, and `Text(startedAt, style: .timer)`
-    asks for more width than the digits it draws, so the hosting view squeezes
-    it and SwiftUI truncates. Likely fix: size the panel from the hosting
-    view's `fittingSize` (or render the label from a `TimelineView` with a
-    formatted string and `.fixedSize()`), leaving room for `H:MM:SS` past the
-    first hour. Check that the remembered frame (`voxline.meetingTimer`
-    autosave) doesn't restore the old 96 pt width.
+Items 28 and 29, found 2026-10-09, were fixed alongside the main window
+(`docs/superpowers/specs/2026-10-09-main-window-design.md`): 29 by the main window
+itself, 28 by sizing the meeting timer chip to its text. Their descriptions are kept
+as written, under "Found 2026-10-09" near the end.
 
 ## High — daily-use pain
 
@@ -263,6 +234,43 @@ Three Accessibility edge cases carried over from phase 1, all fixed in phase 3:
   (command) or a copy (dictation), never a paste into a field that might be a password.
 - **A late AX write could insert twice.** A write that times out is polled for a second
   and then copied; it never falls through to a paste.
+
+## Found 2026-10-09
+
+28. **Meeting timer chip truncates the elapsed time** — while a meeting records,
+    the chip reads "1:…" instead of the time. `MeetingTimerPanel.swift:16` gives
+    the panel a fixed 96 × 28 pt frame, and `Text(startedAt, style: .timer)`
+    asks for more width than the digits it draws, so the hosting view squeezes
+    it and SwiftUI truncates. Likely fix: size the panel from the hosting
+    view's `fittingSize` (or render the label from a `TimelineView` with a
+    formatted string and `.fixedSize()`), leaving room for `H:MM:SS` past the
+    first hour. Check that the remembered frame (`voxline.meetingTimer`
+    autosave) doesn't restore the old 96 pt width.
+
+    Fixed by sizing the chip to its text (`MeetingTimerLayout`): the label is a
+    formatted string ticked by a `TimelineView` with room for `H:MM:SS`, and the
+    panel takes its size from the hosting view.
+
+29. **The Dock icon got stuck with no window behind it.** voxline often
+    shows in the Dock with no visible UI; clicking the icon does nothing and
+    there is no way to hide it short of quitting. Suspected cause, from reading
+    the code (not yet reproduced): `WindowVisibilityCoordinator` switches to
+    `.regular` when any `.titled` window becomes key and back to `.accessory`
+    only on `NSWindow.willCloseNotification`. Modal `NSAlert`s and the
+    `NSOpenPanel` folder picker are titled, become key, and are *ordered out*
+    rather than closed after `runModal()`, so they never leave the tracked set
+    — the quit confirmation (`voxlineApp.swift:150`), the three meeting alerts
+    (`MeetingNotifier.swift:125, 135, 145`), and the meeting-folder picker
+    (`MeetingsSection.swift:49`). Any SwiftUI window hidden rather than closed
+    would leak the same way. Separately, the app delegate has no
+    `applicationShouldHandleReopen(_:hasVisibleWindows:)`, so a Dock click has
+    nothing to show. Likely fix: derive the policy from the windows that are
+    actually visible (re-evaluate on key/close/occlusion changes instead of
+    keeping a set), keep the 0↔1-edge rule that avoids the activation flicker,
+    and handle reopen by opening Settings.
+
+    Fixed by the main window: the Dock icon is worked out from visible non-panel
+    windows on every window event, and a Dock click opens Home.
 
 ## Reviewer claims rejected during verification
 

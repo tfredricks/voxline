@@ -167,7 +167,7 @@ Build and run from Xcode (⌘R), or use `./scripts/build-local.sh` to build Rele
 On first launch:
 
 1. Grant **Microphone** and **Accessibility** when prompted (the app will guide you).
-2. Pick your hotkeys, mic, speech engine, and (for Whisper) model in the Settings window (⌘,). The default dictation hotkey is **Left Shift + Left Control** and the default command hotkey is **Left Shift + Left Option** — change either if you'd rather use something else.
+2. Pick your hotkeys, mic, speech engine, and (for Whisper) model on the main window's Settings page (open Voxline from the menu bar → Settings, or ⌘,). The default dictation hotkey is **Left Shift + Left Control** and the default command hotkey is **Left Shift + Left Option** — change either if you'd rather use something else.
 3. Drop in an Anthropic or OpenAI API key in the **Cleanup (AI)** section.
 4. Hold the dictation hotkey anywhere on your Mac and start talking. To edit text instead, select it, hold the command hotkey, and say what to change.
 
@@ -212,7 +212,7 @@ voxline has **no telemetry, no analytics, and no first-party server**. The only 
 ## Good to know
 
 - **Not sandboxed, on purpose** — voxline reads the focused field through the Accessibility API, which the App Sandbox blocks. The app ships notarized with the hardened runtime, and its data lives in `~/Library/Application Support/voxline`.
-- **Settings live in one place** — single-page Settings window with a status strip up top showing what's wired up. Switching providers keeps both keys around for fast toggling.
+- **Settings live in one place** — the main window's Settings page, with a status strip up top showing what's wired up. Switching providers keeps both keys around for fast toggling.
 - **Resilient hotkey** — when permissions are revoked or restored, voxline reconciles automatically without a relaunch. OS shortcuts that include your hotkey's keys, like ⌘⇧4, don't start a recording.
 - **Open source** — read the code, audit the data path, file an issue, send a PR.
 

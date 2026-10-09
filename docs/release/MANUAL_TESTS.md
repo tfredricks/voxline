@@ -443,8 +443,8 @@ blip may play on the discarded ones.
 - [ ] Press ⌥2 with nothing selected. The toast reads "Select text to
       transform" and no ™ is typed.
 - [ ] Press ⌥1 and ⌥3 on selections in Notes and Slack. Each works.
-- [ ] Open voxline's own Settings window, focus a text field, and press ⌥2. It
-      types ™ (presets are off while voxline is frontmost).
+- [ ] Open the main window's Settings page, focus a text field, and press ⌥2.
+      It types ™ (presets are off while voxline is frontmost).
 - [ ] Select a paragraph in Notes and hold ⌥2 down for two seconds. Make
       concise runs once: key repeat neither runs it again nor types ™.
 - [ ] Add a preset, record a shortcut for it, and leave its instruction
@@ -525,9 +525,9 @@ joins the paste-first list before release.
 
 - [ ] Issue 10: open Settings → General → Hotkey, start recording a new
       dictation chord, and press and hold the old chord keys. No dictation
-      starts, no pill appears, and nothing is pasted into the Settings window.
+      starts, no pill appears, and nothing is pasted into the Settings page.
       Start recording a chord again, then switch to another app or close the
-      Settings window. The recorder stops, and dictating in Notes works.
+      main window. The recorder stops, and dictating in Notes works.
 - [ ] Issue 12: hold the chord and speak. While still holding, turn voxline off
       in System Settings → Privacy & Security → Accessibility. The recording
       finishes instead of sticking: the mic indicator goes off and the pill
@@ -678,3 +678,6 @@ Show Voxline in Dock is off unless a step says otherwise.
 - [ ] Launch at login on, log out and back in → no window and no Dock icon. The menu bar works.
 - [ ] Revoke Accessibility while running → Home opens with Accessibility missing. Re-grant → it turns green within about a second.
 - [ ] Home's recent meetings: click a finished meeting → its notes open. "Open meetings folder" → Finder opens the notes folder.
+- [ ] Open Settings, close the window → the mic indicator turns off immediately; dictate once with the window closed → it stays off.
+- [ ] Edit a preset instruction and a style note, close the window with the field focused, reopen → both edits kept.
+- [ ] Reopen the window → Settings shows current Launch at Login approval state.
