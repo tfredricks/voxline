@@ -79,22 +79,25 @@ import Foundation
     }
 
     @Test func saving_an_openai_key_rechecks_the_openai_engine() async throws {
-        var keySaved = false
+        var checks = 0
         let f = try makeFixtures(engine: .openAIRealtime, readiness: { _ in
-            keySaved ? .ready : .unavailable(OpenAIRealtimeEngine.missingKeyReason)
+            checks += 1
+            return checks == 1
+                ? .unavailable(OpenAIRealtimeEngine.missingKeyReason)
+                : .needsPreparation(downloadMB: nil)
         })
         await f.status.refreshEngineReadiness()
-        #expect(f.status.issues.contains { $0.page == .dictation })
+        #expect(f.status.issues.contains { $0.text == OpenAIRealtimeEngine.missingKeyReason })
         let before = f.status.readinessKey
 
         f.keys.openaiKey = "sk-openai-new"
         f.keys.commitOpenAI()
-        keySaved = true
         #expect(f.status.readinessKey != before)
         #expect(!f.status.issues.contains { $0.page == .dictation })
 
         await f.status.refreshEngineReadiness()
-        #expect(!f.status.issues.contains { $0.page == .dictation })
+        #expect(checks == 2)
+        #expect(f.status.issues == [SetupIssue(text: "OpenAI needs a one-time download", page: .dictation)])
     }
 
     @Test func saving_an_openai_key_keeps_an_on_device_check() async throws {
@@ -111,17 +114,17 @@ import Foundation
     @Test func a_superseded_check_does_not_overwrite_a_newer_one() async throws {
         let gate = ReadinessGate()
         let f = try makeFixtures(engine: .apple, readiness: { id in
-            id == .apple ? await gate.wait() : .ready
+            id == .apple ? await gate.wait() : .needsPreparation(downloadMB: nil)
         })
         let stale = Task { await f.status.refreshEngineReadiness() }
         await gate.waitUntilBlocked()
         f.general.engine = .whisperKit
         await f.status.refreshEngineReadiness()
-        #expect(f.status.issues.isEmpty)
+        #expect(f.status.needsSetup(.dictation))
 
-        gate.release(.needsPreparation(downloadMB: nil))
+        gate.release(.ready)
         await stale.value
-        #expect(f.status.issues.isEmpty)
+        #expect(f.status.needsSetup(.dictation))
     }
 
     @Test func setup_needed_when_no_devices_and_no_uid() async throws {

@@ -19,6 +19,7 @@ final class SettingsModel {
         command: CommandSettingsViewModel,
         meetings: MeetingSettingsViewModel,
         learning: LearningCoordinator,
+        vocabularyStore: CustomVocabularyStore = CustomVocabularyStore(),
         engineReadiness: @escaping @MainActor (EngineID) async -> EngineReadiness?
     ) {
         self.general = general
@@ -27,11 +28,11 @@ final class SettingsModel {
         self.meetings = meetings
         self.learning = learning
         self.vocabulary = CustomVocabularyListViewModel(
-            store: CustomVocabularyStore(),
+            store: vocabularyStore,
             onRemoveLearned: { [weak learning] in learning?.learnedWordsRemoved($0) },
             onAdd: { [weak learning] in learning?.wordAddedByUser($0) }
         )
-        self.learningSettings = LearningSettingsViewModel(learning: learning)
+        self.learningSettings = LearningSettingsViewModel(learning: learning, vocabulary: vocabularyStore)
         self.status = SettingsStatusViewModel(general: general, keys: apiKeys, engineReadiness: engineReadiness)
     }
 
