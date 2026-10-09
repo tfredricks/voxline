@@ -30,7 +30,8 @@ import Foundation
             injector: FakeInjector(handler: inject),
             historyStore: DictationHistoryStore(defaults: defaults),
             contextCapture: FakeContextCapture(),
-            selectionSnapshot: FakeSelectionSnapshot()
+            selectionSnapshot: FakeSelectionSnapshot(),
+            llmModelID: { "test-model" }
         )
         return (p, state, capture)
     }
@@ -121,7 +122,8 @@ import Foundation
             injector: FakeInjector(handler: { _ in TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified) }),
             historyStore: DictationHistoryStore(defaults: defaults),
             contextCapture: FakeContextCapture(),
-            selectionSnapshot: FakeSelectionSnapshot()
+            selectionSnapshot: FakeSelectionSnapshot(),
+            llmModelID: { "test-model" }
         )
         p.startRecording()
         // Do NOT set lastPeakLevel above 0 — simulating a silent mic where the

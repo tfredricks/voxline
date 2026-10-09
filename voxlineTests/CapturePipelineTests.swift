@@ -118,7 +118,8 @@ import Foundation
             llm: llm, modes: router, frontmost: front,
             fieldInspector: inspector, injector: injector,
             historyStore: history, contextCapture: FakeContextCapture(),
-            selectionSnapshot: FakeSelectionSnapshot()
+            selectionSnapshot: FakeSelectionSnapshot(),
+            llmModelID: { "test-model" }
         )
         return (pipe, state, capture, transcriber, llm, front, inspector, injector, history)
     }
@@ -141,7 +142,8 @@ import Foundation
             llm: llm, modes: router, frontmost: front,
             fieldInspector: inspector, injector: injector,
             historyStore: history, contextCapture: ctx,
-            selectionSnapshot: FakeSelectionSnapshot()
+            selectionSnapshot: FakeSelectionSnapshot(),
+            llmModelID: { "test-model" }
         )
         return (pipe, state, capture, transcriber, llm, front, inspector, injector, history, ctx)
     }
@@ -534,6 +536,7 @@ import Foundation
             fieldInspector: inspector, injector: injector,
             historyStore: history, contextCapture: FakeContextCapture(),
             selectionSnapshot: FakeSelectionSnapshot(),
+            llmModelID: { "test-model" },
             reviewLingerDuration: linger, now: { now }
         )
         return (pipe, state, llm, injector, history)
@@ -566,6 +569,7 @@ import Foundation
             fieldInspector: inspector, injector: injector,
             historyStore: history, contextCapture: FakeContextCapture(),
             selectionSnapshot: snap,
+            llmModelID: { "test-model" },
             reviewLingerDuration: linger, now: { now }
         )
         return (pipe, state, llm, injector, history)
@@ -705,6 +709,17 @@ import Foundation
         #expect(item.rawTranscript == "hello world")
     }
 
+    @Test func finalize_withSelection_recordsCommandMetricsRow() async throws {
+        let (pipe, state, _, _, _) = makeTransformPipeline(selection: "original text")
+        pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+
+        let row = try #require(pipe.metrics.items.first)
+        #expect(pipe.metrics.items.count == 1)
+        #expect(row.kind == .command)
+        #expect(row.wordCount == 1)
+        #expect(row.modelID == "test-model")
+    }
+
     @Test func refine_onTransformSession_usesTransformOnCurrentText() async {
         let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
         pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
@@ -805,6 +820,7 @@ import Foundation
             fieldInspector: inspector, injector: injector,
             historyStore: history, contextCapture: FakeContextCapture(),
             selectionSnapshot: snap,
+            llmModelID: { "test-model" },
             reviewLingerDuration: 7, now: { Date(timeIntervalSince1970: 10_000) }
         )
         // Focus/selection moves mid-await: flip the snapshot from inside
@@ -858,7 +874,8 @@ import Foundation
             llm: llm, modes: router, frontmost: front,
             fieldInspector: inspector, injector: injector,
             historyStore: history, contextCapture: FakeContextCapture(),
-            selectionSnapshot: snap
+            selectionSnapshot: snap,
+            llmModelID: { "test-model" }
         )
 
         pipe.startRecording(command: false); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
@@ -891,6 +908,7 @@ import Foundation
         #expect(pipe.metrics.items.count == 1)
         #expect(row.kind == .dictation)
         #expect(row.wordCount == 1)
+        #expect(row.modelID == "test-model")
         #expect(row.engineID == "unknown")
         #expect(row.totalMs >= row.transcribeMs + row.cleanupMs)
     }
