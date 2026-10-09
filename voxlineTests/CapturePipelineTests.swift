@@ -395,6 +395,22 @@ import Foundation
         #expect(history.items[0].cleanedText == "Hello there.")
     }
 
+    @Test func finalize_nonEditableFocusedField_copiesInsteadOfPasting() async throws {
+        let (pipe, state, _, _, _, _, _, injector, history) = makePipeline(
+            focusedField: FocusedField(role: "AXButton", subrole: nil)
+        )
+        let copied = LockedBox<[String]>([])
+        pipe.transcriptFallback = { text in copied.mutate { $0.append(text) } }
+
+        await startAndFinalize(pipe, state: state)
+
+        #expect(injector.injected.isEmpty)
+        #expect(copied.read() == ["cleaned"])
+        #expect(state.toastMessage == "No text field focused — copied")
+        #expect(state.status == .idle)
+        #expect(history.items.first?.cleanedText == "cleaned")
+    }
+
     @Test func finalize_passes_captured_context_to_llm() async {
         let (pipe, state, _, _, llm, _, _, _, _, ctx) = makePipelineWithContext()
         var captured = CapturedContext.empty

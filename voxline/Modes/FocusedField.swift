@@ -28,3 +28,23 @@ struct FocusedField: Equatable, Sendable {
         return .text
     }
 }
+
+extension FocusedField {
+
+    /// Roles that can never take typed text. Everything else, including nil
+    /// and unfamiliar roles, counts as editable so an AX-opaque editor is
+    /// never refused.
+    static let nonEditableRoles: Set<String> = [
+        "AXApplication", "AXButton", "AXCell", "AXCheckBox", "AXDisclosureTriangle",
+        "AXImage", "AXIncrementor", "AXLink", "AXList", "AXMenu", "AXMenuBar",
+        "AXMenuButton", "AXMenuItem", "AXOutline", "AXPopUpButton",
+        "AXProgressIndicator", "AXRadioButton", "AXRow", "AXScrollArea",
+        "AXSlider", "AXSplitGroup", "AXStaticText", "AXTabGroup", "AXTable",
+        "AXToolbar", "AXWindow",
+    ]
+
+    var isEditable: Bool {
+        guard let role else { return true }
+        return !Self.nonEditableRoles.contains(role)
+    }
+}

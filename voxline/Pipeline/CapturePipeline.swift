@@ -254,6 +254,13 @@ final class CapturePipeline {
         state.lastCleanedText = cleaned
         historyStore.record(cleanedText: cleaned, mode: mode, context: context)
 
+        guard field?.isEditable ?? true else {
+            transcriptFallback(cleaned)
+            resetIdle()
+            showToast("No text field focused — copied")
+            return
+        }
+
         // 4. Paste.
         do {
             _ = try await injector.inject(cleaned)
