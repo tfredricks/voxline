@@ -74,4 +74,23 @@ import CoreGraphics
         #expect(HotkeyChord.commandModifierConflictWarning(command: .leftCommand, chord: chord) == nil)
     }
 
+    @Test func default_command_is_left_shift_plus_left_option() {
+        #expect(HotkeyChord.defaultCommand.modifierA == .leftShift)
+        #expect(HotkeyChord.defaultCommand.modifierB == .leftOption)
+    }
+
+    @Test func keys_is_the_set_of_both_modifiers() {
+        #expect(HotkeyChord.default.keys == [.leftShift, .leftControl])
+    }
+
+    @Test func families_is_the_side_agnostic_union() {
+        #expect(HotkeyChord.default.families == [.shift, .control])
+        #expect(HotkeyChord(modifierA: .leftShift, modifierB: .rightShift).families == .shift)
+    }
+
+    @Test func chord_is_hashable_by_value() {
+        let a = HotkeyChord(modifierA: .leftShift, modifierB: .leftControl)
+        #expect(Set([a, .default]).count == 1)
+    }
+
 }

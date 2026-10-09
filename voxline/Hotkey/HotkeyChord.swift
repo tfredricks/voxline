@@ -5,7 +5,7 @@ import IOKit.hidsystem
 
 /// Codable value type for the hold-to-talk chord.
 /// Pure data; flag-bit matching uses CGEventFlags via `Modifier.deviceMaskBit`.
-struct HotkeyChord: Codable, Equatable {
+struct HotkeyChord: Codable, Equatable, Hashable, Sendable {
 
     enum Modifier: String, Codable, CaseIterable {
         case leftControl
@@ -56,6 +56,10 @@ struct HotkeyChord: Codable, Equatable {
     let modifierB: Modifier
 
     static let `default` = HotkeyChord(modifierA: .leftShift, modifierB: .leftControl)
+    static let defaultCommand = HotkeyChord(modifierA: .leftShift, modifierB: .leftOption)
+
+    var keys: Set<Modifier> { [modifierA, modifierB] }
+    var families: ModifierFamilies { ModifierFamilies(modifiers: keys) }
 
     var displayName: String { "\(modifierA.displayName) + \(modifierB.displayName)" }
 
