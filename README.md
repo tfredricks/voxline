@@ -81,7 +81,7 @@ voxline writes the result into the focused field through Accessibility where the
 
 ### Command mode
 
-There are two chords: **dictation** (Left Shift + Left Control by default) and **command** (Left Shift + Left Option by default). Change either, or turn command mode off, in Settings → General → Hotkey.
+There are two chords: **dictation** (Left Shift + Left Control by default) and **command** (Left Shift + Left Option by default). Change either, or turn command mode off, in Settings → General → Hotkey. With ⇧⌥ as the command chord, typing a ⇧⌥ character such as an em dash briefly starts and discards a recording (you hear the start sound and see the microphone indicator), and a slowly pressed ⌥-digit preset can light the microphone indicator for a moment.
 
 Hold the command chord, say what to do, and let go:
 

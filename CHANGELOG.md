@@ -55,6 +55,10 @@ once it reaches its first tagged release.
   replaced. The model sees up to 12,000 characters of the field around the
   cursor, so replies and continuations follow what is already there. Selections
   over 8,000 characters are refused, and password fields are never read.
+  With ⇧⌥ as the command chord, typing a ⇧⌥ character such as an em dash
+  briefly starts and discards a recording (you hear the start sound and see
+  the microphone indicator), and a slowly pressed ⌥-digit preset can light the
+  microphone indicator for a moment.
 - **Preset edit shortcuts.** Select text anywhere and press ⌥1 (Fix grammar),
   ⌥2 (Make concise), or ⌥3 (Make professional) to run a stored instruction
   with no recording. Settings → Command has an editable table: record any
