@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var levelMonitor = MicLevelMonitor()
     @State private var status: SettingsStatusViewModel
     @State private var vocabularyVM: CustomVocabularyListViewModel
+    @State private var learningVM: LearningSettingsViewModel
     private let learning: LearningCoordinator
     @State private var recognitionKeyRevealed = false
 
@@ -41,6 +42,7 @@ struct SettingsView: View {
             onRemoveLearned: { [weak learning] in learning?.learnedWordsRemoved($0) },
             onAdd: { [weak learning] in learning?.wordAddedByUser($0) }
         ))
+        _learningVM = State(wrappedValue: LearningSettingsViewModel(learning: learning))
     }
 
     var body: some View {
@@ -169,6 +171,8 @@ struct SettingsView: View {
 
                     CustomVocabularyListView(viewModel: vocabularyVM)
                         .id(SettingsAnchor.customVocabulary)
+
+                    LearningSection(model: learningVM)
 
                     Section("Feedback") {
                         Toggle("Play sound on record start/stop", isOn: $generalVM.playHotkeySounds)
