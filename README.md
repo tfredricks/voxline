@@ -49,7 +49,7 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 - **Bring your own LLM key** — Anthropic or OpenAI, your account, your model, your costs. Keys live in macOS Keychain.
 - **Menu-bar native, with a real window when you want it** — a main window with Home (status, setup issues, permissions, recent meetings) and six settings pages; close it and voxline keeps running in the menu bar. No Dock icon unless the window is open, or turn on Settings → General → Show Voxline in Dock.
 - **Meeting notes** — record a meeting of up to an hour (your mic plus your Mac's sound output), and get a Markdown file with a summary, decisions, action items, and a speaker-labeled transcript. Transcription and speaker separation run on your Mac; meetings use the Whisper small.en model (English) for speed.
-- **Privacy-aware feedback** — clipboard is restored after paste; the system mic indicator turns off the moment you let go.
+- **Privacy-aware feedback** — clipboard is restored after paste. The microphone stays open for 90 seconds after a dictation so the next one captures from the first syllable, then the system mic indicator turns off; nothing is captured while it idles.
 
 ## How it works
 
@@ -83,7 +83,7 @@ voxline writes the result into the focused field through Accessibility where the
 
 ### Command mode
 
-There are two chords: **dictation** (Left Shift + Left Control by default) and **command** (Left Shift + Left Option by default). Change the dictation chord in Settings → Dictation, and the command chord (or turn command mode off) in Settings → Commands. With ⇧⌥ as the command chord, typing a ⇧⌥ character such as an em dash briefly starts and discards a recording (you hear the start sound and see the microphone indicator), and a slowly pressed ⌥-digit preset can light the microphone indicator for a moment.
+There are two chords: **dictation** (Left Shift + Left Control by default) and **command** (Left Shift + Left Option by default). Change the dictation chord in Settings → Dictation, and the command chord (or turn command mode off) in Settings → Commands. With ⇧⌥ as the command chord, typing a ⇧⌥ character such as an em dash briefly starts and discards a recording (you hear the start sound and see the microphone indicator), and an ⌥-digit preset lights the microphone indicator for a moment, since holding a chord key that is not Shift or Command warms the microphone at once so the first word is never clipped.
 
 Hold the command chord, say what to do, and let go:
 

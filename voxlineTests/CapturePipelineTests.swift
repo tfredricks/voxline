@@ -163,6 +163,63 @@ import Foundation
         #expect(capture.startCallCount == 1)
     }
 
+    @Test func onRecordingStarted_firesOnceTheFirstAudioArrives() async {
+        let (pipe, _, _, _, _, _, _, _, _) = makePipeline()
+        let log = Log()
+        pipe.onRecordingStarted = { log.events.append("started") }
+        pipe.startRecording()
+        #expect(log.events.isEmpty, "the cue must wait for audio, not fire on the keypress")
+        await drainMainActor()
+        #expect(log.events == ["started"])
+    }
+
+    @Test func onRecordingStarted_waitsForAudioFromTheTap() async {
+        let (pipe, _, capture, _, _, _, _, _, _) = makePipeline()
+        capture.pendingSamples = []
+        let log = Log()
+        pipe.onRecordingStarted = { log.events.append("started") }
+        pipe.startRecording()
+        await drainMainActor()
+        #expect(log.events.isEmpty)
+        capture.onSamples?([0.1, 0.2])
+        capture.onSamples?([0.3])
+        await drainMainActor()
+        #expect(log.events == ["started"], "fires once, on the first chunk only")
+    }
+
+    @Test func onRecordingStarted_doesNotFireWhenCaptureFails() async {
+        let (pipe, _, capture, _, _, _, _, _, _) = makePipeline()
+        struct Boom: Error {}
+        capture.startError = Boom()
+        let log = Log()
+        pipe.onRecordingStarted = { log.events.append("started") }
+        pipe.startRecording()
+        await drainMainActor()
+        #expect(log.events.isEmpty)
+    }
+
+    @Test func onRecordingStarted_doesNotFireForARecordingAlreadyCancelled() async {
+        let (pipe, _, capture, _, _, _, _, _, _) = makePipeline()
+        capture.pendingSamples = []
+        let log = Log()
+        pipe.onRecordingStarted = { log.events.append("started") }
+        pipe.startRecording()
+        let tap = capture.onSamples
+        pipe.cancel()
+        tap?([0.1])
+        await drainMainActor()
+        #expect(log.events.isEmpty, "audio from a cancelled recording must not play the start cue")
+    }
+
+    final class Log {
+        var events: [String] = []
+    }
+
+    /// Lets main-actor tasks queued by the code under test run.
+    private func drainMainActor() async {
+        for _ in 0..<5 { await Task.yield() }
+    }
+
     @Test func startRecording_whenCaptureStartThrows_stopsAnyPrewarm() {
         let (pipe, state, capture, _, _, _, _, _, _) = makePipeline()
         struct Boom: Error {}

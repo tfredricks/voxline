@@ -43,6 +43,26 @@ import Foundation
         #expect(rec.played.isEmpty)
     }
 
+    @Test func prime_plays_the_start_sound_silently_and_nothing_audibly() {
+        let settings = AppSettings(defaults: makeDefaults())
+        let audible = Recorder()
+        let silent = Recorder()
+        let player = HotkeySoundPlayer(settings: settings, playSound: audible.capture, primeSound: silent.capture)
+        player.prime()
+        #expect(silent.played == [HotkeySoundPlayer.startSoundName])
+        #expect(audible.played.isEmpty)
+    }
+
+    @Test func prime_runs_even_when_sounds_are_disabled() {
+        let d = makeDefaults()
+        var settings = AppSettings(defaults: d)
+        settings.playHotkeySounds = false
+        let silent = Recorder()
+        let player = HotkeySoundPlayer(settings: settings, playSound: { _ in }, primeSound: silent.capture)
+        player.prime()
+        #expect(silent.played == [HotkeySoundPlayer.startSoundName], "priming is silent, so it costs nothing to keep the output path warm for a later toggle")
+    }
+
     @Test func toggle_takes_effect_on_next_call() {
         let d = makeDefaults()
         var settings = AppSettings(defaults: d)

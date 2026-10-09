@@ -530,7 +530,7 @@ joins the paste-first list before release.
       main window. The recorder stops, and dictating in Notes works.
 - [ ] Issue 12: hold the chord and speak. While still holding, turn voxline off
       in System Settings → Privacy & Security → Accessibility. The recording
-      finishes instead of sticking: the mic indicator goes off and the pill
+      finishes instead of sticking: the stop sound plays and the pill
       moves on from "Recording", with no relaunch. Turn Accessibility back on:
       the next dictation works. Repeat with "Pause Voxline" from the menu bar
       instead of revoking Accessibility.
@@ -561,7 +561,7 @@ joins the paste-first list before release.
 - [ ] Open Settings → Commands, hold the command chord, speak, then turn
       command mode off while still holding (click the Command mode toggle):
       nothing is sent and no command runs. The recording finishes at once
-      (stop sound, microphone indicator off) with no toast, the clipboard is
+      (stop sound) with no toast, the clipboard is
       unchanged, releasing the keys starts nothing, and
       `scripts/tail-logs.sh --debug --last 2m pipeline llm` shows "command
       mode was turned off while recording; discarded" and no POST. Turn
@@ -677,7 +677,8 @@ Show Voxline in Dock is off unless a step says otherwise.
 - [ ] Launch at login on, log out and back in → no window and no Dock icon. The menu bar works.
 - [ ] Revoke Accessibility while running → Home opens with Accessibility missing. Re-grant → it turns green within about a second.
 - [ ] Home's recent meetings: click a finished meeting → its notes open. "Open meetings folder" → Finder opens the notes folder.
-- [ ] Open Settings → Dictation, close the window → the mic indicator turns off immediately; dictate once with the window closed → it stays off.
+- [ ] Open Settings → Dictation, close the window → the mic indicator turns off immediately; dictate once with the window closed → it stays on for about 90 seconds after the dictation, then turns off without another dictation.
+- [ ] Dictate once, then within 90 seconds press the chord and speak immediately as you press → the first word lands. Hold Left Control alone for a moment → the mic indicator comes on at once (or stays on inside the 90 seconds); release it → it turns off (or stays on until the 90 seconds end). Hold Left Shift alone and type a capital letter → the indicator never comes on. The start sound plays after the pill appears, never before.
 - [ ] Edit a preset instruction and a style note, close the window with the field focused, reopen → both edits kept.
 - [ ] Reopen the window → Settings → General shows current Launch at Login approval state.
 

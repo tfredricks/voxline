@@ -64,6 +64,9 @@ final class AppCoordinator {
     /// open Home on a granted→missing transition (runtime revocation)
     /// without reopening it every tick while it stays missing.
     private var lastRequiredGranted: Bool?
+    /// The capture engine binds its input device once, as soon as the
+    /// microphone is granted, so the first keypress after launch doesn't.
+    private var didWarmUpCapture = false
 
     /// Brings up the main window; set by `AppDelegate` before `startIfNeeded`.
     var presentMainWindow: (MainWindowPage) -> Void = { _ in }
@@ -226,6 +229,11 @@ final class AppCoordinator {
         )
         self.pipeline = pipeline
         capture.onInterrupted = { [weak pipeline] in pipeline?.handleCaptureInterrupted() }
+        // The start cue plays once the first tap buffer is in, so hearing it
+        // means the mic is capturing; played on the keypress it led the mic
+        // by ~200 ms on a cold engine, and the first word's onset was lost.
+        pipeline.onRecordingStarted = { [weak self] in self?.soundPlayer?.playStart() }
+        soundPlayer?.prime()
 
         let pill = RecordingPillWindow()
         pillWindow = pill
@@ -239,7 +247,6 @@ final class AppCoordinator {
         let monitor = HotkeyMonitor()
         monitor.chords = settings.chords
         monitor.onStartRecording = { [weak self, weak state] kind in
-            self?.soundPlayer?.playStart()
             self?.pipeline?.startRecording(kind: kind)
             if let state { self?.pillWindow?.updateVisibility(state: state) }
         }
@@ -367,11 +374,16 @@ final class AppCoordinator {
         // revocation). Gated on the previous tick's state so the main window
         // isn't reopened every second while permissions stay missing — which
         // would fight a user who deliberately closed it.
-        let requiredGranted = (ax == .granted && perms.microphoneStatus == .granted)
+        let microphoneGranted = perms.microphoneStatus == .granted
+        let requiredGranted = (ax == .granted && microphoneGranted)
         if lastRequiredGranted == true && !requiredGranted {
             presentMainWindow(.home)
         }
         lastRequiredGranted = requiredGranted
+        if microphoneGranted && !didWarmUpCapture {
+            didWarmUpCapture = true
+            capture?.warmUp()
+        }
 
         guard let monitor = hotkeyMonitor else { return }
         // Accessibility is the hard gate. Input Monitoring is informational
