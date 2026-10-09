@@ -17,7 +17,7 @@ custom vocabulary, and the vocabulary list's Clear All asks first.
 
 ## Open — found 2026-10-09
 
-29. **High: the Dock icon gets stuck with no window behind it.** voxline often
+29. **Fixed (main window): the Dock icon got stuck with no window behind it.** voxline often
     shows in the Dock with no visible UI; clicking the icon does nothing and
     there is no way to hide it short of quitting. Suspected cause, from reading
     the code (not yet reproduced): `WindowVisibilityCoordinator` switches to
@@ -34,6 +34,10 @@ custom vocabulary, and the vocabulary list's Clear All asks first.
     actually visible (re-evaluate on key/close/occlusion changes instead of
     keeping a set), keep the 0↔1-edge rule that avoids the activation flicker,
     and handle reopen by opening Settings.
+
+    Fixed by the main window (`docs/superpowers/specs/2026-10-09-main-window-design.md`):
+    the Dock icon is worked out from visible non-panel windows on every window event, and a
+    Dock click opens Home.
 
 28. **Meeting timer chip truncates the elapsed time** — while a meeting records,
     the chip reads "1:…" instead of the time. `MeetingTimerPanel.swift:16` gives

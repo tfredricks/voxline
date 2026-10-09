@@ -104,6 +104,7 @@ app that is no longer sandboxed.
   the notes, which you can edit (an edited note is never overwritten unless
   you choose Regenerate), and Reset Learning. A refresh still in flight when
   you reset or turn style learning off is dropped.
+- **Main window.** Open Voxline from the menu bar (or click the Dock icon) for a window with Home — status, permissions, and recent meetings with a link to the notes folder — and Settings, which moved in from its own window. Closing it keeps voxline running in the menu bar. Settings → Show Voxline in Dock keeps the Dock icon all the time; otherwise it shows only while the window is open. Starting at login stays in the menu bar.
 
 ### Changed
 
@@ -166,6 +167,7 @@ app that is no longer sandboxed.
 - The post-dictation Shorter / Longer / Clearer pill. The pill now disappears
   as soon as text lands. Edit-by-voice stays available through command mode;
   keyboard presets for common edits arrive with the command-mode rewrite.
+- The separate Settings and Permissions windows, and the menu bar's Check Permissions… item; both live in the main window now.
 
 ### Fixed
 
@@ -225,6 +227,7 @@ app that is no longer sandboxed.
 - A keychain read failure no longer looks like "no key configured", and the
   setup wizard can no longer delete saved keys over a transient read error.
 - **Reset to Defaults no longer clears your custom vocabulary** (issue 15).
+- The Dock icon no longer gets stuck with no window behind it after an alert or the folder picker (#29).
 
 ## [0.3.1] - 2026-07-12
 

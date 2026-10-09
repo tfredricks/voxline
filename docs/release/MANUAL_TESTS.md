@@ -662,3 +662,19 @@ Watch `scripts/tail-logs.sh learning` throughout: every line carries counts and 
 - [ ] **Issue 15.** Reset to Defaults leaves Custom vocabulary and Learning alone. Clear All asks before removing anything.
 - [ ] **Reset Learning.** It asks, then empties the notes and removes only the learned words; words added by hand stay.
 - [ ] **Latency.** 20 Slack dictations with both toggles off, then 20 with both on: the Diagnostics `totalMs` median is within 5%.
+
+## Main window and Dock icon
+
+Show Voxline in Dock is off unless a step says otherwise.
+
+- [ ] Open voxline from Finder → Home opens and the Dock icon shows. Close the window → the Dock icon goes away.
+- [ ] Start a meeting, choose Quit Voxline, then Cancel in the confirmation → no Dock icon is left behind. Repeat with each meeting alert (consent, silent system audio, cap warning).
+- [ ] Settings → Meetings → choose the notes folder, then Cancel the picker → after closing the main window, no Dock icon is left.
+- [ ] With no window open, open voxline from Spotlight → Home opens.
+- [ ] Minimize the main window → the Dock icon and the minimized tile stay. Restore it from the Dock.
+- [ ] Menu bar → Settings… opens Settings. With the main window key, ⌘, switches to Settings.
+- [ ] Put Safari in full screen, then menu bar → Open Voxline → the window appears over the full-screen Space.
+- [ ] Turn Show Voxline in Dock on → close the window → the Dock icon stays. Click it → Home opens. Turn it off with no window open → the icon goes.
+- [ ] Launch at login on, log out and back in → no window and no Dock icon. The menu bar works.
+- [ ] Revoke Accessibility while running → Home opens with Accessibility missing. Re-grant → it turns green within about a second.
+- [ ] Home's recent meetings: click a finished meeting → its notes open. "Open meetings folder" → Finder opens the notes folder.

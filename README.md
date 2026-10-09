@@ -47,7 +47,7 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 - **Learns as you go** — fix a misheard name in the field after a dictation and voxline adds it to your custom vocabulary (with Undo in the pill), so it comes out right the next time. It also keeps a short note on how you write in chat, email, documents, and code, and uses it in cleanup. Read, edit, or reset what it learned in Settings → Learning.
 - **Dictation history** — the last 25 dictations, cleaned text and raw transcript side by side, in a History window; click any row to copy it back to the clipboard.
 - **Bring your own LLM key** — Anthropic or OpenAI, your account, your model, your costs. Keys live in macOS Keychain.
-- **Menu-bar native** — no Dock icon, no clutter. Configurable hotkey, mic, speech engine, and provider.
+- **Menu-bar native, with a real window when you want it** — a main window with Home (status, permissions, recent meetings) and Settings; close it and voxline keeps running in the menu bar. No Dock icon unless the window is open, or turn on Settings → Show Voxline in Dock.
 - **Meeting notes** — record a meeting of up to an hour (your mic plus your Mac's sound output), and get a Markdown file with a summary, decisions, action items, and a speaker-labeled transcript. Transcription and speaker separation run on your Mac; meetings use the Whisper small.en model (English) for speed.
 - **Privacy-aware feedback** — clipboard is restored after paste; the system mic indicator turns off the moment you let go.
 

@@ -1,9 +1,7 @@
 # Main window: Home and Settings, and the Dock icon (fixes #29)
 
 **Date:** 2026-10-09
-**Status:** Approved design. Implementation waits until phase 5 (learning) is on
-`main`, because both change `SettingsView`, `voxlineApp.swift` and
-`AppCoordinator`.
+**Status:** Approved; implemented (see plan 2026-10-09-main-window.md).
 **Issue:** #29 in `docs/issues.md`, where the Dock icon gets stuck with no window behind it.
 
 ## Goal
