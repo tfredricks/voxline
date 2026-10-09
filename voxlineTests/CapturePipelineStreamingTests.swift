@@ -283,18 +283,32 @@ import Foundation
         #expect(await eventually { h.session.cancelCount == 1 })
     }
 
+    /// Finalizes while `h.engine` holds the session open. If the test is
+    /// cancelled first (its time limit), the open is let through so a
+    /// finalize that waits on it returns and fails the caller's check
+    /// instead of hanging the run.
+    private func finalizeWhileOpening(_ h: Harness) async {
+        let engine = h.engine
+        let finalize = Task { await h.pipe.finalizeRecording() }
+        await withTaskCancellationHandler {
+            await finalize.value
+        } onCancel: {
+            Task { @MainActor in engine.releaseOpen() }
+        }
+    }
+
     /// A session slow to open (OpenAI on a dead network, a Whisper model
     /// still loading) must not hold up a tap: the quiet path drops it
     /// without waiting, and the session is cancelled once it opens.
-    @Test func a_short_tap_never_waits_for_the_session_to_open() async {
+    @Test(.timeLimit(.minutes(1))) func a_short_tap_never_waits_for_the_session_to_open() async {
         let h = makeHarness()
         h.engine.holdsOpen = true
         defer { h.engine.releaseOpen() }
         h.capture.pendingSamples = [Float](repeating: 0.1, count: 1_600)
         h.pipe.startRecording()
-        let finalize = Task { await h.pipe.finalizeRecording() }
 
-        #expect(await finishes(finalize, within: .seconds(1)))
+        await finalizeWhileOpening(h)
+        #expect(h.engine.sessions.isEmpty, "finalize returned while the session was still opening")
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == nil)
         #expect(h.llm.calls.isEmpty)
@@ -304,15 +318,15 @@ import Foundation
         #expect(h.session.finishCount == 0)
     }
 
-    @Test func a_silent_capture_never_waits_for_the_session_to_open() async {
+    @Test(.timeLimit(.minutes(1))) func a_silent_capture_never_waits_for_the_session_to_open() async {
         let h = makeHarness()
         h.engine.holdsOpen = true
         defer { h.engine.releaseOpen() }
         h.capture.pendingSamples = [Float](repeating: 0, count: 16_000)
         h.pipe.startRecording()
-        let finalize = Task { await h.pipe.finalizeRecording() }
 
-        #expect(await finishes(finalize, within: .seconds(1)))
+        await finalizeWhileOpening(h)
+        #expect(h.engine.sessions.isEmpty, "finalize returned while the session was still opening")
         guard case .error(let message) = h.state.status else {
             Issue.record("expected .error, got \(h.state.status)"); return
         }
