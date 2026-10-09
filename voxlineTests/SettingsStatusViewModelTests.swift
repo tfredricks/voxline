@@ -22,6 +22,7 @@ import Foundation
         openaiKey: String = "",
         deviceLabel: String = "MacBook Mic",
         deviceUID: String? = "uid-1",
+        devices: DeviceList? = nil,
         readiness: @escaping @MainActor (EngineID) async -> EngineReadiness? = { _ in .ready }
     ) throws -> (general: GeneralSettingsViewModel, keys: APIKeysSettingsViewModel, status: SettingsStatusViewModel, kc: InMemoryKeychain) {
         let kc = keychain()
@@ -39,7 +40,8 @@ import Foundation
         let general = GeneralSettingsViewModel(
             settings: settings,
             onApply: { _ in },
-            deviceEnumerator: { [AudioDevice(uid: "uid-1", name: deviceLabel, isDefault: true)] }
+            deviceEnumerator: devices.map { list in { list.devices } }
+                ?? { [AudioDevice(uid: "uid-1", name: deviceLabel, isDefault: true)] }
         )
         let keys = APIKeysSettingsViewModel(keychain: kc)
         let status = SettingsStatusViewModel(general: general, keys: keys, engineReadiness: readiness)
@@ -187,6 +189,29 @@ import Foundation
         #expect(f.status.issues == [SetupIssue(text: "Microphone not found", page: .dictation)])
     }
 
+    @Test func saving_the_provider_key_clears_the_ai_provider_issue() async throws {
+        let f = try makeFixtures(provider: .anthropic, anthropicKey: "")
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.needsSetup(.aiProvider))
+
+        f.keys.anthropicKey = "sk-ant-new"
+        f.keys.commitAnthropic()
+        #expect(!f.status.needsSetup(.aiProvider))
+        #expect(f.status.issues.isEmpty)
+    }
+
+    @Test func reconnecting_the_microphone_clears_the_microphone_issue() async throws {
+        let mics = DeviceList()
+        let f = try makeFixtures(deviceUID: "uid-1", devices: mics)
+        await f.status.refreshEngineReadiness()
+        #expect(f.status.issues == [SetupIssue(text: "Microphone not found", page: .dictation)])
+
+        mics.devices = [AudioDevice(uid: "uid-1", name: "USB Mic", isDefault: true)]
+        f.general.refreshDevices()
+        #expect(!f.status.issues.contains { $0.text == "Microphone not found" })
+        #expect(f.status.issues.isEmpty)
+    }
+
     @Test func needs_setup_maps_issues_to_their_pages() async throws {
         let f = try makeFixtures(provider: .openai, openaiKey: "")
         await f.status.refreshEngineReadiness()
@@ -194,6 +219,11 @@ import Foundation
         #expect(!f.status.needsSetup(.dictation))
         #expect(!f.status.needsSetup(.home))
     }
+}
+
+/// Input devices the test can change between enumerations.
+private final class DeviceList {
+    var devices: [AudioDevice] = []
 }
 
 /// Holds one readiness check open until the test releases it.
