@@ -67,6 +67,32 @@ import Testing
         #expect(LiveFocusedElementSource.classify(.success, nil) == .failed)
     }
 
+    @Test func element_only_read_makes_one_call_and_classifies_like_read() {
+        let app = AXUIElementCreateApplication(5)
+        let cases: [(AXError, CFTypeRef?, AXRead<AXElementRef>)] = [
+            (.success, app, .value(AXElementRef(element: app))),
+            (.success, "text" as CFString, .failed),
+            (.success, nil, .failed),
+            (.noValue, nil, .absent),
+            (.notImplemented, nil, .absent),
+            (.attributeUnsupported, nil, .absent),
+            (.cannotComplete, nil, .failed),
+            (.failure, nil, .failed),
+            (.apiDisabled, nil, .failed),
+            (.invalidUIElement, nil, .failed),
+        ]
+        for (status, value, expected) in cases {
+            var calls = 0
+            let read = LiveFocusedElementSource.readElement {
+                calls += 1
+                return (status, value)
+            }
+            #expect(read == expected)
+            #expect(read == LiveFocusedElementSource.classify(status, value))
+            #expect(calls == 1)
+        }
+    }
+
     @Test func ax_error_log_names() {
         #expect(AXError.notImplemented.logName == "notImplemented")
         #expect(AXError.noValue.logName == "noValue")

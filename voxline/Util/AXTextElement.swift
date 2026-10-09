@@ -129,23 +129,16 @@ struct FocusedElementSnapshot: @unchecked Sendable {
 enum LiveFocusedElementSource {
     /// System-wide focused element with the app's name/bundle ID from its pid
     /// and the window title read the way `DefaultAXContextProbe` reads it
-    /// (element's window, then the app's focused window). The read is
-    /// classified by `classify(_:_:)`.
+    /// (element's window, then the app's focused window). The element is
+    /// read by `readElement()`. The title costs up to four more AX calls,
+    /// each up to the messaging timeout against a frozen app, so callers on
+    /// the main thread use `readElement()` alone.
     static func read() -> AXRead<FocusedElementSnapshot> {
-        var value: CFTypeRef?
-        let status = AXUIElementCopyAttributeValue(
-            AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString, &value
-        )
         let element: AXUIElement
-        switch classify(status, value) {
-        case .value(let ref):
-            element = ref.element
-        case .absent:
-            AppLog.context.debug("focused element: none (\(status.logName, privacy: .public))")
-            return .absent
-        case .failed:
-            AppLog.context.debug("focused element: read failed (\(status.logName, privacy: .public))")
-            return .failed
+        switch readElement() {
+        case .value(let ref): element = ref.element
+        case .absent: return .absent
+        case .failed: return .failed
         }
 
         var pid: pid_t = 0
@@ -158,6 +151,29 @@ enum LiveFocusedElementSource {
             bundleID: app?.bundleIdentifier,
             windowTitle: windowTitle(of: element, pid: hasPid ? pid : nil)
         ))
+    }
+
+    /// The system-wide focused element alone: one AX call, classified by
+    /// `classify(_:_:)`. `copyFocused` is that call; tests script it.
+    static func readElement(
+        copyFocused: () -> (AXError, CFTypeRef?) = copySystemWideFocusedElement
+    ) -> AXRead<AXElementRef> {
+        let (status, value) = copyFocused()
+        let read = classify(status, value)
+        switch read {
+        case .value: break
+        case .absent: AppLog.context.debug("focused element: none (\(status.logName, privacy: .public))")
+        case .failed: AppLog.context.debug("focused element: read failed (\(status.logName, privacy: .public))")
+        }
+        return read
+    }
+
+    static func copySystemWideFocusedElement() -> (AXError, CFTypeRef?) {
+        var value: CFTypeRef?
+        let status = AXUIElementCopyAttributeValue(
+            AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString, &value
+        )
+        return (status, value)
     }
 
     /// Classified like `LiveAXTextElement.classify`: a process without AX

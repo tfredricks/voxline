@@ -47,7 +47,9 @@ final class TextInserter: TextInserting {
     private let sleep: @Sendable (Duration) async throws -> Void
     private let typingVerifyDelay: Duration
 
-    init(focused: @escaping @Sendable () -> AXRead<any AXTextElement> = { LiveFocusedElementSource.read().map(\.element) },
+    init(focused: @escaping @Sendable () -> AXRead<any AXTextElement> = {
+             LiveFocusedElementSource.readElement().map { LiveAXTextElement(element: $0.element) }
+         },
          isAccessibilityTrusted: @escaping @Sendable () -> Bool = { AXIsProcessTrusted() },
          axEditor: AXTextEditor = AXTextEditor(),
          paste: PasteInjector,
