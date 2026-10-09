@@ -15,6 +15,7 @@ struct AppSettings {
         static let playHotkeySounds = "voxline.sounds.hotkey"
         static let transcriptionEngine = "voxline.transcription.engine"
         static let skipShortUtterances = "voxline.llm.skipShortUtterances"
+        static let saveBakeoffClips = "voxline.debug.saveBakeoffClips"
     }
 
     let defaults: UserDefaults
@@ -151,5 +152,14 @@ struct AppSettings {
     var skipShortUtterances: Bool {
         get { defaults.bool(forKey: Key.skipShortUtterances) }
         set { defaults.set(newValue, forKey: Key.skipShortUtterances) }
+    }
+
+    /// Hidden developer flag (no Settings UI), off when unset: when true,
+    /// each successful dictation is saved to `AppPaths.bakeoffDirectory()`
+    /// as a bake-off clip, its audio plus the cleaned text. This is the only
+    /// code path that writes audio to disk.
+    var saveBakeoffClips: Bool {
+        get { defaults.bool(forKey: Key.saveBakeoffClips) }
+        set { defaults.set(newValue, forKey: Key.saveBakeoffClips) }
     }
 }

@@ -8,7 +8,10 @@ extension CapturePipeline {
     @MainActor
     final class LiveSession {
         let engine: any TranscriptionEngine
+        let config: SessionConfig
         let router: StreamingSampleRouter
+        /// Whether the recording is saved as a bake-off clip once inserted.
+        let savesBakeoffClip: Bool
         private var startedAt: ContinuousClock.Instant?
         private var firstPartialAt: ContinuousClock.Instant?
         private var sessionTask: Task<any TranscriptionSession, Error>?
@@ -16,9 +19,13 @@ extension CapturePipeline {
         private var partialsTask: Task<Void, Never>?
         private var isClosed = false
 
-        init(engine: any TranscriptionEngine) {
+        /// The router keeps the audio for a bake-off clip, and for a cloud
+        /// engine so a failed session can be redone on-device.
+        init(engine: any TranscriptionEngine, config: SessionConfig, savesBakeoffClip: Bool) {
             self.engine = engine
-            router = StreamingSampleRouter(retainsAudio: engine.capabilities.contains(.sendsAudioOffDevice))
+            self.config = config
+            self.savesBakeoffClip = savesBakeoffClip
+            router = StreamingSampleRouter(retainsAudio: savesBakeoffClip || engine.capabilities.contains(.sendsAudioOffDevice))
         }
 
         /// Recording start → first non-empty partial, or nil if none arrived.
@@ -32,12 +39,13 @@ extension CapturePipeline {
         /// is attached inside the opening task, so `session()` never returns
         /// one that is missing early audio. `onPartial` runs on the main actor
         /// for each partial until `close()`.
-        func open(vocabulary: @escaping @Sendable () -> [String], onPartial: @escaping @MainActor (TranscriptPartial) -> Void) {
+        func open(onPartial: @escaping @MainActor (TranscriptPartial) -> Void) {
             startedAt = .now
             let engine = engine
+            let config = config
             let router = router
             sessionTask = Task { [weak self] in
-                let session = try await engine.openSession(SessionConfig(vocabularyHints: vocabulary()))
+                let session = try await engine.openSession(config)
                 guard !Task.isCancelled else {
                     session.cancel()
                     throw CancellationError()

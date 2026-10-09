@@ -101,12 +101,17 @@ final class FakeTranscriptionEngine: TranscriptionEngine {
 
 @MainActor
 final class FakeEngineProvider: TranscriptionEngineProviding {
-    var engines: [EngineID: FakeTranscriptionEngine]
+    var engines: [EngineID: any TranscriptionEngine]
     var currentID: EngineID
 
-    init(_ engine: FakeTranscriptionEngine) {
+    init(_ engine: any TranscriptionEngine) {
         engines = [engine.id: engine]
         currentID = engine.id
+    }
+
+    /// Registers `engine` under its id without making it current.
+    func add(_ engine: any TranscriptionEngine) {
+        engines[engine.id] = engine
     }
 
     var current: any TranscriptionEngine { engines[currentID]! }

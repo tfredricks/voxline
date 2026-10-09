@@ -9,6 +9,10 @@ final class CapturePipeline {
     /// Recordings shorter than this end quietly, as a tap rather than speech.
     static let minimumAudioDuration: TimeInterval = 0.3
 
+    /// The cloud fallback feeds retained audio to the on-device session in
+    /// one-second chunks.
+    static let fallbackChunkSamples = 16_000
+
     private let state: AppState
     private let capture: AudioCapturing
     private let engines: TranscriptionEngineProviding
@@ -25,6 +29,10 @@ final class CapturePipeline {
     private let llmModelID: @Sendable () -> String
     private let vocabulary: @Sendable () -> [String]
     private let skipShortUtterances: @Sendable () -> Bool
+    /// Read at recording start. Off by default in a test host, so the suite
+    /// never saves clips into the developer's real bake-off folder.
+    private let saveBakeoffClips: @Sendable () -> Bool
+    private let bakeoffClipSink: @Sendable (_ samples: [Float], _ reference: String) -> Void
 
     /// Identifies the current recording or retry; `cancel()` bumps it too.
     /// Work resuming after an `await` compares it with the value it captured
@@ -79,6 +87,8 @@ final class CapturePipeline {
         llmModelID: @escaping @Sendable () -> String = { AppSettings().llmModel },
         vocabulary: @escaping @Sendable () -> [String] = { CustomVocabularyStore().load() },
         skipShortUtterances: @escaping @Sendable () -> Bool = { AppSettings().skipShortUtterances },
+        saveBakeoffClips: @escaping @Sendable () -> Bool = { !LaunchEnvironment.isRunningTests && AppSettings().saveBakeoffClips },
+        bakeoffClipSink: @escaping @Sendable (_ samples: [Float], _ reference: String) -> Void = { CapturePipeline.writeBakeoffClip($0, reference: $1) },
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.state = state
@@ -96,6 +106,8 @@ final class CapturePipeline {
         self.llmModelID = llmModelID
         self.vocabulary = vocabulary
         self.skipShortUtterances = skipShortUtterances
+        self.saveBakeoffClips = saveBakeoffClips
+        self.bakeoffClipSink = bakeoffClipSink
         self.now = now
 
         capture.onLevel = { [weak self] level in
@@ -140,7 +152,11 @@ final class CapturePipeline {
         state.lastTranscript = nil
         state.lastCleanedText = nil
         state.retryTranscript = nil
-        let live = LiveSession(engine: engines.current)
+        let live = LiveSession(
+            engine: engines.current,
+            config: SessionConfig(vocabularyHints: vocabulary()),
+            savesBakeoffClip: saveBakeoffClips()
+        )
         capture.onSamples = { [router = live.router] in router.append($0) }
         do {
             try capture.start()
@@ -166,7 +182,7 @@ final class CapturePipeline {
         state.recordingIsCommand = command
         state.status = .recording
         let generation = self.generation
-        live.open(vocabulary: vocabulary) { [weak self] partial in
+        live.open { [weak self] partial in
             guard let self, self.generation == generation else { return }
             self.state.liveTranscript = partial
         }
@@ -330,27 +346,10 @@ final class CapturePipeline {
             return setError("No audio captured. Check that Microphone permission is granted and the input device isn't muted.")
         }
 
-        let session: any TranscriptionSession
-        do {
-            session = try await live.session()
-        } catch {
-            guard generation == self.generation else { return }
-            return setError("Couldn't start \(live.engine.id.shortName): \(error.localizedDescription)")
-        }
-        guard generation == self.generation else { return }
-
-        let finishStart = ContinuousClock.now
-        let transcript: String
-        do {
-            transcript = try await session.finish()
-        } catch {
-            guard generation == self.generation else { return }
-            return setError("Transcription failed. Try again or pick a different engine in Settings → General.")
-        }
-        guard generation == self.generation else { return }
-        let transcribeDuration = finishStart.duration(to: .now)
+        guard let transcription = await transcribe(live, generation: generation) else { return }
+        let transcript = transcription.text
         endLiveSession()
-        state.lastTranscribeDuration = Self.seconds(transcribeDuration)
+        state.lastTranscribeDuration = Self.seconds(transcription.duration)
         state.lastTranscript = transcript
         if !state.recordingIsCommand, !transcript.isEmpty {
             state.retryTranscript = transcript
@@ -373,8 +372,8 @@ final class CapturePipeline {
         let timing = PipelineTiming(
             release: recording.release,
             captureTailMs: recording.captureTailMs,
-            transcribeMs: Self.milliseconds(transcribeDuration),
-            engineID: live.engine.metricsID,
+            transcribeMs: Self.milliseconds(transcription.duration),
+            engineID: transcription.engineID,
             firstPartialMs: live.timeToFirstPartial.map(Self.milliseconds)
         )
 
@@ -395,7 +394,74 @@ final class CapturePipeline {
         // Dictation path: no selection probe was spawned, so the clipboard was
         // never touched.
         cancellableDictation = (transcript, mode, snapshot.context)
-        await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: timing, generation: generation)
+        let bakeoffAudio = live.savesBakeoffClip ? router.retainedAudio : nil
+        await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: timing, bakeoffAudio: bakeoffAudio, generation: generation)
+    }
+
+    /// Finishes the recording's session. A cloud session that fails to open
+    /// or finish is redone on-device from the retained audio. Returns nil
+    /// once a cancel has taken over or an error is showing.
+    private func transcribe(_ live: LiveSession, generation: UInt64) async -> Transcription? {
+        let session: any TranscriptionSession
+        do {
+            session = try await live.session()
+        } catch {
+            guard generation == self.generation else { return nil }
+            let message = "Couldn't start \(live.engine.id.shortName): \(error.localizedDescription)"
+            return await transcribeOnDevice(after: error, live: live, start: .now, failureMessage: message, generation: generation)
+        }
+        guard generation == self.generation else { return nil }
+
+        let start = ContinuousClock.now
+        do {
+            let text = try await session.finish()
+            guard generation == self.generation else { return nil }
+            return Transcription(text: text, engineID: live.engine.metricsID, duration: start.duration(to: .now))
+        } catch {
+            guard generation == self.generation else { return nil }
+            let message = "Transcription failed. Try again or pick a different engine in Settings → General."
+            return await transcribeOnDevice(after: error, live: live, start: start, failureMessage: message, generation: generation)
+        }
+    }
+
+    /// The cloud fallback. Shows `failureMessage` instead when the engine is
+    /// on-device, the session was cancelled, or the fallback fails as well.
+    private func transcribeOnDevice(after error: Error, live: LiveSession, start: ContinuousClock.Instant, failureMessage: String, generation: UInt64) async -> Transcription? {
+        guard live.engine.capabilities.contains(.sendsAudioOffDevice), !(error is CancellationError) else {
+            setError(failureMessage)
+            return nil
+        }
+        AppLog.pipeline.error("cloud transcription failed, fell back: \(Self.logDescription(of: error), privacy: .public)")
+        let local = engines.engine(for: .onDeviceDefault)
+        do {
+            let session = try await local.openSession(live.config)
+            guard generation == self.generation else {
+                session.cancel()
+                return nil
+            }
+            let audio = live.router.retainedAudio
+            for chunkStart in stride(from: 0, to: audio.count, by: Self.fallbackChunkSamples) {
+                session.append(Array(audio[chunkStart..<min(chunkStart + Self.fallbackChunkSamples, audio.count)]))
+            }
+            let text = try await withTaskCancellationHandler {
+                try await session.finish()
+            } onCancel: {
+                session.cancel()
+            }
+            guard generation == self.generation else { return nil }
+            showToast("Cloud transcription failed — used on-device")
+            return Transcription(text: text, engineID: local.metricsID, duration: start.duration(to: .now))
+        } catch {
+            guard generation == self.generation else { return nil }
+            AppLog.pipeline.error("on-device fallback failed: \(Self.logDescription(of: error), privacy: .public)")
+            setError(failureMessage)
+            return nil
+        }
+    }
+
+    /// The error's type and description; never audio or transcript text.
+    private static func logDescription(of error: Error) -> String {
+        "\(type(of: error)): \(error.localizedDescription)"
     }
 
     private func runRetry(transcript: String, generation: UInt64) async {
@@ -405,7 +471,7 @@ final class CapturePipeline {
             return setError(Self.noModeMessage(bundleID: snapshot.bundleID))
         }
         cancellableDictation = (transcript, mode, snapshot.context)
-        await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: nil, generation: generation)
+        await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: nil, bakeoffAudio: nil, generation: generation)
     }
 
     private func announceCapIfHit(generation: UInt64) {
@@ -420,8 +486,9 @@ final class CapturePipeline {
     }
 
     /// Clean up the transcript (or pass it through on the fast path) and
-    /// paste it. Owns its terminal state. Records metrics only with `timing`.
-    private func performDictation(transcript: String, mode: Mode, snapshot: StartSnapshot, timing: PipelineTiming?, generation: UInt64) async {
+    /// paste it. Owns its terminal state. Records metrics only with `timing`,
+    /// and a bake-off clip only with `bakeoffAudio`, once the paste succeeds.
+    private func performDictation(transcript: String, mode: Mode, snapshot: StartSnapshot, timing: PipelineTiming?, bakeoffAudio: [Float]?, generation: UInt64) async {
         let context = snapshot.context
         state.pipelinePhase = .cleaning
         if !context.captureNotes.isEmpty {
@@ -478,6 +545,9 @@ final class CapturePipeline {
         }
         guard generation == self.generation else { return }
         recordMetrics(kind: .dictation, timing: timing, cleanupMs: cleanupMs, insertMs: Self.milliseconds(insertStart.duration(to: .now)), skippedCleanup: skippedCleanup, mode: mode, text: cleaned)
+        if let bakeoffAudio {
+            bakeoffClipSink(bakeoffAudio, cleaned)
+        }
         resetIdle()
     }
 
@@ -609,6 +679,13 @@ final class CapturePipeline {
         static let empty = StartSnapshot(context: .empty, bundleID: nil, field: nil)
     }
 
+    /// A finished transcript and the engine that produced it.
+    private struct Transcription {
+        let text: String
+        let engineID: String
+        let duration: Duration
+    }
+
     private struct PipelineTiming {
         let release: ContinuousClock.Instant
         let captureTailMs: Int
@@ -634,6 +711,18 @@ final class CapturePipeline {
             firstPartialMs: timing.firstPartialMs,
             skippedCleanup: skippedCleanup
         ))
+    }
+
+    /// Saves the clip off the main actor and logs its file name.
+    nonisolated static func writeBakeoffClip(_ samples: [Float], reference: String) {
+        Task.detached(priority: .utility) {
+            do {
+                let wav = try BakeoffClipWriter.write(samples: samples, reference: reference, to: AppPaths.bakeoffDirectory(), now: .now)
+                AppLog.pipeline.info("saved bake-off clip \(wav.lastPathComponent, privacy: .public)")
+            } catch {
+                AppLog.pipeline.error("bake-off clip not saved: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     /// Truncates, so stage times never sum past the total measured around them.

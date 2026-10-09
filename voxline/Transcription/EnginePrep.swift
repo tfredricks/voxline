@@ -79,4 +79,17 @@ enum EnginePrep {
     static func showsDownloadWindow(for plan: Plan, audience: Audience) -> Bool {
         audience == .launch && plan == .download
     }
+
+    /// Whether saving or clearing the OpenAI key calls for re-checking the
+    /// selected engine's readiness.
+    static func rechecksAfterOpenAIKeyChange(selected: EngineID) -> Bool {
+        selected == .openAIRealtime
+    }
+
+    /// Whether `status` is the missing-key error a re-check replaces. It is
+    /// cleared before the re-check, so a saved key leaves the status idle;
+    /// a key that is still missing gets the error back from the re-check.
+    static func isMissingOpenAIKeyError(_ status: AppStatus) -> Bool {
+        status == .error(OpenAIRealtimeEngine.missingKeyReason)
+    }
 }

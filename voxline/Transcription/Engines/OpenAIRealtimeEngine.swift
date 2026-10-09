@@ -331,6 +331,8 @@ final class OpenAIRealtimeSession: TranscriptionSession, @unchecked Sendable {
         close()
     }
 
+    var isAcceptingInput: Bool { lock.withLock { acceptingInput } }
+
     func append(_ samples: [Float]) {
         guard !samples.isEmpty else { return }
         lock.withLock {
@@ -416,7 +418,11 @@ final class OpenAIRealtimeSession: TranscriptionSession, @unchecked Sendable {
     private func handle(_ text: String) {
         guard let event = RealtimeServerEvent.parse(text) else { return }
         if case .error(_, let code) = event {
-            AppLog.pipeline.error("openai realtime: error event \(code ?? "without code", privacy: .public)")
+            if code == Self.commitEmptyErrorCode {
+                AppLog.pipeline.debug("openai realtime: empty final commit, already committed by VAD")
+            } else {
+                AppLog.pipeline.error("openai realtime: error event \(code ?? "without code", privacy: .public)")
+            }
         }
         let partial: TranscriptPartial? = lock.withLock {
             guard !cancelled, !closed else { return nil }
@@ -453,6 +459,7 @@ final class OpenAIRealtimeSession: TranscriptionSession, @unchecked Sendable {
 
     private func fail(_ error: Error) {
         let recorded = lock.withLock { () -> Bool in
+            acceptingInput = false
             guard !closed, !cancelled, failure == nil else { return false }
             failure = error
             return true

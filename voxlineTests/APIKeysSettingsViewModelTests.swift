@@ -180,6 +180,30 @@ import Foundation
         #expect(try kc.string(forKey: KeychainAccount.anthropic) == "sk-real")
     }
 
+    @Test func openai_key_change_is_reported_only_when_the_saved_key_changes() {
+        var changes = 0
+        let vm = APIKeysSettingsViewModel(keychain: keychain(), onOpenAIKeyChange: { changes += 1 })
+
+        vm.commitOpenAI()
+        #expect(changes == 0)
+
+        vm.openaiKey = "sk-openai-new"
+        vm.commitOpenAI()
+        #expect(changes == 1)
+
+        vm.openaiKey = " sk-openai-new\n"
+        vm.commitOpenAI()
+        #expect(changes == 1)
+
+        vm.openaiKey = ""
+        vm.commitOpenAI()
+        #expect(changes == 2)
+
+        vm.anthropicKey = "sk-ant-new"
+        vm.commitAnthropic()
+        #expect(changes == 2)
+    }
+
     @Test func typed_key_after_read_failure_saves_and_reenables_delete() throws {
         let kc = keychain()
         kc.readError = KeychainError.dataProtectionKeychainUnavailable

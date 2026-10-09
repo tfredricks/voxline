@@ -66,6 +66,26 @@ enum BakeoffFixtures {
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
+    /// One `read(into:)` can stop up to a block short of the end, so this
+    /// reads until the whole file is in.
+    private static func readToEnd(_ file: AVAudioFile) throws -> AVAudioPCMBuffer? {
+        let format = file.processingFormat
+        guard let all = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(file.length)),
+              let chunk = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4_096),
+              let destination = all.floatChannelData,
+              let source = chunk.floatChannelData
+        else { return nil }
+        while file.framePosition < file.length {
+            try file.read(into: chunk)
+            guard chunk.frameLength > 0 else { break }
+            for channel in 0..<Int(format.channelCount) {
+                (destination[channel] + Int(all.frameLength)).update(from: source[channel], count: Int(chunk.frameLength))
+            }
+            all.frameLength += chunk.frameLength
+        }
+        return all
+    }
+
     private static func samples16kMono(at url: URL) throws -> [Float] {
         let name = url.lastPathComponent
         let file = try AVAudioFile(forReading: url)
@@ -77,9 +97,8 @@ enum BakeoffFixtures {
                 channels: 1,
                 interleaved: false
               ),
-              let input = AVAudioPCMBuffer(pcmFormat: sourceFormat, frameCapacity: AVAudioFrameCount(file.length))
+              let input = try readToEnd(file)
         else { throw LoadError.unreadableAudio(name) }
-        try file.read(into: input)
 
         if sourceFormat.sampleRate == target.sampleRate, sourceFormat.channelCount == 1,
            let channel = input.floatChannelData?[0] {

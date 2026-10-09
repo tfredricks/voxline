@@ -15,7 +15,7 @@ private func eventually(timeout: Duration = .seconds(2), _ condition: () -> Bool
 
 /// True when `task` completes within `timeout`; never waits longer.
 @MainActor
-private func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool {
+func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool {
     let finished = CapturePipelineStreamingTests.Flag()
     Task { await task.value; finished.set() }
     return await eventually(timeout: timeout) { finished.isSet }

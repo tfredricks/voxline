@@ -177,4 +177,15 @@ import Foundation
         #expect(AppSettings(defaults: d).skipShortUtterances == true)
         #expect(d.bool(forKey: "voxline.llm.skipShortUtterances") == true)
     }
+
+    @Test func save_bakeoff_clips_defaults_false_and_round_trips() {
+        let d = makeDefaults()
+        #expect(AppSettings(defaults: d).saveBakeoffClips == false)
+        var s = AppSettings(defaults: d)
+        s.saveBakeoffClips = true
+        #expect(AppSettings(defaults: d).saveBakeoffClips == true)
+        #expect(d.bool(forKey: "voxline.debug.saveBakeoffClips") == true)
+        s.saveBakeoffClips = false
+        #expect(AppSettings(defaults: d).saveBakeoffClips == false)
+    }
 }

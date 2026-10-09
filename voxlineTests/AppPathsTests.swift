@@ -51,6 +51,19 @@ import Foundation
         #expect(found.standardizedFileURL.path == created.standardizedFileURL.path)
     }
 
+    @Test func bakeoffDirectory_isUnderApplicationSupport_andExists() throws {
+        let url = try AppPaths.bakeoffDirectory()
+        #expect(Array(url.pathComponents.suffix(3)) == ["Application Support", "voxline", "bakeoff"])
+        var isDirectory: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory))
+        #expect(isDirectory.boolValue)
+    }
+
+    @Test func bakeoffDirectory_isWhereTheBakeoffReadsFixtures() throws {
+        let url = try AppPaths.bakeoffDirectory()
+        #expect(url.standardizedFileURL.path == BakeoffFixtures.directory(environment: [:]).standardizedFileURL.path)
+    }
+
     @Test func legacyContainerDataDirectory_pointsInsideTheOldSandbox() {
         let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
         let url = AppPaths.legacyContainerDataDirectory(home: home)

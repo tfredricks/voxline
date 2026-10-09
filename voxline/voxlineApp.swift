@@ -55,7 +55,9 @@ struct voxlineApp: App {
                 generalVM: GeneralSettingsViewModel(onApply: { [weak coordinator = delegate.coordinator] snapshot in
                     coordinator?.apply(snapshot)
                 }),
-                apiKeysVM: APIKeysSettingsViewModel(),
+                apiKeysVM: APIKeysSettingsViewModel(onOpenAIKeyChange: { [weak coordinator = delegate.coordinator] in
+                    coordinator?.openAIKeyDidChange()
+                }),
                 engineReadiness: { [weak coordinator = delegate.coordinator] id in
                     await coordinator?.readiness(of: id)
                 }

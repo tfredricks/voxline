@@ -69,6 +69,21 @@ import Testing
         #expect(EnginePrep.status(for: .fail(Self.reason), audience: .settingsSwitch, current: current) == nil)
     }
 
+    // MARK: OpenAI key change
+
+    @Test func an_openai_key_change_rechecks_only_the_openai_engine() {
+        #expect(EnginePrep.rechecksAfterOpenAIKeyChange(selected: .openAIRealtime))
+        #expect(!EnginePrep.rechecksAfterOpenAIKeyChange(selected: .whisperKit))
+        #expect(!EnginePrep.rechecksAfterOpenAIKeyChange(selected: .apple))
+    }
+
+    @Test func only_the_missing_key_error_is_cleared_before_the_recheck() {
+        #expect(EnginePrep.isMissingOpenAIKeyError(.error(OpenAIRealtimeEngine.missingKeyReason)))
+        #expect(!EnginePrep.isMissingOpenAIKeyError(.error("Transcription failed. Try again or pick a different engine in Settings → General.")))
+        #expect(!EnginePrep.isMissingOpenAIKeyError(.idle))
+        #expect(!EnginePrep.isMissingOpenAIKeyError(.thinking))
+    }
+
     // MARK: Superseded tasks
 
     @Test func the_latest_uncancelled_task_owns_status_and_window() {

@@ -435,6 +435,20 @@ private func type(_ event: [String: Any]) -> String? { event["type"] as? String 
         await #expect(throws: (any Error).self) { _ = try await session.finish() }
     }
 
+    @Test func a_failed_connection_stops_queueing_audio() async throws {
+        let transport = FakeRealtimeTransport()
+        let session = try #require(try await engine(transport: transport).openSession(SessionConfig()) as? OpenAIRealtimeSession)
+        defer { session.cancel() }
+        #expect(session.isAcceptingInput)
+
+        transport.close()
+        let deadline = ContinuousClock.now + .seconds(2)
+        while session.isAcceptingInput, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(!session.isAcceptingInput)
+    }
+
     @Test func cancel_fails_a_pending_finish_with_cancellation_and_closes() async throws {
         let transport = FakeRealtimeTransport { sent in
             sent["type"] as? String == "input_audio_buffer.commit" ? [ServerEvent.committed("item_1")] : []
@@ -467,9 +481,9 @@ struct OpenAIRealtimeLiveTests {
         let stored = Result { try DataProtectionKeychain().string(forKey: KeychainAccount.openai) }
         guard case .success(let key?) = stored, !key.isBlank else {
             if case .failure(let error) = stored {
-                print("OpenAI live smoke: keychain unreadable (\(error.localizedDescription)); skipped")
+                Issue.record("OpenAI live smoke: keychain unreadable (\(error.localizedDescription))")
             } else {
-                print("OpenAI live smoke: no OpenAI key stored; skipped")
+                Issue.record("OpenAI live smoke: no OpenAI key stored in Voxline")
             }
             return
         }

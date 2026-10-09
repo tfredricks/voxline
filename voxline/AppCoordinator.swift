@@ -445,6 +445,21 @@ final class AppCoordinator {
         runModelPrepTask(state: state, engine: engine, audience: .launch)
     }
 
+    /// The saved OpenAI key changed. With the OpenAI engine selected, its
+    /// readiness is checked again, so saving a key clears the missing-key
+    /// error and clearing the key shows it.
+    func openAIKeyDidChange() {
+        guard let engines, EnginePrep.rechecksAfterOpenAIKeyChange(selected: engines.current.id) else { return }
+        if let appState, EnginePrep.isMissingOpenAIKeyError(appState.status) {
+            appState.status = .idle
+        }
+        runModelPrepTask(
+            state: appState,
+            engine: engines.current,
+            audience: .forSwitch(inFlightOwnsLaunchUI: modelPrepOwnsLaunchUI, inFlightDrivesStatus: modelPrepDrivesStatus)
+        )
+    }
+
     /// Readiness of the engine that runs for `id`, or nil before services exist.
     func readiness(of id: EngineID) async -> EngineReadiness? {
         guard let engines else { return nil }

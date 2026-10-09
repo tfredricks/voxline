@@ -22,6 +22,8 @@ final class APIKeysSettingsViewModel {
 
     private let keychain: any KeychainStorage
     private let clientFactory: LLMClientFactory
+    /// Called after a commit changes the saved OpenAI key, or removes it.
+    private let onOpenAIKeyChange: () -> Void
     private var anthropicPersisted: String = ""
     private var openaiPersisted: String = ""
     private var anthropicReadFailed = false
@@ -34,10 +36,12 @@ final class APIKeysSettingsViewModel {
             case .anthropic: return AnthropicClient(apiKey: key)
             case .openai:    return OpenAIClient(apiKey: key)
             }
-        }
+        },
+        onOpenAIKeyChange: @escaping () -> Void = {}
     ) {
         self.keychain = keychain
         self.clientFactory = clientFactory
+        self.onOpenAIKeyChange = onOpenAIKeyChange
         let anthropic = Self.load(KeychainAccount.anthropic, from: keychain)
         let openai = Self.load(KeychainAccount.openai, from: keychain)
         self.anthropicKey = anthropic.value
@@ -69,8 +73,10 @@ final class APIKeysSettingsViewModel {
 
     /// Persist the OpenAI key. Same rules as commitAnthropic.
     func commitOpenAI() {
+        let previous = openaiPersisted
         persist(value: openaiKey, account: KeychainAccount.openai)
         openaiPersisted = openaiKey.trimmed
+        if openaiPersisted != previous { onOpenAIKeyChange() }
     }
 
     /// Issue a tiny no-op LLM call to verify the current in-memory key for
