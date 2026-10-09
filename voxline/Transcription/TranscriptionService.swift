@@ -113,6 +113,10 @@ final class TranscriptionService {
         _ = try await loadIfNeeded()
     }
 
+    /// The loaded pipeline, loading it first if needed. Streaming sessions
+    /// transcribe against it directly.
+    func loadedKit() async throws -> WhisperKit { try await loadIfNeeded() }
+
     /// Transcribe a Float32 PCM buffer at AudioFormat.whisperSampleRate.
     /// Returns the concatenated text across all decoded segments, trimmed.
     /// Vocabulary biasing is handled downstream by `LLMService` against the
