@@ -7,6 +7,11 @@ reviewer claims that did **not** survive verification are listed at the bottom.
 Items 4, 7, 8, 14, 18, 21 and 23 were fixed in 0.5.0 with the transcription-engine
 rework; their descriptions are kept as written, with the pre-0.5.0 line numbers.
 
+Items 6, 10, 11, 12, 16, 17, 20, 22 and 26 were fixed in 0.6.0 with the command-mode
+rework (new hotkey state machine, key interceptor, and text-insertion types in place of
+`ClipboardInjector`); their descriptions are kept as written, with the pre-0.6.0 line
+numbers. The carry-overs from 0.4.0 are fixed too (see the note near the end).
+
 ## High — daily-use pain
 
 ### 1. First words of a dictation can be lost; UI stalls at keypress
@@ -181,7 +186,7 @@ the user waits, nothing pastes, an empty history entry is recorded.
 
 ## Follow-ups from the pill refine-actions feature (2026-07-10)
 
-Items 24, 25 and 27 were resolved in 0.4.0 by removing the feature. Item 26 (the duplicated toast pattern) is still open.
+Items 24, 25 and 27 were resolved in 0.4.0 by removing the feature. Item 26 (the duplicated toast pattern) was fixed in 0.6.0 by `AppState.flashToast(_:for:)`.
 
 Non-blocking items surfaced by the whole-branch review of the post-dictation
 refine pill (commits `7e88720..67958b6`). None block shipping; the feature is on
@@ -208,6 +213,19 @@ refine pill (commits `7e88720..67958b6`). None block shipping; the feature is on
     from a fixed origin (`RecordingPillWindow.updateVisibility`), so it extends
     rightward rather than staying centered on the cursor point. Cosmetic; spec only
     required the origin not to move.
+
+## Carry-overs from 0.4.0
+
+Three Accessibility edge cases carried over from 0.4.0, all fixed in 0.6.0:
+
+- **An empty AX selection fell through to Cmd+C.** `""` now means "nothing selected"
+  whenever the selected-text range is also readable; only an inconclusive read still
+  falls back to Cmd+C, so VS Code's copy-the-whole-line behavior no longer fires where
+  AX gives an answer.
+- **The secure-field check failed open.** An AX error or timeout is now a refusal
+  (command) or a copy (dictation), never a paste into a field that might be a password.
+- **A late AX write could insert twice.** A write that times out is polled for a second
+  and then copied; it never falls through to a paste.
 
 ## Reviewer claims rejected during verification
 

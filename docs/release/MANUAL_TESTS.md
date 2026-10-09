@@ -287,3 +287,250 @@ several items below check it.
 - [ ] Turn the flag off and delete the clips as that doc describes. After new
       dictations, `find ~/Library/Application\ Support/voxline -name '*.wav'`
       prints nothing.
+
+# Manual test pass: 0.6.0 command mode
+
+Covers what automated tests cannot: real Accessibility writes in third-party
+apps, real key events and OS shortcuts, other apps reading the clipboard, and
+Screen Sharing. Use an Apple Silicon Mac and a build from
+`scripts/build-local.sh`, with Anthropic or OpenAI cleanup configured. Keep
+`scripts/tail-logs.sh --last 2m metrics` open in a terminal: each insert logs
+`strategy=` (`ax`, `paste`, `typing`, `copy`, `none`) and each command logs
+`action=` (`replace_selection`, `insert`, `rewrite`). The default chords are
+Left Shift + Left Control (dictation) and Left Shift + Left Option (command).
+
+## Upgrade from 0.5.0
+
+For each case, install 0.5.0, set the state described, quit it, install 0.6.0
+over it, and launch. Settings → General → Hotkey must show a Dictation
+recorder and a "Command mode" toggle with its own recorder, and no command
+modifier picker. Before each upgrade, set the dictation chord to Left Shift +
+Left Control.
+
+- [ ] Command modifier set to **Right Cmd**: the command chord is Left Shift +
+      Right Cmd and Command mode is on.
+- [ ] Command modifier set to **Off**: the command chord is Left Shift + Left
+      Option and Command mode is on.
+- [ ] Command modifier set to a **dictation key** (Left Ctrl): the command
+      chord is Left Shift + Left Option.
+- [ ] Command modifier **unset** (with 0.5.0 quit, run
+      `defaults delete ~/Library/Preferences/com.voxline.app voxline.hotkey.commandModifier`):
+      the command chord is Left Shift + Left Option.
+- [ ] Dictation chord set to Left Shift + Left Option and command modifier Off:
+      Command mode is off after the upgrade.
+- [ ] In each case, `scripts/tail-logs.sh --last 2m hotkey` shows one
+      `migrated command modifier` line on the first launch and none after a
+      relaunch, and
+      `defaults read ~/Library/Preferences/com.voxline.app voxline.hotkey.commandModifier`
+      reports that the key does not exist.
+- [ ] Hold the migrated command chord with text selected in Notes and say
+      "make this shorter". The selection is replaced.
+
+## Selection edits
+
+- [ ] In Notes, Slack, VS Code, and Gmail in Safari, select a few sentences
+      and say each of "make this a bullet list", "translate this to Spanish",
+      and "summarize this". Each time the selection is replaced in place (not
+      appended), and ⌘Z restores the original text in one step.
+- [ ] `metrics` shows `strategy=ax` for Notes and `strategy=paste` for Slack,
+      VS Code, and Safari (they are paste-first), with `action=replace_selection`.
+      If an app lands on `copy` or `none`, note it.
+- [ ] VS Code, nothing selected, cursor on a non-empty line: run a command that
+      inserts text ("add a TODO comment"). The cursor's line is not replaced
+      or deleted. The built-in untrusted-field list for VS Code and Cursor is
+      provisional: if the field read there turns out to be the real document,
+      note it in the test log so the list can be emptied.
+- [ ] A selection of more than 8,000 characters (paste a long article into
+      Notes and select all): the toast reads "Selection too long — 8,000
+      characters max" and nothing changes.
+- [ ] Press Esc while the pill reads "Editing…". The pill says "Cancelled" and
+      nothing is inserted.
+
+## Drafting at the cursor
+
+- [ ] Open a message in Mail and start a reply with nothing selected. Hold the
+      command chord and say "draft a short reply agreeing to the Thursday
+      time". The reply is inserted at the cursor. `metrics` shows
+      `action=insert` (Mail compose is web content, so `strategy=paste`), and
+      ⌘Z removes it.
+- [ ] In Notes, put the cursor at the end of a paragraph and say "continue
+      this with one more sentence". The sentence is added after the cursor.
+
+## Rewrite in place
+
+- [ ] In Notes, type three paragraphs and bold one word in the first. With
+      nothing selected and the cursor in the last paragraph, say "make the
+      last paragraph shorter". Only the last paragraph changes, the bold word
+      is still bold, `metrics` shows `action=rewrite`, and one ⌘Z restores the
+      paragraph.
+- [ ] Repeat in TextEdit (rich text).
+
+## Supersets and shortcuts
+
+Each of these leaves no text from voxline and no new History entry. The start
+blip may play on the discarded ones.
+
+- [ ] Hold the dictation chord, then add ⌘ within a second. Repeat holding ⌘
+      first, then the chord keys.
+- [ ] Settings → General → Hotkey: set the dictation chord to Left Cmd + Left
+      Shift. Press ⌘⇧4. The screenshot crosshair appears (Esc to dismiss) and
+      no recording starts. Restore the chord.
+- [ ] In Safari with several tabs open, press ⌃⇧Tab with the default
+      dictation chord. The tab switches and no recording starts.
+- [ ] In Notes, type ⇧⌥- (an em dash) with the default command chord. The
+      character is typed and no recording starts.
+- [ ] Type a paragraph with capital letters for 20 seconds. The system mic
+      indicator never appears (Shift alone no longer starts the microphone).
+- [ ] Hold Left Shift + Left Control, and within a second add Left Option. The
+      recording is silently discarded. Release all keys: a normal dictation
+      then works.
+
+## Preset shortcuts
+
+- [ ] Settings → Command lists ⌥1 Fix grammar, ⌥2 Make concise, and ⌥3 Make
+      professional, with the caption about ¡ ™ £. The recorder warns that ⌥2
+      types “™” on your keyboard.
+- [ ] Select a paragraph in Notes and press ⌥2. Nothing records (no waveform,
+      no blip). The pill shows "Make concise…", the paragraph is replaced, and
+      ⌘Z restores it. `metrics` records it as a preset with `strategy=ax`.
+- [ ] Press ⌥2 with nothing selected. The toast reads "Select text to
+      transform" and no ™ is typed.
+- [ ] Press ⌥1 and ⌥3 on selections in Notes and Slack. Each works.
+- [ ] Open voxline's own Settings window, focus a text field, and press ⌥2. It
+      types ™ (presets are off while voxline is frontmost).
+- [ ] Remap Make concise to another shortcut (for example ⌃⌥C). It works at
+      once without relaunching, and ⌥2 types ™ again in other apps.
+- [ ] In the shortcut recorder, try Esc, a combo with only ⇧, a combo already
+      used by another preset, and ⇧⌥ with any key (“⇧⌥ is your command
+      hotkey”). Each is rejected with a message.
+- [ ] Add a preset, edit its instruction, remove it, then "Restore default
+      presets". Quit and relaunch: the table is unchanged. Reset to Defaults
+      on the General page leaves the presets alone.
+- [ ] While a preset's shortcut recorder is open, hold the dictation chord. No
+      dictation starts.
+- [ ] In a password field, ⌥2 types ™ (Secure Event Input hides the key from
+      voxline) and nothing is sent to the LLM provider.
+
+## Command model
+
+- [ ] Settings → Command → Command model is empty with the cleanup model as its
+      placeholder. Run a command: it works.
+- [ ] Enter a larger model id from the same provider and run a command: it
+      works, with a slower response. Enter an invalid id: the pill shows the
+      provider's error followed by "Nothing was changed." Clear the field.
+- [ ] Type a model id, then change the provider in Settings → Cleanup. The
+      Command model field is empty again.
+- [ ] Reset to Defaults clears the Command model.
+
+## Dictation regression on the AX-first path
+
+Dictate a sentence into each app, with some text already in the field.
+Each time the text lands exactly once, in the right place, with no spurious
+"Couldn't insert — copied". In the native apps ⌘Z undoes it in one step.
+Write down the `strategy=` shown for each; any app that misbehaves on `ax`
+joins the paste-first list before release.
+
+- [ ] Notes
+- [ ] TextEdit
+- [ ] Pages
+- [ ] Word
+- [ ] Mail (reply body)
+- [ ] Messages
+- [ ] Xcode (a source file)
+- [ ] A Numbers cell
+- [ ] An Excel cell
+- [ ] Terminal
+- [ ] Slack
+- [ ] Safari (a web form field)
+- [ ] Other Chromium or Electron apps (Chrome, Discord, Obsidian): no spurious
+      "Couldn't insert — copied".
+- [ ] Alacritty, kitty, or WezTerm, if installed: the dictation is pasted.
+- [ ] A VM or remote-desktop window with a text cursor: the dictation is
+      pasted as in 0.5.0.
+- [ ] Quit voxline, run
+      `defaults write ~/Library/Preferences/com.voxline.app voxline.insert.axFirst -bool NO`,
+      relaunch, and dictate in Notes: `strategy=paste`. Quit, delete the key
+      (`defaults delete …`), and relaunch to restore `ax`.
+- [ ] Quit voxline, run
+      `defaults write ~/Library/Preferences/com.voxline.app voxline.insert.pasteFirstExtra -array com.apple.Notes`,
+      relaunch, and dictate in Notes: `strategy=paste`. Quit, delete the key,
+      and relaunch.
+
+## Clipboard
+
+- [ ] Copy an image, then dictate into a busy Slack (a channel with many
+      messages and tabs open). The dictation lands, and then pasting into
+      Preview's File → New from Clipboard gives back the image.
+- [ ] Dictate into Notes, then copy other text within 1 s of the insert. The
+      new text is still on the clipboard a few seconds later.
+- [ ] Run Maccy, Paste, or another clipboard manager that reads the clipboard
+      eagerly, copy some text, then dictate into Slack. The dictation lands
+      and the original text is back on the clipboard afterwards.
+- [ ] Copy rich text (bold in Pages), dictate into Slack, then paste into
+      Pages. The paste is still rich.
+
+## Issues 10, 12, 20, and 22
+
+- [ ] Issue 10: open Settings → General → Hotkey, start recording a new
+      dictation chord, and press and hold the old chord keys. No dictation
+      starts, no pill appears, and nothing is pasted into the Settings window.
+      Start recording a chord again, then switch to another app or close the
+      Settings window. The recorder stops, and dictating in Notes works.
+- [ ] Issue 12: hold the chord and speak. While still holding, turn voxline off
+      in System Settings → Privacy & Security → Accessibility. The recording
+      finishes instead of sticking: the mic indicator goes off and the pill
+      moves on from "Recording", with no relaunch. Turn Accessibility back on:
+      the next dictation works. Repeat with "Pause Voxline" from the menu bar
+      instead of revoking Accessibility.
+- [ ] Issue 20: hold the chord, keep talking, and open the menu-bar menu. Leave
+      it open until the pill reads "Stopped at 5 minutes", then close it. The
+      text lands.
+- [ ] Issue 22: connect to a second Mac running voxline with Screen Sharing and
+      control it from the first. Dictate into Notes on the remote Mac with the
+      dictation chord, then select text and use the command chord. Both work.
+
+## Hotkey fallback and other edge cases
+
+- [ ] Accessibility granted and Input Monitoring denied (System Settings →
+      Privacy & Security → Input Monitoring, off or removed for voxline):
+      the hotkey still starts a dictation.
+- [ ] Select OpenAI as the speech engine with no OpenAI key stored and dictate:
+      an error appears. Switch to Apple Speech or Whisper: the error clears
+      and a dictation works.
+- [ ] Select text in an app that needs the ⌘C fallback (the selection read
+      comes back inconclusive, as in some Electron apps), start a command,
+      and press Esc right after releasing the chord. The pill says
+      "Cancelled", nothing is inserted, and the previous clipboard is intact.
+- [ ] Switch the input source to Dvorak – QWERTY ⌘ and run a command that needs
+      the ⌘C fallback, and a dictation into a paste-first app. Known risk:
+      note whether voxline's ⌘C and ⌘V still reach the app.
+
+## Safety
+
+- [ ] Click into a password field in Safari, hold the command chord, and speak.
+      The toast reads "Command mode is off in password fields" and nothing is
+      sent.
+- [ ] Dictate into a password field. Nothing is inserted into it, and the
+      pill reports why.
+- [ ] Select text in Notes, then from Terminal run
+      `sleep 3; kill -STOP $(pgrep -x Notes)` and click back into Notes during
+      the 3 s. Hold the command chord, speak, release. voxline must not
+      beachball for more than a few seconds, and shows "The app isn't
+      responding — try again" (or, if the read finished before the freeze,
+      copies the result: "Couldn't edit in place — copied, ⌘V to apply").
+      Run `kill -CONT $(pgrep -x Notes)`: the text appears in Notes at most
+      once, never twice. Repeat with a preset shortcut, with dictation
+      (expect "Field isn't responding — copied"), and with Slack as in the
+      0.4.0 pass.
+
+## Latency targets
+
+- [ ] Record 20 runs of each row of the Targets table in
+      `docs/superpowers/specs/2026-10-08-command-mode-v2-design.md`, with the
+      default models, and compare the medians (About Voxline → Diagnostics
+      and `metrics`): dictation `insertMs` in Notes and TextEdit (≤ 120 ms,
+      baseline 370 ms via paste); dictation `totalMs` in all apps (no more
+      than 5% above the 0.5.0 median); command `totalMs` for
+      `replace_selection` on under 1,000 characters (≤ 2,500 ms); preset
+      `totalMs` on the same selection size (≤ 1,800 ms). Record the numbers
+      even where a target is missed.

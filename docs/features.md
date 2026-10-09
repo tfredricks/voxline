@@ -38,7 +38,7 @@
 | Detect current application | Adjusts behavior for email, Slack, docs, etc. |
 | Read screen context | Improves output using surrounding information |
 | Cursor awareness | Continues paragraphs naturally |
-| Selection rewriting | Rewrites selected text intelligently — hold the command modifier (default Left Option) with the hotkey and speak a command |
+| Selection rewriting | Rewrites selected text intelligently — hold the command chord (default Left Shift + Left Option) and speak what to change |
 | Form awareness | Behaves differently in forms vs. documents |
 
 ---
@@ -65,6 +65,8 @@
 | Snippets | Insert common text |
 | Variable placeholders | Dynamic templates |
 | Workflow automation | Trigger actions from voice |
+| Voice edit at the cursor / rewrite in place | Say an instruction to draft or continue at the cursor, or to change just part of the field; the edit lands in place and ⌘Z undoes it |
+| Preset edit shortcuts | Select text and press a shortcut (default ⌥1 / ⌥2 / ⌥3) to run a stored instruction with no recording; the table is editable |
 
 ---
 
@@ -131,7 +133,7 @@
 | Automatic retries | Handles network interruptions |
 | Manual retry | Recover without re-speaking — Retry in the pill or "Retry last dictation" in the menu bar re-runs cleanup on the saved transcript |
 | Version history | Recover previous dictations |
-| Undo support | Easy mistake recovery |
+| Undo support | Easy mistake recovery — dictation and command edits land through Accessibility in native apps, so ⌘Z undoes them |
 
 ---
 
@@ -168,7 +170,7 @@ If I were advising a new entrant, I'd look beyond matching competitors and build
 - **Voice macros** – Turn spoken commands into multi-step workflows.
 - **Real-time coaching** – Suggest clearer wording while dictating.
 - **Meeting continuity** – Seamlessly move from meeting capture to summaries, action items, and follow-up drafts.
-- **Model choice** – Let users select AI models based on speed, quality, privacy, or cost.
+- **Model choice** – Let users select AI models based on speed, quality, privacy, or cost. (voxline: provider and cleanup model, plus a separate command model for edits in Settings → Command.)
 - **Knowledge grounding** – Use company documents, CRM data, or project context when rewriting.
 - **Cross-device continuity** – Continue dictation sessions across desktop and mobile.
 - **Adaptive UI** – Surface controls and suggestions based on the current application and task.

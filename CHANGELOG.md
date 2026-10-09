@@ -46,6 +46,26 @@ once it reaches its first tagged release.
 - A hidden, experimental flag, `voxline.llm.skipShortUtterances`, skips AI
   cleanup for dictations of six words or fewer with no filler words. Off by
   default; there is no setting for it.
+- **Command mode has its own chord** (Left Shift + Left Option by default).
+  Hold it, say what to do, and let go. With text selected, the selection is
+  replaced: rewrite, shorten, translate, reformat, or delete it. With nothing
+  selected, the result is inserted at the cursor (draft a reply, continue,
+  answer a question), or, for an instruction about existing text ("make the
+  last paragraph shorter"), only the part of the field that changed is
+  replaced. The model sees up to 12,000 characters of the field around the
+  cursor, so replies and continuations follow what is already there. Selections
+  over 8,000 characters are refused, and password fields are never read.
+- **Preset edit shortcuts.** Select text anywhere and press ⌥1 (Fix grammar),
+  ⌥2 (Make concise), or ⌥3 (Make professional) to run a stored instruction
+  with no recording. Settings → Command has an editable table: record any
+  shortcut that includes ⌘, ⌥, or ⌃, rename a preset, rewrite its instruction,
+  add or remove rows, or restore the defaults.
+- **Command model.** Settings → Command → Command model picks a separate
+  model for commands. Leave it empty to use the cleanup model; it is cleared
+  when you change provider.
+- Command and preset runs get their own median lines in About Voxline →
+  Diagnostics, and the metrics log line records how each insert landed
+  (`strategy=`) and what the edit did (`action=`).
 
 ### Changed
 
@@ -69,6 +89,26 @@ once it reaches its first tagged release.
   the dictation, empty context and vocabulary sections are no longer sent,
   and Claude 5-family models that think by default are asked for low effort.
 - Reset to Defaults also resets the speech engine.
+- **Dictation inserts through Accessibility where the app supports it**, so
+  ⌘Z undoes it as one step in native apps. Electron and Chromium apps,
+  browsers, terminals, and any web content still get a paste, and apps with
+  no accessible focus (some terminals, VMs, remote desktops) get a plain
+  paste as before. A hidden default, `voxline.insert.axFirst` set to NO,
+  restores the 0.5.0 paste-first behavior; `voxline.insert.pasteFirstExtra`
+  (an array of bundle IDs) adds paste-first apps. Neither has a setting.
+- **The command modifier picker is replaced by a second chord.** Settings →
+  General → Hotkey now has a Dictation recorder and a Command mode toggle with
+  its own recorder. On upgrade your old setting carries over: a modifier you
+  had chosen becomes the command chord's second key, beside the dictation
+  chord's first key. "Off", or a modifier that is already one of your
+  dictation keys, gives the default Left Shift + Left Option, or turns
+  command mode off if that is your dictation chord.
+- **A chord held with another key no longer starts a recording.** Pressing
+  Cmd+Shift+4 or Ctrl+Shift+Tab when a hotkey uses those modifiers does
+  nothing; if a key or an extra modifier arrives in the first second of a
+  recording, it is silently discarded. Holding Shift alone no longer turns on
+  the microphone. If macOS withholds key events from the hotkey listener
+  (Input Monitoring denied), it falls back to watching modifier keys only.
 
 ### Fixed
 
@@ -88,6 +128,31 @@ once it reaches its first tagged release.
   offers "Quit Voxline" (issue 21).
 - The last syllable of a dictation is no longer clipped when you release the
   hotkey (issue 23).
+- Slow apps no longer paste your old clipboard instead of the dictation. The
+  text is handed over as the app asks for it, and your clipboard is restored
+  right after, or after 1.5 seconds, and only if nothing else was copied in
+  the meantime (issue 6).
+- Re-recording a hotkey in Settings no longer starts a dictation, and the
+  recorder stops if you leave the Settings window (issue 10).
+- A hotkey built from common modifiers no longer fires on every OS shortcut
+  that includes them, such as a screenshot (issue 11).
+- Losing Accessibility, or pausing voxline, while you hold the hotkey now
+  finishes the recording, instead of leaving the microphone on and dictation
+  stuck until you relaunch (issue 12).
+- The typing fallback no longer splits an emoji in two (issue 16).
+- The restored clipboard keeps its types in their original order, so rich
+  text stays rich (issue 17).
+- The recording time limit and permission checks no longer stall while the
+  menu-bar menu is open (issue 20).
+- The hotkey works over Screen Sharing and other remote or synthetic input
+  (issue 22).
+- Brief status messages in the pill now all appear and clear the same way
+  (issue 26).
+- Command mode no longer copies the whole line in editors such as VS Code
+  when the app reports an empty selection, and a password field that does not
+  answer is refused instead of being treated as safe to paste into.
+- An edit that an app applies late is no longer inserted a second time; if it
+  never shows up, the text is copied instead.
 
 ## [0.4.0] - 2026-10-08
 
