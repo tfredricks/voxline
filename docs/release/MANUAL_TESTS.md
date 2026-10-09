@@ -47,7 +47,7 @@ Configure a staging appcast by setting `SUFeedURL` in a debug build's `Info.plis
 
 # Manual test pass: 0.4.0 platform reset
 
-Covers what XCTest cannot: the real container migration, real AX reads, and
+Covers what automated tests cannot: the real container migration, real AX reads, and
 Sparkle running unsandboxed.
 
 ## Upgrade from 0.3.1
@@ -65,7 +65,7 @@ Sparkle running unsandboxed.
 ## Fresh install
 
 - [ ] `scripts/reset-local-state.sh`, launch, complete the wizard, dictate into Notes.
-- [ ] `defaults read com.voxline.app voxline.migration.containerMigrated` prints `1`.
+- [ ] `defaults read ~/Library/Preferences/com.voxline.app voxline.migration.containerMigrated` prints `1`.
 
 ## Accessibility reads work
 
@@ -102,8 +102,8 @@ Sparkle running unsandboxed.
 
 ## Hung target app
 
-- [ ] Click into Slack's message box, then from Terminal run `kill -STOP $(pgrep -x Slack)`
-      so the frozen app still owns keyboard focus. Hold the chord, speak, release.
+- [ ] Click into Slack's message box, then from Terminal run `sleep 3; kill -STOP $(pgrep -x Slack)`
+      so the frozen app still owns keyboard focus (click back into Slack during the 3 s). Hold the chord, speak, release.
       voxline must not beachball for more than a second (the AX timeout is 0.5s per
       request); the pill shows "No text field focused — copied" or an error within a
       few seconds. Run `kill -CONT $(pgrep -x Slack)` afterwards.

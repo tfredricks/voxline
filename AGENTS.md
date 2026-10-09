@@ -20,7 +20,7 @@ voxline is a native macOS menu-bar app (SwiftUI + AppKit, Swift Package Manager 
 - `voxline/Modes/ModeStore.swift` — the per-app prompt table (28 bundle IDs currently: Slack, Zoom, Teams, Messages, Discord, Mail, Outlook, Spark, Word, Pages, Notes, Excel, PowerPoint, Keynote, Numbers, Terminal, iTerm, VS Code, Cursor, Xcode, and others). Add new apps here.
 - `voxlineTests/` — Swift Testing unit/integration tests, one file per source file roughly 1:1.
 - `docs/release/RELEASE.md` — one-time Sparkle/notarization setup + release mechanics (maintainer-only, requires secrets you likely don't have).
-- `docs/release/MANUAL_TESTS.md` — manual QA checklist for things XCTest can't cover (permissions dialogs, real hotkey presses, etc.).
+- `docs/release/MANUAL_TESTS.md` — manual QA checklist for things automated tests can't cover (permissions dialogs, real hotkey presses, etc.).
 - `docs/features.md` — competitive feature-matrix doc, not architecture.
 - `scripts/build-local.sh` — build Release/Debug and install to `/Applications` with a real git-derived version stamp (plain `⌘R` in Xcode leaves `CFBundleVersion = 1`).
 - `scripts/reset-local-state.sh`, `scripts/tail-logs.sh` — local dev utilities.

@@ -8,6 +8,12 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
+### Added
+
+- Per-dictation timing in About Voxline → Diagnostics: transcribe, cleanup,
+  insert, and total, with medians over the last 50.
+- History keeps the raw transcript next to the cleaned text.
+
 ### Changed
 
 - **voxline is no longer sandboxed.** The App Sandbox blocked reading the
@@ -19,12 +25,8 @@ once it reaches its first tagged release.
 - **Minimum macOS is now 26.** Older systems stay on 0.3.1.
 - Dictating with no editable field focused now says so and copies the text
   to the clipboard instead of reporting success.
-
-### Added
-
-- Per-dictation timing in About Voxline → Diagnostics: transcribe, cleanup,
-  insert, and total, with medians over the last 50.
-- History keeps the raw transcript next to the cleaned text.
+- Command mode reads the selection through Accessibility; the synthetic
+  copy is now only a fallback for apps that expose no selection.
 
 ### Fixed
 

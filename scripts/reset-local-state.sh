@@ -29,6 +29,10 @@
 set -euo pipefail
 
 BUNDLE_ID="com.voxline.app"
+# `defaults` resolves a bare bundle ID to the sandbox container's plist when a
+# container exists, which it does on every machine that ran 0.3.x. The path
+# form always addresses the unsandboxed app's own domain.
+PREFS_DOMAIN="$HOME/Library/Preferences/$BUNDLE_ID"
 KEYCHAIN_SERVICE="com.voxline.app.keys"
 APP_SUPPORT="$HOME/Library/Application Support/voxline"
 HF_MODEL_PATH="$APP_SUPPORT/huggingface"
@@ -70,7 +74,7 @@ sleep 1
 STASHED_VOCAB_PLIST=""
 if [[ $KEEP_VOCAB -eq 1 ]]; then
     FULL_EXPORT=$(mktemp -t voxline-prefs).plist
-    if defaults export "$BUNDLE_ID" "$FULL_EXPORT" 2>/dev/null; then
+    if defaults export "$PREFS_DOMAIN" "$FULL_EXPORT" 2>/dev/null; then
         STASHED_VOCAB_PLIST=$(mktemp -t voxline-vocab).plist
         if plutil -extract "$VOCAB_KEY" xml1 -o "$STASHED_VOCAB_PLIST" "$FULL_EXPORT" 2>/dev/null; then
             echo "→ Stashing custom vocabulary..."
@@ -98,11 +102,11 @@ if [[ $KEEP_MODEL -eq 1 ]]; then
 fi
 
 echo "→ Clearing $APP_SUPPORT..."
-rm -rf "$APP_SUPPORT"
+rm -rf "$APP_SUPPORT" || true
 echo "→ Clearing defaults domain $BUNDLE_ID..."
-defaults delete "$BUNDLE_ID" >/dev/null 2>&1 || true
+defaults delete "$PREFS_DOMAIN" >/dev/null 2>&1 || true
 echo "→ Clearing $CACHES_DIR..."
-rm -rf "$CACHES_DIR"
+rm -rf "$CACHES_DIR" || true
 
 # NOTE: wipe the legacy container's Data/ contents, not the container itself.
 # containermanagerd protects the container directory and its metadata plist.
@@ -134,8 +138,11 @@ if [[ -n "$STASHED_VOCAB_PLIST" && -f "$STASHED_VOCAB_PLIST" ]]; then
         /<\/plist>/ { flag=0 }
         flag { print }
     ' "$STASHED_VOCAB_PLIST")
-    plutil -insert "$VOCAB_KEY" -xml "$inner_xml" "$IMPORT_PLIST"
-    defaults import "$BUNDLE_ID" "$IMPORT_PLIST"
+    if plutil -insert "$VOCAB_KEY" -xml "$inner_xml" "$IMPORT_PLIST" && defaults import "$PREFS_DOMAIN" "$IMPORT_PLIST"; then
+        echo "   restored."
+    else
+        echo "   ⚠ could not restore the custom vocabulary; re-enter it in Settings."
+    fi
     rm -f "$STASHED_VOCAB_PLIST" "$IMPORT_PLIST"
 fi
 
