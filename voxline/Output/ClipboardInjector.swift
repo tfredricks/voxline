@@ -16,92 +16,6 @@ struct DefaultPasteboardSnapshotter: PasteboardSnapshotting {
     }
 }
 
-/// Pre-flight check: does the current paste target look like it will honor
-/// a Cmd+V keystroke? When false, ClipboardInjector skips the clipboard-paste
-/// strategy entirely (without dirtying the clipboard) so the AX value-set
-/// and synthetic-typing fallbacks can run instead.
-protocol PasteEligibilityChecking: Sendable {
-    func isPasteEligible() -> Bool
-}
-
-/// Default that always allows the paste path. Used in tests and as the
-/// fallback for any caller that doesn't supply a stricter checker. The
-/// production code path in `voxlineApp.swift` injects the AX-driven
-/// `DefaultPasteEligibility` instead.
-struct AlwaysPasteEligible: PasteEligibilityChecking {
-    func isPasteEligible() -> Bool { true }
-}
-
-/// Production paste-eligibility checker. Considers two signals:
-///   1. The frontmost app exposes an enabled Edit > Paste menu item with
-///      Cmd+V as its key equivalent.
-///   2. The focused AX element returns a non-nil text snapshot — i.e. the
-///      element has a readable string value, which strongly correlates with
-///      being a text-editing target that honors paste.
-struct DefaultPasteEligibility: PasteEligibilityChecking {
-    let focusedTextSystem: FocusedTextSystem
-
-    func isPasteEligible() -> Bool {
-        if AXMenuBarInspector.frontmostAppHasPasteMenuItem() { return true }
-        if focusedTextSystem.snapshot() != nil { return true }
-        return false
-    }
-}
-
-/// Standalone AX menu-bar inspection used by `DefaultPasteEligibility`.
-/// Lives outside the eligibility struct so it can be unit-tested if needed
-/// and so the implementation reads top-to-bottom without recursion through
-/// instance state.
-enum AXMenuBarInspector {
-    /// True iff the frontmost application's AX menu bar contains an enabled
-    /// menu item whose `Cmd` equivalent is unmodified "V". Empty menu bars
-    /// (no app frontmost, sandboxed agent apps that don't publish one) yield
-    /// false.
-    static func frontmostAppHasPasteMenuItem() -> Bool {
-        guard let app = NSWorkspace.shared.frontmostApplication else { return false }
-        let appElement = AXUIElementCreateApplication(app.processIdentifier)
-        guard let menuBar = appElement.elementAttribute(kAXMenuBarAttribute as CFString) else {
-            return false
-        }
-        for menuBarItem in axChildren(of: menuBar) {
-            for submenu in axChildren(of: menuBarItem) {
-                for menuItem in axChildren(of: submenu) {
-                    if isPasteMenuItem(menuItem) {
-                        return menuItem.boolAttribute(kAXEnabledAttribute as CFString) ?? true
-                    }
-                }
-            }
-        }
-        return false
-    }
-
-    private static func isPasteMenuItem(_ element: AXUIElement) -> Bool {
-        guard let cmdChar = element.stringAttribute("AXMenuItemCmdChar"),
-              cmdChar.lowercased() == "v" else { return false }
-        // AXMenuItemCmdModifiers: 0 means Command-only (no Shift/Option/Control).
-        // Reject Cmd+Shift+V / Cmd+Option+V which are "Paste and Match Style"
-        // and similar — they don't behave like a plain paste.
-        var modRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element, "AXMenuItemCmdModifiers" as CFString, &modRef) == .success,
-           let modifiers = modRef as? Int,
-           modifiers != 0 {
-            return false
-        }
-        return true
-    }
-
-    private static func axChildren(of element: AXUIElement) -> [AXUIElement] {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &value) == .success,
-              let array = value as? [Any] else { return [] }
-        return array.compactMap {
-            let v = $0 as CFTypeRef
-            guard CFGetTypeID(v) == AXUIElementGetTypeID() else { return nil }
-            return (v as! AXUIElement)
-        }
-    }
-}
-
 struct FocusedTextSnapshot: Equatable, Sendable {
     let value: String
 }
@@ -158,7 +72,6 @@ struct TextInsertionOutcome: Equatable, Sendable, CustomStringConvertible {
 enum TextInsertionError: Error, LocalizedError, Equatable {
     case accessibilityNotGranted
     case clipboardSnapshotUnavailable(String)
-    case clipboardPasteNotApplicable(String)
     case accessibilityUnavailable(String)
     case accessibilityRejected
     case directTypingUnavailable(String)
@@ -173,8 +86,6 @@ enum TextInsertionError: Error, LocalizedError, Equatable {
             return "Voxline needs Accessibility permission to insert text. Grant access in System Settings → Privacy & Security → Accessibility."
         case .clipboardSnapshotUnavailable(let reason):
             return "Could not safely use the clipboard paste path: \(reason)."
-        case .clipboardPasteNotApplicable(let reason):
-            return "Clipboard paste skipped: \(reason)."
         case .accessibilityUnavailable(let reason):
             return "Accessibility insertion is unavailable: \(reason)."
         case .accessibilityRejected:
@@ -465,7 +376,6 @@ final class ClipboardInjector {
     let pasteboard: NSPasteboard
     let focusedTextSystem: FocusedTextSystem
     let snapshotter: PasteboardSnapshotting
-    let pasteEligibility: PasteEligibilityChecking
     let chordIsHeld: @Sendable () -> Bool
     let forceClearChord: @Sendable () -> Void
     let postKey: @Sendable (CGKeyCode, CGEventFlags) -> Void
@@ -488,7 +398,6 @@ final class ClipboardInjector {
         pasteboard: NSPasteboard = .general,
         focusedTextSystem: FocusedTextSystem = AXFocusedTextSystem(),
         snapshotter: PasteboardSnapshotting = DefaultPasteboardSnapshotter(),
-        pasteEligibility: PasteEligibilityChecking = AlwaysPasteEligible(),
         chordIsHeld: @escaping @Sendable () -> Bool = ClipboardInjector.defaultChordIsHeld,
         forceClearChord: @escaping @Sendable () -> Void = ClipboardInjector.defaultForceClearChord,
         postKey: @escaping @Sendable (CGKeyCode, CGEventFlags) -> Void = ClipboardInjector.defaultPostKey,
@@ -504,7 +413,6 @@ final class ClipboardInjector {
         self.pasteboard = pasteboard
         self.focusedTextSystem = focusedTextSystem
         self.snapshotter = snapshotter
-        self.pasteEligibility = pasteEligibility
         self.chordIsHeld = chordIsHeld
         self.forceClearChord = forceClearChord
         self.postKey = postKey
@@ -690,15 +598,6 @@ final class ClipboardInjector {
     }
 
     private func injectViaClipboardPaste(_ text: String) async throws -> TextInsertionOutcome {
-        // 0. Pre-flight eligibility. If the frontmost app has no enabled
-        // Paste menu item and no readable focused field, posting a synthetic
-        // Cmd+V will at best do nothing and at worst be eaten by the focused
-        // app's keystroke handler. Bail BEFORE touching the clipboard so the
-        // AX value-set / synthetic-typing fallbacks can run on a clean state.
-        guard pasteEligibility.isPasteEligible() else {
-            throw TextInsertionError.clipboardPasteNotApplicable("frontmost app does not expose a paste target")
-        }
-
         let before = focusedTextSystem.snapshot()
         let beforeIdentity = focusedTextSystem.focusedElementIdentity()
 

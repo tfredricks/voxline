@@ -1,8 +1,8 @@
 import ApplicationServices
 
-/// Tiny read-only AX helpers used by the focused-element inspectors, the
-/// paste-eligibility menu walk, and the context probe. Each call is one
-/// synchronous cross-process IPC; callers that need a deadline guard wrap
+/// Tiny read-only AX helpers used by the focused-element inspectors and the
+/// context probe. Each call is one synchronous cross-process IPC, bounded by
+/// `AXMessagingTimeout`; callers that need a tighter deadline guard wrap
 /// these themselves.
 extension AXUIElement {
 

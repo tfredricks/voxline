@@ -46,6 +46,7 @@ final class AppCoordinator {
     }
 
     func startIfNeeded(state: AppState, historyStore: DictationHistoryStore, migration: ContainerMigration.Report? = nil) {
+        AXMessagingTimeout.install()
         guard !didStart else { return }
         didStart = true
         self.appState = state
@@ -146,18 +147,8 @@ final class AppCoordinator {
         let focusedTextSystem = AXFocusedTextSystem()
         let chordProvider: @Sendable () -> HotkeyChord = { AppSettings().hotkeyChord }
         let commandModifierProvider: @Sendable () -> HotkeyChord.Modifier? = { AppSettings().commandModifier }
-        // Paste eligibility must fail OPEN under the App Sandbox. The
-        // DefaultPasteEligibility pre-flight decides "is this a paste target?"
-        // purely from cross-app AX reads (menu-bar Paste item + focused-field
-        // value) — both of which the sandbox blocks, so it always answers
-        // "no", which vetoes the reliable Cmd+V clipboard paste and forces
-        // every insertion down to synthetic typing (silently dropped by Notes
-        // and other apps). Synthetic Cmd+V works fine while sandboxed (posting
-        // events is allowed), so prefer it: AlwaysPasteEligible restores the
-        // Cmd+V-primary path that a non-sandboxed build would have used.
         let injector = ClipboardInjector(
             focusedTextSystem: focusedTextSystem,
-            pasteEligibility: AlwaysPasteEligible(),
             chordIsHeld: ClipboardInjector.makeChordIsHeld(chord: chordProvider, command: commandModifierProvider)
         )
         let frontmost = FrontmostApp()
