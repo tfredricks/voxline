@@ -76,30 +76,32 @@ enum KeyComboValidator {
               let property = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
         else { return nil }
         let layoutData = Unmanaged<CFData>.fromOpaque(property).takeUnretainedValue()
-        guard let bytes = CFDataGetBytePtr(layoutData) else { return nil }
 
         var state: UInt32 = 0
         if modifiers.contains(.option) { state |= UInt32(optionKey >> 8) }
         if modifiers.contains(.shift)  { state |= UInt32(shiftKey >> 8) }
 
-        var deadKeyState: UInt32 = 0
-        var length = 0
-        var chars = [UniChar](repeating: 0, count: 4)
-        let status = bytes.withMemoryRebound(to: UCKeyboardLayout.self, capacity: 1) { layout in
-            UCKeyTranslate(
-                layout,
-                keyCode,
-                UInt16(kUCKeyActionDisplay),
-                state,
-                UInt32(LMGetKbdType()),
-                OptionBits(kUCKeyTranslateNoDeadKeysBit),
-                &deadKeyState,
-                chars.count,
-                &length,
-                &chars
-            )
+        return withExtendedLifetime((source, layoutData)) { () -> String? in
+            guard let bytes = CFDataGetBytePtr(layoutData) else { return nil }
+            var deadKeyState: UInt32 = 0
+            var length = 0
+            var chars = [UniChar](repeating: 0, count: 4)
+            let status = bytes.withMemoryRebound(to: UCKeyboardLayout.self, capacity: 1) { layout in
+                UCKeyTranslate(
+                    layout,
+                    keyCode,
+                    UInt16(kUCKeyActionDisplay),
+                    state,
+                    UInt32(LMGetKbdType()),
+                    OptionBits(kUCKeyTranslateNoDeadKeysMask),
+                    &deadKeyState,
+                    chars.count,
+                    &length,
+                    &chars
+                )
+            }
+            guard status == noErr, length > 0 else { return nil }
+            return String(utf16CodeUnits: chars, count: length)
         }
-        guard status == noErr, length > 0 else { return nil }
-        return String(utf16CodeUnits: chars, count: length)
     }
 }

@@ -26,12 +26,12 @@ enum SyntheticKeys {
 
     /// Must be called on the main thread (Text Input Sources asserts otherwise).
     static func postCopy() {
-        postKey(keyCode(typing: "c") ?? copyFallbackKeyCode, flags: .maskCommand)
+        postKey(shortcutKeyCode(typing: "c") ?? copyFallbackKeyCode, flags: .maskCommand)
     }
 
     /// Must be called on the main thread (Text Input Sources asserts otherwise).
     static func postPaste() {
-        postKey(keyCode(typing: "v") ?? pasteFallbackKeyCode, flags: .maskCommand)
+        postKey(shortcutKeyCode(typing: "v") ?? pasteFallbackKeyCode, flags: .maskCommand)
     }
 
     static func postRightArrow() {
@@ -85,46 +85,61 @@ enum SyntheticKeys {
         return tagged(event)
     }
 
-    /// Keycode that types `character` on the current layout, via UCKeyTranslate
-    /// over keycodes 0..<128 with `kUCKeyActionDisplay`, so ⌘C and ⌘V follow a
-    /// non-QWERTY layout.
+    /// UCKeyTranslate's `modifierKeyState` with Command held: the Carbon
+    /// modifier mask shifted down a byte.
+    static let commandModifierKeyState = UInt32((cmdKey >> 8) & 0xFF)
+
+    /// Keycode of the ⌘ shortcut for `character` on `layout` (the current
+    /// keyboard layout when nil), resolved with Command held: a layout that
+    /// switches keys under ⌘, such as "Dvorak – QWERTY ⌘", puts ⌘C and ⌘V
+    /// elsewhere than its unmodified C and V.
     /// Must be called on the main thread (Text Input Sources asserts otherwise).
-    static func keyCode(typing character: String) -> CGKeyCode? {
+    static func shortcutKeyCode(typing character: String, layout: TISInputSource? = nil) -> CGKeyCode? {
+        keyCode(typing: character, modifierKeyState: commandModifierKeyState, layout: layout)
+    }
+
+    /// Keycode that types `character` with `modifierKeyState` on `layout`
+    /// (the current keyboard layout when nil), via UCKeyTranslate over
+    /// keycodes 0..<128 with `kUCKeyActionDisplay`.
+    /// Must be called on the main thread (Text Input Sources asserts otherwise).
+    static func keyCode(typing character: String, modifierKeyState: UInt32 = 0, layout: TISInputSource? = nil) -> CGKeyCode? {
         let target = character.lowercased()
         guard
-            let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+            let source = layout ?? TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
             let layoutDataPointer = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
         else {
             return nil
         }
         let layoutData = Unmanaged<CFData>.fromOpaque(layoutDataPointer).takeUnretainedValue()
-        guard let bytes = CFDataGetBytePtr(layoutData) else { return nil }
-        let keyboardLayout = UnsafeRawPointer(bytes).assumingMemoryBound(to: UCKeyboardLayout.self)
-        let keyboardType = UInt32(LMGetKbdType())
-        for keyCode in UInt16(0)..<UInt16(128) {
-            var deadKeyState: UInt32 = 0
-            var actualLength = 0
-            var chars = [UniChar](repeating: 0, count: 8)
-            let status = chars.withUnsafeMutableBufferPointer { buffer in
-                UCKeyTranslate(
-                    keyboardLayout,
-                    keyCode,
-                    UInt16(kUCKeyActionDisplay),
-                    0,
-                    keyboardType,
-                    OptionBits(kUCKeyTranslateNoDeadKeysBit),
-                    &deadKeyState,
-                    buffer.count,
-                    &actualLength,
-                    buffer.baseAddress
-                )
+        return withExtendedLifetime((source, layoutData)) { () -> CGKeyCode? in
+            guard let bytes = CFDataGetBytePtr(layoutData) else { return nil }
+            let keyboardLayout = UnsafeRawPointer(bytes).assumingMemoryBound(to: UCKeyboardLayout.self)
+            let keyboardType = UInt32(LMGetKbdType())
+            for keyCode in UInt16(0)..<UInt16(128) {
+                var deadKeyState: UInt32 = 0
+                var actualLength = 0
+                var chars = [UniChar](repeating: 0, count: 8)
+                let status = chars.withUnsafeMutableBufferPointer { buffer in
+                    UCKeyTranslate(
+                        keyboardLayout,
+                        keyCode,
+                        UInt16(kUCKeyActionDisplay),
+                        modifierKeyState,
+                        keyboardType,
+                        OptionBits(kUCKeyTranslateNoDeadKeysMask),
+                        &deadKeyState,
+                        buffer.count,
+                        &actualLength,
+                        buffer.baseAddress
+                    )
+                }
+                guard status == noErr, actualLength > 0 else { continue }
+                if String(utf16CodeUnits: chars, count: actualLength).lowercased() == target {
+                    return CGKeyCode(keyCode)
+                }
             }
-            guard status == noErr, actualLength > 0 else { continue }
-            if String(utf16CodeUnits: chars, count: actualLength).lowercased() == target {
-                return CGKeyCode(keyCode)
-            }
+            return nil
         }
-        return nil
     }
 
     private static func tagged(_ event: CGEvent) -> CGEvent {

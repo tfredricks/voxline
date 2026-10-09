@@ -1,4 +1,5 @@
 // voxlineTests/SyntheticKeysTests.swift
+import Carbon.HIToolbox
 import CoreGraphics
 import Testing
 @testable import voxline
@@ -72,8 +73,48 @@ import Testing
     }
 
     @MainActor
-    @Test func key_code_typing_v_is_nine_on_us_layout_or_unresolved() {
-        let code = SyntheticKeys.keyCode(typing: "v")
-        #expect(code == nil || code == 9)
+    @Test func shortcut_key_for_v_on_the_current_layout_does_not_crash() {
+        _ = SyntheticKeys.shortcutKeyCode(typing: "v")
+    }
+
+    // MARK: - Shortcut keys per layout
+
+    @Test func command_modifier_key_state_is_the_command_mask_shifted_down_a_byte() {
+        #expect(SyntheticKeys.commandModifierKeyState == 1)
+        #expect(SyntheticKeys.commandModifierKeyState == UInt32((cmdKey >> 8) & 0xFF))
+    }
+
+    /// A layout that ships with macOS, by its input source ID.
+    @MainActor
+    private func layout(_ id: String) throws -> TISInputSource {
+        let filter = [kTISPropertyInputSourceID as String: id] as CFDictionary
+        let sources = TISCreateInputSourceList(filter, true)?.takeRetainedValue() as? [TISInputSource]
+        return try #require(sources?.first, "\(id) ships with macOS")
+    }
+
+    @MainActor
+    @Test func shortcut_keys_on_us_are_c_and_v() throws {
+        let us = try layout("com.apple.keylayout.US")
+        #expect(SyntheticKeys.shortcutKeyCode(typing: "c", layout: us) == 8)
+        #expect(SyntheticKeys.shortcutKeyCode(typing: "v", layout: us) == 9)
+    }
+
+    /// "Dvorak – QWERTY ⌘" types Dvorak but switches to QWERTY under ⌘, so
+    /// ⌘C and ⌘V are the QWERTY C and V keys, not Dvorak's C (QWERTY I)
+    /// and V (QWERTY period).
+    @MainActor
+    @Test func shortcut_keys_follow_a_layout_that_switches_to_qwerty_under_command() throws {
+        let dvorakQwertyCommand = try layout("com.apple.keylayout.DVORAK-QWERTYCMD")
+        #expect(SyntheticKeys.keyCode(typing: "c", layout: dvorakQwertyCommand) == 34)
+        #expect(SyntheticKeys.keyCode(typing: "v", layout: dvorakQwertyCommand) == 47)
+        #expect(SyntheticKeys.shortcutKeyCode(typing: "c", layout: dvorakQwertyCommand) == 8)
+        #expect(SyntheticKeys.shortcutKeyCode(typing: "v", layout: dvorakQwertyCommand) == 9)
+    }
+
+    @MainActor
+    @Test func shortcut_keys_on_plain_dvorak_are_its_own_c_and_v() throws {
+        let dvorak = try layout("com.apple.keylayout.Dvorak")
+        #expect(SyntheticKeys.shortcutKeyCode(typing: "c", layout: dvorak) == 34)
+        #expect(SyntheticKeys.shortcutKeyCode(typing: "v", layout: dvorak) == 47)
     }
 }
