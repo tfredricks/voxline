@@ -50,4 +50,13 @@ struct ModifierTracker: Equatable, Sendable {
     }
 
     mutating func reset(to held: Set<HotkeyChord.Modifier>) { self.held = held }
+
+    /// The modifiers held right now, read from the combined session state.
+    /// A family with only its generic bit set resolves to its left key.
+    static func heldNow() -> Set<HotkeyChord.Modifier> {
+        var tracker = ModifierTracker()
+        return tracker.update(flags: CGEventSource.flagsState(.combinedSessionState), keyCode: -1)
+    }
+
+    static let modifierKeyCodes: Set<Int64> = Set(families.flatMap { [$0.leftKeyCode, $0.rightKeyCode] })
 }

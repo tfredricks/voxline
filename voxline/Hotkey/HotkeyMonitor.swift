@@ -1,21 +1,55 @@
 import AppKit
 import CoreGraphics
 import Foundation
-import IOKit.hidsystem
 
-/// Drives a HotkeyStateMachine from real OS events. Owns a session-level
-/// CGEventTap and the max-duration fail-safe timer.
+/// A scheduled one-shot the monitor can cancel.
+protocol HotkeyTimer: AnyObject {
+    func invalidate()
+}
+
+extension Timer: HotkeyTimer {}
+
+/// Schedules the monitor's one-shot timers. A seam so tests fire them by hand.
+protocol HotkeyTimerScheduling {
+    @MainActor func schedule(after delay: Duration, _ fire: @escaping @MainActor () -> Void) -> any HotkeyTimer
+}
+
+/// Timers on `RunLoop.main` in `.common` mode, so they keep firing while a
+/// menu is open or a window is being dragged (issue 20).
+struct RunLoopTimerScheduler: HotkeyTimerScheduling {
+    @MainActor func schedule(after delay: Duration, _ fire: @escaping @MainActor () -> Void) -> any HotkeyTimer {
+        let timer = Timer(timeInterval: delay / .seconds(1), repeats: false) { _ in
+            MainActor.assumeIsolated { fire() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        return timer
+    }
+}
+
+/// Drives a HotkeyStateMachine from real OS events. Owns a listen-only
+/// session tap on flagsChanged and keyDown, the recording cap, the shortcut
+/// window, and the prewarm delay.
 @MainActor
 final class HotkeyMonitor {
 
-    /// Observer notified when the state machine produces `startRecording`.
-    /// The `Bool` is whether the command modifier was held at recording start
-    /// (command gesture) vs plain dictation. Runs on the main actor.
-    var onStartRecording: ((Bool) -> Void)?
-    var onFinalizeRecording: (() -> Void)?
-    /// One chord modifier went down — warm the audio engine. Runs on the main actor.
+    /// A key or an extra modifier this soon after a recording starts means
+    /// the chord was the start of an OS shortcut, and the recording is dropped.
+    static let shortcutWindow: Duration = .seconds(1)
+    /// Arming waits this long before warming the microphone, so a capital
+    /// letter typed with a shared Shift never starts it.
+    static let prewarmDelay: Duration = .milliseconds(150)
+
+    private nonisolated static let escapeKeyCode: Int64 = 53
+
+    var onStartRecording: ((CaptureKind) -> Void)?
+    var onFinalizeRecording: ((CaptureKind) -> Void)?
+    /// The recording was the start of a shortcut. Runs with the machine
+    /// already `blocked`; nothing about it should reach the user.
+    var onDiscardRecording: ((CaptureKind) -> Void)?
+    /// Fires `prewarmDelay` after arming, unless a key, a release, or the
+    /// full chord comes first. Runs on the main actor.
     var onBeginPrewarm: (() -> Void)?
-    /// The armed modifier was released without completing the chord.
+    /// Arming ended without a recording after `onBeginPrewarm` had fired.
     var onCancelPrewarm: (() -> Void)?
 
     var isTapInstalled: Bool { eventTap != nil }
@@ -25,43 +59,51 @@ final class HotkeyMonitor {
     /// Fires on the main actor just before the cap stops a recording.
     var onMaxDurationReached: (() -> Void)?
 
-    /// Active chord. Read by the tap callback to test the right device-mask bits.
-    /// Defaults to .default; AppCoordinator overrides from AppSettings on launch.
-    var chord: HotkeyChord = .default
+    /// Setting it resyncs the machine against the keys held now, so a chord
+    /// change never starts a recording from keys that are already down.
+    var chords: ChordSet = .default {
+        didSet {
+            machine.chords = chords
+            feed(.resync(tracker.held))
+        }
+    }
 
-    /// Command modifier sampled at recording start. `nil` = command mode off.
-    /// Defaults to `.leftOption`; AppCoordinator overrides from AppSettings on
-    /// launch and on every settings change.
-    var commandModifier: HotkeyChord.Modifier? = .leftOption
+    /// While suspended the tap stays installed and every event is ignored.
+    private(set) var isSuspended = false
 
-    /// Latest observed command-modifier state, updated on EVERY flagsChanged
-    /// (mirroring `HotkeyStateMachine.lastFlags`) so the resume-on-
-    /// `recordingFinished` path — which emits `startRecording` with no live
-    /// event — samples the current value.
-    private var lastCommandFlag = false
+    var state: HotkeyStateMachine.State { machine.state }
 
     private let machine = HotkeyStateMachine()
+    private var tracker = ModifierTracker()
+    private let scheduler: any HotkeyTimerScheduling
+    private let heldNow: () -> Set<HotkeyChord.Modifier>
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var maxDurationTimer: Timer?
+    private var maxDurationTimer: (any HotkeyTimer)?
+    private var shortcutWindowTimer: (any HotkeyTimer)?
+    private var prewarmTimer: (any HotkeyTimer)?
+    private var prewarmFired = false
 
-    /// Pure sampling predicate — testable without a CGEventTap. Whether the
-    /// command modifier is held in `flags`. A modifier that collides with a
-    /// chord key (or `nil`) is treated as "not a command", so command mode can
-    /// never make plain dictation impossible.
-    nonisolated static func commandIsHeld(in flags: CGEventFlags, chord: HotkeyChord, commandModifier: HotkeyChord.Modifier?) -> Bool {
-        guard let cmd = commandModifier,
-              cmd != chord.modifierA,
-              cmd != chord.modifierB else { return false }
-        return cmd.isHeld(in: flags)
+    init(
+        scheduler: any HotkeyTimerScheduling = RunLoopTimerScheduler(),
+        heldNow: @escaping () -> Set<HotkeyChord.Modifier> = ModifierTracker.heldNow
+    ) {
+        self.scheduler = scheduler
+        self.heldNow = heldNow
+    }
+
+    /// A keyDown that can be the key of an OS shortcut: neither Esc nor a modifier.
+    nonisolated static func isShortcutKey(_ keyCode: Int64) -> Bool {
+        keyCode != escapeKeyCode && !ModifierTracker.modifierKeyCodes.contains(keyCode)
     }
 
     // MARK: - Lifecycle
 
-    /// Install the tap and observers. Throws if Accessibility is not granted.
+    /// Install the tap and resync with the keys held now. Throws if
+    /// Accessibility is not granted.
     func start() throws {
         guard eventTap == nil else { return }
-        let mask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
+        let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue) | CGEventMask(1 << CGEventType.keyDown.rawValue)
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -79,17 +121,35 @@ final class HotkeyMonitor {
         eventTap = tap
         runLoopSource = source
         CGEvent.tapEnable(tap: tap, enable: true)
+        resyncWithHeldKeys()
         AppLog.hotkey.info("monitor installed")
     }
 
+    /// Ends any recording as if the chord were released (issue 12), then
+    /// removes the tap.
     func stop() {
+        feed(.inputLost)
         if let tap = eventTap { CGEvent.tapEnable(tap: tap, enable: false) }
         if let src = runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes) }
         eventTap = nil
         runLoopSource = nil
+        cancelRecordingTimers()
+        cancelPrewarmTimer()
+        prewarmFired = false
+    }
 
-        maxDurationTimer?.invalidate()
-        maxDurationTimer = nil
+    /// Stops reacting to keys, ending any recording, until `resume()`.
+    func suspend() {
+        guard !isSuspended else { return }
+        isSuspended = true
+        feed(.inputLost)
+    }
+
+    /// Reacts to keys again. A chord still held lands in `blocked`.
+    func resume() {
+        guard isSuspended else { return }
+        isSuspended = false
+        resyncWithHeldKeys()
     }
 
     /// External signal that transcription has finished and we can return to idle.
@@ -106,94 +166,129 @@ final class HotkeyMonitor {
         }
     }
 
-    // MARK: - Tap callback
+    // MARK: - Events
 
+    // The run-loop source is on CFRunLoopGetMain(), so the callback is already
+    // on the main thread. Events are handled inline, not through a Task, so
+    // flagsChanged and keyDown stay in hardware order.
     private static let tapCallback: CGEventTapCallBack = { _, type, event, refcon in
         guard let refcon else { return Unmanaged.passUnretained(event) }
         let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
-
-        // The runloop source is registered with CFRunLoopGetMain(), so this
-        // callback is already on the main thread. Process inline via
-        // MainActor.assumeIsolated rather than hopping through Task { @MainActor }
-        // — unstructured Tasks don't preserve submission order, and modifier
-        // events from the same hardware source must remain ordered.
-        switch type {
-        case .flagsChanged:
-            let flags = event.flags
-            MainActor.assumeIsolated {
-                let chord = monitor.chord
-                let modA = flags.contains(CGEventFlags(rawValue: chord.modifierA.deviceMaskBit))
-                let modB = flags.contains(CGEventFlags(rawValue: chord.modifierB.deviceMaskBit))
-                monitor.lastCommandFlag = HotkeyMonitor.commandIsHeld(
-                    in: flags, chord: chord, commandModifier: monitor.commandModifier
-                )
-                monitor.feed(.flagsChanged(modAFlag: modA, modBFlag: modB))
-            }
-        case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            let reason = (type == .tapDisabledByTimeout) ? "timeout" : "user-input"
-            MainActor.assumeIsolated {
-                if let tap = monitor.eventTap {
-                    CGEvent.tapEnable(tap: tap, enable: true)
-                }
-                AppLog.hotkey.debug("tap re-enabled (\(reason))")
-                monitor.feed(.tapDisabled)
-            }
-        default:
-            break
+        MainActor.assumeIsolated {
+            monitor.receive(type, event)
         }
         return Unmanaged.passUnretained(event)
     }
 
-    // MARK: - Routing inputs through the machine
+    /// One tap event. Events voxline posted itself, Esc, and modifier
+    /// keyDowns never reach the machine; nothing but the type, flags, and
+    /// keycode is read.
+    func receive(_ type: CGEventType, _ event: CGEvent) {
+        switch type {
+        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            if let tap = eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+            let reason = (type == .tapDisabledByTimeout) ? "timeout" : "user-input"
+            AppLog.hotkey.debug("tap re-enabled (\(reason))")
+            guard !isSuspended else { return }
+            feed(.inputLost)
+        case .flagsChanged:
+            guard !isSuspended, !SyntheticKeys.isTagged(event) else { return }
+            let held = tracker.update(flags: event.flags, keyCode: event.getIntegerValueField(.keyboardEventKeycode))
+            feed(.modifiersChanged(held))
+        case .keyDown:
+            guard !isSuspended,
+                  !SyntheticKeys.isTagged(event),
+                  Self.isShortcutKey(event.getIntegerValueField(.keyboardEventKeycode))
+            else { return }
+            feed(.keyDown)
+        default:
+            break
+        }
+    }
+
+    private func resyncWithHeldKeys() {
+        let held = heldNow()
+        tracker.reset(to: held)
+        feed(.resync(held))
+    }
+
+    // MARK: - Routing outputs
 
     private func feed(_ input: HotkeyStateMachine.Input) {
-        let outputs = machine.handle(input)
-        for output in outputs {
+        for output in machine.handle(input) {
             switch output {
-            case .startRecording:
-                scheduleMaxDurationTimer()
-                onStartRecording?(lastCommandFlag)
-            case .finalizeRecording:
-                cancelMaxDurationTimer()
-                onFinalizeRecording?()
+            case .startRecording(let kind):
+                cancelPrewarmTimer()
+                prewarmFired = false
+                scheduleRecordingTimers()
+                onStartRecording?(kind)
+            case .finalizeRecording(let kind):
+                cancelRecordingTimers()
+                onFinalizeRecording?(kind)
+            case .discardRecording(let kind):
+                cancelRecordingTimers()
+                onDiscardRecording?(kind)
             case .beginPrewarm:
-                onBeginPrewarm?()
+                schedulePrewarm()
             case .cancelPrewarm:
-                onCancelPrewarm?()
+                cancelPrewarmTimer()
+                if prewarmFired {
+                    prewarmFired = false
+                    onCancelPrewarm?()
+                }
             }
         }
     }
 
-    private func scheduleMaxDurationTimer() {
-        maxDurationTimer?.invalidate()
-        maxDurationTimer = Timer.scheduledTimer(withTimeInterval: maxRecordingDuration, repeats: false) { [weak self] _ in
-            // Timer was scheduled from a @MainActor context, so its callback
-            // fires on the main runloop. Stay synchronous to keep the
-            // .maxDurationElapsed signal ordered with subsequent flagsChanged
-            // events from the tap.
-            MainActor.assumeIsolated {
-                self?.onMaxDurationReached?()
-                self?.feed(.maxDurationElapsed)
-            }
+    private func schedulePrewarm() {
+        cancelPrewarmTimer()
+        prewarmFired = false
+        prewarmTimer = scheduler.schedule(after: Self.prewarmDelay) { [weak self] in
+            guard let self else { return }
+            self.prewarmTimer = nil
+            self.prewarmFired = true
+            self.onBeginPrewarm?()
         }
     }
 
-    private func cancelMaxDurationTimer() {
+    private func cancelPrewarmTimer() {
+        prewarmTimer?.invalidate()
+        prewarmTimer = nil
+    }
+
+    private func scheduleRecordingTimers() {
+        cancelRecordingTimers()
+        maxDurationTimer = scheduler.schedule(after: .seconds(maxRecordingDuration)) { [weak self] in
+            guard let self else { return }
+            self.maxDurationTimer = nil
+            self.onMaxDurationReached?()
+            self.feed(.maxDurationElapsed)
+        }
+        shortcutWindowTimer = scheduler.schedule(after: Self.shortcutWindow) { [weak self] in
+            guard let self else { return }
+            self.shortcutWindowTimer = nil
+            self.feed(.shortcutWindowClosed)
+        }
+    }
+
+    private func cancelRecordingTimers() {
         maxDurationTimer?.invalidate()
         maxDurationTimer = nil
+        shortcutWindowTimer?.invalidate()
+        shortcutWindowTimer = nil
     }
 
     deinit {
         // Disable the CGEventTap so the C callback can no longer fire and
         // read our refcon (which would be a use-after-free), and tear down
         // the run-loop source. Synchronous; doesn't touch @MainActor state.
+        // The timers hold the monitor weakly and need no teardown.
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
         if let src = runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes)
         }
-        maxDurationTimer?.invalidate()
     }
 }
 

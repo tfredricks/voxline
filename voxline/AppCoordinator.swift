@@ -214,14 +214,19 @@ final class AppCoordinator {
 
     private func installHotkey(state: AppState, settings: AppSettings) {
         let monitor = HotkeyMonitor()
-        monitor.chord = settings.hotkeyChord
-        monitor.commandModifier = settings.commandModifier
-        monitor.onStartRecording = { [weak self, weak state] command in
+        monitor.chords = ChordSet(
+            dictation: settings.hotkeyChord,
+            command: CommandChordMigration.commandChord(
+                dictation: settings.hotkeyChord,
+                stored: settings.defaults.string(forKey: AppSettings.Key.commandModifier)
+            )
+        )
+        monitor.onStartRecording = { [weak self, weak state] kind in
             self?.soundPlayer?.playStart()
-            self?.pipeline?.startRecording(command: command)
+            self?.pipeline?.startRecording(command: kind == .command)
             if let state { self?.pillWindow?.updateVisibility(state: state) }
         }
-        monitor.onFinalizeRecording = { [weak self, weak state] in
+        monitor.onFinalizeRecording = { [weak self, weak state] _ in
             if self?.pipeline?.wasCancelled != true {
                 self?.soundPlayer?.playStop()
             }
@@ -230,6 +235,11 @@ final class AppCoordinator {
                 self?.hotkeyMonitor?.recordingFinished()
                 if let state { self?.pillWindow?.updateVisibility(state: state) }
             }
+        }
+        monitor.onDiscardRecording = { [weak self, weak state] _ in
+            self?.pipeline?.cancel(reason: .shortcut)
+            self?.hotkeyMonitor?.recordingFinished()
+            if let state { self?.pillWindow?.updateVisibility(state: state) }
         }
         monitor.onBeginPrewarm = { [weak self] in
             self?.pipeline?.prewarmCapture()
@@ -301,12 +311,14 @@ final class AppCoordinator {
     /// all fire within the same second.
     private func startPermissionAndStateLoop(state: AppState) {
         permissionPollTimer?.invalidate()
-        permissionPollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self, weak state] _ in
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self, weak state] _ in
             MainActor.assumeIsolated {
                 guard let self, let state else { return }
                 self.reconcileTapWithPermissionsAndEnabled(state: state)
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        permissionPollTimer = timer
         // React instantly to user-driven hotkeyEnabled toggles instead of
         // waiting up to 1s for the next poll tick.
         observeHotkeyEnabledChanges(state: state)
@@ -370,13 +382,12 @@ final class AppCoordinator {
         }
     }
 
-    /// Arms Esc while the pipeline can cancel, letting it through with the
-    /// hotkey's own modifiers held, since the chord is down while recording.
+    /// Arms Esc while the pipeline can cancel, letting it through with
+    /// either chord's modifiers held, since a chord is down while recording.
     private func syncEscapeInterceptor(state: AppState) {
         guard let interceptor = escapeInterceptor else { return }
         if let monitor = hotkeyMonitor {
-            let held = [monitor.chord.modifierA, monitor.chord.modifierB] + [monitor.commandModifier].compactMap { $0 }
-            interceptor.hotkeyModifiers = EscapeKeyInterceptor.modifierFlags(of: held)
+            interceptor.hotkeyModifiers = monitor.chords.families.cgFlags
         }
         interceptor.isArmed = state.isCancellable
     }
@@ -605,8 +616,13 @@ extension AppCoordinator {
     func apply(_ snapshot: GeneralSettingsSnapshot) {
         // snapshot.provider is consumed by LLMService at the next dictation;
         // no per-snapshot action needed here.
-        hotkeyMonitor?.chord = snapshot.chord
-        hotkeyMonitor?.commandModifier = snapshot.commandModifier
+        hotkeyMonitor?.chords = ChordSet(
+            dictation: snapshot.chord,
+            command: CommandChordMigration.commandChord(
+                dictation: snapshot.chord,
+                stored: snapshot.commandModifier?.rawValue ?? "off"
+            )
+        )
 
         // AudioCaptureService applies preferredInputDeviceUID at next start();
         // CapturePipeline restarts the engine on every chord, so the new device

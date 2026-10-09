@@ -170,6 +170,46 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(!h.pipe.wasCancelled)
     }
 
+    @Test func cancel_with_shortcut_reason_is_silent() async {
+        let h = makeHarness()
+        h.session.keepsPartialsOpen = true
+        h.pipe.startRecording()
+        #expect(await eventually { h.engine.sessions.count == 1 })
+        h.pipe.cancel(reason: .shortcut)
+
+        #expect(h.state.status == .idle)
+        #expect(h.session.cancelCount == 1)
+        #expect(h.session.finishCount == 0)
+        #expect(h.capture.stopCallCount == 1)
+        #expect(h.state.toastMessage == nil)
+        #expect(h.pipe.wasCancelled)
+        #expect(h.state.isCancellable == false)
+
+        await h.pipe.finalizeRecording()
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(h.state.toastMessage == nil)
+        #expect(h.llm.calls.isEmpty)
+        #expect(h.injector.injected.isEmpty)
+        #expect(h.history.items.isEmpty)
+        #expect(h.pipe.metrics.items.isEmpty)
+        #expect(h.state.retryTranscript == nil)
+    }
+
+    @Test func cancel_with_shortcut_reason_while_thinking_acts_as_user() async {
+        let h = makeHarness()
+        h.session.holdFinish = true
+        defer { h.session.releaseFinish() }
+        h.pipe.startRecording()
+        let finalize = Task { await h.pipe.finalizeRecording() }
+        #expect(await eventually { h.session.finishCount == 1 })
+
+        h.pipe.cancel(reason: .shortcut)
+        #expect(await finishes(finalize, within: .milliseconds(200)))
+        #expect(h.state.status == .idle)
+        #expect(h.state.toastMessage == "Cancelled")
+        #expect(h.pipe.wasCancelled)
+    }
+
     // MARK: - Cancel while thinking
 
     @Test func cancel_while_transcribing_returns_promptly() async {

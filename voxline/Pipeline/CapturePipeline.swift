@@ -1,6 +1,12 @@
 import AppKit
 import Foundation
 
+/// Why a capture was cancelled. `.shortcut` is the hotkey's silent discard of
+/// a chord that turned out to start an OS shortcut.
+enum CancelReason: Equatable, Sendable {
+    case user, shortcut
+}
+
 /// Coordinates the hotkey → audio capture → streaming transcription → LLM
 /// cleanup → clipboard inject pipeline. Updates AppState along the way.
 @MainActor
@@ -261,8 +267,10 @@ final class CapturePipeline {
     /// cleaning up, abandons the work and returns to idle at once: the raw
     /// transcript of a dictation or retry whose mode was resolved goes to
     /// history and stays retryable, and any late result is dropped. Ignored once insert has begun, and when
-    /// nothing is running.
-    func cancel() {
+    /// nothing is running. A `.shortcut` discard of a recording shows no
+    /// toast; while thinking it acts as `.user`.
+    func cancel(reason: CancelReason = .user) {
+        var silent = false
         switch state.status {
         case .recording:
             generation &+= 1
@@ -270,6 +278,7 @@ final class CapturePipeline {
             live?.discard()
             startTasks?.cancel()
             startTasks = nil
+            silent = reason == .shortcut
         case .thinking where state.isCancellable:
             generation &+= 1
             finalizeWork?.cancel()
@@ -284,7 +293,7 @@ final class CapturePipeline {
         wasCancelled = true
         capHit = false
         resetIdle()
-        showToast("Cancelled")
+        if !silent { showToast("Cancelled") }
         finalizeDone?.fire()
         finalizeDone = nil
     }

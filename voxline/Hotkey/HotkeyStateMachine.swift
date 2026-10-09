@@ -1,100 +1,133 @@
 import Foundation
 
-/// Pure state machine for the hold-to-talk chord.
-/// All inputs are events; all outputs are effect descriptions.
-/// No CGEventTap, no timers, no AVFoundation — fully unit-testable.
+/// Pure state machine for two hold-to-talk chords. Inputs are events; outputs
+/// are effects. No taps, no timers.
 final class HotkeyStateMachine {
 
     enum State: Equatable {
-        case idle
-        case armed       // exactly one chord modifier down
-        case recording   // both chord modifiers down, audio capture in progress
-        case finalizing  // either modifier released or fail-safe fired; awaiting transcription
+        case idle, armed, blocked
+        case recording(CaptureKind)
+        case finalizing(CaptureKind)
     }
 
     enum Input: Equatable {
-        case flagsChanged(modAFlag: Bool, modBFlag: Bool)
+        case modifiersChanged(Set<HotkeyChord.Modifier>)
+        case keyDown
+        case shortcutWindowClosed
         case maxDurationElapsed
-        case tapDisabled
+        case inputLost
+        case resync(Set<HotkeyChord.Modifier>)
         case recordingFinished
     }
 
     enum Output: Equatable {
-        case startRecording
-        case finalizeRecording
-        /// One chord modifier just went down (entered .armed). The caller
-        /// should warm up the audio engine so a completed chord captures
-        /// from the first syllable.
+        case startRecording(CaptureKind)
+        case finalizeRecording(CaptureKind)
+        case discardRecording(CaptureKind)
         case beginPrewarm
-        /// The armed modifier was released without completing the chord;
-        /// tear down the warmed engine.
         case cancelPrewarm
     }
 
+    var chords: ChordSet
     private(set) var state: State = .idle
+    private var lastHeld: Set<HotkeyChord.Modifier> = []
+    private var shortcutWindowOpen = false
 
-    /// Latest absolute modifier flags seen, INCLUDING events that arrive while
-    /// `.finalizing` (which the switch below otherwise ignores). When the
-    /// pipeline reports `recordingFinished`, these flags are re-evaluated so a
-    /// chord held or re-pressed during processing starts the next recording
-    /// instead of being silently dropped.
-    private var lastFlags: (modA: Bool, modB: Bool) = (false, false)
+    init(chords: ChordSet = .default) {
+        self.chords = chords
+    }
 
-    /// Process an input. Returns zero or more effect outputs the caller should perform.
     @discardableResult
     func handle(_ input: Input) -> [Output] {
-        if case .flagsChanged(let modA, let modB) = input {
-            lastFlags = (modA, modB)
-        }
         switch (state, input) {
+        case (.idle, .modifiersChanged(let h)), (.armed, .modifiersChanged(let h)):
+            lastHeld = h
+            return evaluate(h)
 
-        // From idle / armed, modifier flag changes drive entry into recording.
-        case (.idle, .flagsChanged(let modA, let modB)),
-             (.armed, .flagsChanged(let modA, let modB)):
-            return reactToFlags(modA: modA, modB: modB)
+        case (.armed, .keyDown):
+            state = .blocked
+            return [.cancelPrewarm]
 
-        // While recording, ANY input that signals "stop" finalizes.
-        case (.recording, .flagsChanged(let modA, let modB)) where !(modA && modB):
-            state = .finalizing
-            return [.finalizeRecording]
+        case (.blocked, .modifiersChanged(let h)):
+            lastHeld = h
+            if h.isEmpty { state = .idle }
+            return []
 
-        // These inputs fire precisely when a chord-release flagsChanged event
-        // may have been LOST (tap disabled) or the hold is implausibly long
-        // (fail-safe). Either way lastFlags can't be trusted, so the
-        // resume-on-recordingFinished path below must not fire from stale
-        // data — reset it and make the user re-press. A fresh flagsChanged
-        // arriving during finalizing (the user re-pressing) updates lastFlags
-        // again and resume works as normal; that case is unaffected.
-        case (.recording, .maxDurationElapsed),
-             (.recording, .tapDisabled):
-            lastFlags = (false, false)
-            state = .finalizing
-            return [.finalizeRecording]
+        case (.recording(let kind), .modifiersChanged(let h)):
+            lastHeld = h
+            let chordKeys = chords.chord(for: kind)?.keys ?? []
+            if !chordKeys.isSubset(of: h) {
+                shortcutWindowOpen = false
+                state = .finalizing(kind)
+                return [.finalizeRecording(kind)]
+            }
+            if shortcutWindowOpen, !h.isSubset(of: chordKeys) {
+                shortcutWindowOpen = false
+                state = .blocked
+                return [.discardRecording(kind)]
+            }
+            return []
 
-        // Recording finished: re-evaluate the flags the user is holding RIGHT NOW.
-        // Both held -> start the next dictation immediately (the start sound tells
-        // the user the mic is live). One held -> re-arm (and prewarm). None -> idle.
+        case (.recording(let kind), .keyDown):
+            guard shortcutWindowOpen else { return [] }
+            shortcutWindowOpen = false
+            state = .blocked
+            return [.discardRecording(kind)]
+
+        case (.recording, .shortcutWindowClosed):
+            shortcutWindowOpen = false
+            return []
+
+        case (.recording(let kind), .maxDurationElapsed), (.recording(let kind), .inputLost):
+            lastHeld = []
+            shortcutWindowOpen = false
+            state = .finalizing(kind)
+            return [.finalizeRecording(kind)]
+
+        case (.finalizing, .modifiersChanged(let h)), (.finalizing, .resync(let h)):
+            lastHeld = h
+            return []
+
+        case (.finalizing, .inputLost):
+            lastHeld = []
+            return []
+
         case (.finalizing, .recordingFinished):
-            return reactToFlags(modA: lastFlags.modA, modB: lastFlags.modB)
+            return evaluate(lastHeld)
 
-        // Any other input in any other state is a no-op.
+        case (.idle, .inputLost), (.armed, .inputLost), (.blocked, .inputLost):
+            let wasArmed = (state == .armed)
+            lastHeld = []
+            state = .idle
+            return wasArmed ? [.cancelPrewarm] : []
+
+        case (.idle, .resync(let h)), (.armed, .resync(let h)), (.blocked, .resync(let h)):
+            let wasArmed = (state == .armed)
+            lastHeld = h
+            state = h.isEmpty ? .idle : .blocked
+            return wasArmed ? [.cancelPrewarm] : []
+
         default:
             return []
         }
     }
 
-    private func reactToFlags(modA: Bool, modB: Bool) -> [Output] {
+    private func evaluate(_ held: Set<HotkeyChord.Modifier>) -> [Output] {
         let previous = state
-        switch (modA, modB) {
-        case (true, true):
-            state = .recording
-            return [.startRecording]
-        case (true, false), (false, true):
-            state = .armed
-            return previous == .armed ? [] : [.beginPrewarm]
-        case (false, false):
+        if let kind = chords.kind(matching: held) {
+            state = .recording(kind)
+            shortcutWindowOpen = true
+            return [.startRecording(kind)]
+        }
+        if held.isEmpty {
             state = .idle
             return previous == .armed ? [.cancelPrewarm] : []
         }
+        if chords.isStrictSubsetOfAny(held) {
+            state = .armed
+            return previous == .armed ? [] : [.beginPrewarm]
+        }
+        state = .blocked
+        return previous == .armed ? [.cancelPrewarm] : []
     }
 }
