@@ -30,6 +30,8 @@ final class FakeTranscriptionSession: TranscriptionSession, @unchecked Sendable 
     var appendedSampleCount: Int { appended.reduce(0) { $0 + $1.count } }
     var cancelCount: Int { lock.withLock { _cancelCount } }
     var finishCount: Int { lock.withLock { _finishCount } }
+    /// Whether a `finish()` call is suspended on `holdFinish` right now.
+    var isHoldingFinish: Bool { lock.withLock { finishWaiter != nil } }
 
     func append(_ samples: [Float]) { lock.withLock { _appended.append(samples) } }
 

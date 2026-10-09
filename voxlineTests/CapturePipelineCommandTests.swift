@@ -360,7 +360,9 @@ import Testing
         #expect(await eventually { h.inserter.clipboardRestoreGate.waiting == 1 })
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .seconds(1)))
+        let restoreGate = h.inserter.clipboardRestoreGate
+        await awaitWhileHeld(finalize) { restoreGate.open() }
+        #expect(h.inserter.clipboardRestoreGate.waiting == 1, "finalize returned while the clipboard restore was still held")
         h.inserter.releaseClipboardRestore()
         try? await Task.sleep(for: .milliseconds(50))
 
@@ -392,7 +394,9 @@ import Testing
         #expect(polls.read() >= 1)
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .seconds(1)))
+        let session = h.session
+        await awaitWhileHeld(finalize) { session.releaseFinish() }
+        #expect(h.session.isHoldingFinish, "finalize returned while the engine still held finish")
         await clock.advance(by: .seconds(5))
         try? await Task.sleep(for: .milliseconds(50))
 
@@ -864,7 +868,9 @@ import Testing
         #expect(h.state.isCancellable)
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .seconds(1)))
+        let commandGate = h.llm.commandGate
+        await awaitWhileHeld(finalize) { commandGate.open() }
+        #expect(h.llm.commandGate.waiting == 1, "finalize returned while the edit was still held")
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
 
@@ -1102,7 +1108,9 @@ import Testing
         #expect(await eventually { h.llm.commandGate.waiting == 1 })
 
         h.pipe.cancel()
-        #expect(await finishes(preset, within: .seconds(1)))
+        let commandGate = h.llm.commandGate
+        await awaitWhileHeld(preset) { commandGate.open() }
+        #expect(h.llm.commandGate.waiting == 1, "the preset returned while the edit was still held")
         #expect(h.state.status == .idle)
         #expect(h.state.activityLabel == nil)
         #expect(h.state.toastMessage == "Cancelled")

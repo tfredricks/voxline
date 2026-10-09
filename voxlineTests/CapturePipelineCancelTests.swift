@@ -2,14 +2,6 @@ import Testing
 import Foundation
 @testable import voxline
 
-/// True when `task` completes within `timeout`; never waits longer.
-@MainActor
-func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool {
-    let finished = CapturePipelineStreamingTests.Flag()
-    Task { await task.value; finished.set() }
-    return await eventually(timeout: timeout) { finished.isSet }
-}
-
 @Suite(.timeLimit(.minutes(1))) @MainActor struct CapturePipelineCancelTests {
 
     typealias FakeCapture = CapturePipelineTests.FakeCapture
@@ -227,7 +219,8 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(await eventually { h.session.finishCount == 1 })
 
         h.pipe.cancel(reason: .shortcut)
-        #expect(await finishes(finalize, within: .seconds(1)))
+        let session = h.session
+        await awaitWhileHeld(finalize) { session.releaseFinish() }
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.pipe.wasCancelled)
@@ -246,7 +239,9 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(h.state.status == .thinking)
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .seconds(1)))
+        let session = h.session
+        await awaitWhileHeld(finalize) { session.releaseFinish() }
+        #expect(h.session.isHoldingFinish, "finalize returned while the engine still held finish")
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.session.cancelCount == 1)
@@ -270,7 +265,8 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(await eventually { h.session.finishCount == 1 })
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .seconds(1)))
+        let session = h.session
+        await awaitWhileHeld(finalize) { session.releaseFinish() }
         try? await Task.sleep(for: .milliseconds(20))
 
         #expect(h.session.cancelCount == 1)
@@ -289,7 +285,9 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(h.state.pipelinePhase == .cleaning)
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .seconds(1)))
+        let cleanupGate = h.llm.cleanupGate
+        await awaitWhileHeld(finalize) { cleanupGate.open() }
+        #expect(h.llm.cleanupGate.waiting == 1, "finalize returned while cleanup was still held")
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.history.items.count == 1)
@@ -317,7 +315,9 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(await eventually { h.llm.commandGate.waiting == 1 })
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .seconds(1)))
+        let commandGate = h.llm.commandGate
+        await awaitWhileHeld(finalize) { commandGate.open() }
+        #expect(h.llm.commandGate.waiting == 1, "finalize returned while the edit was still held")
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.history.items.isEmpty)
@@ -345,7 +345,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(!h.pipe.wasCancelled)
 
         h.inserter.releaseInsert()
-        #expect(await finishes(finalize, within: .seconds(2)))
+        await finalize.value
         #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.state.status == .idle)
         #expect(h.pipe.metrics.items.count == 1)
@@ -380,7 +380,9 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         let first = Task { await h.pipe.finalizeRecording() }
         #expect(await eventually { h.session.finishCount == 1 })
         h.pipe.cancel()
-        #expect(await finishes(first, within: .seconds(1)))
+        let session = h.session
+        await awaitWhileHeld(first) { session.releaseFinish() }
+        #expect(h.session.isHoldingFinish, "finalize returned while the engine still held finish")
 
         h.pipe.startRecording()
         #expect(await eventually { h.engine.sessions.count == 2 })
@@ -571,7 +573,9 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(h.state.isCancellable)
 
         h.pipe.cancel()
-        #expect(await finishes(retry, within: .seconds(1)))
+        let cleanupGate = h.llm.cleanupGate
+        await awaitWhileHeld(retry) { cleanupGate.open() }
+        #expect(h.llm.cleanupGate.waiting == 1, "the retry returned while cleanup was still held")
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.state.retryTranscript == "hello world")
@@ -595,7 +599,9 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(h.state.status == .thinking)
 
         h.pipe.cancel()
-        #expect(await finishes(retry, within: .seconds(1)))
+        let probeGate = probe.gate
+        await awaitWhileHeld(retry) { probeGate.open() }
+        #expect(probe.gate.waiting == 1, "the retry returned while context capture was still held")
         #expect(h.state.status == .idle)
         #expect(h.history.items.isEmpty)
         #expect(h.state.retryTranscript == "hello world")
@@ -614,14 +620,16 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         let finalize = Task { await h.pipe.finalizeRecording() }
         #expect(await eventually { h.llm.cleanupGate.waiting == 1 })
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .seconds(1)))
+        let cleanupGate = h.llm.cleanupGate
+        await awaitWhileHeld(finalize) { cleanupGate.open() }
+        #expect(h.llm.cleanupGate.waiting == 1, "finalize returned while cleanup was still held")
         h.llm.releaseCleanup()
         try? await Task.sleep(for: .milliseconds(20))
         #expect(h.inserter.calls.isEmpty, "the cancelled cleanup's late result is dropped")
 
         h.llm.holdCleanup = false
         let retry = Task { await h.pipe.retryLastDictation() }
-        #expect(await finishes(retry, within: .seconds(2)))
+        await retry.value
         #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.state.status == .idle)
     }
@@ -687,16 +695,19 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         let signal = OneShotSignal()
         signal.fire()
         let waiter = Task { await signal.wait() }
-        #expect(await finishes(waiter, within: .seconds(1)))
+        await waiter.value
     }
 
     @Test func fire_resumes_the_waiter() async {
         let signal = OneShotSignal()
-        let waiter = Task { await signal.wait() }
-        #expect(!(await finishes(waiter, within: .milliseconds(20))))
+        let resumed = CapturePipelineStreamingTests.Flag()
+        let waiter = Task { await signal.wait(); resumed.set() }
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(!resumed.isSet)
 
         signal.fire()
-        #expect(await finishes(waiter, within: .seconds(1)))
+        await waiter.value
+        #expect(resumed.isSet)
     }
 
     @Test func second_fire_is_harmless() async {
@@ -704,6 +715,6 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         signal.fire()
         signal.fire()
         let waiter = Task { await signal.wait() }
-        #expect(await finishes(waiter, within: .seconds(1)))
+        await waiter.value
     }
 }
