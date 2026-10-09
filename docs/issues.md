@@ -214,6 +214,18 @@ refine pill (commits `7e88720..67958b6`). None block shipping; the feature is on
     rightward rather than staying centered on the cursor point. Cosmetic; spec only
     required the origin not to move.
 
+## Meetings follow-ups (2026-10-09)
+
+28. **Meeting timer chip truncates the elapsed time** — while a meeting records,
+    the chip reads "1:…" instead of the time. `MeetingTimerPanel.swift:16` gives
+    the panel a fixed 96 × 28 pt frame, and `Text(startedAt, style: .timer)`
+    asks for more width than the digits it draws, so the hosting view squeezes
+    it and SwiftUI truncates. Likely fix: size the panel from the hosting
+    view's `fittingSize` (or render the label from a `TimelineView` with a
+    formatted string and `.fixedSize()`), leaving room for `H:MM:SS` past the
+    first hour. Check that the remembered frame (`voxline.meetingTimer`
+    autosave) doesn't restore the old 96 pt width.
+
 ## Carry-overs from phase 1
 
 Three Accessibility edge cases carried over from phase 1, all fixed in phase 3:
