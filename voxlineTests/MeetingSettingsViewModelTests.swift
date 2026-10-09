@@ -63,4 +63,13 @@ import Testing
         #expect(!settings.showMeetingTimer)
         #expect(settings.meetingNotesFolder.path == "/tmp/m")
     }
+
+    @Test func live_transcript_toggle_writes_through_and_reports() {
+        let changes = LockedBox(0)
+        let vm = model(changes: changes)
+        #expect(vm.liveTranscript)
+        vm.liveTranscript = false
+        #expect(!AppSettings(defaults: defaults).meetingLiveTranscript)
+        #expect(changes.read() == 1)
+    }
 }

@@ -219,9 +219,8 @@ Live transcript           [on]   (disabled when the timer is off)
   this Mac with Apple Speech; nothing is saved.
 ```
 
-Reset to Defaults restores the toggle to on and does not touch the remembered
-expanded state. A change mid-meeting applies at the next meeting; the caption
-does not need to say so.
+Reset to Defaults does not touch meeting settings, as today. A change
+mid-meeting applies at the next meeting; the caption does not need to say so.
 
 ## Gate: measurement spike (first task)
 

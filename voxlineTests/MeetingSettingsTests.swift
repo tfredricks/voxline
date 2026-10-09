@@ -69,4 +69,27 @@ import Testing
         defaults.set(120, forKey: AppSettings.Key.meetingCapSeconds)
         #expect(settings.meetingCapSeconds == 120)
     }
+
+    @Test func live_transcript_defaults_on_and_round_trips() {
+        var settings = makeSettings()
+        #expect(settings.meetingLiveTranscript)
+        #expect(settings.liveTranscriptEnabled)
+        settings.meetingLiveTranscript = false
+        #expect(!settings.meetingLiveTranscript)
+        #expect(!settings.liveTranscriptEnabled)
+    }
+
+    @Test func live_transcript_needs_the_timer() {
+        var settings = makeSettings()
+        settings.showMeetingTimer = false
+        #expect(settings.meetingLiveTranscript)
+        #expect(!settings.liveTranscriptEnabled)
+    }
+
+    @Test func live_panel_expanded_defaults_off_and_round_trips() {
+        var settings = makeSettings()
+        #expect(!settings.meetingLivePanelExpanded)
+        settings.meetingLivePanelExpanded = true
+        #expect(settings.meetingLivePanelExpanded)
+    }
 }

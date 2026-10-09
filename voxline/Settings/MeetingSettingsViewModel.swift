@@ -14,6 +14,7 @@ final class MeetingSettingsViewModel {
     var notesModel: String { didSet { settings.meetingNotesModel = notesModel; onChange() } }
     var retention: MeetingAudioRetention { didSet { settings.meetingAudioRetention = retention; onChange() } }
     var showTimer: Bool { didSet { settings.showMeetingTimer = showTimer; onChange() } }
+    var liveTranscript: Bool { didSet { settings.meetingLiveTranscript = liveTranscript; onChange() } }
 
     @ObservationIgnored private var settings: AppSettings
     @ObservationIgnored private let presets: () -> [PresetShortcut]
@@ -38,6 +39,7 @@ final class MeetingSettingsViewModel {
         notesModel = settings.meetingNotesModel ?? ""
         retention = settings.meetingAudioRetention
         showTimer = settings.showMeetingTimer
+        liveTranscript = settings.meetingLiveTranscript
     }
 
     /// The model notes use when `notesModel` is empty.

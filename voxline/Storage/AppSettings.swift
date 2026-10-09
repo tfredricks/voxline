@@ -23,6 +23,8 @@ struct AppSettings {
         static let meetingNotesModel = "voxline.meetings.notesModel"
         static let meetingAudioRetention = "voxline.meetings.audioRetention"
         static let meetingShowTimer = "voxline.meetings.showTimer"
+        static let meetingLiveTranscript = "voxline.meetings.liveTranscript"
+        static let meetingLivePanelExpanded = "voxline.meetings.livePanelExpanded"
         static let meetingConsentNoticeShown = "voxline.meetings.consentNoticeShown"
         static let meetingSilentSystemNoticeShown = "voxline.meetings.silentSystemNoticeShown"
         static let meetingCapSeconds = "voxline.debug.meetingCapSeconds"
@@ -286,6 +288,24 @@ struct AppSettings {
             return defaults.bool(forKey: Key.meetingShowTimer)
         }
         set { defaults.set(newValue, forKey: Key.meetingShowTimer) }
+    }
+
+    /// Settings → Meetings → Live transcript. Absent reads as on.
+    var meetingLiveTranscript: Bool {
+        get {
+            guard defaults.object(forKey: Key.meetingLiveTranscript) != nil else { return true }
+            return defaults.bool(forKey: Key.meetingLiveTranscript)
+        }
+        set { defaults.set(newValue, forKey: Key.meetingLiveTranscript) }
+    }
+
+    /// Live sessions run only when there is a timer chip to show them in.
+    var liveTranscriptEnabled: Bool { showMeetingTimer && meetingLiveTranscript }
+
+    /// Whether the timer chip was last left expanded to the live transcript.
+    var meetingLivePanelExpanded: Bool {
+        get { defaults.bool(forKey: Key.meetingLivePanelExpanded) }
+        set { defaults.set(newValue, forKey: Key.meetingLivePanelExpanded) }
     }
 
     var meetingConsentNoticeShown: Bool {

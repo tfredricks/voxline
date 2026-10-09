@@ -16,6 +16,11 @@ struct MeetingsSettingsPage: View {
                     }
                 }
                 Toggle("Show recording timer", isOn: $model.showTimer)
+                Toggle("Live transcript", isOn: $model.liveTranscript)
+                    .disabled(!model.showTimer)
+                Text("Shows the last few things said in the recording timer. Transcribed on this Mac with Apple Speech; nothing is saved.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                 Picker("Keep meeting audio", selection: $model.retention) {
                     ForEach(MeetingAudioRetention.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
