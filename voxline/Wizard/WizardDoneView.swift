@@ -7,7 +7,7 @@ struct WizardDoneView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("You're set up").font(.title.bold())
-            Text("Hold **\(chord.displayName)** in any text field, talk, release. Voxline will transcribe locally and paste cleaned text.")
+            Text("Hold **\(chord.displayName)** in any text field, talk, release. Voxline will transcribe it and paste cleaned-up text.")
                 .foregroundStyle(.secondary)
             Text("Choose Settings… in the menu bar to change the hotkey, pick a different mic, or add words Voxline should recognize.")
                 .foregroundStyle(.secondary)
