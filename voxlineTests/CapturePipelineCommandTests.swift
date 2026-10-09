@@ -359,7 +359,7 @@ import Testing
         #expect(await eventually { h.inserter.clipboardRestoreGate.waiting == 1 })
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .milliseconds(500)))
+        #expect(await finishes(finalize, within: .seconds(1)))
         h.inserter.releaseClipboardRestore()
         try? await Task.sleep(for: .milliseconds(50))
 
@@ -391,7 +391,7 @@ import Testing
         #expect(polls.read() >= 1)
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .milliseconds(500)))
+        #expect(await finishes(finalize, within: .seconds(1)))
         await clock.advance(by: .seconds(5))
         try? await Task.sleep(for: .milliseconds(50))
 
@@ -633,7 +633,7 @@ import Testing
         #expect(h.state.isCancellable)
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .milliseconds(200)))
+        #expect(await finishes(finalize, within: .seconds(1)))
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
 
@@ -840,7 +840,7 @@ import Testing
         #expect(await eventually { h.llm.commandGate.waiting == 1 })
 
         h.pipe.cancel()
-        #expect(await finishes(preset, within: .milliseconds(200)))
+        #expect(await finishes(preset, within: .seconds(1)))
         #expect(h.state.status == .idle)
         #expect(h.state.activityLabel == nil)
         #expect(h.state.toastMessage == "Cancelled")

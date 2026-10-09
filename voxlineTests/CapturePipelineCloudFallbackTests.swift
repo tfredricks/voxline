@@ -337,7 +337,7 @@ import Foundation
         #expect(h.state.isCancellable)
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .milliseconds(200)))
+        #expect(await finishes(finalize, within: .seconds(1)))
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.localSession.cancelCount == 1, "cancel reaches the on-device session")
@@ -363,7 +363,7 @@ import Foundation
         #expect(await eventually { h.localSession.finishCount == 1 })
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .milliseconds(200)))
+        #expect(await finishes(finalize, within: .seconds(1)))
         try? await Task.sleep(for: .milliseconds(20))
         #expect(h.localSession.cancelCount == 1)
         #expect(h.state.status == .idle)

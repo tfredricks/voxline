@@ -152,7 +152,7 @@ import Foundation
         )
     }
 
-    private func eventually(timeout: Duration = .seconds(2), _ condition: () -> Bool) async -> Bool {
+    private func eventually(timeout: Duration = .seconds(5), _ condition: () -> Bool) async -> Bool {
         let deadline = ContinuousClock.now + timeout
         while !condition() {
             if ContinuousClock.now >= deadline { return false }

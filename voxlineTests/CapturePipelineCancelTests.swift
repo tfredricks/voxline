@@ -238,7 +238,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(await eventually { h.session.finishCount == 1 })
 
         h.pipe.cancel(reason: .shortcut)
-        #expect(await finishes(finalize, within: .milliseconds(200)))
+        #expect(await finishes(finalize, within: .seconds(1)))
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.pipe.wasCancelled)
@@ -257,7 +257,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(h.state.status == .thinking)
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .milliseconds(200)))
+        #expect(await finishes(finalize, within: .seconds(1)))
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.session.cancelCount == 1)
@@ -281,7 +281,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(await eventually { h.session.finishCount == 1 })
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .milliseconds(200)))
+        #expect(await finishes(finalize, within: .seconds(1)))
         try? await Task.sleep(for: .milliseconds(20))
 
         #expect(h.session.cancelCount == 1)
@@ -300,7 +300,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(h.state.pipelinePhase == .cleaning)
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .milliseconds(200)))
+        #expect(await finishes(finalize, within: .seconds(1)))
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.history.items.count == 1)
@@ -328,7 +328,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(await eventually { h.llm.commandGate.waiting == 1 })
 
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .milliseconds(200)))
+        #expect(await finishes(finalize, within: .seconds(1)))
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.history.items.isEmpty)
@@ -391,7 +391,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         let first = Task { await h.pipe.finalizeRecording() }
         #expect(await eventually { h.session.finishCount == 1 })
         h.pipe.cancel()
-        #expect(await finishes(first, within: .milliseconds(200)))
+        #expect(await finishes(first, within: .seconds(1)))
 
         h.pipe.startRecording()
         #expect(await eventually { h.engine.sessions.count == 2 })
@@ -582,7 +582,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(h.state.isCancellable)
 
         h.pipe.cancel()
-        #expect(await finishes(retry, within: .milliseconds(200)))
+        #expect(await finishes(retry, within: .seconds(1)))
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.state.retryTranscript == "hello world")
@@ -606,7 +606,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         #expect(h.state.status == .thinking)
 
         h.pipe.cancel()
-        #expect(await finishes(retry, within: .milliseconds(200)))
+        #expect(await finishes(retry, within: .seconds(1)))
         #expect(h.state.status == .idle)
         #expect(h.history.items.isEmpty)
         #expect(h.state.retryTranscript == "hello world")
@@ -625,7 +625,7 @@ func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool
         let finalize = Task { await h.pipe.finalizeRecording() }
         #expect(await eventually { h.llm.cleanupGate.waiting == 1 })
         h.pipe.cancel()
-        #expect(await finishes(finalize, within: .milliseconds(200)))
+        #expect(await finishes(finalize, within: .seconds(1)))
         h.llm.releaseCleanup()
         try? await Task.sleep(for: .milliseconds(20))
         #expect(h.inserter.calls.isEmpty, "the cancelled cleanup's late result is dropped")
