@@ -3,7 +3,7 @@ import Observation
 import SwiftUI
 
 enum MainWindowPage: Hashable {
-    case home, settings
+    case home
     case general, dictation, aiProvider, commands, vocabulary, meetings
 
     static let settingsPages: [MainWindowPage] = [.general, .dictation, .aiProvider, .commands, .vocabulary, .meetings]
@@ -11,7 +11,6 @@ enum MainWindowPage: Hashable {
     var title: String {
         switch self {
         case .home: "Home"
-        case .settings: "Settings"
         case .general: "General"
         case .dictation: "Dictation"
         case .aiProvider: "AI Provider"
@@ -24,7 +23,7 @@ enum MainWindowPage: Hashable {
     var systemImage: String {
         switch self {
         case .home: "house"
-        case .settings, .general: "gearshape"
+        case .general: "gearshape"
         case .dictation: "mic"
         case .aiProvider: "sparkles"
         case .commands: "command"
@@ -40,10 +39,10 @@ final class MainWindowSelection {
     var page: MainWindowPage? = .home
 }
 
-/// The app's one primary window: a sidebar with Home and Settings. Built
-/// fresh from `content` on each `show` after a close, and released on close
-/// so the SwiftUI content disappears (its `.task`s cancel, `onDisappear`
-/// runs) the way a SwiftUI `Settings` scene does.
+/// The app's one primary window: a sidebar with Home and the settings pages.
+/// Built fresh from `content` on each `show` after a close, and released on
+/// close so the SwiftUI content disappears (its `.task`s cancel,
+/// `onDisappear` runs) the way a SwiftUI `Settings` scene does.
 @MainActor
 final class MainWindowController {
     private(set) var window: NSWindow?
@@ -100,23 +99,70 @@ final class MainWindowController {
     }
 }
 
-struct MainWindowView<Home: View, Settings: View>: View {
+struct MainWindowView: View {
     @Bindable var selection: MainWindowSelection
-    let home: Home
-    let settings: Settings
+    let home: HomeViewModel
+    let settings: SettingsModel
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         NavigationSplitView {
             List(selection: $selection.page) {
-                Label("Home", systemImage: "house").tag(MainWindowPage.home)
-                Label("Settings", systemImage: "gearshape").tag(MainWindowPage.settings)
+                sidebarRow(.home)
+                Section("Settings") {
+                    ForEach(MainWindowPage.settingsPages, id: \.self) { sidebarRow($0) }
+                }
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
         } detail: {
-            switch selection.page ?? .home {
-            case .home: home
-            default: settings
+            detail(for: selection.page ?? .home)
+        }
+        .task { settings.refresh() }
+        .task(id: settings.status.readinessKey) {
+            await settings.status.refreshEngineReadiness()
+        }
+        .onChange(of: settings.learning.vocabularyRevision) { _, _ in
+            settings.vocabulary.reload()
+        }
+        .onChange(of: appState.status) { oldStatus, newStatus in
+            if oldStatus.blocksRecording && !newStatus.blocksRecording {
+                Task { await settings.status.refreshEngineReadiness() }
             }
+        }
+    }
+
+    private func sidebarRow(_ page: MainWindowPage) -> some View {
+        let issue = settings.status.issues.first { $0.page == page }
+        return HStack {
+            Label(page.title, systemImage: page.systemImage)
+            if let issue {
+                Spacer()
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(.orange)
+                    .help(issue.text)
+                    .accessibilityLabel("Needs setup")
+            }
+        }
+        .tag(page)
+    }
+
+    @ViewBuilder
+    private func detail(for page: MainWindowPage) -> some View {
+        switch page {
+        case .home:
+            HomeView(model: home, issues: settings.status.issues, open: { selection.page = $0 })
+        case .general:
+            GeneralSettingsPage(general: settings.general)
+        case .dictation:
+            DictationSettingsPage(general: settings.general, keys: settings.apiKeys)
+        case .aiProvider:
+            AIProviderSettingsPage(general: settings.general, keys: settings.apiKeys)
+        case .commands:
+            CommandsSettingsPage(general: settings.general, command: settings.command)
+        case .vocabulary:
+            VocabularySettingsPage(vocabulary: settings.vocabulary, learning: settings.learningSettings)
+        case .meetings:
+            MeetingsSettingsPage(model: settings.meetings)
         }
     }
 }

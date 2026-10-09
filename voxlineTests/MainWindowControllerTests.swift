@@ -63,13 +63,13 @@ import Testing
         #expect(probe.disappearances == 1)
     }
 
-    @Test func show_settings_selects_the_settings_page() {
+    @Test func show_general_selects_the_general_page() {
         let probe = ContentProbe()
         let controller = makeController(probe)
         defer { tearDown(controller) }
 
-        controller.show(.settings)
+        controller.show(.general)
 
-        #expect(probe.lastSelection?.page == .settings)
+        #expect(probe.lastSelection?.page == .general)
     }
 }

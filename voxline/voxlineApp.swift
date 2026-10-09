@@ -53,7 +53,7 @@ struct voxlineApp: App {
         .menuBarExtraStyle(.menu)
         .commands {
             CommandGroup(replacing: .appSettings) {
-                Button("Settings…") { delegate.mainWindow.show(.settings) }
+                Button("Settings…") { delegate.mainWindow.show(.general) }
                     .keyboardShortcut(",")
             }
         }
@@ -97,30 +97,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AnyView(
             MainWindowView(
                 selection: selection,
-                home: HomeView(model: HomeViewModel(state: appState)),
-                settings: makeSettingsView()
+                home: HomeViewModel(state: appState),
+                settings: makeSettingsModel()
             )
             .environment(appState)
             .environment(updateService)
         )
     }
 
-    private func makeSettingsView() -> some View {
+    private func makeSettingsModel() -> SettingsModel {
         let coordinator = self.coordinator
         let generalVM = GeneralSettingsViewModel(onApply: { [weak coordinator] snapshot in
             coordinator?.apply(snapshot)
         })
-        return SettingsView(
-            generalVM: generalVM,
-            apiKeysVM: APIKeysSettingsViewModel(onOpenAIKeyChange: { [weak coordinator] in
+        return SettingsModel(
+            general: generalVM,
+            apiKeys: APIKeysSettingsViewModel(onOpenAIKeyChange: { [weak coordinator] in
                 coordinator?.openAIKeyDidChange()
             }),
-            commandVM: CommandSettingsViewModel(
+            command: CommandSettingsViewModel(
                 chords: { [weak generalVM] in generalVM?.chords ?? AppSettings().chords },
                 onChange: { [weak coordinator] in coordinator?.presetsDidChange() },
                 reserved: { AppSettings().meetingShortcut.map { [$0] } ?? [] }
             ),
-            meetingsVM: MeetingSettingsViewModel(
+            meetings: MeetingSettingsViewModel(
                 presets: { PresetStore().load() },
                 chords: { [weak generalVM] in generalVM?.chords ?? AppSettings().chords },
                 onChange: { [weak coordinator] in coordinator?.meetingSettingsDidChange() }

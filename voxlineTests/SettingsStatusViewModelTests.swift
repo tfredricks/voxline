@@ -46,51 +46,6 @@ import Foundation
         return (general, keys, status, kc)
     }
 
-    @Test func ready_when_provider_key_saved_and_engine_ready_and_mic_present() async throws {
-        let f = try makeFixtures()
-        await f.status.refreshEngineReadiness()
-        #expect(f.status.isReady == true)
-        #expect(f.status.providerChipShowsCheck == true)
-        #expect(f.status.engineChipShowsCheck == true)
-    }
-
-    @Test func setup_needed_until_readiness_is_checked() throws {
-        let f = try makeFixtures()
-        #expect(f.status.isReady == false)
-        #expect(f.status.engineChipShowsCheck == false)
-    }
-
-    @Test func setup_needed_when_active_provider_key_missing() async throws {
-        let f = try makeFixtures(provider: .openai, openaiKey: "")
-        await f.status.refreshEngineReadiness()
-        #expect(f.status.isReady == false)
-        #expect(f.status.providerChipShowsCheck == false)
-    }
-
-    @Test func setup_needed_when_engine_needs_preparation() async throws {
-        let f = try makeFixtures(readiness: { _ in .needsPreparation(downloadMB: 466) })
-        await f.status.refreshEngineReadiness()
-        #expect(f.status.isReady == false)
-        #expect(f.status.engineChipShowsCheck == false)
-        #expect(f.status.engineUnavailableReason == nil)
-    }
-
-    @Test func setup_needed_and_reason_shown_when_engine_unavailable() async throws {
-        let reason = "Apple Speech doesn't support this Mac's language."
-        let f = try makeFixtures(engine: .apple, readiness: { _ in .unavailable(reason) })
-        await f.status.refreshEngineReadiness()
-        #expect(f.status.isReady == false)
-        #expect(f.status.engineChipShowsCheck == false)
-        #expect(f.status.engineUnavailableReason == reason)
-    }
-
-    @Test func setup_needed_when_engines_are_not_built_yet() async throws {
-        let f = try makeFixtures(readiness: { _ in nil })
-        await f.status.refreshEngineReadiness()
-        #expect(f.status.isReady == false)
-        #expect(f.status.engineChipShowsCheck == false)
-    }
-
     @Test func readiness_is_checked_for_the_selected_engine() async throws {
         var asked: [EngineID] = []
         let f = try makeFixtures(engine: .apple, readiness: { id in asked.append(id); return .ready })
@@ -100,42 +55,46 @@ import Foundation
         #expect(asked == [.apple, .whisperKit])
     }
 
-    @Test func switching_engines_hides_the_check_until_rechecked() async throws {
-        let f = try makeFixtures(engine: .apple)
+    @Test func switching_engines_drops_the_old_check() async throws {
+        let f = try makeFixtures(engine: .apple, readiness: { id in
+            id == .apple ? .ready : .needsPreparation(downloadMB: nil)
+        })
         await f.status.refreshEngineReadiness()
-        #expect(f.status.engineChipShowsCheck == true)
+        #expect(f.status.issues.isEmpty)
 
         f.general.engine = .whisperKit
-        #expect(f.status.engineChipShowsCheck == false)
+        #expect(f.status.issues.isEmpty)
 
         await f.status.refreshEngineReadiness()
-        #expect(f.status.engineChipShowsCheck == true)
+        #expect(f.status.needsSetup(.dictation))
     }
 
-    @Test func switching_whisper_models_hides_the_check_until_rechecked() async throws {
-        let f = try makeFixtures(engine: .whisperKit, model: .smallEn)
+    @Test func switching_whisper_models_drops_the_old_check() async throws {
+        let f = try makeFixtures(engine: .whisperKit, model: .smallEn, readiness: { _ in .needsPreparation(downloadMB: nil) })
         await f.status.refreshEngineReadiness()
+        #expect(f.status.needsSetup(.dictation))
+
         f.general.whisperModel = .largeV3Turbo
-        #expect(f.status.engineChipShowsCheck == false)
+        #expect(f.status.issues.isEmpty)
     }
 
     @Test func saving_an_openai_key_rechecks_the_openai_engine() async throws {
         var keySaved = false
         let f = try makeFixtures(engine: .openAIRealtime, readiness: { _ in
-            keySaved ? .ready : .unavailable("Add an OpenAI API key in Settings → General → Recognition to use OpenAI transcription.")
+            keySaved ? .ready : .unavailable(OpenAIRealtimeEngine.missingKeyReason)
         })
         await f.status.refreshEngineReadiness()
-        #expect(f.status.engineChipShowsCheck == false)
+        #expect(f.status.issues.contains { $0.page == .dictation })
         let before = f.status.readinessKey
 
         f.keys.openaiKey = "sk-openai-new"
         f.keys.commitOpenAI()
         keySaved = true
         #expect(f.status.readinessKey != before)
-        #expect(f.status.engineUnavailableReason == nil)
+        #expect(!f.status.issues.contains { $0.page == .dictation })
 
         await f.status.refreshEngineReadiness()
-        #expect(f.status.engineChipShowsCheck == true)
+        #expect(!f.status.issues.contains { $0.page == .dictation })
     }
 
     @Test func saving_an_openai_key_keeps_an_on_device_check() async throws {
@@ -146,7 +105,7 @@ import Foundation
         f.keys.openaiKey = "sk-openai-new"
         f.keys.commitOpenAI()
         #expect(f.status.readinessKey == before)
-        #expect(f.status.engineChipShowsCheck == true)
+        #expect(f.status.issues.isEmpty)
     }
 
     @Test func a_superseded_check_does_not_overwrite_a_newer_one() async throws {
@@ -158,29 +117,11 @@ import Foundation
         await gate.waitUntilBlocked()
         f.general.engine = .whisperKit
         await f.status.refreshEngineReadiness()
-        #expect(f.status.engineChipShowsCheck == true)
+        #expect(f.status.issues.isEmpty)
 
         gate.release(.needsPreparation(downloadMB: nil))
         await stale.value
-        #expect(f.status.engineChipShowsCheck == true)
-    }
-
-    @Test func engine_chip_names_the_whisper_model_only_for_whisper() throws {
-        #expect(try makeFixtures(engine: .whisperKit, model: .smallEn).status.engineChipText == WhisperModel.smallEn.displayName)
-        #expect(try makeFixtures(engine: .apple).status.engineChipText == "Apple Speech")
-        #expect(try makeFixtures(engine: .openAIRealtime).status.engineChipText == "OpenAI")
-    }
-
-    @Test func mic_chip_uses_selected_device_label() throws {
-        let f = try makeFixtures(deviceLabel: "Studio Mic")
-        #expect(f.status.micChipText.contains("Studio Mic"))
-    }
-
-    @Test func setup_needed_when_saved_mic_uid_is_disconnected() async throws {
-        // Saved UID points to a device that isn't in the current device list.
-        let f = try makeFixtures(deviceUID: "ghost-uid")
-        await f.status.refreshEngineReadiness()
-        #expect(f.status.isReady == false)
+        #expect(f.status.issues.isEmpty)
     }
 
     @Test func setup_needed_when_no_devices_and_no_uid() async throws {
@@ -197,7 +138,7 @@ import Foundation
         let keys = APIKeysSettingsViewModel(keychain: kc)
         let status = SettingsStatusViewModel(general: general, keys: keys, engineReadiness: { _ in .ready })
         await status.refreshEngineReadiness()
-        #expect(status.isReady == false)
+        #expect(status.issues == [SetupIssue(text: "Microphone not found", page: .dictation)])
     }
 
     @Test func no_issues_when_everything_is_ready() async throws {

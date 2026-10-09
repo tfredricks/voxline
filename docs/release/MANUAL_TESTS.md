@@ -443,7 +443,7 @@ blip may play on the discarded ones.
 - [ ] Press ⌥2 with nothing selected. The toast reads "Select text to
       transform" and no ™ is typed.
 - [ ] Press ⌥1 and ⌥3 on selections in Notes and Slack. Each works.
-- [ ] Open the main window's Settings page, focus a text field, and press ⌥2.
+- [ ] Open Settings → Commands, focus a text field, and press ⌥2.
       It types ™ (presets are off while voxline is frontmost).
 - [ ] Select a paragraph in Notes and hold ⌥2 down for two seconds. Make
       concise runs once: key repeat neither runs it again nor types ™.
@@ -677,9 +677,9 @@ Show Voxline in Dock is off unless a step says otherwise.
 - [ ] Launch at login on, log out and back in → no window and no Dock icon. The menu bar works.
 - [ ] Revoke Accessibility while running → Home opens with Accessibility missing. Re-grant → it turns green within about a second.
 - [ ] Home's recent meetings: click a finished meeting → its notes open. "Open meetings folder" → Finder opens the notes folder.
-- [ ] Open Settings, close the window → the mic indicator turns off immediately; dictate once with the window closed → it stays off.
+- [ ] Open Settings → Dictation, close the window → the mic indicator turns off immediately; dictate once with the window closed → it stays off.
 - [ ] Edit a preset instruction and a style note, close the window with the field focused, reopen → both edits kept.
-- [ ] Reopen the window → Settings shows current Launch at Login approval state.
+- [ ] Reopen the window → Settings → General shows current Launch at Login approval state.
 
 ### Settings pages
 

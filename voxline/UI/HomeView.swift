@@ -4,6 +4,8 @@ import SwiftUI
 
 struct HomeView: View {
     @Bindable var model: HomeViewModel
+    let issues: [SetupIssue]
+    let open: (MainWindowPage) -> Void
     @Environment(UpdateService.self) private var updateService
     @State private var showsPermissionDetails = false
 
@@ -12,6 +14,22 @@ struct HomeView: View {
     var body: some View {
         Form {
             Section { statusRow }
+            if !issues.isEmpty {
+                Section("Setup") {
+                    ForEach(issues) { issue in
+                        HStack {
+                            Label {
+                                Text(issue.text)
+                            } icon: {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .foregroundStyle(.orange)
+                            }
+                            Spacer()
+                            Button("Open \(issue.page.title)") { open(issue.page) }
+                        }
+                    }
+                }
+            }
             Section("Permissions") { permissions }
             if model.showsMeetings {
                 Section("Recent meetings") { meetings }

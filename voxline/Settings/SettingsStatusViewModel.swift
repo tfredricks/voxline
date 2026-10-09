@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-/// Derives the Settings status strip's chip data and overall readiness from
-/// the existing settings view models, plus the selected engine's readiness,
-/// which `refreshEngineReadiness()` fetches through the injected check.
+/// Derives the settings setup issues from the settings view models and the
+/// selected engine's readiness, which `refreshEngineReadiness()` fetches
+/// through the injected check.
 @Observable
 @MainActor
 final class SettingsStatusViewModel {
@@ -55,36 +55,6 @@ final class SettingsStatusViewModel {
         checked = (key, readiness)
     }
 
-    var isReady: Bool {
-        providerKeySaved && engineReady && micPresent
-    }
-
-    var engineChipShowsCheck: Bool { engineReady }
-    var providerChipShowsCheck: Bool { providerKeySaved }
-
-    var micChipText: String {
-        general.deviceRows
-            .first(where: { $0.uid == general.audioInputDeviceUID })?
-            .label
-            ?? "System default"
-    }
-
-    /// The Whisper model's name (which includes "Whisper") when Whisper is
-    /// selected; otherwise the engine's short name.
-    var engineChipText: String {
-        general.engine == .whisperKit ? general.whisperModel.displayName : general.engine.shortName
-    }
-
-    /// The selected engine's reason it can't run, when it reported one.
-    var engineUnavailableReason: String? {
-        guard case .unavailable(let reason) = currentReadiness else { return nil }
-        return reason
-    }
-
-    var providerChipText: String {
-        general.provider.displayName
-    }
-
     /// Unchecked readiness (nil) is not an issue, so opening the window
     /// doesn't flash a warning before the check finishes.
     var issues: [SetupIssue] {
@@ -116,8 +86,6 @@ final class SettingsStatusViewModel {
         guard let checked, checked.key == readinessKey else { return nil }
         return checked.readiness
     }
-
-    private var engineReady: Bool { currentReadiness == .ready }
 
     private var providerKeySaved: Bool {
         let live: String

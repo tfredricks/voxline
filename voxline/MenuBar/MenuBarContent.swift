@@ -82,7 +82,7 @@ struct MenuBarContent: View {
             Divider()
         }
 
-        Button("Settings…") { openMainWindow(.settings) }
+        Button("Settings…") { openMainWindow(.general) }
             .keyboardShortcut(",")
 
         Divider()
