@@ -1,4 +1,5 @@
 // voxline/Audio/AudioDeviceEnumerator.swift
+import AVFoundation
 import CoreAudio
 import Foundation
 
@@ -119,6 +120,22 @@ enum AudioDeviceEnumerator {
             }
         }
         return status == noErr && deviceID != 0 ? deviceID : nil
+    }
+
+    /// Points `node`'s audio unit at the input device with `uid`. Does
+    /// nothing when the device is gone or the node has no audio unit, so
+    /// capture falls through to the system default.
+    static func route(_ node: AVAudioInputNode, toDeviceUID uid: String) {
+        guard let deviceID = deviceID(forUID: uid), let au = node.audioUnit else { return }
+        var mutableID = deviceID
+        _ = AudioUnitSetProperty(
+            au,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &mutableID,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
     }
 }
 

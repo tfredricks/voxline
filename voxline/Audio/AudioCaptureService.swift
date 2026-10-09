@@ -75,18 +75,8 @@ final class AudioCaptureService {
     /// Route the engine's input AU to the preferred device, when set and still
     /// present. Falls through silently to the system default otherwise.
     private func applyPreferredDevice() {
-        guard let uid = preferredInputDeviceUID,
-              let deviceID = AudioDeviceEnumerator.deviceID(forUID: uid),
-              let au = engine.inputNode.audioUnit else { return }
-        var mutableID = deviceID
-        _ = AudioUnitSetProperty(
-            au,
-            kAudioOutputUnitProperty_CurrentDevice,
-            kAudioUnitScope_Global,
-            0,
-            &mutableID,
-            UInt32(MemoryLayout<AudioDeviceID>.size)
-        )
+        guard let uid = preferredInputDeviceUID else { return }
+        AudioDeviceEnumerator.route(engine.inputNode, toDeviceUID: uid)
     }
 
     /// Best-effort engine spin-up on the chord's armed edge (one modifier
