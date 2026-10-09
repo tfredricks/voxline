@@ -64,6 +64,9 @@ final class LearningCoordinator: LearningObserving {
     /// so anything it reports afterward is dropped.
     @ObservationIgnored private var windows: [UInt64: CorrectionWindow] = [:]
     @ObservationIgnored private var windowID: UInt64 = 0
+    /// Bumped when stored learning is forgotten or style learning stops, so a
+    /// refresh already running drops its result.
+    @ObservationIgnored private var refreshGeneration = 0
     @ObservationIgnored private var pending: (words: [String], since: Date)?
     @ObservationIgnored private var observingStatus = false
 
@@ -121,6 +124,7 @@ final class LearningCoordinator: LearningObserving {
     /// Called when a Learning toggle changes. With both off, an open window
     /// is cancelled with no final read.
     func settingsDidChange() {
+        if !toggles().style { refreshGeneration &+= 1 }
         guard !toggles().anyOn else { return }
         cancelWindows()
     }
@@ -128,6 +132,7 @@ final class LearningCoordinator: LearningObserving {
     /// Forgets notes, texts, pairs, and rejected words, and removes learned
     /// words from the vocabulary. Words the user added stay.
     func reset() {
+        refreshGeneration &+= 1
         cancelWindows()
         pending = nil
         let removed = vocabulary.removeLearned()
@@ -158,6 +163,7 @@ final class LearningCoordinator: LearningObserving {
         let request = StyleNotePrompt.request(category: category, data: store.category(category), model: model())
         guard !request.texts.isEmpty else { return nil }
         refreshing.insert(category)
+        let generation = refreshGeneration
         return Task { [weak self] in
             let result: Result<String, Error>
             do {
@@ -167,6 +173,7 @@ final class LearningCoordinator: LearningObserving {
             }
             guard let self else { return }
             self.refreshing.remove(category)
+            guard generation == self.refreshGeneration, self.toggles().style else { return }
             switch result {
             case .success(let note):
                 if !replacingEdits, self.store.category(category).noteEditedByUser {

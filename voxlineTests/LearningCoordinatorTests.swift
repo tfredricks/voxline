@@ -350,4 +350,47 @@ import Testing
         seed(noGenerator, 3)
         #expect(noGenerator.learning.regenerate(.chat) == nil)
     }
+
+    @Test func a_refresh_that_outlives_a_reset_writes_nothing() async {
+        let generator = FakeStyleGenerator()
+        generator.hold = true
+        let h = makeHarness(anchors: [.skipped(.noElement)], generator: generator)
+        seed(h, 19)
+        dictateUnanchored(h)
+        #expect(await eventually { generator.requests.count == 1 })
+        h.learning.reset()
+        generator.release()
+        #expect(await eventually { h.learning.refreshing.isEmpty })
+        #expect(h.store.category(.chat).note == nil)
+        #expect(h.store.category(.chat).sinceRefresh == 0)
+        #expect(h.store.category(.chat).recentTexts.isEmpty)
+    }
+
+    @Test func a_failed_refresh_that_outlives_a_reset_writes_nothing() async {
+        let generator = FakeStyleGenerator()
+        generator.hold = true
+        generator.result = .failure(LLMError.rateLimited)
+        let h = makeHarness(anchors: [.skipped(.noElement)], generator: generator)
+        seed(h, 19)
+        dictateUnanchored(h)
+        #expect(await eventually { generator.requests.count == 1 })
+        h.learning.reset()
+        generator.release()
+        #expect(await eventually { h.learning.refreshing.isEmpty })
+        #expect(h.store.category(.chat) == CategoryLearning())
+    }
+
+    @Test func a_refresh_that_outlives_turning_style_off_writes_nothing() async {
+        let generator = FakeStyleGenerator()
+        generator.hold = true
+        let h = makeHarness(anchors: [.skipped(.noElement)], generator: generator)
+        seed(h, 19)
+        dictateUnanchored(h)
+        #expect(await eventually { generator.requests.count == 1 })
+        h.toggles.write(LearningToggles(words: true, style: false))
+        h.learning.settingsDidChange()
+        generator.release()
+        #expect(await eventually { h.learning.refreshing.isEmpty })
+        #expect(h.store.category(.chat).note == nil)
+    }
 }
