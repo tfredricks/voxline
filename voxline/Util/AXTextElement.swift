@@ -13,6 +13,14 @@ enum AXRead<T> {
 
     var value: T? { if case .value(let v) = self { return v } else { return nil } }
     var isFailed: Bool { if case .failed = self { return true } else { return false } }
+
+    func map<U>(_ transform: (T) -> U) -> AXRead<U> {
+        switch self {
+        case .value(let v): return .value(transform(v))
+        case .absent: return .absent
+        case .failed: return .failed
+        }
+    }
 }
 extension AXRead: Equatable where T: Equatable {}
 
