@@ -123,4 +123,36 @@ import Foundation
         #expect(report.movedModelCache)
         #expect(f.defaults.bool(forKey: ContainerMigration.completedKey))
     }
+
+    @Test func empty_destination_directory_does_not_block_the_move() throws {
+        let f = try makeFixture()
+        defer { f.tearDown() }
+        try populateLegacy(f)
+        try FileManager.default.createDirectory(
+            at: f.appSupport.appending(path: "huggingface", directoryHint: .isDirectory),
+            withIntermediateDirectories: true
+        )
+
+        let report = try #require(migration(f).runIfNeeded())
+
+        #expect(report.movedModelCache)
+        #expect(report.skipped.isEmpty)
+        #expect(exists(f.appSupport.appending(path: "huggingface/models/argmaxinc/whisperkit-coreml/openai_whisper-small.en/model.bin")))
+        #expect(!exists(f.legacy.appending(path: "Documents/huggingface")))
+    }
+
+    @Test func non_empty_destination_is_left_alone_and_reported() throws {
+        let f = try makeFixture()
+        defer { f.tearDown() }
+        try populateLegacy(f)
+        try write("other", to: f.appSupport.appending(path: "huggingface/other.bin"))
+
+        let report = try #require(migration(f).runIfNeeded())
+
+        #expect(!report.movedModelCache)
+        #expect(report.skipped == ["huggingface: destination already exists"])
+        #expect(report.failures.isEmpty)
+        #expect(exists(f.legacy.appending(path: "Documents/huggingface/models/argmaxinc/whisperkit-coreml/openai_whisper-small.en/model.bin")))
+        #expect(exists(f.appSupport.appending(path: "huggingface/other.bin")))
+    }
 }

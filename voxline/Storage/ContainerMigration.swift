@@ -14,6 +14,7 @@ struct ContainerMigration {
         var movedModelCache = false
         var movedANECache = false
         var failures: [String] = []
+        var skipped: [String] = []
     }
 
     let legacyDataDirectory: URL
@@ -90,7 +91,18 @@ struct ContainerMigration {
 
     private func move(_ source: URL, to destination: URL, flag: WritableKeyPath<Report, Bool>, report: inout Report) {
         guard fileManager.fileExists(atPath: source.path) else { return }
-        guard !fileManager.fileExists(atPath: destination.path) else { return }
+        if fileManager.fileExists(atPath: destination.path) {
+            guard isEmptyDirectory(destination) else {
+                report.skipped.append("\(destination.lastPathComponent): destination already exists")
+                return
+            }
+            do {
+                try fileManager.removeItem(at: destination)
+            } catch {
+                report.failures.append("\(destination.lastPathComponent): \(error.localizedDescription)")
+                return
+            }
+        }
         do {
             try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             try fileManager.moveItem(at: source, to: destination)
@@ -98,5 +110,13 @@ struct ContainerMigration {
         } catch {
             report.failures.append("\(source.lastPathComponent): \(error.localizedDescription)")
         }
+    }
+
+    private func isEmptyDirectory(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return false
+        }
+        return ((try? fileManager.contentsOfDirectory(atPath: url.path)) ?? []).isEmpty
     }
 }

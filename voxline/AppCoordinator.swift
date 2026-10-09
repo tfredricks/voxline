@@ -52,6 +52,9 @@ final class AppCoordinator {
 
         if let migration {
             AppLog.pipeline.info("container migration: prefs=\(migration.preferencesCopied) modes=\(migration.movedModes) models=\(migration.movedModelCache) ane=\(migration.movedANECache)")
+            for skipped in migration.skipped {
+                AppLog.pipeline.notice("container migration skipped: \(skipped, privacy: .public)")
+            }
             for failure in migration.failures {
                 AppLog.pipeline.error("container migration failed: \(failure, privacy: .public)")
             }
@@ -66,7 +69,7 @@ final class AppCoordinator {
         }
 
         if let migration, !migration.failures.isEmpty {
-            flashToast("Some data couldn't be moved from the previous version. See the log.", state: state)
+            flashToast("Couldn't move old data — see log", state: state)
         }
     }
 
@@ -194,6 +197,7 @@ final class AppCoordinator {
             }
         )
         pill.show(state: state, actions: pillActions)
+        observeToastChanges(state: state)
     }
 
     private func installHotkey(state: AppState, settings: AppSettings) {
@@ -253,7 +257,6 @@ final class AppCoordinator {
             state.status = .permissionsError("Hotkey monitoring requires Accessibility permission. Grant it in System Settings → Privacy & Security — Voxline will pick it up automatically.")
         }
 
-        observeToastChanges(state: state)
         observeReviewSessionChanges(state: state)
         startPermissionAndStateLoop(state: state)
 
