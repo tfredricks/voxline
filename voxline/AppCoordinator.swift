@@ -28,6 +28,10 @@ final class AppCoordinator {
     /// engine or model switch in that time inherits both, so the status is
     /// never left stuck on a cancelled task's value.
     private var modelPrepOwnsLaunchUI = false
+    /// True while the in-flight prep task drives `AppState.status` (always
+    /// for launch; for a settings switch, only while it reports a download).
+    /// A switch in that time takes the status over.
+    private var modelPrepDrivesStatus = false
     /// The engine selection last prepared for; `apply(_:)` re-prepares only
     /// when the selection changes.
     private var appliedEngine: EngineID?
@@ -131,7 +135,7 @@ final class AppCoordinator {
         let capture = AudioCaptureService()
         self.capture = capture
         self.soundPlayer = HotkeySoundPlayer(settings: settings)
-        let transcriber = TranscriptionService()
+        let transcriber = TranscriptionService(model: settings.whisperModel)
         self.transcriber = transcriber
         let engines = TranscriptionEngines(
             settings: settings,
@@ -377,75 +381,80 @@ final class AppCoordinator {
     }
 
     private func prepareIfNeeded(state: AppState, engine: any TranscriptionEngine) {
-        runModelPrepTask(state: state, engine: engine, managesDownloadWindow: true)
+        runModelPrepTask(state: state, engine: engine, audience: .launch)
+    }
+
+    /// Readiness of the engine that runs for `id`, or nil before services exist.
+    func readiness(of id: EngineID) async -> EngineReadiness? {
+        guard let engines else { return nil }
+        return await engines.engine(for: id).readiness()
     }
 
     /// Single-flight readiness check + prepare. Cancels any in-flight task
     /// before starting a new one so a settings-driven engine or model switch
     /// during launch prep doesn't race against the launch-path prepareIfNeeded.
     ///
-    /// The plan comes from `engine.readiness()`: `.download` shows progress
-    /// (and the download window), `.warm` shows "preparing" while `prepare`
-    /// warms the engine, `.fail` surfaces the engine's reason as an error.
+    /// The plan comes from `engine.readiness()`; `EnginePrep.status(for:audience:current:)`
+    /// decides whether the task reports it through `state.status` (download
+    /// progress → preparing → idle, or the failure), and
+    /// `EnginePrep.showsDownloadWindow(for:audience:)` whether the download
+    /// window opens. A task that doesn't report stays silent throughout.
     ///
     /// - Parameters:
-    ///   - state: `AppState` to update with progress/idle/error status, or `nil`
-    ///     for the settings-swap path which performs a silent background prepare.
+    ///   - state: `AppState` the task may report into.
     ///   - engine: The engine to bring to ready.
-    ///   - managesDownloadWindow: When `true`, shows `downloadWindow` for a
-    ///     download and closes it on completion or failure (launch path). When
-    ///     `false`, the download window is not touched (settings-swap path).
+    ///   - audience: `.launch` for the launch path, wizard retry, or a switch
+    ///     that takes their place (the only audience that manages the download
+    ///     window); otherwise from `EnginePrep.Audience.forSwitch`.
     private func runModelPrepTask(
         state: AppState?,
         engine: any TranscriptionEngine,
-        managesDownloadWindow: Bool
+        audience: EnginePrep.Audience
     ) {
         modelPrepTask?.cancel()
         modelPrepTaskToken &+= 1
         let myToken = modelPrepTaskToken
+        let managesDownloadWindow = audience == .launch
         modelPrepOwnsLaunchUI = managesDownloadWindow
-        // When the caller passes `state`, this task takes ownership of
-        // `state.status` for its duration. Reset it right away so a stale
-        // value (an error being retried, or an inherited
+        modelPrepDrivesStatus = audience.ownsStatusFromStart
+        // A status-owning task resets the status right away so a stale value
+        // (an error being retried, or an inherited
         // `.downloadingModel(progress: 0.37)` from a cancelled task) doesn't
         // linger while readiness is checked.
-        if let state {
+        if let state, audience.ownsStatusFromStart {
             state.status = .preparingModel
         }
         modelPrepTask = Task { @MainActor [weak self, weak state] in
+            var reporter: AppState?
             do {
                 let plan = EnginePrep.plan(for: await engine.readiness())
                 try Task.checkCancellation()
-                switch plan {
-                case .fail(let reason):
+                if let state, let status = EnginePrep.status(for: plan, audience: audience, current: state.status) {
+                    state.status = status
+                    reporter = state
+                }
+                self?.modelPrepDrivesStatus = reporter != nil
+                if case .fail(let reason) = plan {
                     AppLog.pipeline.error("engine \(engine.id.rawValue, privacy: .public) unavailable: \(reason, privacy: .public)")
-                    if let state {
-                        state.status = .error(reason)
-                    }
                     if managesDownloadWindow {
                         self?.closeDownloadWindow()
                     }
                     self?.finishModelPrepTask(token: myToken)
                     return
-                case .download:
-                    if let state, case .preparingModel = state.status {
-                        state.status = .downloadingModel(progress: 0)
-                    }
-                    if managesDownloadWindow, let state {
-                        self?.showDownloadWindow(state: state)
-                    }
-                case .warm:
-                    break
                 }
+                if EnginePrep.showsDownloadWindow(for: plan, audience: audience), let state {
+                    self?.showDownloadWindow(state: state)
+                }
+                let progressReporter = reporter
                 try await engine.prepare { progress in
                     Task { @MainActor in
-                        guard let state, case .downloadingModel = state.status else { return }
-                        state.status = progress >= 1 ? .preparingModel : .downloadingModel(progress: progress)
+                        guard let progressReporter, case .downloadingModel = progressReporter.status else { return }
+                        progressReporter.status = progress >= 1 ? .preparingModel : .downloadingModel(progress: progress)
                     }
                 }
                 try Task.checkCancellation()
-                if let state, state.status.blocksRecording {
-                    state.status = .idle
+                if let reporter, reporter.status.blocksRecording {
+                    reporter.status = .idle
                 }
                 if managesDownloadWindow {
                     self?.closeDownloadWindow()
@@ -456,8 +465,8 @@ final class AppCoordinator {
                 return
             } catch {
                 AppLog.pipeline.error("engine \(engine.id.rawValue, privacy: .public) prep failed: \(error.localizedDescription)")
-                if let state {
-                    state.status = .error("Model setup failed: \(error.localizedDescription). Try Retry or relaunch Voxline.")
+                if let reporter {
+                    reporter.status = .error("Model setup failed: \(error.localizedDescription). Try Retry or relaunch Voxline.")
                 }
                 if managesDownloadWindow {
                     self?.closeDownloadWindow()
@@ -474,6 +483,7 @@ final class AppCoordinator {
         guard modelPrepTaskToken == token else { return }
         modelPrepTask = nil
         modelPrepOwnsLaunchUI = false
+        modelPrepDrivesStatus = false
     }
 
     private func showDownloadWindow(state: AppState) {
@@ -534,15 +544,14 @@ extension AppCoordinator {
         // the setting. Shares modelPrepTask with the launch path so a
         // mid-prep switch cancels cleanly.
         guard engineChanged || (whisperModelChanged && selected.id == .whisperKit) else { return }
-        // If the launch-path prep still owns the status (and possibly the
-        // download window), the new task takes both over; otherwise the
-        // status would freeze at the cancelled task's value. After the launch
-        // flow has completed, do a quiet background prepare with no UI.
-        let inheritsLaunchUI = modelPrepOwnsLaunchUI
+        // Take over whatever the in-flight prep owns (launch UI, or a status
+        // it is driving) so the status never freezes at a cancelled task's
+        // value. Otherwise a download is reported in the status without the
+        // window, and a warm-up is silent.
         runModelPrepTask(
-            state: inheritsLaunchUI ? appState : nil,
+            state: appState,
             engine: selected,
-            managesDownloadWindow: inheritsLaunchUI
+            audience: .forSwitch(inFlightOwnsLaunchUI: modelPrepOwnsLaunchUI, inFlightDrivesStatus: modelPrepDrivesStatus)
         )
     }
 }

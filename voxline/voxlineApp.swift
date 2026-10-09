@@ -52,7 +52,10 @@ struct voxlineApp: App {
                 generalVM: GeneralSettingsViewModel(onApply: { [weak coordinator = delegate.coordinator] snapshot in
                     coordinator?.apply(snapshot)
                 }),
-                apiKeysVM: APIKeysSettingsViewModel()
+                apiKeysVM: APIKeysSettingsViewModel(),
+                engineReadiness: { [weak coordinator = delegate.coordinator] id in
+                    await coordinator?.readiness(of: id)
+                }
             )
             .environment(delegate.appState)
             .environment(delegate.updateService)

@@ -2,30 +2,57 @@ import Foundation
 import Observation
 
 /// Derives the Settings status strip's chip data and overall readiness from
-/// the existing settings view models. Pure derived state — no IO.
+/// the existing settings view models, plus the selected engine's readiness,
+/// which `refreshEngineReadiness()` fetches through the injected check.
 @Observable
 @MainActor
 final class SettingsStatusViewModel {
 
+    /// What a readiness result was checked for; a result only counts while
+    /// it still matches the selection.
+    struct ReadinessKey: Equatable {
+        let engine: EngineID
+        let whisperModel: WhisperModel
+    }
+
     private let general: GeneralSettingsViewModel
     private let keys: APIKeysSettingsViewModel
-    private let isModelCached: (WhisperModel) -> Bool
+    /// Readiness of the engine that runs for an `EngineID`; nil when it
+    /// can't be checked yet (services not built).
+    private let engineReadiness: @MainActor (EngineID) async -> EngineReadiness?
+    private var checked: (key: ReadinessKey, readiness: EngineReadiness?)?
+    @ObservationIgnored private var checkGeneration = 0
 
     init(
         general: GeneralSettingsViewModel,
         keys: APIKeysSettingsViewModel,
-        isModelCached: ((WhisperModel) -> Bool)? = nil
+        engineReadiness: @escaping @MainActor (EngineID) async -> EngineReadiness?
     ) {
         self.general = general
         self.keys = keys
-        self.isModelCached = isModelCached ?? { TranscriptionService.isModelCached($0) }
+        self.engineReadiness = engineReadiness
+    }
+
+    var readinessKey: ReadinessKey {
+        ReadinessKey(engine: general.engine, whisperModel: general.whisperModel)
+    }
+
+    /// Checks the selected engine. A check that finishes after a newer one
+    /// started is dropped.
+    func refreshEngineReadiness() async {
+        checkGeneration &+= 1
+        let generation = checkGeneration
+        let key = readinessKey
+        let readiness = await engineReadiness(key.engine)
+        guard generation == checkGeneration else { return }
+        checked = (key, readiness)
     }
 
     var isReady: Bool {
-        providerKeySaved && modelCached && micPresent
+        providerKeySaved && engineReady && micPresent
     }
 
-    var modelChipShowsCheck: Bool { modelCached }
+    var engineChipShowsCheck: Bool { engineReady }
     var providerChipShowsCheck: Bool { providerKeySaved }
 
     var micChipText: String {
@@ -35,13 +62,28 @@ final class SettingsStatusViewModel {
             ?? "System default"
     }
 
-    var modelChipText: String {
-        general.whisperModel.displayName
+    /// The Whisper model's name (which includes "Whisper") when Whisper is
+    /// selected; otherwise the engine's short name.
+    var engineChipText: String {
+        general.engine == .whisperKit ? general.whisperModel.displayName : general.engine.shortName
+    }
+
+    /// The selected engine's reason it can't run, when it reported one.
+    var engineUnavailableReason: String? {
+        guard case .unavailable(let reason) = currentReadiness else { return nil }
+        return reason
     }
 
     var providerChipText: String {
         general.provider.displayName
     }
+
+    private var currentReadiness: EngineReadiness? {
+        guard let checked, checked.key == readinessKey else { return nil }
+        return checked.readiness
+    }
+
+    private var engineReady: Bool { currentReadiness == .ready }
 
     private var providerKeySaved: Bool {
         let live: String
@@ -52,10 +94,6 @@ final class SettingsStatusViewModel {
         // isPersisted returns true when both live and saved are empty (empty == empty),
         // so the !live.isEmpty guard is needed to distinguish "key not set" from "key saved".
         return !live.isEmpty && keys.isPersisted(general.provider)
-    }
-
-    private var modelCached: Bool {
-        isModelCached(general.whisperModel)
     }
 
     private var micPresent: Bool {

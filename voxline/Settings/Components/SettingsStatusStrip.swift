@@ -19,7 +19,7 @@ struct SettingsStatusStrip: View {
             }
 
             chip(text: status.micChipText, showsCheck: false) { scrollTo(.microphone) }
-            chip(text: status.modelChipText, showsCheck: status.modelChipShowsCheck) { scrollTo(.recognition) }
+            chip(text: status.engineChipText, showsCheck: status.engineChipShowsCheck, help: status.engineUnavailableReason) { scrollTo(.recognition) }
             chip(text: status.providerChipText, showsCheck: status.providerChipShowsCheck) { scrollTo(.cleanup) }
 
             Spacer(minLength: 0)
@@ -31,7 +31,7 @@ struct SettingsStatusStrip: View {
     }
 
     @ViewBuilder
-    private func chip(text: String, showsCheck: Bool, action: @escaping () -> Void) -> some View {
+    private func chip(text: String, showsCheck: Bool, help: String? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 3) {
                 Text(text)
@@ -46,6 +46,6 @@ struct SettingsStatusStrip: View {
             }
         }
         .buttonStyle(.plain)
-        .help("Jump to section")
+        .help(help ?? "Jump to section")
     }
 }

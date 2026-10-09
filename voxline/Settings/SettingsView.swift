@@ -12,13 +12,20 @@ struct SettingsView: View {
     @State private var status: SettingsStatusViewModel
     @State private var vocabularyVM: CustomVocabularyListViewModel
 
+    /// `engineReadiness` reports the readiness of the engine that runs for
+    /// an `EngineID`, or nil before the app's engines exist.
     init(
         generalVM: GeneralSettingsViewModel,
-        apiKeysVM: APIKeysSettingsViewModel
+        apiKeysVM: APIKeysSettingsViewModel,
+        engineReadiness: @escaping @MainActor (EngineID) async -> EngineReadiness?
     ) {
         _generalVM = State(wrappedValue: generalVM)
         _apiKeysVM = State(wrappedValue: apiKeysVM)
-        _status = State(wrappedValue: SettingsStatusViewModel(general: generalVM, keys: apiKeysVM))
+        _status = State(wrappedValue: SettingsStatusViewModel(
+            general: generalVM,
+            keys: apiKeysVM,
+            engineReadiness: engineReadiness
+        ))
         _vocabularyVM = State(wrappedValue: CustomVocabularyListViewModel(
             store: CustomVocabularyStore()
         ))
@@ -122,7 +129,7 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                                 .font(.callout)
                             if generalVM.showsOpenAIKeyWarning {
-                                Text("Add an OpenAI API key in API Keys to use this engine.")
+                                Text("Add an OpenAI API key to use this engine.")
                                     .foregroundStyle(.orange)
                                     .font(.callout)
                             }
@@ -161,6 +168,9 @@ struct SettingsView: View {
             generalVM.refreshLoginItemStatus()
             generalVM.openAIKeyDidChange()
         }
+        .task(id: status.readinessKey) {
+            await status.refreshEngineReadiness()
+        }
         .onAppear {
             levelMonitor.preferredInputDeviceUID = generalVM.audioInputDeviceUID
             startMonitorIfAllowed()
@@ -171,7 +181,10 @@ struct SettingsView: View {
             levelMonitor.preferredInputDeviceUID = newValue
             startMonitorIfAllowed()
         }
-        .onChange(of: appState.status) { _, newStatus in
+        .onChange(of: appState.status) { oldStatus, newStatus in
+            if oldStatus.blocksRecording && !newStatus.blocksRecording {
+                Task { await status.refreshEngineReadiness() }
+            }
             if newStatus == .recording {
                 levelMonitor.stop()
             } else {
