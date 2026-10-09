@@ -47,35 +47,23 @@ Configure a staging appcast by setting `SUFeedURL` in a debug build's `Info.plis
 
 # Manual test pass: platform reset
 
-Covers what automated tests cannot: the real container migration, real AX reads, and
+Covers what automated tests cannot: real AX reads and
 Sparkle running unsandboxed.
 
-## Upgrade from 0.3.1
+## Numbers
 
-- [ ] Maintainers: if this Mac ever ran an unsandboxed dev build, first wipe `~/Library/Application Support/voxline` and the `com.voxline.app` domain (`defaults delete ~/Library/Preferences/com.voxline.app`), or the migration will skip your real data as "destination already exists".
-- [ ] Install 0.3.1 from Releases. Complete the wizard, save an API key, add
-      two custom vocabulary terms, dictate three times (so history is non-empty).
-- [ ] Install the current build over it (DMG drag, or Sparkle from a staging appcast). Launch.
-- [ ] No wizard appears. The hotkey (Settings → Dictation), provider (Settings → AI Provider), and model (Settings → Commands) are unchanged.
-- [ ] Settings → AI Provider shows the saved key (no re-entry).
-- [ ] Custom vocabulary still lists both terms. Show history… lists the three dictations.
-- [ ] No model download happens. `ls ~/Library/Application\ Support/voxline/huggingface/models/argmaxinc/whisperkit-coreml/` lists the variant.
-- [ ] `ls ~/Library/Containers/com.voxline.app/Data/Documents/` no longer contains `huggingface`.
-- [ ] `scripts/tail-logs.sh --last 2m pipeline` shows a `container migration:` line with `models=true`.
-- [ ] The first dictation after the upgrade is not delayed by a 30 s–2 min model compile (the ANE cache moved with the rest).
-- [ ] Numbers: select a cell (not editing it), dictate. The text lands in the cell, as in 0.3.1. Repeat in Excel.
+- [ ] Numbers: select a cell (not editing it), dictate. The text lands in the cell. Repeat in Excel.
 
 ## Fresh install
 
 - [ ] `scripts/reset-local-state.sh`, launch, complete the wizard, dictate into Notes.
-- [ ] `defaults read ~/Library/Preferences/com.voxline.app voxline.migration.containerMigrated` prints `1`.
 
 ## Accessibility reads work
 
 - [ ] Run a Debug build with `VOXLINE_TRACE_LLM=1` from Xcode. Dictate into the
       middle of an existing paragraph in Notes. The trace's `textBeforeCursor`
       and `textAfterCursor` are populated (not `(nil)`).
-- [ ] Select text in Notes, hold the dictation chord + command modifier, say
+- [ ] Select text in Notes, hold the command chord, say
       "make this shorter". The selection is replaced. Repeat in Slack and in
       Gmail in Safari.
 
@@ -177,7 +165,7 @@ several items below check it.
       app (Slack), choose it, and the cleaned text lands there, formatted for
       that app.
 - [ ] On a fresh launch, "Retry last dictation" is disabled.
-- [ ] Select text, hold the chord and the command modifier, and speak a
+- [ ] Select text, hold the command chord, and speak a
       command with Wi-Fi off. The error appears without a Retry button.
 
 ## Microphone disconnected
@@ -213,12 +201,12 @@ several items below check it.
 - [ ] Turn Wi-Fi off, select a Whisper model that is not cached, and wait for
       "Model setup failed…". Select Apple Speech: the error clears.
 - [ ] Add an OpenAI key (in Recognition when cleanup is not using OpenAI;
-      otherwise in API Keys) and dictate. Live text appears a phrase at a time
+      otherwise in AI Provider) and dictate. Live text appears a phrase at a time
       and the final text is inserted.
 - [ ] `scripts/tail-logs.sh --last 5m metrics` names the engine for each
       dictation above.
 - [ ] Quit and relaunch: the selected engine is unchanged. Reset to Defaults
-      selects Whisper.
+      selects Apple Speech.
 
 ## OpenAI fallback
 
@@ -274,7 +262,7 @@ several items below check it.
 
 ## No regressions
 
-- [ ] Select text in Notes, hold the chord and the command modifier, say "make
+- [ ] Select text in Notes, hold the command chord, say "make
       this shorter". The selection is replaced.
 - [ ] With nothing editable focused, dictate. The pill shows "No text field
       focused — copied".
@@ -316,33 +304,6 @@ Screen Sharing. Use an Apple Silicon Mac and a build from
 `strategy=` (`ax`, `paste`, `typing`, `copy`, `none`) and each command logs
 `action=` (`replace_selection`, `insert`, `rewrite`). The default chords are
 Left Shift + Left Control (dictation) and Left Shift + Left Option (command).
-
-## Upgrade from 0.3.1: command chord
-
-For each case, install 0.3.1, set the state described, quit it, install the
-current build over it, and launch. Settings → Dictation must show a dictation
-recorder, and Settings → Commands a "Command mode" toggle with its own recorder, and no command
-modifier picker. Before each upgrade, set the dictation chord to Left Shift +
-Left Control.
-
-- [ ] Command modifier set to **Right Cmd**: the command chord is Left Shift +
-      Right Cmd and Command mode is on.
-- [ ] Command modifier set to **Off**: the command chord is Left Shift + Left
-      Option and Command mode is on.
-- [ ] Command modifier set to a **dictation key** (Left Ctrl): the command
-      chord is Left Shift + Left Option.
-- [ ] Command modifier **unset** (with 0.3.1 quit, run
-      `defaults delete ~/Library/Preferences/com.voxline.app voxline.hotkey.commandModifier`):
-      the command chord is Left Shift + Left Option.
-- [ ] Dictation chord set to Left Shift + Left Option and command modifier Off:
-      Command mode is off after the upgrade.
-- [ ] In each case, `scripts/tail-logs.sh --last 2m hotkey` shows one
-      `migrated command modifier` line on the first launch and none after a
-      relaunch, and
-      `defaults read ~/Library/Preferences/com.voxline.app voxline.hotkey.commandModifier`
-      reports that the key does not exist.
-- [ ] Hold the migrated command chord with text selected in Notes and say
-      "make this shorter". The selection is replaced.
 
 ## Selection edits
 
@@ -465,7 +426,7 @@ blip may play on the discarded ones.
 
 ## Command model
 
-- [ ] Settings → Commands → Command model is empty with the cleanup model as its
+- [ ] Settings → Commands → Command model is empty with the provider's default model as its
       placeholder. Run a command: it works.
 - [ ] Enter a larger model id from the same provider and run a command: it
       works, with a slower response. Enter an invalid id: the pill shows the
