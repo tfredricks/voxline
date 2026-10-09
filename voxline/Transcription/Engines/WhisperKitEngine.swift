@@ -92,7 +92,9 @@ final class WhisperKitEngine: TranscriptionEngine {
 /// Otherwise it runs one final pass over the complete buffer.
 ///
 /// Audio is silent where its peak absolute amplitude is below `silencePeak`
-/// (default 0.02, about −34 dBFS).
+/// (default 0.02, about −34 dBFS) or `relativeSilence` of the loudest audio
+/// so far, whichever is lower, so a quiet speaker's soft words are not taken
+/// for silence. A session never as loud as `silencePeak` never finishes early.
 final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendable {
     typealias Transcribe = @Sendable (_ samples: [Float], _ clipStart: Float) async throws -> [TimedText]
 
@@ -105,6 +107,7 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
     static let minimumSpeechSamples = 800
     /// Non-silent audio is counted in frames of this many samples (10 ms).
     static let peakFrameSamples = 160
+    static let relativeSilence: Float = 0.1
     static let pollInterval: Duration = .milliseconds(100)
     static let keepUnconfirmed = 2
     /// WhisperKit starts no decode window when `windowClipTime` (1.0 s) or
@@ -122,6 +125,7 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
     private var inFlightSampleCount: Int?
     private var coveredSampleCount = 0
     private var coveredHasText = false
+    private var sessionPeak: Float = 0
     private var confirmed: [TimedText] = []
     private var confirmedEnd: Float = 0
     private var lastUnconfirmed: [TimedText] = []
@@ -160,9 +164,11 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
     }
 
     func append(_ samples: [Float]) {
+        let peak = samples.isEmpty ? 0 : vDSP.maximumMagnitude(samples)
         lock.withLock {
             guard !cancelled else { return }
             buffer.append(contentsOf: samples)
+            sessionPeak = max(sessionPeak, peak)
         }
     }
 
@@ -173,8 +179,9 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
     ///
     /// Otherwise final text = kept confirmed text, then the final pass's
     /// segments. When the final pass finds nothing past its clip start, the
-    /// released segments and the last rolling pass's unconfirmed segments
-    /// stand in, so words already shown as partials are never dropped.
+    /// released segments and the unconfirmed segments of the last rolling
+    /// pass that heard words stand in, so words already shown as partials are
+    /// never dropped.
     func finish() async throws -> String {
         try await withTaskCancellationHandler {
             try await finishPasses()
@@ -197,7 +204,7 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
         defer { continuation.finish() }
         let (loop, awaitsInFlightPass) = lock.withLock {
             finishing = true
-            return (loopTask, inFlightSampleCount.map(isSilent(from:)) ?? false)
+            return (loopTask, inFlightSampleCount.map(onlySilenceFollows) ?? false)
         }
         if !awaitsInFlightPass { loop?.cancel() }
         await loop?.value
@@ -292,14 +299,16 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
             inFlightSampleCount = nil
             guard !cancelled else { return nil }
             let split = SegmentConfirmation.split(segments, keepUnconfirmed: Self.keepUnconfirmed, after: confirmedEnd)
-            confirmed.append(contentsOf: split.confirmed)
-            confirmedEnd = split.newConfirmedEnd
-            lastUnconfirmed = split.unconfirmed
             coveredSampleCount = samples.count
             coveredHasText = (split.confirmed + split.unconfirmed).contains {
                 !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             }
-            return TranscriptPartial(stable: Self.joined(confirmed), volatile: Self.joined(split.unconfirmed))
+            if coveredHasText {
+                confirmed.append(contentsOf: split.confirmed)
+                confirmedEnd = split.newConfirmedEnd
+                lastUnconfirmed = split.unconfirmed
+            }
+            return TranscriptPartial(stable: Self.joined(confirmed), volatile: Self.joined(lastUnconfirmed))
         }
         if let partial { continuation.yield(partial) }
     }
@@ -317,7 +326,7 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
 
     /// Must be called with `lock` held.
     private func lastPassTextIfFinal() -> String? {
-        guard coveredSampleCount > 0, coveredHasText, isSilent(from: coveredSampleCount) else { return nil }
+        guard coveredSampleCount > 0, coveredHasText, onlySilenceFollows(coveredSampleCount) else { return nil }
         return Self.joined(confirmed + lastUnconfirmed)
     }
 
@@ -326,10 +335,18 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
         buffer.withUnsafeBufferPointer { isSilent(UnsafeBufferPointer(rebasing: $0[start...])) }
     }
 
-    private func isSilent(_ samples: UnsafeBufferPointer<Float>) -> Bool {
-        samples.isEmpty || vDSP.maximumMagnitude(samples) < silencePeak
+    /// Must be called with `lock` held. False until the session has been
+    /// at least as loud as `silencePeak`, so a quiet session never ends early.
+    private func onlySilenceFollows(_ start: Int) -> Bool {
+        sessionPeak >= silencePeak && isSilent(from: start)
     }
 
+    /// Must be called with `lock` held.
+    private func isSilent(_ samples: UnsafeBufferPointer<Float>) -> Bool {
+        samples.isEmpty || vDSP.maximumMagnitude(samples) < min(silencePeak, Self.relativeSilence * sessionPeak)
+    }
+
+    /// Must be called with `lock` held.
     private func nonSilentSampleCount(_ samples: UnsafeBufferPointer<Float>) -> Int {
         stride(from: 0, to: samples.count, by: Self.peakFrameSamples).reduce(0) { count, start in
             let frame = UnsafeBufferPointer(rebasing: samples[start..<min(start + Self.peakFrameSamples, samples.count)])

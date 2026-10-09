@@ -209,13 +209,14 @@ private let threeThenFour: @Sendable (FakeWhisperPass.Call) -> [TimedText] = { c
 /// and `finish()`.
 private func finishAfterOnePass(
     then tail: [Float],
+    speechAmplitude: Float = 0.5,
     silencePeak: Float? = nil,
     respond: @escaping @Sendable (FakeWhisperPass.Call) throws -> [TimedText] = threeThenFour
 ) async throws -> (text: String, calls: [FakeWhisperPass.Call]) {
     let fake = FakeWhisperPass(respond: respond)
     let session = fake.session(silencePeak: silencePeak)
     var partials = session.partials.makeAsyncIterator()
-    session.append(speech(32_000))
+    session.append(speech(32_000, amplitude: speechAmplitude))
     _ = await partials.next()
     session.append(tail)
     let text = try await session.finish()
@@ -459,9 +460,82 @@ struct WhisperKitStreamingSessionTests {
     }
 
     @Test func silence_peak_is_injectable() async throws {
-        let run = try await finishAfterOnePass(then: speech(8_000), silencePeak: 0.6)
+        let tail = speech(8_000, amplitude: 0.04)
+        let injected = try await finishAfterOnePass(then: tail, speechAmplitude: 0.9, silencePeak: 0.05)
+        #expect(injected.text == "one two three")
+        #expect(injected.calls.count == 1)
+        let byDefault = try await finishAfterOnePass(then: tail, speechAmplitude: 0.9)
+        #expect(byDefault.calls.count == 2)
+    }
+
+    @Test func quiet_speaker_keeps_a_soft_trailing_word() async throws {
+        let run = try await finishAfterOnePass(then: speech(8_000, amplitude: 0.01), speechAmplitude: 0.05)
+        #expect(run.text == "one two three four")
+        #expect(run.calls.count == 2)
+    }
+
+    @Test func quiet_speaker_still_finishes_early_after_silence() async throws {
+        let run = try await finishAfterOnePass(then: silence(8_000), speechAmplitude: 0.05)
         #expect(run.text == "one two three")
         #expect(run.calls.count == 1)
+    }
+
+    @Test func a_session_never_louder_than_the_silence_peak_never_finishes_early() async throws {
+        let run = try await finishAfterOnePass(then: silence(8_000), speechAmplitude: 0.015)
+        #expect(run.text == "one two three four")
+        #expect(run.calls.count == 2)
+    }
+
+    @Test func a_soft_pause_is_not_silence_for_a_quiet_speaker() async throws {
+        let fake = FakeWhisperPass()
+        let session = fake.session()
+        session.append(speech(9_600, amplitude: 0.05))
+        session.append(speech(5_600, amplitude: 0.01))
+        try await Task.sleep(for: .milliseconds(350))
+        #expect(fake.calls.isEmpty)
+        session.cancel()
+    }
+
+    @Test func a_quiet_speakers_real_pause_triggers_a_pass() async throws {
+        let fake = FakeWhisperPass()
+        let session = fake.session()
+        session.append(speech(9_600, amplitude: 0.05))
+        session.append(silence(5_600))
+        #expect(await eventually { fake.calls.count == 1 })
+        #expect(fake.calls == [.init(sampleCount: 15_200, clipStart: 0)])
+        session.cancel()
+    }
+
+    @Test func an_awaited_in_flight_pass_without_segments_falls_back_to_the_final_pass() async throws {
+        let fake = FakeWhisperPass(delay: .milliseconds(400)) { call in call.sampleCount == 32_000 ? [] : fourWords }
+        let session = fake.session()
+        session.append(speech(32_000))
+        #expect(await eventually { fake.calls.count == 1 })
+        session.append(silence(8_000))
+        #expect(try await session.finish() == "one two three four")
+        #expect(fake.cancelledCount == 0)
+        #expect(fake.calls == [
+            .init(sampleCount: 32_000, clipStart: 0),
+            .init(sampleCount: 40_000, clipStart: 0),
+        ])
+    }
+
+    @Test func an_empty_pass_keeps_the_previous_volatile_words() async throws {
+        let fake = FakeWhisperPass { call in call.sampleCount == 32_000 ? threeWords : [] }
+        let session = fake.session()
+        var partials = session.partials.makeAsyncIterator()
+        session.append(speech(32_000))
+        #expect(await partials.next() == TranscriptPartial(stable: "one", volatile: "two three"))
+        session.append(speech(16_000))
+        #expect(await partials.next() == TranscriptPartial(stable: "one", volatile: "two three"))
+
+        session.append(speech(1_600))
+        #expect(try await session.finish() == "one two three")
+        #expect(fake.calls == [
+            .init(sampleCount: 32_000, clipStart: 0),
+            .init(sampleCount: 48_000, clipStart: 0.6),
+            .init(sampleCount: 49_600, clipStart: 0.6),
+        ])
     }
 
     @Test func pause_triggers_a_pass_before_one_second_of_new_audio() async throws {
