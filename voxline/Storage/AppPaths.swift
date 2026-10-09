@@ -41,6 +41,18 @@ enum AppPaths {
         appDirectory.appending(path: "bakeoff", directoryHint: .isDirectory)
     }
 
+    /// One directory per meeting: raw and compressed audio, `meta.json`,
+    /// `transcript.json`. Notes files live in the user's notes folder instead.
+    static func meetingsDirectory() throws -> URL {
+        let dir = meetingsDirectory(inAppDirectory: try applicationSupportDirectory())
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    static func meetingsDirectory(inAppDirectory appDirectory: URL) -> URL {
+        appDirectory.appending(path: "meetings", directoryHint: .isDirectory)
+    }
+
     /// The model cache root if it already exists; nil otherwise. Never
     /// creates a directory, so cache checks leave the disk untouched.
     static func modelCacheDirectoryIfPresent() -> URL? {
