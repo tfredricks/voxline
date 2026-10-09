@@ -13,9 +13,9 @@ final class MeetingTimerPanel {
 
     func show(startedAt: Date) {
         guard panel == nil else { return }
-        let size = NSSize(width: 96, height: 28)
+        let hostingView = NSHostingView(rootView: MeetingTimerChip(startedAt: startedAt))
         let panel = ChipPanel(
-            contentRect: NSRect(origin: .zero, size: size),
+            contentRect: NSRect(origin: .zero, size: hostingView.fittingSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -29,10 +29,14 @@ final class MeetingTimerPanel {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
-        panel.contentView = NSHostingView(rootView: MeetingTimerChip(startedAt: startedAt))
-        if !panel.setFrameUsingName(Self.autosaveName), let screen = NSScreen.main {
-            let frame = screen.visibleFrame
-            panel.setFrameOrigin(NSPoint(x: frame.maxX - size.width - 16, y: frame.maxY - size.height - 8))
+        panel.contentView = hostingView
+        let saved = panel.setFrameUsingName(Self.autosaveName) ? panel.frame : nil
+        let screen = saved.flatMap { saved in NSScreen.screens.first { $0.frame.intersects(saved) } } ?? NSScreen.main
+        if let screen {
+            let frame = MeetingTimerLayout.frame(
+                size: hostingView.fittingSize, saved: saved, visibleFrame: screen.visibleFrame
+            )
+            panel.setFrame(frame, display: false)
         }
         panel.setFrameAutosaveName(Self.autosaveName)
         panel.orderFrontRegardless()
@@ -56,9 +60,15 @@ private struct MeetingTimerChip: View {
     var body: some View {
         HStack(spacing: 6) {
             Circle().fill(.red).frame(width: 8, height: 8)
-            Text(startedAt, style: .timer)
-                .monospacedDigit()
-                .font(.system(size: 12, weight: .medium))
+            ZStack {
+                Text(MeetingTimerLayout.widestLabel).hidden()
+                TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                    Text(MeetingTimerLayout.label(elapsed: context.date.timeIntervalSince(startedAt)))
+                }
+            }
+            .monospacedDigit()
+            .font(.system(size: 12, weight: .medium))
+            .fixedSize()
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
