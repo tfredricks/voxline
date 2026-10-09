@@ -60,4 +60,15 @@ import Foundation
         #expect(!CleanupFastPath.shouldSkip("one two three four five six seven"))
         #expect(CleanupFastPath.shouldSkip("one, two, three, four, five, six."))
     }
+
+    @Test func punctuation_or_symbols_alone_are_not_skipped() {
+        #expect(!CleanupFastPath.shouldSkip("!!!"))
+        #expect(!CleanupFastPath.shouldSkip("... ?"))
+        #expect(!CleanupFastPath.shouldSkip("— –"))
+    }
+
+    @Test func a_single_digit_or_letter_is_enough_to_skip() {
+        #expect(CleanupFastPath.shouldSkip("42."))
+        #expect(CleanupFastPath.shouldSkip("A!"))
+    }
 }

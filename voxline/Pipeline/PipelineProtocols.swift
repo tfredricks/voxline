@@ -7,8 +7,8 @@ protocol AudioCapturing: AnyObject {
     var onTapCallback: ((Int) -> Void)? { get set }
     /// Receives each converted 16 kHz chunk synchronously, in order, on the
     /// audio thread, then the flushed tail during stop(). Read once per
-    /// start(); must never wait on the main actor, since stop() and
-    /// takeSamples() wait for an in-flight delivery.
+    /// start(); must never wait on the main actor, since stop() waits for an
+    /// in-flight delivery.
     var onSamples: (@Sendable ([Float]) -> Void)? { get set }
     /// Fires on the main actor when an input configuration change has stopped
     /// the engine during a capture; no more audio will arrive. Changes that
@@ -23,22 +23,6 @@ protocol AudioCapturing: AnyObject {
     func stopPrewarm()
     func start() throws
     func stop()
-    func takeSamples() -> [Float]
-}
-
-@MainActor
-protocol Transcribing: AnyObject {
-    /// Stable identifier of the engine and model producing transcripts, for
-    /// metrics. Phase 2's engine protocol replaces this.
-    var engineID: String { get }
-    /// Transcribe a Float32 PCM buffer at AudioFormat.whisperSampleRate.
-    /// Vocabulary biasing happens later in the pipeline via the LLM cleanup
-    /// prompt — see `LLMService.transcriptionPreamble`.
-    func transcribe(samples: [Float]) async throws -> String
-}
-
-extension Transcribing {
-    var engineID: String { "unknown" }
 }
 
 protocol FocusedFieldInspecting: Sendable {
@@ -67,7 +51,6 @@ protocol FrontmostAppProviding: Sendable {
 }
 
 extension AudioCaptureService: AudioCapturing {}
-extension TranscriptionService: Transcribing {}
 extension ClipboardInjector: ClipboardInjecting {}
 // LLMService: LLMServing lives in its own source file — Sendable-bearing
 // protocol conformances must be declared in the same file as the type under

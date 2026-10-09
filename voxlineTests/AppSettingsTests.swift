@@ -168,4 +168,13 @@ import Foundation
         d.set("not-an-engine", forKey: AppSettings.Key.transcriptionEngine)
         #expect(AppSettings(defaults: d).transcriptionEngine == EngineID.default)
     }
+
+    @Test func skip_short_utterances_defaults_false_and_round_trips() {
+        let d = makeDefaults()
+        #expect(AppSettings(defaults: d).skipShortUtterances == false)
+        var s = AppSettings(defaults: d)
+        s.skipShortUtterances = true
+        #expect(AppSettings(defaults: d).skipShortUtterances == true)
+        #expect(d.bool(forKey: "voxline.llm.skipShortUtterances") == true)
+    }
 }

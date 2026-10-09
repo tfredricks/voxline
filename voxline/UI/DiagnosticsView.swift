@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Latency breakdown of the last dictation and medians over the retained
-/// history. Lives in the About window so bug reports can quote it.
+/// dictations (commands excluded). Lives in the About window so bug reports
+/// can quote it.
 struct DiagnosticsView: View {
     let metrics: DictationMetricsStore
 
@@ -11,11 +12,14 @@ struct DiagnosticsView: View {
                 .fontWeight(.semibold)
             if let last = metrics.items.first {
                 Text("Last: \(Self.line(total: last.totalMs, transcribe: last.transcribeMs, cleanup: last.cleanupMs, insert: last.insertMs))")
-                if let total = metrics.median(\.totalMs),
-                   let transcribe = metrics.median(\.transcribeMs),
-                   let cleanup = metrics.median(\.cleanupMs),
-                   let insert = metrics.median(\.insertMs) {
-                    Text("Median of \(metrics.items.count): \(Self.line(total: total, transcribe: transcribe, cleanup: cleanup, insert: insert))")
+                if let total = metrics.median(\.totalMs, kind: .dictation),
+                   let transcribe = metrics.median(\.transcribeMs, kind: .dictation),
+                   let cleanup = metrics.median(\.cleanupMs, kind: .dictation) {
+                    let insert = metrics.median(\.insertMs, kind: .dictation, excludingZero: true) ?? 0
+                    Text("Median of \(metrics.count(kind: .dictation)) dictations: \(Self.line(total: total, transcribe: transcribe, cleanup: cleanup, insert: insert))")
+                }
+                if let firstWords = metrics.median(\.firstPartialMs, kind: .dictation) {
+                    Text("First words: \(Self.seconds(firstWords))")
                 }
                 Text("Engine \(last.engineID) · Model \(last.modelID)")
             } else {

@@ -1,14 +1,17 @@
 import AppKit
 import Foundation
 
-/// Coordinates the hotkey → audio capture → transcription → LLM cleanup →
-/// clipboard inject pipeline. Updates AppState along the way.
+/// Coordinates the hotkey → audio capture → streaming transcription → LLM
+/// cleanup → clipboard inject pipeline. Updates AppState along the way.
 @MainActor
 final class CapturePipeline {
 
+    /// Recordings shorter than this end quietly, as a tap rather than speech.
+    static let minimumAudioDuration: TimeInterval = 0.3
+
     private let state: AppState
     private let capture: AudioCapturing
-    private let transcriber: Transcribing
+    private let engines: TranscriptionEngineProviding
     private let llm: LLMServing
     var modes: ModeRouter
     private let frontmost: FrontmostAppProviding
@@ -16,12 +19,20 @@ final class CapturePipeline {
     private let injector: ClipboardInjecting
     private let historyStore: DictationHistoryStore
     private let contextCapture: ContextCapturing
-    private var contextTask: Task<CapturedContext, Never>?
     private let selectionSnapshot: SelectionSnapshotting
-    private var selectionTask: Task<String?, Never>?
     private let now: @Sendable () -> Date
     let metrics: DictationMetricsStore
     private let llmModelID: @Sendable () -> String
+    private let vocabulary: @Sendable () -> [String]
+    private let skipShortUtterances: @Sendable () -> Bool
+
+    /// Identifies the current recording. Work resuming after an `await`
+    /// compares it with the value it captured and drops its result when a
+    /// newer recording has taken over.
+    private var generation: UInt64 = 0
+    private var live: LiveSession?
+    private var snapshotTask: Task<StartSnapshot, Never>?
+    private var selectionTask: Task<String?, Never>?
 
     /// Invoked with the raw transcript when LLM cleanup fails, so the user's
     /// words survive a provider outage instead of being discarded. The default
@@ -40,7 +51,7 @@ final class CapturePipeline {
     init(
         state: AppState,
         capture: AudioCapturing,
-        transcriber: Transcribing,
+        engines: TranscriptionEngineProviding,
         llm: LLMServing,
         modes: ModeRouter,
         frontmost: FrontmostAppProviding,
@@ -51,11 +62,13 @@ final class CapturePipeline {
         selectionSnapshot: SelectionSnapshotting = DefaultSelectionSnapshot(),
         metrics: DictationMetricsStore = DictationMetricsStore(),
         llmModelID: @escaping @Sendable () -> String = { AppSettings().llmModel },
+        vocabulary: @escaping @Sendable () -> [String] = { CustomVocabularyStore().load() },
+        skipShortUtterances: @escaping @Sendable () -> Bool = { AppSettings().skipShortUtterances },
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.state = state
         self.capture = capture
-        self.transcriber = transcriber
+        self.engines = engines
         self.llm = llm
         self.modes = modes
         self.frontmost = frontmost
@@ -66,15 +79,13 @@ final class CapturePipeline {
         self.selectionSnapshot = selectionSnapshot
         self.metrics = metrics
         self.llmModelID = llmModelID
+        self.vocabulary = vocabulary
+        self.skipShortUtterances = skipShortUtterances
         self.now = now
 
         capture.onLevel = { [weak self] level in
             Task { @MainActor in
-                guard let self else { return }
-                self.state.audioLevel = level
-                if level > self.state.lastPeakLevel {
-                    self.state.lastPeakLevel = level
-                }
+                self?.state.audioLevel = level
             }
         }
     }
@@ -103,6 +114,9 @@ final class CapturePipeline {
         case .idle, .error:
             break
         }
+        generation &+= 1
+        let live = LiveSession(engine: engines.current)
+        capture.onSamples = { [router = live.router] in router.append($0) }
         do {
             try capture.start()
         } catch {
@@ -116,9 +130,9 @@ final class CapturePipeline {
             setError("Audio capture failed: \(error.localizedDescription)")
             return
         }
+        self.live = live
         state.recordingStartedAt = Date()
         state.audioLevel = 0
-        state.lastPeakLevel = 0
         // Scrub the prior dictation's text so it doesn't linger in process
         // memory for the lifetime of the app. Spoken content can include
         // passwords / 2FA codes / private notes; defensible-by-default hygiene.
@@ -126,11 +140,25 @@ final class CapturePipeline {
         state.lastCleanedText = nil
         state.lastTranscribeDuration = nil
         state.lastCleanupDuration = nil
+        state.liveTranscript = nil
+        state.retryTranscript = nil
+        state.pipelinePhase = nil
+        state.isCancellable = true
         state.recordingIsCommand = command
         state.status = .recording
+        let generation = self.generation
+        live.open(vocabulary: vocabulary) { [weak self] partial in
+            guard let self, self.generation == generation else { return }
+            self.state.liveTranscript = partial
+        }
+
         let captor = contextCapture
-        contextTask = Task.detached(priority: .userInitiated) {
-            await captor.capture()
+        let frontmost = frontmost
+        let fieldInspector = fieldInspector
+        snapshotTask = Task.detached(priority: .userInitiated) {
+            let bundleID = frontmost.frontmostBundleID()
+            let field = fieldInspector.inspect()
+            return StartSnapshot(context: await captor.capture(), bundleID: bundleID, field: field)
         }
         // Selection probe runs ONLY in command mode. In dictation the clipboard
         // is never touched — this is the fix for VS Code's line-copy false
@@ -164,68 +192,107 @@ final class CapturePipeline {
         capture.stopPrewarm()
     }
 
-    /// Stop capture, transcribe, run LLM cleanup against the active mode's
-    /// prompt, and paste the result into the focused field.
+    /// The input device went away mid-recording: finish with what was
+    /// captured, as if the hotkey had been released. The real release later
+    /// finds status past `.recording` and returns immediately.
+    func handleCaptureInterrupted() {
+        guard case .recording = state.status else { return }
+        showToast("Microphone disconnected — stopped recording")
+        Task { [weak self] in await self?.finalizeRecording() }
+    }
+
+    /// Stop capture, finish the transcription session, run LLM cleanup against
+    /// the active mode's prompt, and paste the result into the focused field.
     func finalizeRecording() async {
         // Only valid entry state is `.recording`. A spurious finalize while
         // we're already in `.thinking` (an earlier finalize is mid-flight) or
         // any non-recording state would race with the in-flight pipeline.
-        guard case .recording = state.status else { return }
-        let finalizeStart = Date()
+        guard case .recording = state.status, let live else { return }
+        let generation = self.generation
+        let router = live.router
+        let release = ContinuousClock.now
         capture.stop()
-        let samples = capture.takeSamples()
-        let timing = PipelineTiming(finalizeStart: finalizeStart, captureTailMs: Self.milliseconds(since: finalizeStart))
+        let captureTailMs = Self.milliseconds(release.duration(to: .now))
         state.status = .thinking
-        state.lastRecordingDuration = Double(samples.count) / 16_000.0
+        state.pipelinePhase = .transcribing
+        state.lastRecordingDuration = router.audioDuration
 
-        // Silent-capture detector: tap fired (samples non-empty) but no audio
-        // signal reached the converter (peak stayed at 0). Almost always means
-        // Microphone permission is denied or a muted device was selected.
-        if !samples.isEmpty && state.lastPeakLevel == 0 {
-            cancelContextTask()
+        if router.sampleCount == 0 || router.audioDuration < Self.minimumAudioDuration {
+            await live.cancel()
+            guard generation == self.generation else { return }
+            cancelContextTasks()
+            resetIdle()
+            return
+        }
+
+        // Silent-capture detector: audio arrived but every sample was zero.
+        // Almost always means Microphone permission is denied or a muted
+        // device was selected.
+        if router.peak == 0 {
+            await live.cancel()
+            guard generation == self.generation else { return }
+            cancelContextTasks()
             return setError("No audio captured. Check that Microphone permission is granted and the input device isn't muted.")
         }
 
-        if samples.isEmpty {
-            cancelContextTask()
-            resetIdle()
-            return
-        }
-
-        // 1. Transcribe locally.
-        let transcript: String
-        let transcribeStart = Date()
+        let session: any TranscriptionSession
         do {
-            transcript = try await transcriber.transcribe(samples: samples)
+            session = try await live.session()
         } catch {
-            cancelContextTask()
-            return setError("Transcription failed. Try again or pick a different model in Settings → General.")
+            guard generation == self.generation else { return }
+            cancelContextTasks()
+            return setError("Couldn't start \(live.engineName): \(error.localizedDescription)")
         }
-        state.lastTranscribeDuration = Date().timeIntervalSince(transcribeStart)
+        guard generation == self.generation else { return }
+
+        let finishStart = ContinuousClock.now
+        let transcript: String
+        do {
+            transcript = try await session.finish()
+        } catch {
+            guard generation == self.generation else { return }
+            cancelContextTasks()
+            return setError("Transcription failed. Try again or pick a different engine in Settings → General.")
+        }
+        guard generation == self.generation else { return }
+        let transcribeDuration = finishStart.duration(to: .now)
+        endLiveSession()
+        state.lastTranscribeDuration = Self.seconds(transcribeDuration)
         state.lastTranscript = transcript
+        if !state.recordingIsCommand, !transcript.isEmpty {
+            state.retryTranscript = transcript
+        }
 
         if transcript.isEmpty {
             // Nothing to clean / paste — quietly idle out.
-            cancelContextTask()
+            cancelContextTasks()
             resetIdle()
             return
         }
+        state.liveTranscript = TranscriptPartial(stable: transcript)
 
-        // 2. Resolve the active mode by frontmost bundle ID + focused field
-        //    snapshot. Falls back to `*` wildcard when nothing matches.
-        let bundleID = frontmost.frontmostBundleID()
-        let field = fieldInspector.inspect()
-        guard let mode = modes.mode(for: bundleID, field: field) else {
-            cancelContextTask()
-            return setError("No mode for app '\(bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes.")
+        // Mode resolution uses the frontmost app and focused field as they
+        // were at recording start, not wherever focus drifted since.
+        let snapshot = await snapshotTask?.value ?? .empty
+        snapshotTask = nil
+        guard generation == self.generation else { return }
+        guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
+            cancelContextTasks()
+            return setError("No mode for app '\(snapshot.bundleID ?? "unknown")' and no '*' fallback configured. Open Settings → Modes.")
         }
+        let timing = PipelineTiming(
+            release: release,
+            captureTailMs: captureTailMs,
+            transcribeMs: Self.milliseconds(transcribeDuration),
+            engineID: live.engine.metricsID,
+            firstPartialMs: live.timeToFirstPartial.map(Self.milliseconds)
+        )
 
-        // 3. Route by mode. `recordingIsCommand` was latched at recording start.
-        let context = await contextTask?.value ?? .empty
-        contextTask = nil
+        // `recordingIsCommand` was latched at recording start.
         if state.recordingIsCommand {
             let selection = await selectionTask?.value ?? nil
             selectionTask = nil
+            guard generation == self.generation else { return }
             guard let selection, !selection.isEmpty else {
                 // Command gesture but nothing selected: keep the mode boundary
                 // crisp — no dictation fallback, no clipboard-probe surprise.
@@ -233,55 +300,80 @@ final class CapturePipeline {
                 showToast("Select text to transform")
                 return
             }
-            await performTransform(command: transcript, selection: selection, mode: mode, context: context, field: field, timing: timing)
+            await performTransform(command: transcript, selection: selection, mode: mode, snapshot: snapshot, timing: timing, generation: generation)
             return
         }
         // Dictation path: selectionTask was never spawned, so the clipboard was
         // never touched.
+        await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: timing, generation: generation)
+    }
+
+    /// Clean up the transcript (or pass it through on the fast path) and
+    /// paste it. Owns its terminal state.
+    private func performDictation(transcript: String, mode: Mode, snapshot: StartSnapshot, timing: PipelineTiming, generation: UInt64) async {
+        let context = snapshot.context
+        state.pipelinePhase = .cleaning
         if !context.captureNotes.isEmpty {
             AppLog.context.info("context partial: notes=\(context.captureNotes.joined(separator: ",")) durationMs=\(context.captureDurationMs)")
         }
+        let skippedCleanup = skipShortUtterances() && CleanupFastPath.shouldSkip(transcript)
         let cleaned: String
-        let cleanupStart = Date()
-        do {
-            cleaned = try await llm.cleanup(transcript: transcript, mode: mode, context: context)
-        } catch let e as LLMError {
-            transcriptFallback(transcript)
-            return setError("\(e.errorDescription ?? "LLM cleanup failed.") Raw transcript copied to the clipboard — paste to recover it.")
-        } catch {
-            transcriptFallback(transcript)
-            return setError("LLM cleanup failed: \(error.localizedDescription) Raw transcript copied to the clipboard — paste to recover it.")
+        let cleanupMs: Int
+        if skippedCleanup {
+            cleaned = transcript
+            cleanupMs = 0
+            state.lastCleanupDuration = 0
+        } else {
+            let cleanupStart = ContinuousClock.now
+            do {
+                let result = try await llm.cleanup(transcript: transcript, mode: mode, context: context)
+                guard generation == self.generation else { return }
+                cleaned = result
+            } catch let e as LLMError {
+                guard generation == self.generation else { return }
+                transcriptFallback(transcript)
+                return setError("\(e.errorDescription ?? "LLM cleanup failed.") Raw transcript copied to the clipboard — paste to recover it.")
+            } catch {
+                guard generation == self.generation else { return }
+                transcriptFallback(transcript)
+                return setError("LLM cleanup failed: \(error.localizedDescription) Raw transcript copied to the clipboard — paste to recover it.")
+            }
+            let cleanupDuration = cleanupStart.duration(to: .now)
+            state.lastCleanupDuration = Self.seconds(cleanupDuration)
+            cleanupMs = Self.milliseconds(cleanupDuration)
         }
-        state.lastCleanupDuration = Date().timeIntervalSince(cleanupStart)
         state.lastCleanedText = cleaned
         historyStore.record(cleanedText: cleaned, rawTranscript: transcript, mode: mode, context: context)
-        let cleanupMs = Self.milliseconds(state.lastCleanupDuration)
+        state.isCancellable = false
+        state.pipelinePhase = .inserting
 
-        guard field?.isEditable ?? true else {
+        guard snapshot.field?.isEditable ?? true else {
             transcriptFallback(cleaned)
-            recordMetrics(kind: .dictation, timing: timing, cleanupMs: cleanupMs, insertMs: 0, mode: mode, text: cleaned)
+            recordMetrics(kind: .dictation, timing: timing, cleanupMs: cleanupMs, insertMs: 0, skippedCleanup: skippedCleanup, mode: mode, text: cleaned)
             resetIdle()
             showToast("No text field focused — copied")
             return
         }
 
-        // 4. Paste.
-        let insertStart = Date()
+        let insertStart = ContinuousClock.now
         do {
             _ = try await injector.inject(cleaned)
         } catch let e as TextInsertionError {
+            guard generation == self.generation else { return }
             return setError(e.errorDescription ?? "Text insertion failed.", permissions: e == .accessibilityNotGranted)
         } catch {
+            guard generation == self.generation else { return }
             return setError("Text insertion failed: \(error.localizedDescription)")
         }
-        recordMetrics(kind: .dictation, timing: timing, cleanupMs: cleanupMs, insertMs: Self.milliseconds(since: insertStart), mode: mode, text: cleaned)
+        guard generation == self.generation else { return }
+        recordMetrics(kind: .dictation, timing: timing, cleanupMs: cleanupMs, insertMs: Self.milliseconds(insertStart.duration(to: .now)), skippedCleanup: skippedCleanup, mode: mode, text: cleaned)
         resetIdle()
     }
 
     /// Rewrite the user's selection according to the spoken command and paste
     /// it over the (still-live) selection.
     /// Owns its terminal state — callers must not call `resetIdle` afterward.
-    private func performTransform(command: String, selection: String, mode: Mode, context: CapturedContext, field: FocusedField?, timing: PipelineTiming) async {
+    private func performTransform(command: String, selection: String, mode: Mode, snapshot: StartSnapshot, timing: PipelineTiming, generation: UInt64) async {
         // The AX reader returns the FULL live selection (no truncation), and
         // `injector.inject` below pastes back over that same full live
         // selection. If we let an over-long selection through, the LLM would
@@ -294,22 +386,29 @@ final class CapturePipeline {
             return
         }
 
+        state.pipelinePhase = .cleaning
         let transformed: String
-        let transformStart = Date()
+        let transformStart = ContinuousClock.now
         do {
-            transformed = try await llm.transform(instruction: command, selection: selection, mode: mode)
+            let result = try await llm.transform(instruction: command, selection: selection, mode: mode)
+            guard generation == self.generation else { return }
+            transformed = result
         } catch let e as LLMError {
+            guard generation == self.generation else { return }
             return setError("\(e.errorDescription ?? "Transform failed.") Your selection was left unchanged.")
         } catch {
+            guard generation == self.generation else { return }
             return setError("Transform failed: \(error.localizedDescription) Your selection was left unchanged.")
         }
-        let cleanupMs = Self.milliseconds(since: transformStart)
+        let cleanupMs = Self.milliseconds(transformStart.duration(to: .now))
 
         // Focus/selection may have moved during the LLM await. If the live
         // selection no longer matches what we transformed, don't overwrite
         // the wrong target — leave the result on the clipboard for a manual
         // paste instead.
-        guard await selectionSnapshot.readSelection() == selection else {
+        let liveSelection = await selectionSnapshot.readSelection()
+        guard generation == self.generation else { return }
+        guard liveSelection == selection else {
             transcriptFallback(transformed)
             resetIdle()
             showToast("Copied — ⌘V to replace")
@@ -325,9 +424,11 @@ final class CapturePipeline {
             return
         }
 
-        historyStore.record(cleanedText: transformed, rawTranscript: command, mode: mode, context: context)
+        historyStore.record(cleanedText: transformed, rawTranscript: command, mode: mode, context: snapshot.context)
+        state.isCancellable = false
+        state.pipelinePhase = .inserting
 
-        guard field?.isEditable ?? true else {
+        guard snapshot.field?.isEditable ?? true else {
             transcriptFallback(transformed)
             recordMetrics(kind: .command, timing: timing, cleanupMs: cleanupMs, insertMs: 0, mode: mode, text: transformed)
             resetIdle()
@@ -335,11 +436,12 @@ final class CapturePipeline {
             return
         }
 
-        let insertStart = Date()
+        let insertStart = ContinuousClock.now
         do {
             // Selection is live, so a paste lands over it — no re-selection needed.
             _ = try await injector.inject(transformed)
         } catch {
+            guard generation == self.generation else { return }
             // Any insertion failure: leave the result on the clipboard so ⌘V
             // still replaces the selection.
             transcriptFallback(transformed)
@@ -348,38 +450,57 @@ final class CapturePipeline {
             showToast("Copied — ⌘V to replace")
             return
         }
-        recordMetrics(kind: .command, timing: timing, cleanupMs: cleanupMs, insertMs: Self.milliseconds(since: insertStart), mode: mode, text: transformed)
+        guard generation == self.generation else { return }
+        recordMetrics(kind: .command, timing: timing, cleanupMs: cleanupMs, insertMs: Self.milliseconds(insertStart.duration(to: .now)), mode: mode, text: transformed)
         resetIdle()
     }
 
-    private struct PipelineTiming {
-        let finalizeStart: Date
-        let captureTailMs: Int
+    // MARK: - Snapshot and metrics
+
+    private struct StartSnapshot: Sendable {
+        let context: CapturedContext
+        let bundleID: String?
+        let field: FocusedField?
+
+        static let empty = StartSnapshot(context: .empty, bundleID: nil, field: nil)
     }
 
-    private func recordMetrics(kind: DictationMetrics.Kind, timing: PipelineTiming, cleanupMs: Int, insertMs: Int, mode: Mode, text: String) {
+    private struct PipelineTiming {
+        let release: ContinuousClock.Instant
+        let captureTailMs: Int
+        let transcribeMs: Int
+        let engineID: String
+        let firstPartialMs: Int?
+    }
+
+    private func recordMetrics(kind: DictationMetrics.Kind, timing: PipelineTiming, cleanupMs: Int, insertMs: Int, skippedCleanup: Bool = false, mode: Mode, text: String) {
         metrics.record(DictationMetrics(
             timestamp: now(),
             kind: kind,
             audioDuration: state.lastRecordingDuration ?? 0,
             captureTailMs: timing.captureTailMs,
-            transcribeMs: Self.milliseconds(state.lastTranscribeDuration),
+            transcribeMs: timing.transcribeMs,
             cleanupMs: cleanupMs,
             insertMs: insertMs,
-            totalMs: Self.milliseconds(since: timing.finalizeStart),
-            engineID: transcriber.engineID,
+            totalMs: Self.milliseconds(timing.release.duration(to: .now)),
+            engineID: timing.engineID,
             modelID: mode.model ?? llmModelID(),
-            wordCount: text.split(whereSeparator: \.isWhitespace).count
+            wordCount: text.split(whereSeparator: \.isWhitespace).count,
+            firstPartialMs: timing.firstPartialMs,
+            skippedCleanup: skippedCleanup
         ))
     }
 
-    private static func milliseconds(_ interval: TimeInterval?) -> Int {
-        Int(((interval ?? 0) * 1000).rounded())
+    /// Truncates, so stage times never sum past the total measured around them.
+    private static func milliseconds(_ duration: Duration) -> Int {
+        Int(duration / .milliseconds(1))
     }
 
-    private static func milliseconds(since start: Date) -> Int {
-        milliseconds(Date().timeIntervalSince(start))
+    private static func seconds(_ duration: Duration) -> TimeInterval {
+        duration / .seconds(1)
     }
+
+    // MARK: - Terminal states
 
     private func showToast(_ message: String) {
         state.toastMessage = message
@@ -390,22 +511,37 @@ final class CapturePipeline {
         }
     }
 
-    private func cancelContextTask() {
-        contextTask?.cancel()
-        contextTask = nil
+    private func cancelContextTasks() {
+        snapshotTask?.cancel()
+        snapshotTask = nil
         selectionTask?.cancel()
         selectionTask = nil
     }
 
     private func resetIdle() {
-        state.recordingStartedAt = nil
-        state.audioLevel = 0
+        clearRecordingState()
         state.status = .idle
     }
 
     private func setError(_ message: String, permissions: Bool = false) {
         state.status = permissions ? .permissionsError(message) : .error(message)
+        clearRecordingState()
+    }
+
+    /// Stops feeding and observing the current session, which must already be
+    /// finished or cancelled.
+    private func endLiveSession() {
+        live?.close()
+        live = nil
+    }
+
+    /// Shared by idle and error. `retryTranscript` survives both.
+    private func clearRecordingState() {
+        endLiveSession()
         state.recordingStartedAt = nil
         state.audioLevel = 0
+        state.liveTranscript = nil
+        state.pipelinePhase = nil
+        state.isCancellable = false
     }
 }

@@ -7,6 +7,7 @@ final class AppCoordinator {
     var hotkeyMonitor: HotkeyMonitor?
     var pipeline: CapturePipeline?
     var transcriber: TranscriptionService?
+    var engines: TranscriptionEngines?
     var llm: LLMService?
     var modes: ModeRouter?
     var injector: ClipboardInjector?
@@ -126,6 +127,12 @@ final class AppCoordinator {
         self.soundPlayer = HotkeySoundPlayer(settings: settings)
         let transcriber = TranscriptionService()
         self.transcriber = transcriber
+        let engines = TranscriptionEngines(
+            settings: settings,
+            apple: AppleSpeechEngine(),
+            whisperKit: WhisperKitEngine(service: transcriber)
+        )
+        self.engines = engines
 
         // Modes
         let modes: [Mode]
@@ -164,7 +171,7 @@ final class AppCoordinator {
         let pipeline = CapturePipeline(
             state: state,
             capture: capture,
-            transcriber: transcriber,
+            engines: engines,
             llm: llm,
             modes: router,
             frontmost: frontmost,
@@ -175,6 +182,7 @@ final class AppCoordinator {
             selectionSnapshot: AXSelectionReader()
         )
         self.pipeline = pipeline
+        capture.onInterrupted = { [weak pipeline] in pipeline?.handleCaptureInterrupted() }
 
         let pill = RecordingPillWindow()
         pillWindow = pill

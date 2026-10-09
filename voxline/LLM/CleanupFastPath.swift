@@ -16,6 +16,7 @@ enum CleanupFastPath {
         let words = rawTokens
             .map { String($0.filter { !$0.isPunctuation }) }
             .filter { !$0.isEmpty }
+        guard words.contains(where: { $0.contains { $0.isLetter || $0.isNumber } }) else { return false }
         if words.contains(where: fillerTokens.contains) { return false }
         for (first, second) in zip(words, words.dropFirst()) where fillerPhrases.contains([first, second]) {
             return false

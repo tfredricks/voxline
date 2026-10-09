@@ -7,7 +7,7 @@ import Foundation
     // MARK: - Helpers
 
     private func pipeline(
-        transcribe: @escaping ([Float]) async throws -> String = { _ in "hello" },
+        transcript: Result<String, Error> = .success("hello"),
         cleanup: @escaping (String, Mode, CapturedContext) async throws -> String = { t, _, _ in t },
         inject: @escaping (String) async throws -> TextInsertionOutcome = { _ in
             TextInsertionOutcome(strategy: .clipboardPaste, verification: .unverified)
@@ -15,14 +15,18 @@ import Foundation
     ) -> (CapturePipeline, AppState, FakeCapture) {
         let state = AppState()
         let capture = FakeCapture()
-        capture.canned = [Float](repeating: 0.5, count: 16_000)
+        capture.pendingSamples = [Float](repeating: 0.5, count: 16_000)
+        let engine = FakeTranscriptionEngine()
+        let session = FakeTranscriptionSession()
+        session.finishResult = transcript
+        engine.nextSessions = [session]
         let suiteName = "voxline-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let p = CapturePipeline(
             state: state,
             capture: capture,
-            transcriber: FakeTranscriber(handler: transcribe),
+            engines: FakeEngineProvider(engine),
             llm: FakeLLM(handler: cleanup),
             modes: ModeRouter(modes: [Mode(bundleID: "*", displayName: "Default", prompt: "p", model: nil, temperature: nil)]),
             frontmost: FakeFrontmost(),
@@ -31,14 +35,15 @@ import Foundation
             historyStore: DictationHistoryStore(defaults: defaults),
             contextCapture: FakeContextCapture(),
             selectionSnapshot: FakeSelectionSnapshot(),
-            llmModelID: { "test-model" }
+            llmModelID: { "test-model" },
+            vocabulary: { [] },
+            skipShortUtterances: { false }
         )
         return (p, state, capture)
     }
 
     private func runOnce(_ p: CapturePipeline, _ state: AppState) async {
         p.startRecording()
-        state.lastPeakLevel = 0.5  // simulate the production onLevel callback firing
         await p.finalizeRecording()
     }
 
@@ -73,7 +78,7 @@ import Foundation
 
     @Test func transcription_failure_surfaces_actionable_message() async {
         struct TranscribeFail: Error {}
-        let (p, state, _) = pipeline(transcribe: { _ in throw TranscribeFail() })
+        let (p, state, _) = pipeline(transcript: .failure(TranscribeFail()))
         await runOnce(p, state)
         guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
         #expect(msg.lowercased().contains("transcription"))
@@ -107,14 +112,14 @@ import Foundation
     @Test func samples_with_zero_peak_surface_microphone_error() async {
         let state = AppState()
         let capture = FakeCapture()
-        capture.canned = [Float](repeating: 0.0, count: 16_000) // 1 second of pure silence
+        capture.pendingSamples = [Float](repeating: 0.0, count: 16_000) // 1 second of pure silence
         let suiteName = "voxline-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let p = CapturePipeline(
             state: state,
             capture: capture,
-            transcriber: FakeTranscriber(handler: { _ in "" }),
+            engines: FakeEngineProvider(FakeTranscriptionEngine()),
             llm: FakeLLM(handler: { t, _, _ in t }),
             modes: ModeRouter(modes: [Mode(bundleID: "*", displayName: "D", prompt: "p", model: nil, temperature: nil)]),
             frontmost: FakeFrontmost(),
@@ -123,12 +128,11 @@ import Foundation
             historyStore: DictationHistoryStore(defaults: defaults),
             contextCapture: FakeContextCapture(),
             selectionSnapshot: FakeSelectionSnapshot(),
-            llmModelID: { "test-model" }
+            llmModelID: { "test-model" },
+            vocabulary: { [] },
+            skipShortUtterances: { false }
         )
         p.startRecording()
-        // Do NOT set lastPeakLevel above 0 — simulating a silent mic where the
-        // onLevel callback never gets a non-zero value.
-        state.lastPeakLevel = 0
         await p.finalizeRecording()
         guard case .error(let msg) = state.status else {
             Issue.record("Expected .error, got \(state.status)"); return
@@ -139,30 +143,22 @@ import Foundation
 
 // MARK: - Test fakes
 //
-// AudioCapturing / Transcribing / ClipboardInjecting are AnyObject-constrained
+// AudioCapturing / ClipboardInjecting are AnyObject-constrained
 // (and @MainActor). LLMServing / FrontmostAppProviding are Sendable.
 
 @MainActor
 private final class FakeCapture: AudioCapturing {
-    var canned: [Float] = []
+    var pendingSamples: [Float] = [Float](repeating: 0.1, count: 8_000)
     var onLevel: ((Float) -> Void)?
     var onTapCallback: ((Int) -> Void)?
     var onSamples: (@Sendable ([Float]) -> Void)?
     var onInterrupted: (() -> Void)?
     func prewarm() {}
     func stopPrewarm() {}
-    func start() throws {}
-    func stop() {}
-    func takeSamples() -> [Float] { defer { canned = [] }; return canned }
-}
-
-@MainActor
-private final class FakeTranscriber: Transcribing {
-    let handler: ([Float]) async throws -> String
-    init(handler: @escaping ([Float]) async throws -> String) { self.handler = handler }
-    func transcribe(samples: [Float]) async throws -> String {
-        try await handler(samples)
+    func start() throws {
+        if !pendingSamples.isEmpty { onSamples?(pendingSamples) }
     }
+    func stop() {}
 }
 
 private final class FakeLLM: LLMServing, @unchecked Sendable {

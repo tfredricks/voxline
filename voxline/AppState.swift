@@ -36,6 +36,13 @@ extension AppStatus {
     }
 }
 
+/// Which post-recording step is running while status is `.thinking`.
+enum PipelinePhase: Equatable {
+    case transcribing
+    case cleaning
+    case inserting
+}
+
 @Observable
 @MainActor
 final class AppState {
@@ -52,7 +59,7 @@ final class AppState {
     var audioLevel: Float = 0
 
     /// Most recently produced raw (pre-cleanup) transcript. Set by
-    /// CapturePipeline after a successful Whisper transcription; scrubbed to
+    /// CapturePipeline after a successful transcription; scrubbed to
     /// nil at the start of each new recording so spoken passwords/2FA codes
     /// don't linger in process memory.
     var lastTranscript: String?
@@ -71,18 +78,13 @@ final class AppState {
     /// Set at `startRecording`; only meaningful while `status == .recording`.
     var recordingIsCommand: Bool = false
 
-    /// Peak audio level observed during the most recent recording. Stays
-    /// at 0 if the mic was muted/denied or the input device produced silence.
-    /// Read by CapturePipeline's silent-capture detector.
-    var lastPeakLevel: Float = 0
-
     /// Duration of the most recent recording in seconds, derived from the
-    /// sample count delivered to WhisperKit (samples / 16_000). Nil until the
-    /// first recording finalizes.
+    /// sample count captured at 16 kHz. Nil until the first recording
+    /// finalizes.
     var lastRecordingDuration: TimeInterval?
 
-    /// Wall-clock seconds spent in the local WhisperKit transcribe call on
-    /// the most recent dictation. Nil until the first transcribe completes.
+    /// Seconds the transcription session's `finish()` took on the most recent
+    /// dictation. Nil until the first transcription completes.
     var lastTranscribeDuration: TimeInterval?
 
     /// Wall-clock seconds spent in the LLM cleanup call on the most recent
@@ -90,4 +92,18 @@ final class AppState {
     /// transcript was empty).
     var lastCleanupDuration: TimeInterval?
 
+    /// The engine's evolving transcript while recording, then the final
+    /// transcript while thinking; nil once idle.
+    var liveTranscript: TranscriptPartial?
+
+    /// Step in progress while `.thinking`; nil otherwise.
+    var pipelinePhase: PipelinePhase?
+
+    /// Raw transcript of the last dictation, kept after it finishes (or fails)
+    /// so it can be cleaned and inserted again. Cleared when a new recording
+    /// starts.
+    var retryTranscript: String?
+
+    /// True while Esc may cancel: recording, and thinking until insert begins.
+    var isCancellable: Bool = false
 }

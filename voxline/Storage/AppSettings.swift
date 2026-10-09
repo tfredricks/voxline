@@ -14,6 +14,7 @@ struct AppSettings {
         static let hasCompletedFirstRun = "voxline.firstRun.completed"
         static let playHotkeySounds = "voxline.sounds.hotkey"
         static let transcriptionEngine = "voxline.transcription.engine"
+        static let skipShortUtterances = "voxline.llm.skipShortUtterances"
     }
 
     let defaults: UserDefaults
@@ -143,5 +144,12 @@ struct AppSettings {
             return id
         }
         set { defaults.set(newValue.rawValue, forKey: Key.transcriptionEngine) }
+    }
+
+    /// Hidden switch (no Settings UI): when true, short transcripts with no
+    /// filler words skip LLM cleanup. See `CleanupFastPath`.
+    var skipShortUtterances: Bool {
+        get { defaults.bool(forKey: Key.skipShortUtterances) }
+        set { defaults.set(newValue, forKey: Key.skipShortUtterances) }
     }
 }

@@ -33,8 +33,6 @@ import Testing
 
         #expect(recorder.chunks == expected)
         #expect(recorder.chunks.last == tail)
-        #expect(delivery.takeSamples() == expected.flatMap { $0 })
-        #expect(delivery.takeSamples().isEmpty)
     }
 
     @Test func deliver_after_the_tail_is_a_no_op() throws {
@@ -43,11 +41,9 @@ import Testing
         _ = delivery.deliver(try TestAudio.sineBuffer(frames: 4_800))
         delivery.deliverTail()
         let deliveredBefore = recorder.chunks.count
-        _ = delivery.takeSamples()
 
         #expect(delivery.deliver(try TestAudio.sineBuffer(frames: 4_800, startingAt: 4_800)).isEmpty)
         #expect(delivery.deliverTail().isEmpty)
         #expect(recorder.chunks.count == deliveredBefore)
-        #expect(delivery.takeSamples().isEmpty)
     }
 }

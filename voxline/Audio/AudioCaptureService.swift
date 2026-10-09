@@ -8,8 +8,8 @@ import Foundation
 /// audio thread as it arrives. stop() flushes the resampler's tail through the
 /// same path before it returns.
 ///
-/// Audio is *never* written to disk. Converted samples are also held in memory
-/// until the consumer drains them via takeSamples().
+/// Audio is *never* written to disk, and this service keeps none of it: each
+/// chunk lives only as long as `onSamples` holds it.
 @MainActor
 final class AudioCaptureService {
 
@@ -30,8 +30,8 @@ final class AudioCaptureService {
     /// Receives every converted 16 kHz chunk, synchronously and in order, on
     /// the audio tap thread; the flushed tail arrives on the main actor inside
     /// stop(). Read once per start(). Must be cheap and must never wait on the
-    /// main actor: stop() and takeSamples() take the same lock and wait for an
-    /// in-flight delivery to finish.
+    /// main actor: stop() takes the same lock and waits for an in-flight
+    /// delivery to finish.
     var onSamples: (@Sendable ([Float]) -> Void)?
 
     /// Fires on the main actor when an input configuration change (device
@@ -93,7 +93,7 @@ final class AudioCaptureService {
     /// down). Starting AVAudioEngine is the expensive part of start() —
     /// hundreds of ms on Bluetooth inputs — so paying it before the second
     /// modifier lands means the recording captures from the first syllable.
-    /// No tap is installed and the sample buffer is untouched. Errors are
+    /// No tap is installed and nothing is delivered. Errors are
     /// swallowed here and surface properly from start() if the user completes
     /// the chord.
     func prewarm() {
@@ -202,11 +202,6 @@ final class AudioCaptureService {
         currentEpoch &+= 1
     }
 
-    /// Drain and return the converted samples buffered so far. Subsequent calls return [].
-    func takeSamples() -> [Float] {
-        delivery?.takeSamples() ?? []
-    }
-
     // MARK: - Private
 
     private func handleConfigurationChange() {
@@ -229,7 +224,6 @@ final class SampleDelivery: @unchecked Sendable {
     private let lock = NSLock()
     private let converter: CaptureConverter
     private let onSamples: (@Sendable ([Float]) -> Void)?
-    private var samples: [Float] = []
 
     init(converter: CaptureConverter, onSamples: (@Sendable ([Float]) -> Void)?) {
         self.converter = converter
@@ -245,17 +239,9 @@ final class SampleDelivery: @unchecked Sendable {
         lock.withLock { publish(converter.flushAndClose()) }
     }
 
-    func takeSamples() -> [Float] {
-        lock.withLock {
-            defer { samples = [] }
-            return samples
-        }
-    }
-
     private func publish(_ chunk: [Float]) -> [Float] {
         guard !chunk.isEmpty else { return chunk }
         onSamples?(chunk)
-        samples.append(contentsOf: chunk)
         return chunk
     }
 }
