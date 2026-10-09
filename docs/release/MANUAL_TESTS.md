@@ -356,14 +356,19 @@ Left Control.
       with the command chord in Notes, TextEdit, Slack, and Chrome (a text
       area on a web page). Each time the selection is deleted: `strategy=ax`
       in Notes and TextEdit, `strategy=typing` in Slack and Chrome (voxline
-      presses the delete key). If Slack shows "Couldn't delete in place —
-      nothing was changed" instead, note it: its selection was readable only
-      through ⌘C.
+      presses the delete key). If Slack or Chrome shows "Couldn't delete in
+      place — nothing was changed" instead, note it with the reason from
+      `scripts/tail-logs.sh --debug --last 2m paste`: "no selection to
+      delete" means the selection was readable only through ⌘C, and "isn't
+      editable" means the field doesn't report its value as settable.
 - [ ] In Terminal, type a few characters at the prompt without pressing
       Return, select some earlier output, and say "delete this". The toast
       reads "Couldn't delete in place — nothing was changed" and the prompt
       line is untouched. Repeat in iTerm2. After all of these, ⌘V pastes the
       word you copied: the clipboard never changed.
+- [ ] Select text on a read-only Safari page, say "delete this": nothing is
+      deleted, the page doesn't navigate, and the toast says nothing was
+      changed.
 - [ ] VS Code, nothing selected, cursor on a non-empty line: run a command that
       inserts text ("add a TODO comment"). The cursor's line is not replaced
       or deleted. The built-in untrusted-field list for VS Code and Cursor is

@@ -96,10 +96,12 @@ final class TextInserter: TextInserting {
     /// element is focused (else `focusMoved`) with the same selection (else
     /// `fieldChanged`). It is verified like typing, reported as `.typing`,
     /// and never falls through. With no selection the element shows (one
-    /// only Cmd+C could read), or no accessible focus, that step is
-    /// `cannotTarget` and posts nothing. In a terminal
-    /// (`InsertionPlan.isTerminal`) an empty `text` is `cannotTarget` before
-    /// anything is read: the selection there is scrollback.
+    /// only Cmd+C could read), no accessible focus, or an element whose
+    /// kAXValue isn't settable (read-only content, such as a web page or a
+    /// message being read), that step is `cannotTarget` and posts nothing.
+    /// In a terminal (`InsertionPlan.isTerminal`) an empty `text` is
+    /// `cannotTarget` before anything is read: the selection there is
+    /// scrollback.
     ///
     /// Once the calling task is cancelled nothing more is selected, posted, or
     /// written: the insert checks on entry, before each strategy, and after
@@ -178,6 +180,10 @@ final class TextInserter: TextInserting {
             if text.isEmpty, strategy != .accessibility {
                 guard let deletion, let element else {
                     AppLog.paste.debug("insert: no selection to delete; posting nothing")
+                    return notInserted(.cannotTarget)
+                }
+                guard element.isSettable(kAXValueAttribute) == .value(true) else {
+                    AppLog.paste.debug("insert: the focused element isn't editable; posting no delete key")
                     return notInserted(.cannotTarget)
                 }
                 return await deleteSelection(deletion, in: element, trigger: trigger)

@@ -48,6 +48,7 @@ import Testing
     private func editableFake(value: [AXRead<String>] = [.value("hello")]) -> FakeAXTextElement {
         let fake = FakeAXTextElement()
         fake.settable[kAXSelectedTextAttribute] = .value(true)
+        fake.settable[kAXValueAttribute] = .value(true)
         fake.strings[kAXValueAttribute] = value
         fake.ranges[kAXSelectedTextRangeAttribute] = .value(UTF16Range(location: 5, length: 0))
         return fake
@@ -767,6 +768,41 @@ import Testing
 
         #expect(outcome == .notInserted(.fieldChanged))
         #expect(h.events.read() == ["gate"])
+    }
+
+    @Test(arguments: ["com.apple.Safari", "com.apple.mail"])
+    func a_selection_in_content_that_is_not_editable_is_never_deleted(bundleID: String) async {
+        for valueSettable in [AXRead<Bool>.value(false), .absent, .failed] {
+            let fake = selectedFake(value: [.value("hello world"), .value("hello ")])
+            fake.settable[kAXSelectedTextAttribute] = .value(false)
+            fake.settable[kAXValueAttribute] = valueSettable
+            let h = makeHarness(element: fake)
+            defer { h.board.releaseGlobally() }
+
+            let outcome = await insert(h, "", bundleID: bundleID)
+
+            #expect(outcome == .notInserted(.cannotTarget), "\(valueSettable)")
+            #expect(h.events.read().isEmpty)
+            #expect(h.pastes.read() == 0)
+            #expect(h.typed.read().isEmpty)
+            #expect(fake.stringSets.isEmpty)
+            #expect(h.board.string(forType: .string) == "ORIGINAL")
+        }
+    }
+
+    @Test func a_rejected_ax_delete_in_content_that_is_not_editable_posts_no_delete() async {
+        let fake = selectedFake(value: [.value("hello world")])
+        fake.settable[kAXValueAttribute] = .value(false)
+        fake.setResults = [.failure]
+        let h = makeHarness(element: fake)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "")
+
+        #expect(outcome == .notInserted(.cannotTarget))
+        #expect(fake.stringSets.map(\.value) == [""])
+        #expect(h.events.read().isEmpty)
+        #expect(h.pastes.read() == 0)
     }
 
     // MARK: - Terminals
