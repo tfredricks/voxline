@@ -45,6 +45,7 @@ struct RecordingPillView: View {
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .monospacedDigit()
             }
+            .frame(height: 16)
             if let transcript {
                 transcriptText(transcript)
             }
@@ -73,6 +74,7 @@ struct RecordingPillView: View {
         if let toast = state.toastMessage {
             Text(toast)
                 .font(.system(size: 11, weight: .medium, design: .rounded))
+                .lineLimit(1)
         }
     }
 

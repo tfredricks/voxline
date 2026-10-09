@@ -43,8 +43,10 @@ final class RecordingPillWindow {
         guard let panel else { return }
         let content = PillLayout.content(status: state.status, hasToast: state.toastMessage != nil)
         guard content != .hidden else {
-            panel.orderOut(nil)
-            anchorScreen = nil
+            if panel.isVisible {
+                panel.orderOut(nil)
+                anchorScreen = nil
+            }
             return
         }
 
@@ -84,10 +86,13 @@ final class RecordingPillWindow {
         NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
     }
 
+    private static let toastWidthSlack: CGFloat = 4
+
+    /// Width of `toast` in the font `RecordingPillView` draws it in.
     private static func toastTextWidth(_ toast: String) -> CGFloat {
-        NSAttributedString(
-            string: toast,
-            attributes: [.font: NSFont.systemFont(ofSize: 11, weight: .medium)]
-        ).size().width
+        let base = NSFont.systemFont(ofSize: 11, weight: .medium)
+        let font = base.fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: 11) } ?? base
+        let width = NSAttributedString(string: toast, attributes: [.font: font]).size().width
+        return ceil(width) + toastWidthSlack
     }
 }
