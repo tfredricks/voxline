@@ -111,6 +111,7 @@ import Testing
             }),
             gate: gate,
             postRightArrow: { events.mutate { $0.append("arrow") } },
+            postDelete: { events.mutate { $0.append("delete") } },
             overrides: { InsertionPlan.Overrides() },
             sleep: { _ in }
         )
@@ -555,6 +556,125 @@ import Testing
         #expect(h.board.string(forType: .string) == "ORIGINAL")
     }
 
+    // MARK: - Empty replacement
+
+    private func selectedFake(value: [AXRead<String>]) -> FakeAXTextElement {
+        let fake = editableFake(value: value)
+        fake.ranges[kAXSelectedTextRangeAttribute] = .value(UTF16Range(location: 6, length: 5))
+        return fake
+    }
+
+    @Test func empty_replacement_of_a_range_on_paste_first_deletes_it() async {
+        let fake = editableFake(value: [.value("hello world"), .value("hello world"), .value("hello ")])
+        fake.ranges[kAXSelectedTextRangeAttribute] = .value(UTF16Range(location: 0, length: 0))
+        let h = makeHarness(element: SelectionFollowingElement(fake))
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "", at: .range(UTF16Range(location: 6, length: 5), expected: "world"),
+                                   bundleID: Self.slack)
+
+        #expect(outcome == .inserted(.typing, verified: true))
+        #expect(fake.rangeSets.map(\.value) == [UTF16Range(location: 6, length: 5)])
+        #expect(h.events.read() == ["delete"])
+        #expect(h.pastes.read() == 0)
+        #expect(h.typed.read().isEmpty)
+        #expect(fake.stringSets.isEmpty)
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
+    @Test func empty_replacement_of_a_live_selection_on_paste_first_deletes_it() async {
+        let fake = selectedFake(value: [.value("hello world"), .value("hello ")])
+        let h = makeHarness(element: fake)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "", bundleID: Self.slack)
+
+        #expect(outcome == .inserted(.typing, verified: true))
+        #expect(h.events.read() == ["delete"])
+        #expect(h.pastes.read() == 0)
+    }
+
+    @Test func a_selection_seen_only_through_selected_text_is_deleted() async {
+        let fake = editableFake(value: [.value("hello world"), .value("hello ")])
+        fake.ranges[kAXSelectedTextRangeAttribute] = .absent
+        fake.strings[kAXSelectedTextAttribute] = [.value("world")]
+        let h = makeHarness(element: fake)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "", bundleID: Self.slack)
+
+        #expect(outcome == .inserted(.typing, verified: true))
+        #expect(h.events.read() == ["delete"])
+    }
+
+    @Test func empty_text_with_nothing_selected_posts_no_delete() async {
+        let fake = editableFake()
+        fake.strings[kAXSelectedTextAttribute] = [.value("")]
+        let h = makeHarness(element: fake)
+        defer { h.board.releaseGlobally() }
+
+        _ = await insert(h, "", bundleID: Self.slack)
+
+        #expect(!h.events.read().contains("delete"))
+    }
+
+    @Test func empty_text_without_accessible_focus_posts_no_delete() async {
+        let h = makeHarness(focused: { .absent })
+        defer { h.board.releaseGlobally() }
+
+        _ = await insert(h, "", bundleID: Self.slack)
+
+        #expect(!h.events.read().contains("delete"))
+    }
+
+    @Test func empty_replacement_on_an_ax_first_app_writes_through_ax() async {
+        let fake = selectedFake(value: [.value("hello world"), .value("hello world"), .value("hello ")])
+        let h = makeHarness(element: fake)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "", at: .range(UTF16Range(location: 6, length: 5), expected: "world"))
+
+        #expect(outcome == .inserted(.accessibility, verified: true))
+        #expect(fake.stringSets.map(\.value) == [""])
+        #expect(h.events.read().isEmpty)
+    }
+
+    @Test func a_rejected_ax_delete_falls_to_the_delete_key_not_a_paste() async {
+        let fake = selectedFake(value: [.value("hello world"), .value("hello world"), .value("hello ")])
+        fake.setResults = [.failure]
+        let h = makeHarness(element: fake)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "")
+
+        #expect(outcome == .inserted(.typing, verified: true))
+        #expect(fake.stringSets.map(\.value) == [""])
+        #expect(h.events.read() == ["delete"])
+        #expect(h.pastes.read() == 0)
+    }
+
+    @Test func delete_waits_for_the_release_gate() async {
+        let fake = selectedFake(value: [.value("hello world"), .value("hello ")])
+        let h = makeHarness(element: fake, flags: [.maskShift, []])
+        defer { h.board.releaseGlobally() }
+
+        _ = await insert(h, "", bundleID: Self.slack, trigger: [.shift])
+
+        #expect(h.events.read() == ["gate", "delete"])
+    }
+
+    @Test func a_delete_that_changes_nothing_is_unverified_and_never_falls_through() async {
+        let fake = selectedFake(value: [.value("hello world")])
+        let h = makeHarness(element: fake)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, "", bundleID: Self.slack)
+
+        #expect(outcome == .inserted(.typing, verified: false))
+        #expect(h.events.read() == ["delete"])
+        #expect(h.typed.read().isEmpty)
+    }
+
     // MARK: - Cancellation
 
     @Test(arguments: [InsertTarget.liveSelection, .afterLiveSelection])
@@ -602,6 +722,17 @@ import Testing
         defer { h.board.releaseGlobally() }
 
         let outcome = await Task { await insert(h, at: .afterLiveSelection, trigger: [.option]) }.value
+
+        #expect(outcome == .notInserted(.cancelled))
+        #expect(h.events.read() == ["gate"])
+    }
+
+    @Test func cancel_while_waiting_for_the_release_posts_no_delete() async {
+        let fake = selectedFake(value: [.value("hello world")])
+        let h = makeHarness(element: fake, flags: [.maskShift, []], cancelInGate: true)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await Task { await insert(h, "", bundleID: Self.slack, trigger: [.shift]) }.value
 
         #expect(outcome == .notInserted(.cancelled))
         #expect(h.events.read() == ["gate"])

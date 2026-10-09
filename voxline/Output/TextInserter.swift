@@ -45,6 +45,7 @@ final class TextInserter: TextInserting {
     private let typing: TypingInjector
     private let gate: ModifierReleaseGate
     private let postRightArrow: @Sendable () -> Void
+    private let postDelete: @Sendable () -> Void
     private let overrides: @Sendable () -> InsertionPlan.Overrides
     private let sleep: @Sendable (Duration) async throws -> Void
     private let typingVerifyDelay: Duration
@@ -58,6 +59,7 @@ final class TextInserter: TextInserting {
          typing: TypingInjector = TypingInjector(),
          gate: ModifierReleaseGate = ModifierReleaseGate(),
          postRightArrow: @escaping @Sendable () -> Void = { SyntheticKeys.postRightArrow() },
+         postDelete: @escaping @Sendable () -> Void = { SyntheticKeys.postDelete() },
          overrides: @escaping @Sendable () -> InsertionPlan.Overrides = { InsertionPlan.Overrides.load(from: .standard) },
          sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
          typingVerifyDelay: Duration = .milliseconds(150)) {
@@ -68,6 +70,7 @@ final class TextInserter: TextInserting {
         self.typing = typing
         self.gate = gate
         self.postRightArrow = postRightArrow
+        self.postDelete = postDelete
         self.overrides = overrides
         self.sleep = sleep
         self.typingVerifyDelay = typingVerifyDelay
@@ -84,6 +87,14 @@ final class TextInserter: TextInserting {
     /// VM or remote-desktop window) gets an unverified paste, then typing, as
     /// 0.5.0 did, unless `expectedElement` was given (`focusMoved`) or the
     /// target is a range it can't check (`cannotTarget`).
+    ///
+    /// An empty `text` that replaces a selection the element shows as
+    /// non-empty (a `.range` of non-zero length, or a live selection) is a
+    /// deletion. An AX write of "" deletes it as usual, but paste and typing
+    /// can't express one, so the first of them in the plan posts a single
+    /// Backspace instead, after the release gate. It is verified like typing,
+    /// reported as `.typing`, and never falls through. An empty `text` with
+    /// no selection, or no accessible focus, posts no Backspace.
     ///
     /// Once the calling task is cancelled nothing more is selected, posted, or
     /// written: the insert checks on entry, before each strategy, and after
@@ -124,8 +135,9 @@ final class TextInserter: TextInserting {
         )
         var plan = InsertionPlan.strategies(for: traits, overrides: overrides())
         if target == .afterLiveSelection { plan.removeAll { $0 == .accessibility } }
-        AppLog.paste.debug("insert plan: \(plan.map(\.rawValue).joined(separator: ", "), privacy: .public)")
-        return await run(plan, text: text, element: element, trigger: trigger)
+        let deletesSelection = text.isEmpty && Self.showsSelection(for: target, in: element)
+        AppLog.paste.debug("insert plan: \(plan.map(\.rawValue).joined(separator: ", "), privacy: .public)\(deletesSelection ? " (deleting)" : "", privacy: .public)")
+        return await run(plan, text: text, element: element, trigger: trigger, deletesSelection: deletesSelection)
     }
 
     func waitForClipboardRestore() async {
@@ -150,10 +162,13 @@ final class TextInserter: TextInserting {
     /// With no `element`, nothing can be verified: a posted paste or typed
     /// text is `inserted(_, verified: false)`, and an AX write is skipped.
     private func run(_ plan: [InsertStrategy], text: String, element: (any AXTextElement)?,
-                     trigger: ModifierFamilies) async -> InsertOutcome {
+                     trigger: ModifierFamilies, deletesSelection: Bool = false) async -> InsertOutcome {
         var failures: [String] = []
         for strategy in plan {
             guard !Task.isCancelled else { return notInserted(.cancelled) }
+            if deletesSelection, strategy != .accessibility, let element {
+                return await deleteSelection(in: element, trigger: trigger)
+            }
             switch strategy {
             case .accessibility:
                 guard let element else { continue }
@@ -198,6 +213,32 @@ final class TextInserter: TextInserting {
         }
         AppLog.paste.info("insert: all strategies failed: \(failures.joined(separator: "; "), privacy: .public)")
         return .failed(.allStrategiesFailed(failures))
+    }
+
+    private func deleteSelection(in element: any AXTextElement, trigger: ModifierFamilies) async -> InsertOutcome {
+        try? await gate.wait(for: trigger)
+        guard !Task.isCancelled else { return notInserted(.cancelled) }
+        let before = element.string(kAXValueAttribute).value
+        postDelete()
+        try? await sleep(typingVerifyDelay)
+        let after = element.string(kAXValueAttribute).value
+        guard let before, let after else { return inserted(.typing, verified: false) }
+        return inserted(.typing, verified: before != after)
+    }
+
+    /// A `.range` has been selected and checked by `select`; a live
+    /// selection counts only when the element reports it, by range or by
+    /// selected text.
+    private static func showsSelection(for target: InsertTarget, in element: any AXTextElement) -> Bool {
+        switch target {
+        case .range(let range, _):
+            return range.length > 0
+        case .afterLiveSelection:
+            return false
+        case .liveSelection:
+            if let range = element.range(kAXSelectedTextRangeAttribute).value { return range.length > 0 }
+            return !(element.string(kAXSelectedTextAttribute).value ?? "").isEmpty
+        }
     }
 
     private func select(_ range: UTF16Range, expected: String, in element: any AXTextElement) -> NotInsertedReason? {

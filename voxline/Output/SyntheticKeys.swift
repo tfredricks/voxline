@@ -38,6 +38,13 @@ enum SyntheticKeys {
         postKey(rightArrowKeyCode, flags: [])
     }
 
+    /// Backspace, which deletes a non-empty selection in any text view.
+    /// Called on the main thread like every insert keystroke; `kVK_Delete` is
+    /// the same key on every layout, so it needs no Text Input Sources lookup.
+    static func postDelete() {
+        postKey(CGKeyCode(kVK_Delete), flags: [])
+    }
+
     /// One tagged keyDown/keyUp pair carrying `units` via
     /// `keyboardSetUnicodeString`, from `.combinedSessionState`. Callers keep
     /// each chunk to at most 20 UTF-16 units (`TypingChunker`'s `maxUnits`);
