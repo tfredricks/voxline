@@ -157,6 +157,11 @@ final class GeneralSettingsViewModel {
         return !key.isBlank
     }
 
+    /// The model commands use when `commandModel` is empty.
+    var cleanupModelPlaceholder: String { settings.llmModel }
+
+    var chords: ChordSet { ChordSet(dictation: chord, command: commandChord) }
+
     var commandModeEnabled: Bool {
         get { commandChord != nil }
         set {

@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum SettingsAnchor: Hashable {
-    case hotkey, microphone, recognition, cleanup, customVocabulary, feedback
+    case hotkey, microphone, recognition, cleanup, command, customVocabulary, feedback
 }
 
 struct SettingsStatusStrip: View {

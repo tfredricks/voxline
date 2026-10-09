@@ -534,6 +534,26 @@ import Foundation
         #expect(AppSettings(defaults: d).commandModel == nil)
     }
 
+    @Test func command_model_placeholder_is_the_cleanup_model() {
+        let d = defaults()
+        let vm = hermeticVM(AppSettings(defaults: d))
+        #expect(vm.cleanupModelPlaceholder == LLMProvider.anthropic.defaultModel)
+
+        vm.provider = .openai
+        #expect(vm.cleanupModelPlaceholder == LLMProvider.openai.defaultModel)
+
+        var elsewhere = AppSettings(defaults: d)
+        elsewhere.llmModel = "gpt-5"
+        #expect(vm.cleanupModelPlaceholder == "gpt-5")
+    }
+
+    @Test func chords_combine_the_dictation_and_command_chords() {
+        let vm = hermeticVM(AppSettings(defaults: defaults()))
+        #expect(vm.chords == ChordSet(dictation: vm.chord, command: vm.commandChord))
+        vm.commandModeEnabled = false
+        #expect(vm.chords == ChordSet(dictation: vm.chord, command: nil))
+    }
+
     @Test func reset_leaves_presets_alone() {
         let d = defaults()
         let custom = [PresetShortcut(

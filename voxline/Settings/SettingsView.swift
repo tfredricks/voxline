@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Environment(UpdateService.self) private var updateService
     @State private var generalVM: GeneralSettingsViewModel
     @State private var apiKeysVM: APIKeysSettingsViewModel
+    @State private var commandVM: CommandSettingsViewModel
     @State private var levelMonitor = MicLevelMonitor()
     @State private var status: SettingsStatusViewModel
     @State private var vocabularyVM: CustomVocabularyListViewModel
@@ -18,10 +19,12 @@ struct SettingsView: View {
     init(
         generalVM: GeneralSettingsViewModel,
         apiKeysVM: APIKeysSettingsViewModel,
+        commandVM: CommandSettingsViewModel,
         engineReadiness: @escaping @MainActor (EngineID) async -> EngineReadiness?
     ) {
         _generalVM = State(wrappedValue: generalVM)
         _apiKeysVM = State(wrappedValue: apiKeysVM)
+        _commandVM = State(wrappedValue: commandVM)
         _status = State(wrappedValue: SettingsStatusViewModel(
             general: generalVM,
             keys: apiKeysVM,
@@ -150,6 +153,9 @@ struct SettingsView: View {
 
                     CleanupSection(general: generalVM, keys: apiKeysVM)
                         .id(SettingsAnchor.cleanup)
+
+                    CommandSection(general: generalVM, command: commandVM)
+                        .id(SettingsAnchor.command)
 
                     CustomVocabularyListView(viewModel: vocabularyVM)
                         .id(SettingsAnchor.customVocabulary)

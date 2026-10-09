@@ -51,13 +51,20 @@ struct voxlineApp: App {
         .menuBarExtraStyle(.menu)
 
         Settings {
+            let generalVM = GeneralSettingsViewModel(onApply: { [weak coordinator = delegate.coordinator] snapshot in
+                coordinator?.apply(snapshot)
+            })
             SettingsView(
-                generalVM: GeneralSettingsViewModel(onApply: { [weak coordinator = delegate.coordinator] snapshot in
-                    coordinator?.apply(snapshot)
-                }),
+                generalVM: generalVM,
                 apiKeysVM: APIKeysSettingsViewModel(onOpenAIKeyChange: { [weak coordinator = delegate.coordinator] in
                     coordinator?.openAIKeyDidChange()
                 }),
+                commandVM: CommandSettingsViewModel(
+                    chords: { [weak generalVM] in generalVM?.chords ?? AppSettings().chords },
+                    onChange: { [weak coordinator = delegate.coordinator] in
+                        coordinator?.presetsDidChange()
+                    }
+                ),
                 engineReadiness: { [weak coordinator = delegate.coordinator] id in
                     await coordinator?.readiness(of: id)
                 }

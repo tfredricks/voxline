@@ -16,7 +16,10 @@ final class AppCoordinator {
     var soundPlayer: HotkeySoundPlayer?
 
     private var pillWindow: RecordingPillWindow?
-    private var escapeInterceptor: EscapeKeyInterceptor?
+    private var keyInterceptor: KeyInterceptor?
+    private let presetStore = PresetStore()
+    private var presetMap: [KeyCombo: UUID] = [:]
+    private var frontmostObserver: NSObjectProtocol?
     private var shortcutCaptureSuspender: ShortcutCaptureSuspender?
     private var downloadWindow: ModelDownloadWindow?
     private var modelPrepTask: Task<Void, Never>?
@@ -235,10 +238,20 @@ final class AppCoordinator {
             guard state?.status == .recording else { return }
             self?.pipeline?.capHit = true
         }
-        escapeInterceptor = EscapeKeyInterceptor(onEscape: { [weak self, weak state] in
-            self?.pipeline?.cancel()
-            if let state { self?.pillWindow?.updateVisibility(state: state) }
-        })
+        keyInterceptor = KeyInterceptor(
+            onEscape: { [weak self, weak state] in
+                self?.pipeline?.cancel()
+                if let state { self?.pillWindow?.updateVisibility(state: state) }
+            },
+            onPreset: { [weak self] id in
+                guard let self, let preset = self.presetStore.load().first(where: { $0.id == id }) else { return }
+                // The hotkey tap never sees a swallowed key, so a preset's held
+                // modifier can leave a chord armed with the mic prewarmed.
+                self.pipeline?.cancelCapturePrewarm()
+                Task { await self.pipeline?.runPreset(preset) }
+            }
+        )
+        presetMap = KeyInterceptor.presetMap(presetStore.load())
         pillWindow?.onRetry = { [weak self] in self?.retryLastDictation() }
         // Accessibility is the hard requirement for our session-level
         // CGEventTap with .listenOnly on .flagsChanged. Input Monitoring is
@@ -273,12 +286,19 @@ final class AppCoordinator {
             // restart the app.
             state.status = .permissionsError("Hotkey monitoring requires Accessibility permission. Grant it in System Settings → Privacy & Security — Voxline will pick it up automatically.")
         }
-        reconcileEscapeInterceptor(state: state)
+        reconcileKeyInterceptor()
         observeCancellableChanges(state: state)
+        observeFrontmostApp()
         shortcutCaptureSuspender = ShortcutCaptureSuspender(
             state: state,
-            suspend: { [weak self] in self?.hotkeyMonitor?.suspend() },
-            resume: { [weak self] in self?.hotkeyMonitor?.resume() }
+            suspend: { [weak self] in
+                self?.hotkeyMonitor?.suspend()
+                self?.refreshInterceptorConfig()
+            },
+            resume: { [weak self] in
+                self?.hotkeyMonitor?.resume()
+                self?.refreshInterceptorConfig()
+            }
         )
 
         startPermissionAndStateLoop(state: state)
@@ -354,31 +374,57 @@ final class AppCoordinator {
                 state.status = .permissionsError("Accessibility permission was revoked. Re-grant it in System Settings → Privacy & Security; Voxline will recover automatically.")
             }
         }
-        reconcileEscapeInterceptor(state: state)
+        reconcileKeyInterceptor()
     }
 
-    /// Keeps the Esc tap installed exactly while the hotkey tap is. A tap
-    /// that can't be created leaves Esc cancel unavailable and is retried on
-    /// the next tick.
-    private func reconcileEscapeInterceptor(state: AppState) {
-        guard let interceptor = escapeInterceptor, let monitor = hotkeyMonitor else { return }
+    /// Keeps the key interceptor installed exactly while the hotkey tap is.
+    /// A tap that can't be created leaves Esc cancel and presets unavailable
+    /// and is retried, at most every `KeyInterceptor.installRetryInterval`.
+    private func reconcileKeyInterceptor() {
+        guard let interceptor = keyInterceptor, let monitor = hotkeyMonitor else { return }
         if monitor.isTapInstalled && !interceptor.isInstalled {
-            if interceptor.install() {
-                syncEscapeInterceptor(state: state)
-            }
+            interceptor.install()
         } else if !monitor.isTapInstalled && interceptor.isInstalled {
             interceptor.uninstall()
         }
+        refreshInterceptorConfig()
     }
 
-    /// Arms Esc while the pipeline can cancel, letting it through with
-    /// either chord's modifiers held, since a chord is down while recording.
-    private func syncEscapeInterceptor(state: AppState) {
-        guard let interceptor = escapeInterceptor else { return }
-        if let monitor = hotkeyMonitor {
-            interceptor.hotkeyModifiers = monitor.chords.families.cgFlags
+    /// Arms Esc while the pipeline can cancel, letting it through with either
+    /// chord's modifiers held, and arms presets while the tap is installed,
+    /// no shortcut is being recorded, and voxline isn't frontmost.
+    private func refreshInterceptorConfig(activated: NSRunningApplication? = nil) {
+        guard let interceptor = keyInterceptor, let state = appState else { return }
+        let frontmost = activated ?? NSWorkspace.shared.frontmostApplication
+        let voxlineIsFrontmost = frontmost?.bundleIdentifier == Bundle.main.bundleIdentifier
+        interceptor.config = KeyInterceptor.Config(
+            escapeArmed: state.isCancellable,
+            presetsArmed: KeyInterceptor.presetsArmed(
+                installed: interceptor.isInstalled,
+                capturingShortcut: state.shortcutCaptureDepth > 0,
+                voxlineIsFrontmost: voxlineIsFrontmost
+            ),
+            presets: presetMap,
+            chordFamilies: hotkeyMonitor?.chords.families ?? []
+        )
+    }
+
+    /// Settings → Command saved the presets.
+    func presetsDidChange() {
+        presetMap = KeyInterceptor.presetMap(presetStore.load())
+        refreshInterceptorConfig()
+    }
+
+    private func observeFrontmostApp() {
+        guard frontmostObserver == nil else { return }
+        frontmostObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let activated = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            MainActor.assumeIsolated { self?.refreshInterceptorConfig(activated: activated) }
         }
-        interceptor.isArmed = state.isCancellable
     }
 
     /// Re-arms `withObservationTracking` after each change so we keep getting
@@ -418,7 +464,7 @@ final class AppCoordinator {
         } onChange: { [weak self, weak state] in
             Task { @MainActor in
                 guard let self, let state else { return }
-                self.syncEscapeInterceptor(state: state)
+                self.refreshInterceptorConfig()
                 self.observeCancellableChanges(state: state)
             }
         }
@@ -588,6 +634,9 @@ final class AppCoordinator {
     deinit {
         permissionPollTimer?.invalidate()
         modelPrepTask?.cancel()
+        if let frontmostObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(frontmostObserver)
+        }
     }
 
     private func logLaunchTrace(settings: AppSettings) {
@@ -606,6 +655,7 @@ extension AppCoordinator {
         // snapshot.provider is consumed by LLMService at the next dictation;
         // no per-snapshot action needed here.
         hotkeyMonitor?.chords = ChordSet(dictation: snapshot.chord, command: snapshot.commandChord)
+        refreshInterceptorConfig()
 
         // AudioCaptureService applies preferredInputDeviceUID at next start();
         // CapturePipeline restarts the engine on every chord, so the new device
