@@ -8,15 +8,10 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
-### Added
-- Meeting recording and notes: up to 60 minutes of mic + system audio, on-device transcription (WhisperKit) and speaker separation (SpeakerKit), LLM notes written as Markdown to a folder you choose. Start/stop from the menu or a shortcut; recovery after a quit or crash; Regenerate Notes; audio retention setting.
-
-## [0.6.0] - 2026-10-09
-
-0.4.0 and 0.5.0 were never released on their own; this release includes
-both. Coming from 0.3.1, the big changes are a choice of speech engine with
-live text while you speak, command mode that edits text in place, preset
-shortcuts, and an app that is no longer sandboxed.
+Everything since 0.3.1, the last published release. The big changes are a
+choice of speech engine with live text while you speak, command mode that
+edits text in place, preset shortcuts, meeting recording and notes, and an
+app that is no longer sandboxed.
 
 ### Added
 
@@ -89,6 +84,11 @@ shortcuts, and an app that is no longer sandboxed.
 - Per-dictation timing in About Voxline → Diagnostics: transcribe, cleanup,
   insert, and total, with medians over the last 50.
 - History keeps the raw transcript next to the cleaned text.
+- **Meeting recording and notes.** Up to 60 minutes of mic + system audio,
+  on-device transcription (WhisperKit) and speaker separation (SpeakerKit),
+  and LLM notes written as Markdown to a folder you choose. Start and stop
+  from the menu or a shortcut; recovery after a quit or crash; Regenerate
+  Notes; an audio retention setting.
 
 ### Changed
 
@@ -271,8 +271,7 @@ shortcuts, and an app that is no longer sandboxed.
   synthetic keystrokes. Under the App Sandbox the previous AX-based
   paste-eligibility check always failed and forced the unreliable typing path.
 
-[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.6.0...HEAD
-[0.6.0]: https://github.com/tfredricks/voxline/releases/tag/v0.6.0
+[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.3.1...HEAD
 [0.3.1]: https://github.com/tfredricks/voxline/releases/tag/v0.3.1
 [0.3.0]: https://github.com/tfredricks/voxline/releases/tag/v0.3.0
 [0.2.5]: https://github.com/tfredricks/voxline/releases/tag/v0.2.5

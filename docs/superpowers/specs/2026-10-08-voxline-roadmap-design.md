@@ -35,23 +35,26 @@ voxline 0.3.1 transcribes well but feels slow and narrow next to Wispr Flow:
 | Command mode scope | Full editing assistant; output always lands in the field | Rewrite, translate, summarize, expand, draft, continue, answer. The only guardrail is "return text", not "refuse to add content". |
 | Command mode trigger | A second independent two-key chord, may share one modifier with the dictation chord | Matches Wispr (Fn dictates, Fn+Ctrl commands). No three-finger hold, no intent inference from speech. |
 | Daily-use features in scope | Live transcript in the pill, learning dictionary with engine biasing, Esc to cancel plus retry, style learning | Chosen by the maintainer from the Wispr feature set and the open issues list. |
-| Out of scope for this roadmap | Hands-free toggle mode, snippets, non-text voice actions, history search and re-insert, editable per-app prompts, full pill redesign | Not chosen. Can be scheduled after 0.8. |
+| Out of scope for this roadmap | Hands-free toggle mode, snippets, non-text voice actions, history search and re-insert, editable per-app prompts, full pill redesign | Not chosen. Can be scheduled after Learning. |
 | Sequencing | Foundation first: platform → engine → command mode → meetings → learning | Each phase ships on its own, and the pipeline is rebuilt once, not twice. Phases 2 and 3 are independent and may run in parallel worktrees if the calendar needs compressing. |
 
 ## Roadmap at a glance
 
-| Phase | Release | Ships | Unblocks |
-|---|---|---|---|
-| 1. Platform reset | 0.4.0 | Sandbox off, macOS 26 floor, one-time data migration out of the container, sandbox workarounds deleted, AX messaging timeouts, per-dictation latency metrics, raw transcript kept in history | Everything below |
-| 2. Transcription engine | 0.5.0 | Engine protocol, streaming capture, bake-off and default engine, vocabulary biasing, cloud opt-in, live transcript in the pill, bottom-center pill, Esc to cancel, retry, 5-minute recording cap | Fast commands in phase 3, engine hints in phase 5 |
-| 3. Command mode v2 | 0.6.0 | Two-chord hotkey machine, AX reads of selection and field, generative editing prompt with structured result, AX in-place editor, refine buttons removed | Field reads reused by phase 5 |
-| 4. Meetings | 0.7.0 | One-hour meeting recording (mic + system audio), on-device transcription and speaker diarization, LLM meeting notes written as Markdown | — |
-| 5. Learning | 0.8.0 | Correction detection feeding the dictionary automatically, style profile per mode category, Learning section in Settings | 1.0 |
+| Phase | Ships | Unblocks |
+|---|---|---|
+| 1. Platform reset | Sandbox off, macOS 26 floor, one-time data migration out of the container, sandbox workarounds deleted, AX messaging timeouts, per-dictation latency metrics, raw transcript kept in history | Everything below |
+| 2. Transcription engine | Engine protocol, streaming capture, bake-off and default engine, vocabulary biasing, cloud opt-in, live transcript in the pill, bottom-center pill, Esc to cancel, retry, 5-minute recording cap | Fast commands in phase 3, engine hints in phase 5 |
+| 3. Command mode v2 | Two-chord hotkey machine, AX reads of selection and field, generative editing prompt with structured result, AX in-place editor, refine buttons removed | Field reads reused by phase 5 |
+| 4. Meetings | One-hour meeting recording (mic + system audio), on-device transcription and speaker diarization, LLM meeting notes written as Markdown | — |
+| 5. Learning | Correction detection feeding the dictionary automatically, style profile per mode category, Learning section in Settings | — |
 
 Rules that apply to every phase:
 
 - Each phase is shippable on its own and leaves `main` releasable. No
   long-lived branches.
+- Phases are milestones, not releases. Nothing bumps `MARKETING_VERSION`
+  or dates a CHANGELOG section until a release is actually published; the
+  version is picked then.
 - Open items from `docs/issues.md` are fixed inside whichever phase touches
   that code (mapping at the end of this document). They are not scheduled
   separately.
@@ -61,7 +64,7 @@ Rules that apply to every phase:
 - Each phase's spec is written against the code as it exists when that phase
   starts, not against this document's guesses about it.
 
-## Phase 1 — Platform reset (0.4.0)
+## Phase 1 — Platform reset
 
 Goal: an unsandboxed app on macOS 26 that behaves exactly like 0.3.1, plus the
 measurement hooks later phases need. Mostly deletion.
@@ -152,7 +155,7 @@ it makes "was it the engine or the LLM?" answerable from the History window.
 - The Diagnostics pane shows a baseline median for `totalMs` after 20
   dictations. That number is the input to phase 2's targets.
 
-## Phase 2 — Transcription engine (0.5.0)
+## Phase 2 — Transcription engine
 
 Goal: text appears as fast as Wispr's, names are transcribed right the first
 time, and the user can see and cancel what is happening.
@@ -281,7 +284,7 @@ affordance), 23 (trailing syllable clipped: flush the converter on stop).
 - Live text is visible in the pill within the first second of speaking.
 - Esc cancels at every stage without wedging the hotkey.
 
-## Phase 3 — Command mode v2 (0.6.0)
+## Phase 3 — Command mode v2
 
 Goal: Wispr's command workflow. Hold the command chord, say what you want done
 to the selection or the field, release, and it happens in place.
@@ -369,7 +372,7 @@ answering benefit from a stronger model than filler stripping does.
 
 ### Preset edit shortcuts
 
-Added 2026-10-08 after using 0.4.0: the keyboard-driven cousin of command
+Added 2026-10-08 after using the phase 1 build: the keyboard-driven cousin of command
 mode. Select text anywhere, press a shortcut, and a predefined instruction
 runs through the same transform path with no recording. Defaults shipped as
 a small editable table in Settings → Command:
@@ -390,7 +393,7 @@ obvious.
 
 ### Removed
 
-Done early, in 0.4.0.
+Done early, in phase 1.
 
 The post-dictation review session: `ReviewSession`, `RefinementDirective`,
 `PillReviewActions`, `CapturePipeline.refine`, the hover-pause timers, and the
@@ -411,14 +414,14 @@ disappear with it.
 - Select a paragraph in Notes, press Option+2: it is replaced by a shorter
   version with no recording, and Cmd+Z restores it.
 
-## Phase 4 — Meetings (0.7.0)
+## Phase 4 — Meetings
 
 Added 2026-10-09, scheduled ahead of Learning. Record a meeting of up to one
 hour from the microphone and system audio, transcribe and diarize it on-device
 after it stops, and write LLM meeting notes plus a speaker-labeled transcript
 to a Markdown file. Full design: `2026-10-09-meeting-notes-design.md`.
 
-## Phase 5 — Learning (0.8.0)
+## Phase 5 — Learning
 
 Goal: stop correcting the same word twice, and have output sound like the
 user without per-app prompt editing.
@@ -480,7 +483,7 @@ today. The README's Privacy section says so.
   it is transcribed correctly.
 - After 20 Slack dictations, the Chat style note exists, reads sensibly, and a
   new Slack dictation visibly follows it.
-- Turning both toggles off restores 0.6 behavior exactly.
+- Turning both toggles off restores the pre-learning behavior exactly.
 
 ## Issue mapping
 
@@ -499,16 +502,16 @@ Every open item in `docs/issues.md` and where it is fixed:
 | 12 AX revoked mid-hold wedges recording | 3 |
 | 13 keychain read errors look like "no key" | 1 |
 | 14 OpenAI reasoning models paste nothing | 2 |
-| 15 Reset wipes custom vocabulary | 4 |
+| 15 Reset wipes custom vocabulary | 5 |
 | 16 typing fallback mangles emoji | 3 |
 | 17 clipboard restore loses type order | 3 |
 | 18 Anthropic stop_reason unchecked | 2 |
-| 19 Mode Codable trap | 4 |
+| 19 Mode Codable trap | Done (`category` decodes with `decodeIfPresent`) |
 | 20 timers stall while menu open | 3 |
 | 21 wizard dead end offline | 2 |
 | 22 hotkey dead over Screen Sharing | 3 |
 | 23 trailing audio dropped at release | 2 |
-| 24–27 review-pill follow-ups | 24, 25, 27 done in 0.4.0 (pill removed); 26 open |
+| 24–27 review-pill follow-ups | 24, 25, 27 done in phase 1 (pill removed); 26 done in phase 3 |
 
 ## Testing strategy
 
@@ -533,7 +536,7 @@ Every open item in `docs/issues.md` and where it is fixed:
 Hands-free toggle mode, snippets, non-text voice actions (open app, web
 search), history search and re-insert, editable per-app prompts and tone
 presets in Settings, multi-language auto-detection, a full pill redesign
-beyond position and live text. All are candidates for 0.9+.
+beyond position and live text. All are candidates for after Learning.
 
 ## Open questions deferred to phase specs
 

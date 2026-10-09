@@ -4,13 +4,13 @@ Ranked by how hard a real user hits them: impact × likelihood. Every item below
 verified against the source; line numbers are from `main` at d0ee62d. A few
 reviewer claims that did **not** survive verification are listed at the bottom.
 
-Items 4, 7, 8, 14, 18, 21 and 23 were fixed in 0.5.0 with the transcription-engine
-rework; their descriptions are kept as written, with the pre-0.5.0 line numbers.
+Items 4, 7, 8, 14, 18, 21 and 23 were fixed in phase 2 with the transcription-engine
+rework; their descriptions are kept as written, with the pre-phase-2 line numbers.
 
-Items 6, 10, 11, 12, 16, 17, 20, 22 and 26 were fixed in 0.6.0 with the command-mode
+Items 6, 10, 11, 12, 16, 17, 20, 22 and 26 were fixed in phase 3 with the command-mode
 rework (new hotkey state machine, key interceptor, and text-insertion types in place of
-`ClipboardInjector`); their descriptions are kept as written, with the pre-0.6.0 line
-numbers. The carry-overs from 0.4.0 are fixed too (see the note near the end).
+`ClipboardInjector`); their descriptions are kept as written, with the pre-phase-3 line
+numbers. The carry-overs from phase 1 are fixed too (see the note near the end).
 
 ## High — daily-use pain
 
@@ -186,7 +186,7 @@ the user waits, nothing pastes, an empty history entry is recorded.
 
 ## Follow-ups from the pill refine-actions feature (2026-07-10)
 
-Items 24, 25 and 27 were resolved in 0.4.0 by removing the feature. Item 26 (the duplicated toast pattern) was fixed in 0.6.0 by `AppState.flashToast(_:for:)`.
+Items 24, 25 and 27 were resolved in phase 1 by removing the feature. Item 26 (the duplicated toast pattern) was fixed in phase 3 by `AppState.flashToast(_:for:)`.
 
 Non-blocking items surfaced by the whole-branch review of the post-dictation
 refine pill (commits `7e88720..67958b6`). None block shipping; the feature is on
@@ -214,9 +214,9 @@ refine pill (commits `7e88720..67958b6`). None block shipping; the feature is on
     rightward rather than staying centered on the cursor point. Cosmetic; spec only
     required the origin not to move.
 
-## Carry-overs from 0.4.0
+## Carry-overs from phase 1
 
-Three Accessibility edge cases carried over from 0.4.0, all fixed in 0.6.0:
+Three Accessibility edge cases carried over from phase 1, all fixed in phase 3:
 
 - **An empty AX selection fell through to Cmd+C.** `""` now means "nothing selected"
   whenever the selected-text range is also readable; only an inconclusive read still
@@ -233,12 +233,12 @@ Three Accessibility edge cases carried over from 0.4.0, all fixed in 0.6.0:
   can't trigger.** The 60s `maxRecordingDuration` fail-safe caps a dictation at
   ~150-200 spoken words (~250-300 output tokens), far under 1024. Real only if the
   cap is raised or removed; the unchecked `stop_reason` remains item 18.
-  0.5.0 raised the cap to 5 minutes and, to match, scaled the output budget with
+  Phase 2 raised the cap to 5 minutes and, to match, scaled the output budget with
   the transcript length and started checking `stop_reason` (item 18).
 - **"Task cancellation during the restore sleep pastes the old clipboard and
   double-inserts" — no live trigger.** Nothing ever cancels the inject task
   (`CapturePipeline.swift:169` awaits it; only `contextTask` is cancelled).
-  Latent if a cancel affordance is added later (see item 2's fix). 0.5.0 added
+  Latent if a cancel affordance is added later (see item 2's fix). Phase 2 added
   one (Esc), and it is ignored once insert begins for exactly this reason.
 - **"Mic-level monitor keeps running after Settings closes" — not supported.**
   `SettingsView.swift:134` has `.onDisappear { levelMonitor.stop() }`.

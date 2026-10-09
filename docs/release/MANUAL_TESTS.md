@@ -45,7 +45,7 @@ Configure a staging appcast by setting `SUFeedURL` in a debug build's `Info.plis
 - [ ] Disable network. Click "Check for updates…". Sparkle reports an error dialog. App keeps running.
 - [ ] Re-enable network. Click "Check for updates…". Normal flow resumes.
 
-# Manual test pass: 0.4.0 platform reset
+# Manual test pass: platform reset
 
 Covers what automated tests cannot: the real container migration, real AX reads, and
 Sparkle running unsandboxed.
@@ -55,7 +55,7 @@ Sparkle running unsandboxed.
 - [ ] Maintainers: if this Mac ever ran an unsandboxed dev build, first wipe `~/Library/Application Support/voxline` and the `com.voxline.app` domain (`defaults delete ~/Library/Preferences/com.voxline.app`), or the migration will skip your real data as "destination already exists".
 - [ ] Install 0.3.1 from Releases. Complete the wizard, save an API key, add
       two custom vocabulary terms, dictate three times (so history is non-empty).
-- [ ] Install 0.4.0 over it (DMG drag, or Sparkle from a staging appcast). Launch.
+- [ ] Install the current build over it (DMG drag, or Sparkle from a staging appcast). Launch.
 - [ ] No wizard appears. Settings → the hotkey, provider, and model are unchanged.
 - [ ] Settings → API Keys shows the saved key (no re-entry).
 - [ ] Custom vocabulary still lists both terms. Show history… lists the three dictations.
@@ -112,7 +112,7 @@ Sparkle running unsandboxed.
       or an error within a few seconds. Run `kill -CONT $(pgrep -x Slack)` afterwards.
 - [ ] Repeat with text selected and the command chord: same bound.
 
-# Manual test pass: 0.5.0 transcription engine
+# Manual test pass: transcription engine
 
 Covers what automated tests cannot: real speech engines, real audio hardware,
 real full-screen Spaces, and real network failure. Use an Apple Silicon Mac and
@@ -197,7 +197,7 @@ several items below check it.
       on-device, fastest", "Whisper — on-device", and "OpenAI — cloud, audio
       leaves your Mac". A fresh install has Apple Speech selected, and the
       Whisper model picker shows only while Whisper is selected. Upgrading
-      from 0.4.0 without ever picking an engine also lands on Apple Speech.
+      from 0.3.1 also lands on Apple Speech.
 - [ ] Select Apple Speech and dictate in Notes. Text lands. Select Whisper and
       dictate again. Text lands.
 - [ ] Choose a Whisper model that is not downloaded yet (for example small.en
@@ -306,7 +306,7 @@ several items below check it.
       dictations, `find ~/Library/Application\ Support/voxline -name '*.wav'`
       prints nothing.
 
-# Manual test pass: 0.6.0 command mode
+# Manual test pass: command mode
 
 Covers what automated tests cannot: real Accessibility writes in third-party
 apps, real key events and OS shortcuts, other apps reading the clipboard, and
@@ -317,10 +317,10 @@ Screen Sharing. Use an Apple Silicon Mac and a build from
 `action=` (`replace_selection`, `insert`, `rewrite`). The default chords are
 Left Shift + Left Control (dictation) and Left Shift + Left Option (command).
 
-## Upgrade from 0.5.0
+## Upgrade from 0.3.1: command chord
 
-For each case, install 0.5.0, set the state described, quit it, install 0.6.0
-over it, and launch. Settings → General → Hotkey must show a Dictation
+For each case, install 0.3.1, set the state described, quit it, install the
+current build over it, and launch. Settings → General → Hotkey must show a Dictation
 recorder and a "Command mode" toggle with its own recorder, and no command
 modifier picker. Before each upgrade, set the dictation chord to Left Shift +
 Left Control.
@@ -331,7 +331,7 @@ Left Control.
       Option and Command mode is on.
 - [ ] Command modifier set to a **dictation key** (Left Ctrl): the command
       chord is Left Shift + Left Option.
-- [ ] Command modifier **unset** (with 0.5.0 quit, run
+- [ ] Command modifier **unset** (with 0.3.1 quit, run
       `defaults delete ~/Library/Preferences/com.voxline.app voxline.hotkey.commandModifier`):
       the command chord is Left Shift + Left Option.
 - [ ] Dictation chord set to Left Shift + Left Option and command modifier Off:
@@ -498,7 +498,7 @@ joins the paste-first list before release.
       "Couldn't insert — copied".
 - [ ] Alacritty, kitty, or WezTerm, if installed: the dictation is pasted.
 - [ ] A VM or remote-desktop window with a text cursor: the dictation is
-      pasted as in 0.5.0.
+      pasted, as before command mode.
 - [ ] Quit voxline, run
       `defaults write ~/Library/Preferences/com.voxline.app voxline.insert.axFirst -bool NO`,
       relaunch, and dictate in Notes: `strategy=paste`. Quit, delete the key
@@ -591,7 +591,7 @@ joins the paste-first list before release.
       Run `kill -CONT $(pgrep -x Notes)`: the text appears in Notes at most
       once, never twice. Repeat with a preset shortcut, with dictation
       (expect "Field isn't responding — copied"), and with Slack as in the
-      0.4.0 pass.
+      platform reset pass.
 - [ ] Freeze an app at insert time: click into Slack's message box, run
       `sleep 6; kill -STOP $(pgrep -x Slack)` in Terminal, click back into
       Slack, and hold the dictation chord, speaking, until the 6 s are up;
@@ -613,12 +613,12 @@ joins the paste-first list before release.
       default models, and compare the medians (About Voxline → Diagnostics
       and `metrics`): dictation `insertMs` in Notes and TextEdit (≤ 120 ms,
       baseline 370 ms via paste); dictation `totalMs` in all apps (no more
-      than 5% above the 0.5.0 median); command `totalMs` for
+      than 5% above the transcription-engine median); command `totalMs` for
       `replace_selection` on under 1,000 characters (≤ 2,500 ms); preset
       `totalMs` on the same selection size (≤ 1,800 ms). Record the numbers
       even where a target is missed.
 
-## Meetings (0.7.0)
+## Meetings
 
 Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meetingCapSeconds -int 120` shortens the cap to 2 minutes (warning at 1:00). Delete it afterwards.
 
@@ -636,7 +636,7 @@ Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meeti
 - [ ] Unplug headphones / switch input device mid-meeting: recording continues; transcript has a gap at most.
 - [ ] Quit during recording → confirmation; relaunch → "Process unfinished meeting…?" → Process writes notes for the recorded part.
 - [ ] `kill -9` voxline mid-recording → relaunch → recovery works the same.
-- [ ] Hold the dictation hotkey during a meeting: dictation works as in 0.6.0.
+- [ ] Hold the dictation hotkey during a meeting: dictation works as usual.
 - [ ] No API key: file has the transcript and "Notes not generated…"; add a key; Regenerate Notes writes a "(regenerated)" file.
 - [ ] Offline first run with no SpeakerKit model: notes say speakers couldn't be separated; call audio labeled "Them".
 - [ ] Settings → Meetings: folder picker, shortcut (rejects a preset's combo and the dictation chord), notes model placeholder, retention, timer toggle.
