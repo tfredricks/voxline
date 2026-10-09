@@ -5,23 +5,12 @@ import Testing
 
 @Suite struct CaptureConverterTests {
 
-    private static let hardwareRate: Double = 48_000
-
     private func makeConverter() throws -> CaptureConverter {
-        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: Self.hardwareRate, channels: 1))
-        return try CaptureConverter(inputFormat: format)
+        try CaptureConverter(inputFormat: try TestAudio.hardwareFormat())
     }
 
     private func sineBuffer(frames: AVAudioFrameCount, startingAt offset: Int = 0) throws -> AVAudioPCMBuffer {
-        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: Self.hardwareRate, channels: 1))
-        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames))
-        buffer.frameLength = frames
-        let channel = try #require(buffer.floatChannelData?[0])
-        for i in 0..<Int(frames) {
-            let t = Double(offset + i) / Self.hardwareRate
-            channel[i] = Float(0.5 * sin(2 * Double.pi * 440 * t))
-        }
-        return buffer
+        try TestAudio.sineBuffer(frames: frames, startingAt: offset)
     }
 
     @Test func converts_48k_to_16k_at_one_third_rate() throws {
@@ -32,6 +21,32 @@ import Testing
         }
         total += converter.flushAndClose().count
         #expect(abs(total - 16_000) <= 32)
+    }
+
+    @Test func convert_keeps_pace_with_input() throws {
+        let converter = try makeConverter()
+        var produced = 0
+        for index in 0..<10 {
+            produced += converter.convert(try sineBuffer(frames: 4_800, startingAt: index * 4_800)).count
+            #expect((index + 1) * 1_600 - produced <= 32, "held back after buffer \(index)")
+        }
+    }
+
+    @Test func output_does_not_depend_on_tap_buffer_size() throws {
+        func convertOneSecond(inBuffersOf frames: Int) throws -> [Float] {
+            let converter = try makeConverter()
+            var output: [Float] = []
+            for index in 0..<(48_000 / frames) {
+                output += converter.convert(
+                    try sineBuffer(frames: AVAudioFrameCount(frames), startingAt: index * frames)
+                )
+            }
+            return output + converter.flushAndClose()
+        }
+        let large = try convertOneSecond(inBuffersOf: 4_800)
+        let small = try convertOneSecond(inBuffersOf: 960)
+        #expect(large.count == small.count)
+        #expect(large == small)
     }
 
     @Test func flush_returns_the_converter_tail() throws {

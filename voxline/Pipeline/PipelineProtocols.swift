@@ -7,10 +7,12 @@ protocol AudioCapturing: AnyObject {
     var onTapCallback: ((Int) -> Void)? { get set }
     /// Receives each converted 16 kHz chunk synchronously, in order, on the
     /// audio thread, then the flushed tail during stop(). Read once per
-    /// start(); must never wait on the main actor.
+    /// start(); must never wait on the main actor, since stop() and
+    /// takeSamples() wait for an in-flight delivery.
     var onSamples: (@Sendable ([Float]) -> Void)? { get set }
-    /// Fires on the main actor when the input device's configuration changes
-    /// while capturing; the engine has stopped and no more audio will arrive.
+    /// Fires on the main actor when an input configuration change has stopped
+    /// the engine during a capture; no more audio will arrive. Changes that
+    /// leave the engine running are ignored.
     var onInterrupted: (() -> Void)? { get set }
     /// Best-effort: spin the audio engine up before the chord completes so
     /// start() captures from the first tap buffer. Must be cheap and safe

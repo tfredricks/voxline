@@ -30,13 +30,14 @@ final class AudioCaptureService {
     /// Receives every converted 16 kHz chunk, synchronously and in order, on
     /// the audio tap thread; the flushed tail arrives on the main actor inside
     /// stop(). Read once per start(). Must be cheap and must never wait on the
-    /// main actor, because stop() waits for an in-flight delivery to finish.
+    /// main actor: stop() and takeSamples() take the same lock and wait for an
+    /// in-flight delivery to finish.
     var onSamples: (@Sendable ([Float]) -> Void)?
 
-    /// Fires on the main actor when the engine's input configuration changes
-    /// while capturing (device unplugged, Bluetooth mic dropped, sample rate
-    /// switched). The engine has stopped itself by then; the tap delivers no
-    /// more audio until the next start().
+    /// Fires on the main actor when an input configuration change (device
+    /// unplugged, Bluetooth mic dropped, sample rate switched) has stopped the
+    /// engine during a capture; no more audio arrives until the next start().
+    /// Configuration changes that leave the engine running are ignored.
     var onInterrupted: (() -> Void)?
 
     private let engine = AVAudioEngine()
@@ -210,6 +211,10 @@ final class AudioCaptureService {
 
     private func handleConfigurationChange() {
         guard isCapturing else { return }
+        guard !engine.isRunning else {
+            AppLog.audio.debug("input configuration change ignored; engine still running")
+            return
+        }
         AppLog.audio.error("input configuration changed during capture")
         onInterrupted?()
     }
@@ -219,7 +224,7 @@ final class AudioCaptureService {
 /// convert-then-deliver on the tap thread and flush-then-deliver in stop(), so
 /// the tail always reaches `onSamples` after the last tap chunk, and nothing is
 /// delivered once the converter is closed.
-private final class SampleDelivery: @unchecked Sendable {
+final class SampleDelivery: @unchecked Sendable {
 
     private let lock = NSLock()
     private let converter: CaptureConverter
@@ -235,8 +240,9 @@ private final class SampleDelivery: @unchecked Sendable {
         lock.withLock { publish(converter.convert(buffer)) }
     }
 
-    func deliverTail() {
-        lock.withLock { _ = publish(converter.flushAndClose()) }
+    @discardableResult
+    func deliverTail() -> [Float] {
+        lock.withLock { publish(converter.flushAndClose()) }
     }
 
     func takeSamples() -> [Float] {
