@@ -252,7 +252,7 @@ final class CapturePipeline {
         }
         state.lastCleanupDuration = Date().timeIntervalSince(cleanupStart)
         state.lastCleanedText = cleaned
-        historyStore.record(cleanedText: cleaned, mode: mode, context: context)
+        historyStore.record(cleanedText: cleaned, rawTranscript: transcript, mode: mode, context: context)
 
         guard field?.isEditable ?? true else {
             transcriptFallback(cleaned)
@@ -320,7 +320,7 @@ final class CapturePipeline {
             return
         }
 
-        historyStore.record(cleanedText: transformed, mode: mode, context: context)
+        historyStore.record(cleanedText: transformed, rawTranscript: command, mode: mode, context: context)
 
         do {
             // Selection is live, so a paste lands over it — no re-selection needed.

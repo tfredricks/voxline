@@ -55,7 +55,7 @@ struct HistoryView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 6)
         }
-        .frame(minWidth: 760, minHeight: 320)
+        .frame(minWidth: 900, minHeight: 320)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Clear history") { store.clear() }
@@ -98,11 +98,18 @@ struct HistoryView: View {
             }
             .width(min: 80, ideal: 110, max: 150)
 
+            TableColumn("Transcript") { item in
+                Text(HistoryViewFormatter.previewText(item.rawTranscript ?? "—", maxChars: 120))
+                    .foregroundStyle(.secondary)
+                    .help(Self.tooltip(item))
+            }
+            .width(min: 160, ideal: 240)
+
             TableColumn("Preview") { item in
                 Text(HistoryViewFormatter.previewText(item.cleanedText, maxChars: 200))
                     .help(Self.tooltip(item))
             }
-            .width(min: 240, ideal: 480)
+            .width(min: 200, ideal: 360)
         }
         .onChange(of: selectedID) { _, newID in
             guard let id = newID,
@@ -136,6 +143,10 @@ struct HistoryView: View {
         let df = DateFormatter()
         df.dateStyle = .medium
         df.timeStyle = .medium
-        return "\(df.string(from: item.timestamp))\n\n\(item.cleanedText)"
+        var text = "\(df.string(from: item.timestamp))\n\n\(item.cleanedText)"
+        if let raw = item.rawTranscript, !raw.isEmpty {
+            text += "\n\nRaw transcript:\n\(raw)"
+        }
+        return text
     }
 }

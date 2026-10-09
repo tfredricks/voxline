@@ -1,10 +1,9 @@
 import Foundation
 import Observation
 
-/// One entry in the dictation history. Stores cleaned text only — no raw
-/// transcript, no target app, no model. Smaller storage footprint and less
-/// to worry about for privacy. Future feature #15 controls can wrap recording
-/// with a no-op without touching this type.
+/// One entry in the dictation history: the cleaned text that was inserted
+/// plus the raw transcript it came from, so "was it the engine or the
+/// cleanup?" is answerable from the History window. No audio, no model.
 struct DictationHistoryItem: Codable, Identifiable, Equatable {
     let id: UUID
     let timestamp: Date
@@ -17,6 +16,8 @@ struct DictationHistoryItem: Codable, Identifiable, Equatable {
     let appName: String?
     /// Bundle ID of the frontmost app, from `CapturedContext.bundleID`.
     let appBundleID: String?
+    /// What Whisper heard, before cleanup. Nil for rows written before 0.4.0.
+    let rawTranscript: String?
 }
 
 /// In-memory list (max 25, newest first) of recent cleaned dictations,
@@ -40,7 +41,7 @@ final class DictationHistoryStore {
     /// Prepend a new entry for a successful dictation. Pulls the resolved mode
     /// and frontmost-app fields so the history window can show context per row.
     /// Whitespace-only text is ignored. Caps at 25 by dropping the oldest entries.
-    func record(cleanedText: String, mode: Mode, context: CapturedContext) {
+    func record(cleanedText: String, rawTranscript: String? = nil, mode: Mode, context: CapturedContext) {
         // Trim is a record-or-skip filter only; the stored text is the raw
         // cleanedText so history matches what was pasted into the focused app.
         guard !cleanedText.isBlank else { return }
@@ -50,7 +51,8 @@ final class DictationHistoryStore {
             cleanedText: cleanedText,
             modeCategoryName: mode.category.displayName,
             appName: context.appName,
-            appBundleID: context.bundleID
+            appBundleID: context.bundleID,
+            rawTranscript: rawTranscript
         )
         var next = [item] + items
         if next.count > Self.maxItems {
@@ -74,7 +76,8 @@ final class DictationHistoryStore {
             cleanedText: cleanedText,
             modeCategoryName: current.modeCategoryName,
             appName: current.appName,
-            appBundleID: current.appBundleID
+            appBundleID: current.appBundleID,
+            rawTranscript: current.rawTranscript
         )
         persist()
     }

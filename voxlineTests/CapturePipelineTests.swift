@@ -867,6 +867,14 @@ import Foundation
         #expect(state.recordingIsCommand == true)
     }
 
+    @Test func finalizeRecording_recordsRawTranscriptInHistory() async throws {
+        let (pipe, state, _, _, _, _, _, _, history) = makePipeline()
+        await startAndFinalize(pipe, state: state)
+        let item = try #require(history.items.first)
+        #expect(item.cleanedText == "cleaned")
+        #expect(item.rawTranscript == "hello world")
+    }
+
 }
 
 final class FakeContextCapture: ContextCapturing, @unchecked Sendable {

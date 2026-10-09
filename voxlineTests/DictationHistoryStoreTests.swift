@@ -158,6 +158,7 @@ import Foundation
         #expect(first.modeCategoryName == nil)
         #expect(first.appName == nil)
         #expect(first.appBundleID == nil)
+        #expect(first.rawTranscript == nil)
     }
 
     @Test func updateMostRecent_replacesNewestText_preservingIdentity() {
@@ -184,5 +185,21 @@ import Foundation
         store.record(cleanedText: "keep me", mode: mode, context: .empty)
         store.updateMostRecent(cleanedText: "   ")                 // blank: no-op
         #expect(store.items.first?.cleanedText == "keep me")
+    }
+
+    @Test func record_stores_raw_transcript() throws {
+        let store = DictationHistoryStore(defaults: makeDefaults())
+        store.record(cleanedText: "Hello, world.", rawTranscript: "um hello world", mode: anyMode(), context: .empty)
+        let item = try #require(store.items.first)
+        #expect(item.rawTranscript == "um hello world")
+    }
+
+    @Test func updateMostRecent_preserves_raw_transcript() throws {
+        let store = DictationHistoryStore(defaults: makeDefaults())
+        store.record(cleanedText: "first", rawTranscript: "raw", mode: anyMode(), context: .empty)
+        store.updateMostRecent(cleanedText: "second")
+        let item = try #require(store.items.first)
+        #expect(item.cleanedText == "second")
+        #expect(item.rawTranscript == "raw")
     }
 }
