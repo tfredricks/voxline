@@ -35,6 +35,12 @@ enum PillLayout {
         }
     }
 
+    /// Whether a status change to `status` starts a Retry offer.
+    static func offersRetry(status: AppStatus, hasRetryTranscript: Bool) -> Bool {
+        guard case .error = status else { return false }
+        return hasRetryTranscript
+    }
+
     static func showsText(content: PillContent, hasText: Bool) -> Bool {
         switch content {
         case .recording, .thinking:   return hasText

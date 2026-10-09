@@ -2,7 +2,26 @@ import Testing
 import Foundation
 @testable import voxline
 
-@Suite @MainActor struct CapturePipelineCancelTests {
+/// Polls `condition` until it holds or `timeout` passes; never waits longer.
+@MainActor
+private func eventually(timeout: Duration = .seconds(2), _ condition: () -> Bool) async -> Bool {
+    let deadline = ContinuousClock.now + timeout
+    while !condition() {
+        if ContinuousClock.now >= deadline { return false }
+        try? await Task.sleep(for: .milliseconds(2))
+    }
+    return true
+}
+
+/// True when `task` completes within `timeout`; never waits longer.
+@MainActor
+private func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool {
+    let finished = CapturePipelineStreamingTests.Flag()
+    Task { await task.value; finished.set() }
+    return await eventually(timeout: timeout) { finished.isSet }
+}
+
+@Suite(.timeLimit(.minutes(1))) @MainActor struct CapturePipelineCancelTests {
 
     typealias FakeCapture = CapturePipelineTests.FakeCapture
     typealias FakeLLM = CapturePipelineTests.FakeLLM
@@ -10,7 +29,6 @@ import Foundation
     typealias FakeSelectionSnapshot = CapturePipelineTests.FakeSelectionSnapshot
     typealias LockedFrontmost = CapturePipelineStreamingTests.LockedFrontmost
     typealias LockedFieldInspector = CapturePipelineStreamingTests.LockedFieldInspector
-    typealias Flag = CapturePipelineStreamingTests.Flag
 
     /// Holds every capture until `gate` opens, then reports whether the task
     /// running it had been cancelled by then.
@@ -96,22 +114,6 @@ import Foundation
         )
     }
 
-    private func eventually(timeout: Duration = .seconds(2), _ condition: () -> Bool) async -> Bool {
-        let deadline = ContinuousClock.now + timeout
-        while !condition() {
-            if ContinuousClock.now >= deadline { return false }
-            try? await Task.sleep(for: .milliseconds(2))
-        }
-        return true
-    }
-
-    /// True when `task` completes within `timeout`; never waits longer.
-    private func finishes(_ task: Task<Void, Never>, within timeout: Duration) async -> Bool {
-        let finished = Flag()
-        Task { await task.value; finished.set() }
-        return await eventually(timeout: timeout) { finished.isSet }
-    }
-
     private func dictate(_ h: Harness) async {
         h.pipe.startRecording()
         await h.pipe.finalizeRecording()
@@ -174,6 +176,7 @@ import Foundation
         let h = makeHarness()
         h.session.holdFinish = true
         h.session.ignoresCancel = true
+        defer { h.session.releaseFinish() }
         h.pipe.startRecording()
         let finalize = Task { await h.pipe.finalizeRecording() }
         #expect(await eventually { h.session.finishCount == 1 })
@@ -204,7 +207,7 @@ import Foundation
         #expect(await eventually { h.session.finishCount == 1 })
 
         h.pipe.cancel()
-        await finalize.value
+        #expect(await finishes(finalize, within: .milliseconds(200)))
         try? await Task.sleep(for: .milliseconds(20))
 
         #expect(h.session.cancelCount == 1)
@@ -216,6 +219,7 @@ import Foundation
     @Test func cancel_while_cleaning_keeps_transcript_in_history_and_retry() async throws {
         let h = makeHarness()
         h.llm.holdCleanup = true
+        defer { h.llm.releaseCleanup() }
         h.pipe.startRecording()
         let finalize = Task { await h.pipe.finalizeRecording() }
         #expect(await eventually { h.llm.cleanupGate.waiting == 1 })
@@ -244,6 +248,7 @@ import Foundation
         let h = makeHarness()
         h.selection.selection = "original text"
         h.llm.holdCleanup = true
+        defer { h.llm.releaseCleanup() }
         h.pipe.startRecording(command: true)
         let finalize = Task { await h.pipe.finalizeRecording() }
         #expect(await eventually { h.llm.cleanupGate.waiting == 1 })
@@ -263,6 +268,7 @@ import Foundation
     @Test func cancel_during_insert_is_ignored() async {
         let h = makeHarness()
         h.injector.holdInject = true
+        defer { h.injector.releaseInject() }
         h.pipe.startRecording()
         let finalize = Task { await h.pipe.finalizeRecording() }
         #expect(await eventually { h.injector.injectGate.waiting == 1 })
@@ -275,7 +281,7 @@ import Foundation
         #expect(!h.pipe.wasCancelled)
 
         h.injector.releaseInject()
-        await finalize.value
+        #expect(await finishes(finalize, within: .seconds(2)))
         #expect(h.injector.injected == ["cleaned"])
         #expect(h.state.status == .idle)
         #expect(h.pipe.metrics.items.count == 1)
@@ -298,6 +304,10 @@ import Foundation
         let h = makeHarness(context: probe)
         h.session.holdFinish = true
         h.session.ignoresCancel = true
+        defer {
+            h.session.releaseFinish()
+            probe.gate.open()
+        }
         let second = FakeTranscriptionSession()
         second.finishResult = .success("second take")
         h.engine.nextSessions.append(second)
@@ -354,6 +364,28 @@ import Foundation
     }
 
     // MARK: - Retry
+
+    @Test func failed_start_scrubs_the_previous_transcript() async {
+        struct Boom: Error {}
+        let h = makeHarness()
+        await dictate(h)
+        #expect(h.state.retryTranscript == "hello world")
+
+        h.capture.startError = Boom()
+        h.pipe.startRecording()
+        guard case .error(let message) = h.state.status else {
+            Issue.record("expected .error, got \(h.state.status)"); return
+        }
+        #expect(message.hasPrefix("Audio capture failed"))
+        #expect(h.state.retryTranscript == nil)
+        #expect(h.state.lastTranscript == nil)
+        #expect(h.state.lastCleanedText == nil)
+        #expect(!PillLayout.offersRetry(status: h.state.status, hasRetryTranscript: h.state.retryTranscript != nil))
+
+        await h.pipe.retryLastDictation()
+        #expect(h.llm.calls.count == 1)
+        #expect(h.injector.injected == ["cleaned"])
+    }
 
     @Test func retry_reinserts_last_transcript() async {
         let h = makeHarness(transcript: "uh hello there")
@@ -449,10 +481,11 @@ import Foundation
         #expect(h.injector.injected == ["Sounds good.", "Sounds good."])
     }
 
-    @Test func cancel_during_retry_drops_the_result() async {
+    @Test func cancel_during_retry_drops_the_result_and_files_the_transcript() async {
         let h = makeHarness()
         await dictate(h)
         h.llm.holdCleanup = true
+        defer { h.llm.releaseCleanup() }
         let retry = Task { await h.pipe.retryLastDictation() }
         #expect(await eventually { h.llm.cleanupGate.waiting == 1 })
         #expect(h.state.status == .thinking)
@@ -464,24 +497,53 @@ import Foundation
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.state.retryTranscript == "hello world")
+        #expect(h.history.items.count == 2)
+        #expect(h.history.items.first?.cleanedText == "hello world")
+        #expect(h.history.items.first?.rawTranscript == "hello world")
 
         h.llm.releaseCleanup()
         try? await Task.sleep(for: .milliseconds(50))
         #expect(h.injector.injected == ["cleaned"])
-        #expect(h.history.items.count == 1)
+        #expect(h.history.items.count == 2)
+    }
+
+    @Test func cancel_during_retry_before_a_mode_skips_history() async {
+        let probe = CancellationProbingContext()
+        let h = makeHarness(context: probe)
+        defer { probe.gate.open() }
+        h.state.retryTranscript = "hello world"
+        let retry = Task { await h.pipe.retryLastDictation() }
+        #expect(await eventually { probe.gate.waiting == 1 })
+        #expect(h.state.status == .thinking)
+
+        h.pipe.cancel()
+        #expect(await finishes(retry, within: .milliseconds(200)))
+        #expect(h.state.status == .idle)
+        #expect(h.history.items.isEmpty)
+        #expect(h.state.retryTranscript == "hello world")
+
+        probe.gate.open()
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(h.llm.calls.isEmpty)
+        #expect(h.injector.injected.isEmpty)
     }
 
     @Test func retry_after_a_cancel_inserts_the_kept_transcript() async {
         let h = makeHarness()
         h.llm.holdCleanup = true
+        defer { h.llm.releaseCleanup() }
         h.pipe.startRecording()
         let finalize = Task { await h.pipe.finalizeRecording() }
         #expect(await eventually { h.llm.cleanupGate.waiting == 1 })
         h.pipe.cancel()
-        await finalize.value
+        #expect(await finishes(finalize, within: .milliseconds(200)))
+        h.llm.releaseCleanup()
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(h.injector.injected.isEmpty, "the cancelled cleanup's late result is dropped")
 
         h.llm.holdCleanup = false
-        await h.pipe.retryLastDictation()
+        let retry = Task { await h.pipe.retryLastDictation() }
+        #expect(await finishes(retry, within: .seconds(2)))
         #expect(h.injector.injected == ["cleaned"])
         #expect(h.state.status == .idle)
     }
@@ -541,33 +603,29 @@ import Foundation
     }
 }
 
-@Suite @MainActor struct OneShotSignalTests {
+@Suite(.timeLimit(.minutes(1))) @MainActor struct OneShotSignalTests {
 
     @Test func wait_after_fire_returns_at_once() async {
         let signal = OneShotSignal()
         signal.fire()
-        await signal.wait()
+        let waiter = Task { await signal.wait() }
+        #expect(await finishes(waiter, within: .seconds(1)))
     }
 
     @Test func fire_resumes_the_waiter() async {
         let signal = OneShotSignal()
-        let resumed = CapturePipelineStreamingTests.Flag()
-        Task { await signal.wait(); resumed.set() }
-        try? await Task.sleep(for: .milliseconds(20))
-        #expect(!resumed.isSet)
+        let waiter = Task { await signal.wait() }
+        #expect(!(await finishes(waiter, within: .milliseconds(20))))
 
         signal.fire()
-        let deadline = ContinuousClock.now + .seconds(2)
-        while !resumed.isSet, ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(2))
-        }
-        #expect(resumed.isSet)
+        #expect(await finishes(waiter, within: .seconds(1)))
     }
 
     @Test func second_fire_is_harmless() async {
         let signal = OneShotSignal()
         signal.fire()
         signal.fire()
-        await signal.wait()
+        let waiter = Task { await signal.wait() }
+        #expect(await finishes(waiter, within: .seconds(1)))
     }
 }

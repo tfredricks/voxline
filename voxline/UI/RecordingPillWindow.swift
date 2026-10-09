@@ -104,7 +104,7 @@ final class RecordingPillWindow {
         guard state.status != observedStatus else { return }
         observedStatus = state.status
         withdrawRetryOffer()
-        guard case .error = state.status, state.retryTranscript != nil else { return }
+        guard PillLayout.offersRetry(status: state.status, hasRetryTranscript: state.retryTranscript != nil) else { return }
         retryUntil = Date().addingTimeInterval(PillLayout.retryDuration)
         retryTimer = Timer.scheduledTimer(withTimeInterval: PillLayout.retryDuration, repeats: false) { [weak self, weak state] _ in
             MainActor.assumeIsolated {

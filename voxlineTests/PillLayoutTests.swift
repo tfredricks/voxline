@@ -118,6 +118,13 @@ import CoreGraphics
         #expect(PillLayout.content(status: status, hasToast: false, retryOffered: true) == expected)
     }
 
+    @Test func retry_is_offered_only_for_an_error_with_a_transcript() {
+        #expect(PillLayout.offersRetry(status: .error("boom"), hasRetryTranscript: true))
+        #expect(!PillLayout.offersRetry(status: .error("boom"), hasRetryTranscript: false))
+        #expect(!PillLayout.offersRetry(status: .permissionsError("nope"), hasRetryTranscript: true))
+        #expect(!PillLayout.offersRetry(status: .idle, hasRetryTranscript: true))
+    }
+
     @Test func retry_never_shows_transcript_text() {
         #expect(!PillLayout.showsText(content: .retry, hasText: true))
     }

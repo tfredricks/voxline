@@ -37,9 +37,9 @@ final class CapturePipeline {
     /// at once even when the engine or the provider ignores cancellation.
     private var finalizeWork: Task<Void, Never>?
     private var finalizeDone: OneShotSignal?
-    /// Mode and context of the dictation being cleaned up, which `cancel()`
-    /// files the raw transcript under.
-    private var cancellableDictation: (mode: Mode, context: CapturedContext)?
+    /// Raw transcript of the dictation or retry being cleaned up, with the
+    /// mode and context `cancel()` files it in history under.
+    private var cancellableDictation: (transcript: String, mode: Mode, context: CapturedContext)?
 
     /// True from `cancel()` until the next `startRecording`, so the chord
     /// release that follows an Esc can skip the stop sound.
@@ -132,6 +132,14 @@ final class CapturePipeline {
         }
         generation &+= 1
         capHit = false
+        // Scrub the prior dictation's text so it doesn't linger in process
+        // memory for the lifetime of the app. Spoken content can include
+        // passwords / 2FA codes / private notes; defensible-by-default hygiene.
+        // Done before capture starts, so a failed start can't leave the old
+        // text behind to be offered for Retry.
+        state.lastTranscript = nil
+        state.lastCleanedText = nil
+        state.retryTranscript = nil
         let live = LiveSession(engine: engines.current)
         capture.onSamples = { [router = live.router] in router.append($0) }
         do {
@@ -150,15 +158,9 @@ final class CapturePipeline {
         self.live = live
         state.recordingStartedAt = Date()
         state.audioLevel = 0
-        // Scrub the prior dictation's text so it doesn't linger in process
-        // memory for the lifetime of the app. Spoken content can include
-        // passwords / 2FA codes / private notes; defensible-by-default hygiene.
-        state.lastTranscript = nil
-        state.lastCleanedText = nil
         state.lastTranscribeDuration = nil
         state.lastCleanupDuration = nil
         state.liveTranscript = nil
-        state.retryTranscript = nil
         state.pipelinePhase = nil
         state.isCancellable = true
         state.recordingIsCommand = command
@@ -240,9 +242,9 @@ final class CapturePipeline {
     }
 
     /// Esc. While recording, discards the recording. While transcribing or
-    /// cleaning up, abandons the work and returns to idle at once: a
-    /// dictation's raw transcript goes to history and stays retryable, and
-    /// any late result is dropped. Ignored once insert has begun, and when
+    /// cleaning up, abandons the work and returns to idle at once: the raw
+    /// transcript of a dictation or retry whose mode was resolved goes to
+    /// history and stays retryable, and any late result is dropped. Ignored once insert has begun, and when
     /// nothing is running.
     func cancel() {
         switch state.status {
@@ -257,8 +259,8 @@ final class CapturePipeline {
             finalizeWork?.cancel()
             finalizeWork = nil
             live?.discard()
-            if let dictation = cancellableDictation, let transcript = state.lastTranscript, !transcript.isEmpty {
-                historyStore.record(cleanedText: transcript, rawTranscript: transcript, mode: dictation.mode, context: dictation.context)
+            if let dictation = cancellableDictation, !dictation.transcript.isEmpty {
+                historyStore.record(cleanedText: dictation.transcript, rawTranscript: dictation.transcript, mode: dictation.mode, context: dictation.context)
             }
         default:
             return
@@ -392,7 +394,7 @@ final class CapturePipeline {
         }
         // Dictation path: no selection probe was spawned, so the clipboard was
         // never touched.
-        cancellableDictation = (mode, snapshot.context)
+        cancellableDictation = (transcript, mode, snapshot.context)
         await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: timing, generation: generation)
     }
 
@@ -402,6 +404,7 @@ final class CapturePipeline {
         guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
             return setError(Self.noModeMessage(bundleID: snapshot.bundleID))
         }
+        cancellableDictation = (transcript, mode, snapshot.context)
         await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: nil, generation: generation)
     }
 

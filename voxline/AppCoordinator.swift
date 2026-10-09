@@ -59,7 +59,9 @@ final class AppCoordinator {
         permissionsWindow.show()
     }
 
-    /// Called from the menu-bar item and the pill's Retry button.
+    /// Cleans up and inserts the last dictation's transcript again, into the
+    /// field focused now. Does nothing unless a transcript is retryable and
+    /// the pipeline is idle or showing an error.
     func retryLastDictation() {
         guard let pipeline else { return }
         Task { await pipeline.retryLastDictation() }
