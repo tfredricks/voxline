@@ -1,8 +1,8 @@
 // voxline/UI/HistoryView.swift
 //
 // Standalone window listing recent cleaned dictations with Time / Mode /
-// App / Preview columns. Click a row to copy that entry's text. Replaces
-// the menu-bar submenu — the latter could not surface the resolved mode
+// App / Transcript / Preview columns. Click a row to copy that entry's text.
+// Replaces the menu-bar submenu — the latter could not surface the resolved mode
 // for each row without exploding in size.
 
 import AppKit

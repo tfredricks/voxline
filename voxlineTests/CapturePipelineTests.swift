@@ -696,6 +696,15 @@ import Foundation
         if case .idle = state.status {} else { Issue.record("expected .idle after transform") }
     }
 
+    @Test func finalize_withSelection_recordsSpokenCommandAsRawTranscript() async throws {
+        let (pipe, state, _, _, history) = makeTransformPipeline(selection: "original text")
+        pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()
+
+        let item = try #require(history.items.first)
+        #expect(item.cleanedText == "transformed")
+        #expect(item.rawTranscript == "hello world")
+    }
+
     @Test func refine_onTransformSession_usesTransformOnCurrentText() async {
         let (pipe, state, llm, injector, history) = makeTransformPipeline(selection: "original text")
         pipe.startRecording(command: true); state.lastPeakLevel = 0.5; await pipe.finalizeRecording()

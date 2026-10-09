@@ -187,19 +187,28 @@ import Foundation
         #expect(store.items.first?.cleanedText == "keep me")
     }
 
-    @Test func record_stores_raw_transcript() throws {
-        let store = DictationHistoryStore(defaults: makeDefaults())
+    @Test func record_stores_raw_transcript_and_persists_it() throws {
+        let defaults = makeDefaults()
+        let store = DictationHistoryStore(defaults: defaults)
         store.record(cleanedText: "Hello, world.", rawTranscript: "um hello world", mode: anyMode(), context: .empty)
         let item = try #require(store.items.first)
         #expect(item.rawTranscript == "um hello world")
+
+        let reader = DictationHistoryStore(defaults: defaults)
+        #expect(reader.items.first?.rawTranscript == "um hello world")
     }
 
-    @Test func updateMostRecent_preserves_raw_transcript() throws {
-        let store = DictationHistoryStore(defaults: makeDefaults())
+    @Test func updateMostRecent_preserves_raw_transcript_and_persists_it() throws {
+        let defaults = makeDefaults()
+        let store = DictationHistoryStore(defaults: defaults)
         store.record(cleanedText: "first", rawTranscript: "raw", mode: anyMode(), context: .empty)
         store.updateMostRecent(cleanedText: "second")
         let item = try #require(store.items.first)
         #expect(item.cleanedText == "second")
         #expect(item.rawTranscript == "raw")
+
+        let reader = DictationHistoryStore(defaults: defaults)
+        #expect(reader.items.first?.cleanedText == "second")
+        #expect(reader.items.first?.rawTranscript == "raw")
     }
 }

@@ -20,8 +20,9 @@ struct DictationHistoryItem: Codable, Identifiable, Equatable {
     let rawTranscript: String?
 }
 
-/// In-memory list (max 25, newest first) of recent cleaned dictations,
-/// JSON-encoded into UserDefaults. Same persistence pattern as `HotkeyChord`.
+/// In-memory list (max 25, newest first) of recent dictations (cleaned text plus
+/// the raw transcript it came from), JSON-encoded into UserDefaults. Same
+/// persistence pattern as `HotkeyChord`.
 @Observable
 @MainActor
 final class DictationHistoryStore {
