@@ -323,4 +323,8 @@ Machine: Apple M3 Pro, 36 GB RAM. Audio: synthetic two-voice fixture tiled to 60
 
 Both rows are second runs (the first includes Core ML compilation). large-v3 turbo misses the 240 s total target; small.en meets both targets, with only 0.2 s of margin on time.
 
-Decision: meetings use small.en.
+Cold-run model load (first run, includes Core ML compilation): small.en about 89 s, large-v3 turbo about 148 s.
+
+WER on bake-off-style clips (WhisperKit, one-shot per clip, no dictionary or cleanup): the real bake-off clips were not on this machine (no `bakeoff` folder in the app container or Application Support), so this uses 12 synthetic `say` clips (5 jargon terms, 152 reference words, via `scripts/make-synthetic-bakeoff.sh`). large-v3 turbo 12.50% WER (19/152), 3/5 terms; small.en 10.53% WER (16/152), 4/5 terms. No measurable accuracy loss from small.en on this set; it has not been checked on real recordings.
+
+Decision: meetings use small.en. This is provisional: the time margin is effectively zero (239.8 s against a 240 s target) and the audio is synthetic, so it must be re-checked on real audio (and a real-clip WER comparison) before relying on it.
