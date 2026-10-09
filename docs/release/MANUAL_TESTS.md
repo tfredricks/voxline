@@ -554,10 +554,14 @@ joins the paste-first list before release.
       recording is not interrupted: the pill keeps recording until you
       release. Then hold Left Shift alone, click the toggle back (a
       shift-click), and add Left Control: a dictation starts.
-- [ ] Open Settings → General, hold the command chord without speaking, and
-      click the Command mode toggle off while still holding. The recording
-      finishes at once (stop sound, microphone indicator off), no command
-      runs, and releasing the keys starts nothing. Turn Command mode back on.
+- [ ] Open Settings → General, hold the command chord, speak, then turn
+      command mode off while still holding (click the Command mode toggle):
+      nothing is sent and no command runs. The recording finishes at once
+      (stop sound, microphone indicator off) with no toast, the clipboard is
+      unchanged, releasing the keys starts nothing, and
+      `scripts/tail-logs.sh --debug --last 2m pipeline llm` shows "command
+      mode was turned off while recording; discarded" and no POST. Turn
+      Command mode back on.
 - [ ] With the default presets, choose Pause Voxline from the menu bar. In
       Notes, ⌥2 on a selection types ™ and nothing runs. Choose Resume
       Voxline: ⌥2 on a selection runs Make concise again, and Esc while it

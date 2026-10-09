@@ -68,7 +68,8 @@ import Testing
         gate: ModifierReleaseGate = .released,
         log: LockedBox<[String]> = LockedBox([]),
         commandModel: String? = nil,
-        modes: [Mode] = defaultModes
+        modes: [Mode] = defaultModes,
+        chords: @escaping @Sendable () -> ChordSet = { .default }
     ) -> Harness {
         let state = AppState()
         let capture = FakeCapture()
@@ -101,7 +102,7 @@ import Testing
             commandModelID: { commandModel },
             vocabulary: { ["Voxline"] },
             skipShortUtterances: { false },
-            chords: { .default },
+            chords: chords,
             releaseGate: gate
         )
         let copied = LockedBox<[String]>([])
@@ -876,6 +877,27 @@ import Testing
         #expect(h.copies.reads.read() == 0)
         #expect(h.history.items.isEmpty)
         #expect(h.pipe.metrics.items.isEmpty)
+    }
+
+    @Test func a_command_recording_is_discarded_when_command_mode_was_turned_off() async {
+        let chords = LockedBox(ChordSet.default)
+        let h = makeHarness(reader: .needingCopy(), copies: ["cat"], chords: { chords.read() })
+        h.pipe.startRecording(kind: .command)
+        chords.write(ChordSet(dictation: ChordSet.default.dictation, command: nil))
+        await h.pipe.finalizeRecording()
+
+        #expect(h.llm.commandRequests.isEmpty)
+        #expect(h.copies.reads.read() == 0)
+        #expect(h.inserter.clipboardRestoreWaits == 0)
+        #expect(h.inserter.calls.isEmpty)
+        #expect(h.copied.read().isEmpty)
+        #expect(h.session.finishCount == 0)
+        #expect(h.history.items.isEmpty)
+        #expect(h.pipe.metrics.items.isEmpty)
+        #expect(h.state.status == .idle)
+        #expect(h.state.toastMessage == nil)
+        #expect(h.state.recordingKind == nil)
+        #expect(h.state.lastTranscript == nil)
     }
 
     @Test func the_edit_context_is_read_at_recording_start() async {

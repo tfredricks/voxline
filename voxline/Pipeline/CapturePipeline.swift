@@ -259,7 +259,9 @@ final class CapturePipeline {
 
     /// Stop capture, finish the transcription session, run LLM cleanup against
     /// the active mode's prompt, and paste the result into the focused field.
-    /// Returns as soon as `cancel()` abandons the work.
+    /// Returns as soon as `cancel()` abandons the work. A command recording
+    /// that finalizes after command mode was turned off is discarded
+    /// silently, before the Cmd+C fallback or the model runs.
     func finalizeRecording() async {
         // Only valid entry state is `.recording`. A spurious finalize while
         // we're already in `.thinking` (an earlier finalize is mid-flight) or
@@ -369,6 +371,12 @@ final class CapturePipeline {
             if let commandContext, copyFallbackTask == commandContext { copyFallbackTask = nil }
         }
         guard generation == self.generation else { return }
+        if startTasks?.editContext != nil, chords().command == nil {
+            AppLog.pipeline.info("command: command mode was turned off while recording; discarded")
+            live.discard()
+            resetIdle()
+            return
+        }
         let router = live.router
 
         // Neither path waits for the session to open (a cloud connect or a
