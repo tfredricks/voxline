@@ -14,8 +14,8 @@ once it reaches its first tagged release.
   picker: Apple Speech (on-device, fastest), Whisper (on-device, still the
   default), or OpenAI (cloud). Switching prepares the new engine in the
   background; if it needs a download, the menu bar shows progress and
-  dictation waits for it. The Whisper model picker shows only while Whisper
-  is selected.
+  dictation is unavailable until it finishes. The Whisper model picker shows
+  only while Whisper is selected.
 - **Live transcript in the pill.** The words you say appear as you speak:
   settled text bright, text that may still change dim. After you let go, the
   pill reads "Transcribing…", "Cleaning up…", or "Inserting…", and past a

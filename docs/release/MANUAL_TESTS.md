@@ -201,10 +201,16 @@ several items below check it.
       dictate again. Text lands.
 - [ ] Choose a Whisper model that is not downloaded yet (for example small.en
       if only large-v3 turbo is cached). The menu bar shows download progress,
-      and a dictation started meanwhile waits for the download. After it
-      finishes, dictate: text lands.
+      and dictation is unavailable until it finishes: the hotkey does nothing
+      and "Retry last dictation" is disabled. After it finishes, dictate: text
+      lands.
 - [ ] Select OpenAI with no OpenAI key stored. A caption says audio is sent to
       OpenAI with your key, and a warning says no key is stored.
+- [ ] With OpenAI selected and no key, the menu bar shows the missing-key
+      error. Select Whisper (model cached): the error clears at once. Repeat
+      with Apple Speech in place of Whisper.
+- [ ] Turn Wi-Fi off, select a Whisper model that is not cached, and wait for
+      "Model setup failed…". Select Apple Speech: the error clears.
 - [ ] Add an OpenAI key (in Recognition when cleanup is not using OpenAI;
       otherwise in API Keys) and dictate. Live text appears a phrase at a time
       and the final text is inserted.
@@ -224,6 +230,8 @@ several items below check it.
       fallback). Cleanup then fails for lack of network, so you get the Retry
       error with the correct transcript on the clipboard. Turn Wi-Fi on and
       click Retry to finish.
+- [ ] With Wi-Fi off and OpenAI selected, tap the chord quickly ten times.
+      The pill goes away at once each time; it never sits on "Transcribing…".
 - [ ] `find ~/Library/Application\ Support/voxline -name '*.wav'` prints
       nothing: the fallback kept the audio in memory only.
 
@@ -253,6 +261,15 @@ several items below check it.
 - [ ] End a sentence on a distinct word ("…and send it to Dana") and release
       the chord the instant you finish it. Repeat five times: the last word is
       never clipped.
+
+## Keyboard layouts
+
+- [ ] Add the "Dvorak – QWERTY ⌘" input source and switch to it. Dictate into
+      Notes and into Terminal: the text is pasted (no ⌘I italics, nothing
+      typed instead). Repeat with plain "Dvorak". Switch back afterwards.
+- [ ] With "Dvorak – QWERTY ⌘" active, select text in an app whose selection
+      Accessibility can't read (for example a Terminal tab) and run a
+      command: the selection is copied and the edit lands.
 
 ## No regressions
 
