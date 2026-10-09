@@ -1,4 +1,3 @@
-// voxline/Meetings/LiveMeetingTranscript.swift
 import Foundation
 import Observation
 
@@ -82,6 +81,9 @@ final class LiveMeetingTranscript: LiveMeetingTranscribing {
                 AppLog.meetings.info("live transcript: \(ordered.count) session(s) open")
             } catch {
                 guard !stopped else { return }
+                for session in sessions.removeAll() { session.cancel() }
+                consumers.values.forEach { $0.cancel() }
+                consumers = [:]
                 availability = .unavailable(error.localizedDescription)
                 AppLog.meetings.notice("live transcript unavailable: \(error.localizedDescription, privacy: .public)")
             }

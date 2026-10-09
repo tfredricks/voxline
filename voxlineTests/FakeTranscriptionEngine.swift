@@ -77,6 +77,8 @@ final class FakeTranscriptionEngine: TranscriptionEngine {
     var capabilities: EngineCapabilities
     var readinessValue: EngineReadiness = .ready
     var openError: Error?
+    /// Consumed one per `openSession` call; a nil entry opens normally. Empty falls back to `openError`.
+    var openErrors: [Error?] = []
     /// When true, `openSession` suspends until `releaseOpen()`, ignoring
     /// cancellation, like a cloud engine on a dead network or a model still
     /// loading.
@@ -102,7 +104,8 @@ final class FakeTranscriptionEngine: TranscriptionEngine {
         if holdsOpen {
             await withCheckedContinuation { openWaiters.append($0) }
         }
-        if let openError { throw openError }
+        if !openErrors.isEmpty, let queued = openErrors.removeFirst() { throw queued }
+        if openErrors.isEmpty, let openError { throw openError }
         let s = nextSessions.isEmpty ? FakeTranscriptionSession() : nextSessions.removeFirst()
         sessions.append(s)
         return s

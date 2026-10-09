@@ -1,4 +1,3 @@
-// voxlineTests/LiveMeetingTranscriptTests.swift
 import Foundation
 import Testing
 @testable import voxline
@@ -106,6 +105,17 @@ import Testing
         engine.openError = Boom()
         let live = await started()
         #expect(live.availability == .unavailable("boom"))
+    }
+
+    @Test func second_open_failure_cancels_the_first_session() async {
+        struct Boom: LocalizedError { var errorDescription: String? { "boom" } }
+        engine.openErrors = [nil, Boom()]
+        let live = await started()
+        #expect(engine.sessions.count == 1)
+        #expect(engine.sessions[0].cancelCount == 1)
+        #expect(live.availability == .unavailable("boom"))
+        live.samples([0.1], track: .mic)
+        #expect(engine.sessions[0].appended.isEmpty)
     }
 
     @Test func needs_preparation_prepares_first() async {
