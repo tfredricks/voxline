@@ -148,4 +148,24 @@ import Foundation
         s.commandModifier = nil   // explicit "off"
         #expect(AppSettings(defaults: d).commandModifier == nil)
     }
+
+    @Test func unset_transcription_engine_defaults_to_engine_default() {
+        let d = makeDefaults()
+        #expect(AppSettings(defaults: d).transcriptionEngine == EngineID.default)
+    }
+
+    @Test func transcription_engine_round_trips() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.transcriptionEngine = .apple
+        #expect(AppSettings(defaults: d).transcriptionEngine == .apple)
+        s.transcriptionEngine = .openAIRealtime
+        #expect(AppSettings(defaults: d).transcriptionEngine == .openAIRealtime)
+    }
+
+    @Test func unknown_transcription_engine_raw_value_falls_back_to_default() {
+        let d = makeDefaults()
+        d.set("not-an-engine", forKey: AppSettings.Key.transcriptionEngine)
+        #expect(AppSettings(defaults: d).transcriptionEngine == EngineID.default)
+    }
 }

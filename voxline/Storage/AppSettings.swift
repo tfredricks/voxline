@@ -13,6 +13,7 @@ struct AppSettings {
         static let whisperModel = "voxline.whisper.model"
         static let hasCompletedFirstRun = "voxline.firstRun.completed"
         static let playHotkeySounds = "voxline.sounds.hotkey"
+        static let transcriptionEngine = "voxline.transcription.engine"
     }
 
     let defaults: UserDefaults
@@ -133,4 +134,14 @@ struct AppSettings {
         set { defaults.set(newValue, forKey: Key.playHotkeySounds) }
     }
 
+    var transcriptionEngine: EngineID {
+        get {
+            guard
+                let raw = defaults.string(forKey: Key.transcriptionEngine),
+                let id = EngineID(rawValue: raw)
+            else { return .default }
+            return id
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.transcriptionEngine) }
+    }
 }
