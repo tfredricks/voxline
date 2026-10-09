@@ -75,6 +75,11 @@ final class FakeTranscriptionEngine: TranscriptionEngine {
     var capabilities: EngineCapabilities
     var readinessValue: EngineReadiness = .ready
     var openError: Error?
+    /// When true, `openSession` suspends until `releaseOpen()`, ignoring
+    /// cancellation, like a cloud engine on a dead network or a model still
+    /// loading.
+    var holdsOpen = false
+    private var openWaiters: [CheckedContinuation<Void, Never>] = []
     var prepareCount = 0
     var openedConfigs: [SessionConfig] = []
     /// Sessions handed out, in order. Pre-seed `nextSessions` to control them.
@@ -92,10 +97,21 @@ final class FakeTranscriptionEngine: TranscriptionEngine {
 
     func openSession(_ config: SessionConfig) async throws -> any TranscriptionSession {
         openedConfigs.append(config)
+        if holdsOpen {
+            await withCheckedContinuation { openWaiters.append($0) }
+        }
         if let openError { throw openError }
         let s = nextSessions.isEmpty ? FakeTranscriptionSession() : nextSessions.removeFirst()
         sessions.append(s)
         return s
+    }
+
+    /// Lets every held and later `openSession` through.
+    func releaseOpen() {
+        holdsOpen = false
+        let waiters = openWaiters
+        openWaiters = []
+        for waiter in waiters { waiter.resume() }
     }
 }
 

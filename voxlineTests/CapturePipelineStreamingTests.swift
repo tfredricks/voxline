@@ -275,7 +275,7 @@ import Foundation
         #expect(h.llm.calls.isEmpty)
         #expect(h.inserter.calls.isEmpty)
         #expect(h.state.toastMessage == nil)
-        #expect(h.session.cancelCount == 1)
+        #expect(await eventually { h.session.cancelCount == 1 })
         #expect(h.session.finishCount == 0)
         #expect(h.pipe.metrics.items.isEmpty)
         #expect(h.state.isCancellable == false)
@@ -289,7 +289,47 @@ import Foundation
 
         #expect(h.state.status == .idle)
         #expect(h.llm.calls.isEmpty)
-        #expect(h.session.cancelCount == 1)
+        #expect(await eventually { h.session.cancelCount == 1 })
+    }
+
+    /// A session slow to open (OpenAI on a dead network, a Whisper model
+    /// still loading) must not hold up a tap: the quiet path drops it
+    /// without waiting, and the session is cancelled once it opens.
+    @Test func a_short_tap_never_waits_for_the_session_to_open() async {
+        let h = makeHarness()
+        h.engine.holdsOpen = true
+        defer { h.engine.releaseOpen() }
+        h.capture.pendingSamples = [Float](repeating: 0.1, count: 1_600)
+        h.pipe.startRecording()
+        let finalize = Task { await h.pipe.finalizeRecording() }
+
+        #expect(await finishes(finalize, within: .seconds(1)))
+        #expect(h.state.status == .idle)
+        #expect(h.state.toastMessage == nil)
+        #expect(h.llm.calls.isEmpty)
+
+        h.engine.releaseOpen()
+        #expect(await eventually { h.session.cancelCount == 1 })
+        #expect(h.session.finishCount == 0)
+    }
+
+    @Test func a_silent_capture_never_waits_for_the_session_to_open() async {
+        let h = makeHarness()
+        h.engine.holdsOpen = true
+        defer { h.engine.releaseOpen() }
+        h.capture.pendingSamples = [Float](repeating: 0, count: 16_000)
+        h.pipe.startRecording()
+        let finalize = Task { await h.pipe.finalizeRecording() }
+
+        #expect(await finishes(finalize, within: .seconds(1)))
+        guard case .error(let message) = h.state.status else {
+            Issue.record("expected .error, got \(h.state.status)"); return
+        }
+        #expect(message.hasPrefix("No audio captured."))
+
+        h.engine.releaseOpen()
+        #expect(await eventually { h.session.cancelCount == 1 })
+        #expect(h.session.finishCount == 0)
     }
 
     @Test func short_silent_tap_is_quiet_not_a_microphone_error() async {
@@ -310,7 +350,7 @@ import Foundation
             Issue.record("expected .error, got \(h.state.status)"); return
         }
         #expect(message.hasPrefix("No audio captured."))
-        #expect(h.session.cancelCount == 1)
+        #expect(await eventually { h.session.cancelCount == 1 })
         #expect(h.llm.calls.isEmpty)
     }
 

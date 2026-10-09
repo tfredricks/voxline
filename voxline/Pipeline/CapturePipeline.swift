@@ -371,9 +371,10 @@ final class CapturePipeline {
         guard generation == self.generation else { return }
         let router = live.router
 
+        // Neither path waits for the session to open (a cloud connect or a
+        // model load can take seconds); `discard` cancels it once it does.
         if router.sampleCount == 0 || router.audioDuration < Self.minimumAudioDuration {
-            await live.cancel()
-            guard generation == self.generation else { return }
+            live.discard()
             resetIdle()
             return
         }
@@ -382,8 +383,7 @@ final class CapturePipeline {
         // Almost always means Microphone permission is denied or a muted
         // device was selected.
         if router.peak == 0 {
-            await live.cancel()
-            guard generation == self.generation else { return }
+            live.discard()
             return setError("No audio captured. Check that Microphone permission is granted and the input device isn't muted.")
         }
 
@@ -394,6 +394,7 @@ final class CapturePipeline {
 
         guard let transcription = await transcribe(live, generation: generation) else { return }
         let transcript = transcription.text
+        let bakeoffAudio = live.savesBakeoffClip && commandContext == nil ? router.retainedAudio : nil
         endLiveSession()
         state.lastTranscribeDuration = Self.seconds(transcription.duration)
         state.lastTranscript = transcript
@@ -428,7 +429,6 @@ final class CapturePipeline {
             return setError(Self.noModeMessage(bundleID: snapshot.bundleID))
         }
         cancellableDictation = (transcript, mode, snapshot.context)
-        let bakeoffAudio = live.savesBakeoffClip ? router.retainedAudio : nil
         await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: timing, bakeoffAudio: bakeoffAudio, generation: generation)
     }
 

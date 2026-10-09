@@ -41,6 +41,19 @@ import Foundation
         #expect(discarding.retainedAudio == [])
     }
 
+    /// Cloud audio is kept only to redo a failed session on-device; once
+    /// the session is done, the recording isn't held any longer.
+    @Test func close_releases_retained_audio_but_keeps_the_tallies() {
+        let router = StreamingSampleRouter(retainsAudio: true)
+        router.append([0.25, -0.5])
+        router.append([0.125])
+        router.close()
+        #expect(router.retainedAudio.isEmpty)
+        #expect(router.sampleCount == 3)
+        #expect(router.peak == 0.5)
+        #expect(router.audioDuration == 3 / AudioFormat.whisperSampleRate)
+    }
+
     @Test func close_drops_further_input() {
         let router = StreamingSampleRouter(retainsAudio: false)
         let session = FakeTranscriptionSession()

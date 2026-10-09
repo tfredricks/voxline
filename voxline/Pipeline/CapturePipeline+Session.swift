@@ -62,11 +62,6 @@ extension CapturePipeline {
             return try await sessionTask.value
         }
 
-        /// Waits for the open to settle, then cancels the session if it opened.
-        func cancel() async {
-            (try? await session())?.cancel()
-        }
-
         /// Cancels the session now, or as soon as it opens, without waiting,
         /// then closes.
         func discard() {
@@ -75,8 +70,9 @@ extension CapturePipeline {
             close()
         }
 
-        /// Stops feeding and observing the session. The session itself must
-        /// already be finished or cancelled.
+        /// Stops feeding and observing the session, and lets go of the
+        /// retained audio. The session itself must already be finished or
+        /// cancelled.
         func close() {
             isClosed = true
             router.close()
