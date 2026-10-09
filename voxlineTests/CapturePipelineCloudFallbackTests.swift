@@ -2,17 +2,6 @@ import Testing
 import Foundation
 @testable import voxline
 
-/// Polls `condition` until it holds or `timeout` passes; never waits longer.
-@MainActor
-private func eventually(timeout: Duration = .seconds(2), _ condition: () -> Bool) async -> Bool {
-    let deadline = ContinuousClock.now + timeout
-    while !condition() {
-        if ContinuousClock.now >= deadline { return false }
-        try? await Task.sleep(for: .milliseconds(2))
-    }
-    return true
-}
-
 @Suite(.timeLimit(.minutes(1))) @MainActor struct CapturePipelineCloudFallbackTests {
 
     typealias FakeCapture = CapturePipelineTests.FakeCapture
@@ -126,6 +115,22 @@ private func eventually(timeout: Duration = .seconds(2), _ condition: () -> Bool
         #expect(h.history.items.first?.rawTranscript == "local text")
     }
 
+    /// The first partial came from the failed cloud session, so it says
+    /// nothing about the transcript that was used.
+    @Test func a_fallback_dictation_records_no_first_partial_time() async throws {
+        let h = makeHarness()
+        h.capture.pendingSamples = Self.speech
+        h.cloudSession.finishResult = .failure(Self.serverError("Internal server error"))
+        h.pipe.startRecording()
+        h.cloudSession.emit(TranscriptPartial(stable: "", volatile: "cloud"))
+        #expect(await eventually { h.state.liveTranscript?.isEmpty == false })
+        await h.pipe.finalizeRecording()
+
+        let row = try #require(h.pipe.metrics.items.first)
+        #expect(row.engineID == "fake:local")
+        #expect(row.firstPartialMs == nil)
+    }
+
     @Test func open_failure_reruns_the_retained_audio_on_device() async throws {
         let h = makeHarness()
         h.capture.pendingSamples = Self.speech
@@ -228,6 +233,57 @@ private func eventually(timeout: Duration = .seconds(2), _ condition: () -> Bool
             Issue.record("expected .error, got \(h.state.status)"); return
         }
         #expect(message.hasPrefix("Couldn't start OpenAI: "))
+    }
+
+    /// A fallback never downloads or installs a model, so an on-device engine
+    /// that isn't ready right now is never opened.
+    @Test(arguments: [EngineReadiness.needsPreparation(downloadMB: 1_500), .unavailable("Speech assets aren't installed.")])
+    func a_finish_failure_does_not_fall_back_to_an_engine_that_isnt_ready(readiness: EngineReadiness) async {
+        let h = makeHarness()
+        h.local.readinessValue = readiness
+        h.cloudSession.finishResult = .failure(Self.serverError("Internal server error"))
+        await dictate(h)
+
+        #expect(h.local.openedConfigs.isEmpty)
+        #expect(h.local.prepareCount == 0)
+        #expect(h.state.status == .error(Self.transcriptionFailed))
+        #expect(h.state.toastMessage == nil)
+        #expect(h.llm.calls.isEmpty)
+        #expect(h.injector.injected.isEmpty)
+    }
+
+    @Test func an_open_failure_does_not_fall_back_to_an_engine_that_isnt_ready() async {
+        let h = makeHarness()
+        h.local.readinessValue = .needsPreparation(downloadMB: 1_500)
+        h.cloud.openError = Self.serverError("The network connection was lost.")
+        await dictate(h)
+
+        #expect(h.local.openedConfigs.isEmpty)
+        #expect(h.local.prepareCount == 0)
+        #expect(h.state.status == .error("Couldn't start OpenAI: The network connection was lost."))
+        #expect(h.state.toastMessage == nil)
+    }
+
+    /// A missing (or blank) key is a setting to fix, not an outage: falling
+    /// back would hide it behind a toast on every dictation.
+    @Test(arguments: [[:], [KeychainAccount.openai: "   "]])
+    func a_missing_openai_key_shows_its_error_instead_of_falling_back(keychain: [String: String]) async {
+        let openAI = OpenAIRealtimeEngine(
+            keychain: InMemoryKeychain(seed: keychain),
+            transport: { _ in
+                Issue.record("no connection without a key")
+                return FakeRealtimeTransport()
+            }
+        )
+        let h = makeHarness(current: openAI)
+        await dictate(h)
+
+        #expect(h.local.openedConfigs.isEmpty)
+        #expect(h.state.status == .error(OpenAIRealtimeEngine.missingKeyReason))
+        #expect(h.state.toastMessage == nil)
+        #expect(h.llm.calls.isEmpty)
+        #expect(h.injector.injected.isEmpty)
+        #expect(h.pipe.metrics.items.isEmpty)
     }
 
     @Test func an_on_device_engine_failure_does_not_fall_back() async {

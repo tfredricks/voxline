@@ -84,6 +84,30 @@ import Testing
         #expect(!EnginePrep.isMissingOpenAIKeyError(.thinking))
     }
 
+    // MARK: Stale missing-key error
+
+    /// Switching from OpenAI without a key to an engine that only needs
+    /// warming is silent, so without the clear the old error would stay.
+    @Test func a_warm_plan_clears_the_missing_key_error() {
+        #expect(EnginePrep.clearsStaleMissingKeyError(plan: .warm, current: .error(OpenAIRealtimeEngine.missingKeyReason)))
+    }
+
+    @Test func a_warm_plan_keeps_every_other_status() {
+        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .warm, current: .error("Transcription failed. Try again or pick a different engine in Settings → General.")))
+        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .warm, current: .error(Self.reason)))
+        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .warm, current: .permissionsError("Grant Accessibility.")))
+        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .warm, current: .idle))
+        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .warm, current: .thinking))
+    }
+
+    /// A download or a failure reports its own status over the error.
+    @Test func only_a_warm_plan_clears_the_missing_key_error() {
+        let missingKey = AppStatus.error(OpenAIRealtimeEngine.missingKeyReason)
+        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .download, current: missingKey))
+        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .fail(OpenAIRealtimeEngine.missingKeyReason), current: missingKey))
+        #expect(!EnginePrep.clearsStaleMissingKeyError(plan: .fail(Self.reason), current: missingKey))
+    }
+
     // MARK: Superseded tasks
 
     @Test func the_latest_uncancelled_task_owns_status_and_window() {

@@ -505,6 +505,9 @@ final class AppCoordinator {
             do {
                 let plan = EnginePrep.plan(for: await engine.readiness())
                 try Task.checkCancellation()
+                if let state, EnginePrep.clearsStaleMissingKeyError(plan: plan, current: state.status) {
+                    state.status = .idle
+                }
                 if let state, let status = EnginePrep.status(for: plan, audience: audience, current: state.status) {
                     state.status = status
                     reporter = state

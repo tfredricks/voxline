@@ -374,7 +374,7 @@ final class CapturePipeline {
             captureTailMs: recording.captureTailMs,
             transcribeMs: Self.milliseconds(transcription.duration),
             engineID: transcription.engineID,
-            firstPartialMs: live.timeToFirstPartial.map(Self.milliseconds)
+            firstPartialMs: transcription.firstPartial.map(Self.milliseconds)
         )
 
         // `recordingIsCommand` was latched at recording start.
@@ -406,7 +406,12 @@ final class CapturePipeline {
         do {
             session = try await live.session()
         } catch {
+            let unavailableReason = await cloudUnavailableReason(live.engine, after: error)
             guard generation == self.generation else { return nil }
+            if let unavailableReason {
+                setError(unavailableReason)
+                return nil
+            }
             let message = "Couldn't start \(live.engine.id.shortName): \(error.localizedDescription)"
             return await transcribeOnDevice(after: error, live: live, start: .now, failureMessage: message, generation: generation)
         }
@@ -416,7 +421,7 @@ final class CapturePipeline {
         do {
             let text = try await session.finish()
             guard generation == self.generation else { return nil }
-            return Transcription(text: text, engineID: live.engine.metricsID, duration: start.duration(to: .now))
+            return Transcription(text: text, engineID: live.engine.metricsID, duration: start.duration(to: .now), firstPartial: live.timeToFirstPartial)
         } catch {
             guard generation == self.generation else { return nil }
             let message = "Transcription failed. Try again or pick a different engine in Settings → General."
@@ -424,15 +429,33 @@ final class CapturePipeline {
         }
     }
 
+    /// Why a cloud engine whose session failed to open can't run at all, such
+    /// as OpenAI without a key. That is a setting to fix, so it is shown as
+    /// is: the fallback would hide it on every dictation.
+    private func cloudUnavailableReason(_ engine: any TranscriptionEngine, after error: Error) async -> String? {
+        guard engine.capabilities.contains(.sendsAudioOffDevice), !(error is CancellationError),
+              case .unavailable(let reason) = await engine.readiness() else { return nil }
+        return reason
+    }
+
     /// The cloud fallback. Shows `failureMessage` instead when the engine is
-    /// on-device, the session was cancelled, or the fallback fails as well.
+    /// on-device, the session was cancelled, the on-device engine isn't ready
+    /// right now (a fallback never downloads or installs a model), or the
+    /// fallback fails as well.
     private func transcribeOnDevice(after error: Error, live: LiveSession, start: ContinuousClock.Instant, failureMessage: String, generation: UInt64) async -> Transcription? {
         guard live.engine.capabilities.contains(.sendsAudioOffDevice), !(error is CancellationError) else {
             setError(failureMessage)
             return nil
         }
-        AppLog.pipeline.error("cloud transcription failed, fell back: \(Self.logDescription(of: error), privacy: .public)")
         let local = engines.engine(for: .onDeviceDefault)
+        let localIsReady = await local.readiness() == .ready
+        guard generation == self.generation else { return nil }
+        guard localIsReady else {
+            AppLog.pipeline.error("cloud transcription failed, \(local.id.rawValue, privacy: .public) not ready to fall back: \(Self.logDescription(of: error), privacy: .public)")
+            setError(failureMessage)
+            return nil
+        }
+        AppLog.pipeline.error("cloud transcription failed, fell back: \(Self.logDescription(of: error), privacy: .public)")
         do {
             let session = try await local.openSession(live.config)
             guard generation == self.generation else {
@@ -450,7 +473,7 @@ final class CapturePipeline {
             }
             guard generation == self.generation else { return nil }
             showToast("Cloud transcription failed — used on-device")
-            return Transcription(text: text, engineID: local.metricsID, duration: start.duration(to: .now))
+            return Transcription(text: text, engineID: local.metricsID, duration: start.duration(to: .now), firstPartial: nil)
         } catch {
             guard generation == self.generation else { return nil }
             AppLog.pipeline.error("on-device fallback failed: \(Self.logDescription(of: error), privacy: .public)")
@@ -684,6 +707,9 @@ final class CapturePipeline {
         let text: String
         let engineID: String
         let duration: Duration
+        /// Recording start → first partial from the session that produced the
+        /// text; nil after a fallback, whose partials came from the failed session.
+        let firstPartial: Duration?
     }
 
     private struct PipelineTiming {

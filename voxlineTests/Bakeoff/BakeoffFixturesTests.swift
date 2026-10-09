@@ -66,6 +66,25 @@ import Foundation
         #expect(try BakeoffFixtures.load(from: dir).terms.isEmpty)
     }
 
+    /// A file can yield more frames than its `length` promised; the loader
+    /// keeps what fits and stops instead of writing past the buffer.
+    @Test func append_stops_once_the_buffer_is_full() throws {
+        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1))
+        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 10))
+        let chunk = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 8))
+        chunk.frameLength = 8
+        let source = try #require(chunk.floatChannelData?[0])
+        for i in 0..<8 { source[i] = Float(i + 1) }
+
+        #expect(BakeoffFixtures.append(chunk, to: buffer))
+        #expect(!BakeoffFixtures.append(chunk, to: buffer))
+        #expect(!BakeoffFixtures.append(chunk, to: buffer))
+
+        #expect(buffer.frameLength == 10)
+        let destination = try #require(buffer.floatChannelData?[0])
+        #expect(Array(UnsafeBufferPointer(start: destination, count: Int(buffer.frameLength))) == [1, 2, 3, 4, 5, 6, 7, 8, 1, 2])
+    }
+
     @Test func suite_is_enabled_only_with_the_opt_in_and_fixtures() throws {
         let populated = try makeDirectory()
         let empty = try makeDirectory()

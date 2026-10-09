@@ -51,16 +51,20 @@ import Foundation
         #expect(found.standardizedFileURL.path == created.standardizedFileURL.path)
     }
 
-    @Test func bakeoffDirectory_isUnderApplicationSupport_andExists() throws {
-        let url = try AppPaths.bakeoffDirectory()
-        #expect(Array(url.pathComponents.suffix(3)) == ["Application Support", "voxline", "bakeoff"])
-        var isDirectory: ObjCBool = false
-        #expect(FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory))
-        #expect(isDirectory.boolValue)
+    /// Never touches the real bake-off folder, where the developer's own
+    /// clips live.
+    @Test func bakeoffDirectory_isInsideTheAppDirectory_andCreatesNothing() {
+        let appDirectory = FileManager.default.temporaryDirectory.appending(path: "voxline-paths-\(UUID().uuidString)", directoryHint: .isDirectory)
+
+        let url = AppPaths.bakeoffDirectory(inAppDirectory: appDirectory)
+
+        #expect(url.standardizedFileURL.path == appDirectory.appending(path: "bakeoff").standardizedFileURL.path)
+        #expect(!FileManager.default.fileExists(atPath: appDirectory.path))
     }
 
-    @Test func bakeoffDirectory_isWhereTheBakeoffReadsFixtures() throws {
-        let url = try AppPaths.bakeoffDirectory()
+    @Test func bakeoffDirectory_isWhereTheBakeoffReadsFixtures() {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let url = AppPaths.bakeoffDirectory(inAppDirectory: support.appending(path: "voxline", directoryHint: .isDirectory))
         #expect(url.standardizedFileURL.path == BakeoffFixtures.directory(environment: [:]).standardizedFileURL.path)
     }
 

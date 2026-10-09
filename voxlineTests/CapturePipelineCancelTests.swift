@@ -4,7 +4,7 @@ import Foundation
 
 /// Polls `condition` until it holds or `timeout` passes; never waits longer.
 @MainActor
-private func eventually(timeout: Duration = .seconds(2), _ condition: () -> Bool) async -> Bool {
+func eventually(timeout: Duration = .seconds(2), _ condition: () -> Bool) async -> Bool {
     let deadline = ContinuousClock.now + timeout
     while !condition() {
         if ContinuousClock.now >= deadline { return false }

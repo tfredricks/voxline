@@ -67,23 +67,29 @@ enum BakeoffFixtures {
     }
 
     /// One `read(into:)` can stop up to a block short of the end, so this
-    /// reads until the whole file is in.
+    /// reads until the whole file is in, or until `length` frames are.
     private static func readToEnd(_ file: AVAudioFile) throws -> AVAudioPCMBuffer? {
         let format = file.processingFormat
         guard let all = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(file.length)),
-              let chunk = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4_096),
-              let destination = all.floatChannelData,
-              let source = chunk.floatChannelData
+              let chunk = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4_096)
         else { return nil }
         while file.framePosition < file.length {
             try file.read(into: chunk)
-            guard chunk.frameLength > 0 else { break }
-            for channel in 0..<Int(format.channelCount) {
-                (destination[channel] + Int(all.frameLength)).update(from: source[channel], count: Int(chunk.frameLength))
-            }
-            all.frameLength += chunk.frameLength
+            guard chunk.frameLength > 0, append(chunk, to: all) else { break }
         }
         return all
+    }
+
+    /// Appends as much of `chunk` as `buffer` has room for. Returns whether
+    /// room is left. Both must share a deinterleaved Float32 format.
+    static func append(_ chunk: AVAudioPCMBuffer, to buffer: AVAudioPCMBuffer) -> Bool {
+        guard let destination = buffer.floatChannelData, let source = chunk.floatChannelData else { return false }
+        let count = min(chunk.frameLength, buffer.frameCapacity - buffer.frameLength)
+        for channel in 0..<Int(buffer.format.channelCount) {
+            (destination[channel] + Int(buffer.frameLength)).update(from: source[channel], count: Int(count))
+        }
+        buffer.frameLength += count
+        return buffer.frameLength < buffer.frameCapacity
     }
 
     private static func samples16kMono(at url: URL) throws -> [Float] {

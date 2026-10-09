@@ -32,9 +32,13 @@ enum AppPaths {
     /// Bake-off clips: where `BakeoffClipWriter` saves them and the bake-off
     /// reads them by default.
     static func bakeoffDirectory() throws -> URL {
-        let dir = try applicationSupportDirectory().appending(path: "bakeoff", directoryHint: .isDirectory)
+        let dir = bakeoffDirectory(inAppDirectory: try applicationSupportDirectory())
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
+    }
+
+    static func bakeoffDirectory(inAppDirectory appDirectory: URL) -> URL {
+        appDirectory.appending(path: "bakeoff", directoryHint: .isDirectory)
     }
 
     /// The model cache root if it already exists; nil otherwise. Never

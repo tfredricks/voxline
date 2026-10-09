@@ -92,4 +92,12 @@ enum EnginePrep {
     static func isMissingOpenAIKeyError(_ status: AppStatus) -> Bool {
         status == .error(OpenAIRealtimeEngine.missingKeyReason)
     }
+
+    /// Whether a prepare task resets `current` to idle once its plan is known.
+    /// A warm plan means the selected engine runs, so a missing-key error left
+    /// from OpenAI is stale; a settings switch warms silently and would
+    /// otherwise leave it showing. Every other status stays.
+    static func clearsStaleMissingKeyError(plan: Plan, current: AppStatus) -> Bool {
+        plan == .warm && isMissingOpenAIKeyError(current)
+    }
 }
