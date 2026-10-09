@@ -27,8 +27,6 @@ body:
       label: macOS version
       options:
         - "26 (Tahoe)"
-        - "15 (Sequoia)"
-        - "14 (Sonoma)"
         - Other (note in description)
     validations:
       required: true

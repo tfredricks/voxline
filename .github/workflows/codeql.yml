@@ -38,16 +38,16 @@ jobs:
 
   analyze-swift:
     name: Analyze Swift
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
 
-      - name: Select latest Xcode 16
+      - name: Select latest Xcode 26
         run: |
-          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
           if [[ -z "$XCODE" ]]; then
-            echo "No Xcode 16.x found on runner" >&2
+            echo "No Xcode 26.x found on runner" >&2
             ls /Applications/ | grep -i xcode >&2 || true
             exit 1
           fi
