@@ -369,6 +369,14 @@ Left Control.
 - [ ] Select text on a read-only Safari page, say "delete this": nothing is
       deleted, the page doesn't navigate, and the toast says nothing was
       changed.
+- [ ] In Terminal, type a few characters at the prompt without pressing
+      Return, select some earlier output, and say "summarize this"; then
+      press ⌥1 on the same selection. Each time the toast reads "Couldn't
+      edit in place — copied, ⌘V to apply", nothing is added at the prompt
+      (the characters you typed are all that is there), and ⌘V pastes the
+      result. Repeat in iTerm2. Then clear the prompt, select nothing, and
+      say "write a command that lists the files here": it is pasted at the
+      prompt, as a dictation would be.
 - [ ] VS Code, nothing selected, cursor on a non-empty line: run a command that
       inserts text ("add a TODO comment"). The cursor's line is not replaced
       or deleted. The built-in untrusted-field list for VS Code and Cursor is

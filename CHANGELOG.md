@@ -55,6 +55,9 @@ once it reaches its first tagged release.
   replaced. The model sees up to 12,000 characters of the field around the
   cursor, so replies and continuations follow what is already there. Selections
   over 8,000 characters are refused, and password fields are never read.
+  In a terminal, selected output is never edited in place: the result is
+  copied for you to paste with ⌘V, and only a draft with nothing selected
+  goes straight to the prompt.
   With ⇧⌥ as the command chord, typing a ⇧⌥ character such as an em dash
   briefly starts and discards a recording (you hear the start sound and see
   the microphone indicator), and a slowly pressed ⌥-digit preset can light the

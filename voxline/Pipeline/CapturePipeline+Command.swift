@@ -240,9 +240,19 @@ extension CapturePipeline {
         var context: EditContext { target.context }
 
         func clipboardText(for inserted: String) -> String { fullRewrite ?? inserted }
+
+        /// In a terminal the selection and the readable field are scrollback,
+        /// not the prompt: only an insert with nothing selected belongs there.
+        var editsTerminalOutput: Bool {
+            InsertionPlan.isTerminal(context.bundleID) && (context.selection != nil || fullRewrite != nil)
+        }
     }
 
     private func act(_ plan: PlannedEdit, _ edit: PerformedEdit, generation: UInt64) async {
+        if let text = plan.insertedText, edit.editsTerminalOutput {
+            AppLog.pipeline.info("command: terminal output isn't editable; copying instead")
+            return copyInstead(text, edit, toast: Self.toast(for: .cannotTarget))
+        }
         switch plan {
         case .nothing(let message):
             recordCommandMetrics(edit, insertMs: 0, strategy: .none, text: "")
@@ -385,5 +395,18 @@ extension CapturePipeline {
             insertStrategy: strategy,
             editAction: edit.action
         ))
+    }
+}
+
+private extension PlannedEdit {
+    /// What the edit would put in the field; nil for a copy or nothing.
+    var insertedText: String? {
+        switch self {
+        case .replace(_, _, let text), .replaceLiveSelection(let text),
+             .insertAfterLiveSelection(let text), .insertAtCaret(let text):
+            return text
+        case .copy, .nothing:
+            return nil
+        }
     }
 }

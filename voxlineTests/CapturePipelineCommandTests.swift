@@ -713,6 +713,109 @@ import Testing
         #expect(h.pipe.metrics.items.isEmpty)
     }
 
+    // MARK: - Terminals
+
+    nonisolated static let terminal = "com.apple.Terminal"
+
+    /// Terminal whose scrollback reads "the cat sat", fully readable.
+    nonisolated static func terminalContext(selecting range: UTF16Range? = nil) -> EditContext {
+        var context = notesContext(selecting: range)
+        context.appName = "Terminal"
+        context.bundleID = terminal
+        return context
+    }
+
+    /// Terminal whose scrollback is unavailable, with `selection` read
+    /// without a range.
+    nonisolated static func terminalLiveContext(selection: String?) -> EditContext {
+        var context = unavailableContext(selection: selection)
+        context.appName = "Terminal"
+        context.bundleID = terminal
+        return context
+    }
+
+    @Test(arguments: [
+        (CapturePipelineCommandTests.terminalContext(selecting: cat), CommandAction.replaceSelection, "dog", "dog", "dog"),
+        (CapturePipelineCommandTests.terminalLiveContext(selection: "cat"), .replaceSelection, "dog", "dog", "dog"),
+        (CapturePipelineCommandTests.terminalContext(selecting: cat), .insert, "!", "!", "!"),
+        (CapturePipelineCommandTests.terminalLiveContext(selection: "cat"), .insert, "!", "!", "!"),
+        (CapturePipelineCommandTests.terminalContext(), .rewrite, "the dog sat", "the dog sat", "dog"),
+    ])
+    func an_edit_of_terminal_output_is_copied_never_pasted_at_the_prompt(
+        context: EditContext, action: CommandAction, text: String, copied: String, history: String
+    ) async throws {
+        let h = makeHarness(reader: reader(context))
+        answer(h, action, text)
+        await runCommand(h)
+
+        #expect(h.inserter.calls.isEmpty)
+        #expect(h.reader.readCount == 1)
+        #expect(h.copies.reads.read() == 0)
+        #expect(h.copied.read() == [copied])
+        #expect(h.state.toastMessage == "Couldn't edit in place — copied, ⌘V to apply")
+        #expect(h.state.status == .idle)
+        #expect(h.history.items.first?.cleanedText == history)
+        let row = try #require(h.pipe.metrics.items.first)
+        #expect(row.insertStrategy == .copy)
+        #expect(row.insertMs == 0)
+        #expect(row.editAction == action.rawValue)
+    }
+
+    @Test func an_edit_of_copied_terminal_output_is_copied_without_copying_it_again() async {
+        var context = Self.terminalLiveContext(selection: nil)
+        context.needsCopyFallback = true
+        let h = makeHarness(reader: reader(context), copies: ["cat"])
+        answer(h, .replaceSelection, "dog")
+        await runCommand(h)
+
+        #expect(h.inserter.calls.isEmpty)
+        #expect(h.copies.reads.read() == 1)
+        #expect(h.copied.read() == ["dog"])
+        #expect(h.state.toastMessage == "Couldn't edit in place — copied, ⌘V to apply")
+    }
+
+    @Test func a_preset_on_terminal_output_is_copied() async {
+        let h = makeHarness(reader: reader(Self.terminalContext(selecting: Self.cat)))
+        await h.pipe.runPreset(Self.makeConcise)
+
+        #expect(h.inserter.calls.isEmpty)
+        #expect(h.copied.read() == ["transformed"])
+        #expect(h.state.toastMessage == "Couldn't edit in place — copied, ⌘V to apply")
+        #expect(h.state.status == .idle)
+    }
+
+    @Test func a_deletion_of_terminal_output_changes_nothing() async throws {
+        let h = makeHarness(reader: reader(Self.terminalContext(selecting: Self.cat)))
+        answer(h, .replaceSelection, "")
+        await runCommand(h)
+
+        #expect(h.inserter.calls.isEmpty)
+        #expect(h.copied.read().isEmpty)
+        #expect(h.history.items.isEmpty)
+        #expect(h.state.toastMessage == Self.nothingDeleted)
+        #expect(try #require(h.pipe.metrics.items.first).insertStrategy == DictationMetrics.InsertStrategyTag.none)
+    }
+
+    @Test(arguments: [
+        (CapturePipelineCommandTests.terminalContext(), InsertTarget.range(UTF16Range(location: 11, length: 0), expected: "")),
+        (CapturePipelineCommandTests.terminalLiveContext(selection: nil), .liveSelection),
+    ])
+    func an_insert_with_nothing_selected_in_a_terminal_lands_at_the_prompt(context: EditContext, target: InsertTarget) async throws {
+        let h = makeHarness(reader: reader(context))
+        answer(h, .insert, "ls -la")
+        h.inserter.outcomes = [.inserted(.paste, verified: true)]
+        await runCommand(h)
+
+        let call = try #require(h.inserter.calls.first)
+        #expect(h.inserter.calls.count == 1)
+        #expect(call.text == "ls -la")
+        #expect(call.target == target)
+        #expect(call.bundleID == Self.terminal)
+        #expect(h.copied.read().isEmpty)
+        #expect(h.state.toastMessage == nil)
+        #expect(try #require(h.pipe.metrics.items.first).insertStrategy == .paste)
+    }
+
     // MARK: - Cancel
 
     @Test func esc_while_editing_drops_the_result() async {

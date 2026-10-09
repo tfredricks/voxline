@@ -616,6 +616,25 @@ import Foundation
         #expect(call.trigger == ChordSet.default.dictation.families)
     }
 
+    @Test func dictation_into_a_terminal_still_inserts_at_the_prompt() async throws {
+        let (pipe, state, _, _, _, _, _, inserter, _) = makePipeline(frontmostBundleID: "com.apple.Terminal")
+        inserter.outcomes = [.inserted(.paste, verified: true)]
+        let copied = LockedBox<[String]>([])
+        pipe.transcriptFallback = { text in copied.mutate { $0.append(text) } }
+
+        await startAndFinalize(pipe, state: state)
+
+        let call = try #require(inserter.calls.first)
+        #expect(inserter.calls.count == 1)
+        #expect(call.text == "cleaned")
+        #expect(call.target == .liveSelection)
+        #expect(call.bundleID == "com.apple.Terminal")
+        #expect(copied.read().isEmpty)
+        #expect(state.toastMessage == nil)
+        #expect(state.status == .idle)
+        #expect(try #require(pipe.metrics.items.first).insertStrategy == .paste)
+    }
+
     @Test(arguments: [NotInsertedReason.fieldChanged, .focusMoved, .cannotTarget, .outcomeUnknown])
     func not_inserted_copies_with_the_paste_hint(reason: NotInsertedReason) async throws {
         let (pipe, state, _, _, _, _, _, inserter, history) = makePipeline()
