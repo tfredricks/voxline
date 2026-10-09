@@ -48,6 +48,32 @@ import Testing
         }
     }
 
+    @Test func focused_read_without_ax_support_is_absent() {
+        for status: AXError in [.noValue, .notImplemented, .attributeUnsupported] {
+            #expect(LiveFocusedElementSource.classify(status, nil) == .absent)
+        }
+    }
+
+    @Test func focused_read_timeouts_and_other_errors_are_failed() {
+        for status: AXError in [.cannotComplete, .failure, .apiDisabled, .invalidUIElement, .illegalArgument] {
+            #expect(LiveFocusedElementSource.classify(status, nil) == .failed)
+        }
+    }
+
+    @Test func focused_read_success_needs_an_element() {
+        let app = AXUIElementCreateApplication(5)
+        #expect(LiveFocusedElementSource.classify(.success, app) == .value(AXElementRef(element: app)))
+        #expect(LiveFocusedElementSource.classify(.success, "text" as CFString) == .failed)
+        #expect(LiveFocusedElementSource.classify(.success, nil) == .failed)
+    }
+
+    @Test func ax_error_log_names() {
+        #expect(AXError.notImplemented.logName == "notImplemented")
+        #expect(AXError.noValue.logName == "noValue")
+        #expect(AXError.cannotComplete.logName == "cannotComplete")
+        #expect(AXError.attributeUnsupported.logName == "attributeUnsupported")
+    }
+
     @Test func ax_read_accessors() {
         #expect(AXRead<Int>.value(3).value == 3)
         #expect(AXRead<Int>.absent.value == nil)

@@ -871,6 +871,20 @@ import Foundation
         #expect(pipe.metrics.items.isEmpty)
     }
 
+    @Test func paste_verification_failure_is_a_plain_error() async {
+        let (pipe, state, _, _, _, _, _, inserter, _) = makePipeline()
+        inserter.outcomes = [.failed(.pasteVerificationFailed)]
+        let copied = LockedBox<[String]>([])
+        pipe.transcriptFallback = { text in copied.mutate { $0.append(text) } }
+
+        await startAndFinalize(pipe, state: state)
+
+        #expect(state.status == .error(TextInsertionError.pasteVerificationFailed.errorDescription!))
+        #expect(copied.read().isEmpty)
+        #expect(pipe.metrics.items.isEmpty)
+        #expect(state.retryTranscript == "hello world")
+    }
+
     @Test func inserted_records_the_strategy() async throws {
         let (pipe, state, _, _, _, _, _, inserter, _) = makePipeline()
         inserter.outcomes = [.inserted(.paste, verified: false)]

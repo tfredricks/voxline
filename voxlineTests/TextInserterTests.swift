@@ -80,9 +80,8 @@ import Testing
         gate.forceClear = {}
         gate.sleep = { _ in events.mutate { $0.append("gate") } }
 
-        var pasteGate = ModifierReleaseGate()
-        pasteGate.flagsState = { [] }
-        pasteGate.forceClear = {}
+        var pasteGate = gate
+        pasteGate.sleep = { _ in events.mutate { $0.append("paste gate") } }
 
         let paste = PasteInjector(
             pasteboard: board,
@@ -253,14 +252,12 @@ import Testing
         #expect(h.typed.read().count == 1)
     }
 
-    @Test func all_strategies_failed_message_lists_what_was_tried() {
+    @Test func all_strategies_failed_message_is_plain() {
         let error = TextInsertionError.allStrategiesFailed([
-            "Accessibility write rejected", "Clipboard paste skipped: test refusal", "Typing produced no change",
+            "Accessibility write rejected", "Clipboard paste skipped: pasteboardItems was nil", "Typing produced no change",
         ])
-        #expect(error.errorDescription == "Text insertion failed. Accessibility write rejected. Clipboard paste skipped: test refusal. Typing produced no change.")
-        #expect(TextInsertionError.allStrategiesFailed(["Typing produced no change"]).errorDescription
-                == "Text insertion failed. Typing produced no change.")
-        #expect(TextInsertionError.allStrategiesFailed([]).errorDescription == "Text insertion failed.")
+        #expect(error.errorDescription == "Couldn't insert the text.")
+        #expect(TextInsertionError.allStrategiesFailed([]).errorDescription == "Couldn't insert the text.")
     }
 
     // MARK: - Checks
@@ -302,6 +299,7 @@ import Testing
         let outcome = await insert(h, bundleID: "org.alacritty", trigger: [.shift])
 
         #expect(outcome == .inserted(.paste, verified: false))
+        #expect(h.events.read() == ["paste gate", "paste"])
         #expect(h.pastes.read() == 1)
         #expect(h.typed.read().isEmpty)
         #expect(h.board.string(forType: .string) == "ORIGINAL")

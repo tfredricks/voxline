@@ -129,20 +129,24 @@ struct FocusedElementSnapshot: @unchecked Sendable {
 enum LiveFocusedElementSource {
     /// System-wide focused element with the app's name/bundle ID from its pid
     /// and the window title read the way `DefaultAXContextProbe` reads it
-    /// (element's window, then the app's focused window). `.noValue` on the
-    /// focused-element read is `.absent`; any other error is `.failed`.
+    /// (element's window, then the app's focused window). The read is
+    /// classified by `classify(_:_:)`.
     static func read() -> AXRead<FocusedElementSnapshot> {
         var value: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(
             AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute as CFString, &value
         )
-        switch status {
-        case .success: break
-        case .noValue: return .absent
-        default: return .failed
+        let element: AXUIElement
+        switch classify(status, value) {
+        case .value(let ref):
+            element = ref.element
+        case .absent:
+            AppLog.context.debug("focused element: none (\(status.logName, privacy: .public))")
+            return .absent
+        case .failed:
+            AppLog.context.debug("focused element: read failed (\(status.logName, privacy: .public))")
+            return .failed
         }
-        guard let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return .failed }
-        let element = value as! AXUIElement
 
         var pid: pid_t = 0
         let hasPid = AXUIElementGetPid(element, &pid) == .success
@@ -154,6 +158,18 @@ enum LiveFocusedElementSource {
             bundleID: app?.bundleIdentifier,
             windowTitle: windowTitle(of: element, pid: hasPid ? pid : nil)
         ))
+    }
+
+    /// Classified like `LiveAXTextElement.classify`: a process without AX
+    /// support answers `.notImplemented`, so that, `.noValue`, and
+    /// `.attributeUnsupported` are `.absent` (no accessible focus); a
+    /// timeout or any other error is `.failed`. A success must carry an
+    /// AXUIElement.
+    static func classify(_ status: AXError, _ value: CFTypeRef?) -> AXRead<AXElementRef> {
+        LiveAXTextElement.classify(status, value) { value in
+            guard CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+            return AXElementRef(element: value as! AXUIElement)
+        }
     }
 
     private static func windowTitle(of element: AXUIElement, pid: pid_t?) -> String? {
@@ -172,5 +188,30 @@ enum LiveFocusedElementSource {
         guard let s, !s.isEmpty else { return nil }
         if s.count <= maxLen { return s }
         return String(s.prefix(maxLen - 1)) + "…"
+    }
+}
+
+extension AXError {
+    /// The case name, for logs.
+    var logName: String {
+        switch self {
+        case .success: return "success"
+        case .failure: return "failure"
+        case .illegalArgument: return "illegalArgument"
+        case .invalidUIElement: return "invalidUIElement"
+        case .invalidUIElementObserver: return "invalidUIElementObserver"
+        case .cannotComplete: return "cannotComplete"
+        case .attributeUnsupported: return "attributeUnsupported"
+        case .actionUnsupported: return "actionUnsupported"
+        case .notificationUnsupported: return "notificationUnsupported"
+        case .notImplemented: return "notImplemented"
+        case .notificationAlreadyRegistered: return "notificationAlreadyRegistered"
+        case .notificationNotRegistered: return "notificationNotRegistered"
+        case .apiDisabled: return "apiDisabled"
+        case .noValue: return "noValue"
+        case .parameterizedAttributeUnsupported: return "parameterizedAttributeUnsupported"
+        case .notEnoughPrecision: return "notEnoughPrecision"
+        @unknown default: return "AXError(\(rawValue))"
+        }
     }
 }

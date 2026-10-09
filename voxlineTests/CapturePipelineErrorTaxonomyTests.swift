@@ -89,7 +89,7 @@ import Foundation
         let (p, state, _) = pipeline(insert: .failed(.allStrategiesFailed(["Typing produced no change"])))
         await runOnce(p, state)
         guard case .error(let msg) = state.status else { Issue.record("expected error"); return }
-        #expect(msg.lowercased().contains("text insertion"))
+        #expect(msg == "Couldn't insert the text.")
     }
 
     @Test func revoked_accessibility_during_paste_is_sticky_permissions_error() async {

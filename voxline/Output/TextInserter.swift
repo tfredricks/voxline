@@ -174,7 +174,7 @@ final class TextInserter: TextInserting {
                 AppLog.paste.debug("insert: typing produced no change")
             }
         }
-        AppLog.paste.debug("insert: all \(failures.count, privacy: .public) strategies failed")
+        AppLog.paste.info("insert: all strategies failed: \(failures.joined(separator: "; "), privacy: .public)")
         return .failed(.allStrategiesFailed(failures))
     }
 
