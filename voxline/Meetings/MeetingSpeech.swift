@@ -14,6 +14,8 @@ struct TrackTranscript: @unchecked Sendable {
 }
 
 protocol MeetingTranscribing: Sendable {
+    /// Loads (downloading if needed) the model. Idempotent.
+    func prepare() async throws
     func transcribe(_ samples: [Float]) async throws -> TrackTranscript
     /// Frees the loaded model; the next transcribe loads it again.
     func release() async
@@ -23,6 +25,8 @@ protocol MeetingTranscribing: Sendable {
 /// Throws `MeetingDiarizationError` when diarization was impossible or its
 /// output could not be matched to the transcript.
 protocol MeetingDiarizing: Sendable {
+    /// Loads (downloading if needed) the model. Idempotent.
+    func prepare() async throws
     func diarize(_ samples: [Float], transcript: TrackTranscript) async throws -> [SpeakerSegmentText]
     func release() async
 }

@@ -11,6 +11,9 @@ final class FakeTranscriber: MeetingTranscribing, @unchecked Sendable {
     var responses: [Result<TrackTranscript, Error>] = []
     private(set) var calls = 0
     private(set) var released = false
+    private(set) var prepared = false
+    var onPrepare: (() -> Void)?
+    func prepare() async throws { prepared = true; onPrepare?() }
     func transcribe(_ samples: [Float]) async throws -> TrackTranscript {
         calls += 1
         return try responses.removeFirst().get()
@@ -21,6 +24,7 @@ final class FakeTranscriber: MeetingTranscribing, @unchecked Sendable {
 final class FakeDiarizer: MeetingDiarizing, @unchecked Sendable {
     var response: Result<[SpeakerSegmentText], Error> = .success([])
     private(set) var receivedSegments: [TimedSegment]?
+    func prepare() async throws {}
     func diarize(_ samples: [Float], transcript: TrackTranscript) async throws -> [SpeakerSegmentText] {
         receivedSegments = transcript.segments
         return try response.get()
@@ -197,8 +201,12 @@ final class FakeTranscoder: MeetingAudioTranscoding, @unchecked Sendable {
         let pipeline = makePipeline(download: true)
         var stages: [MeetingStage] = []
         pipeline.onStage = { stages.append($0) }
+        var stageAtPrepare: MeetingStage?
+        transcriber.onPrepare = { stageAtPrepare = stages.last }
         _ = await pipeline.process(id)
         #expect(stages.first == .downloadingModels)
+        #expect(stageAtPrepare == .downloadingModels)
+        #expect(transcriber.prepared)
     }
 
     @Test func regenerate_writes_a_new_file_and_keeps_the_old_one() async throws {
@@ -219,5 +227,33 @@ final class FakeTranscoder: MeetingAudioTranscoding, @unchecked Sendable {
         #expect(second.lastPathComponent == "2026-10-09 1402 Better title (regenerated).md")
         #expect(FileManager.default.fileExists(atPath: first.path))
         #expect(try store.load(id).notesPath == second.path)
+    }
+
+    @Test func one_track_failing_and_the_other_empty_marks_failed_and_keeps_audio() async throws {
+        let id = try meeting(mic: speech, system: speech)
+        transcriber.responses = [.success(TrackTranscript(segments: [])), .failure(Boom())]
+        let outcome = await makePipeline().process(id)
+        guard case .failed = outcome else {
+            Issue.record("expected .failed, got \(outcome)")
+            return
+        }
+        #expect(try store.load(id).state == .failed)
+        #expect(FileManager.default.fileExists(atPath: store.directory(for: id).systemPCM.path))
+    }
+
+    @Test func regenerate_with_notes_failure_returns_failed_and_changes_nothing() async throws {
+        let id = try meeting(mic: speech, system: nil, tap: false)
+        transcriber.responses = [.success(transcript("Hello."))]
+        let pipeline = makePipeline()
+        guard case .written(let first) = await pipeline.process(id) else {
+            Issue.record("first pass failed")
+            return
+        }
+        notes.response = .failure(Boom(message: "No API key configured."))
+        let outcome = await pipeline.regenerateNotes(id)
+        #expect(outcome == .failed("No API key configured."))
+        #expect(try store.load(id).notesPath == first.path)
+        let files = try FileManager.default.contentsOfDirectory(atPath: notesFolder.path)
+        #expect(files.count == 1)
     }
 }

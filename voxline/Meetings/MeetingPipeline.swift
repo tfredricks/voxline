@@ -86,6 +86,22 @@ final class MeetingPipeline: MeetingProcessing {
     }
 
     func process(_ id: UUID) async -> MeetingOutcome {
+        let outcome = await run(id)
+        await transcriber.release()
+        await diarizer.release()
+        return outcome
+    }
+
+    private static func offMain<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+        try await Task.detached(priority: .userInitiated, operation: work).value
+    }
+
+    private static func milliseconds(_ duration: Duration) -> Int {
+        let parts = duration.components
+        return Int(parts.seconds * 1000 + parts.attoseconds / 1_000_000_000_000_000)
+    }
+
+    private func run(_ id: UUID) async -> MeetingOutcome {
         guard var meta = try? store.load(id) else { return .failed("This meeting's files are missing.") }
         let dir = store.directory(for: id)
         meta.state = .processing
@@ -94,11 +110,17 @@ final class MeetingPipeline: MeetingProcessing {
         let began = clock.now
 
         do {
-            let micPeak = try PCMTrackReader.peak(at: dir.micPCM)
-            let systemPeak = try PCMTrackReader.peak(at: dir.systemPCM)
+            let micURL = dir.micPCM
+            let systemURL = dir.systemPCM
+            let (micPeak, systemPeak, sampleCount) = try await Self.offMain {
+                (
+                    try PCMTrackReader.peak(at: micURL),
+                    try PCMTrackReader.peak(at: systemURL),
+                    max(PCMTrackReader.sampleCount(at: micURL), PCMTrackReader.sampleCount(at: systemURL))
+                )
+            }
             if meta.durationSeconds <= 0 {
-                let samples = max(PCMTrackReader.sampleCount(at: dir.micPCM), PCMTrackReader.sampleCount(at: dir.systemPCM))
-                meta.durationSeconds = Double(samples) / AudioFormat.whisperSampleRate
+                meta.durationSeconds = Double(sampleCount) / AudioFormat.whisperSampleRate
             }
             let callMode = systemPeak >= Self.silencePeak
             let micHasSpeech = micPeak >= Self.silencePeak
@@ -111,37 +133,52 @@ final class MeetingPipeline: MeetingProcessing {
             let config = settings()
             var warnings: [String] = []
             if meta.systemTapStarted && systemPeak == 0 { warnings.append(Self.silentSystemWarning) }
-            if config.modelsNeedDownload { onStage?(.downloadingModels) }
+            if config.modelsNeedDownload {
+                onStage?(.downloadingModels)
+                do {
+                    try await transcriber.prepare()
+                } catch {
+                    throw MeetingPipelineError.transcriptionFailed(error.localizedDescription)
+                }
+            }
 
             let trackCount = (micHasSpeech ? 1 : 0) + (callMode ? 1 : 0)
             var trackIndex = 0
-            var micSamples: [Float] = []
+            var micSamples: [Float]?
             var micTranscript: TrackTranscript?
-            var systemSamples: [Float] = []
+            var systemSamples: [Float]?
             var systemTranscript: TrackTranscript?
             var firstError: String?
+            var micMs = 0
+            var systemMs = 0
 
             if micHasSpeech {
                 trackIndex += 1
                 onStage?(.transcribing(track: trackIndex, of: trackCount))
-                micSamples = try PCMTrackReader.samples(at: dir.micPCM)
+                let samples = try await Self.offMain { try PCMTrackReader.samples(at: micURL) }
+                let t0 = clock.now
                 do {
-                    micTranscript = try await transcriber.transcribe(micSamples)
+                    micTranscript = try await transcriber.transcribe(samples)
                 } catch {
                     firstError = firstError ?? error.localizedDescription
                     warnings.append(Self.micMissingWarning(error.localizedDescription))
                 }
+                micMs = Self.milliseconds(clock.now - t0)
+                if !callMode { micSamples = samples }
             }
             if callMode {
                 trackIndex += 1
                 onStage?(.transcribing(track: trackIndex, of: trackCount))
-                systemSamples = try PCMTrackReader.samples(at: dir.systemPCM)
+                let samples = try await Self.offMain { try PCMTrackReader.samples(at: systemURL) }
+                let t0 = clock.now
                 do {
-                    systemTranscript = try await transcriber.transcribe(systemSamples)
+                    systemTranscript = try await transcriber.transcribe(samples)
                 } catch {
                     firstError = firstError ?? error.localizedDescription
                     warnings.append(Self.systemMissingWarning(error.localizedDescription))
                 }
+                systemMs = Self.milliseconds(clock.now - t0)
+                systemSamples = samples
             }
             await transcriber.release()
             guard micTranscript != nil || systemTranscript != nil else {
@@ -149,38 +186,56 @@ final class MeetingPipeline: MeetingProcessing {
             }
 
             onStage?(.identifyingSpeakers)
-            let utterances: [MeetingUtterance]
+            let diarizeStart = clock.now
+            let others: [SpeakerSegmentText]
             if callMode {
-                micSamples = []
-                let others = await diarized(systemSamples, systemTranscript, warnings: &warnings)
-                utterances = TranscriptMerger.merge(mic: micTranscript?.segments ?? [], others: others, unattributedLabel: "Them")
+                others = await diarized(systemSamples ?? [], systemTranscript, warnings: &warnings)
             } else {
-                let others = await diarized(micSamples, micTranscript, warnings: &warnings)
-                utterances = TranscriptMerger.merge(mic: [], others: others, unattributedLabel: "Speaker")
+                others = await diarized(micSamples ?? [], micTranscript, warnings: &warnings)
             }
+            micSamples = nil
+            systemSamples = nil
             await diarizer.release()
+            let diarizeMs = Self.milliseconds(clock.now - diarizeStart)
+
+            let mergeStart = clock.now
+            let utterances = callMode
+                ? TranscriptMerger.merge(mic: micTranscript?.segments ?? [], others: others, unattributedLabel: "Them")
+                : TranscriptMerger.merge(mic: [], others: others, unattributedLabel: "Speaker")
+            let mergeMs = Self.milliseconds(clock.now - mergeStart)
             guard !utterances.isEmpty else {
+                if let firstError { throw MeetingPipelineError.transcriptionFailed(firstError) }
                 store.delete(id)
+                AppLog.meetings.info("transcript was empty; meeting discarded")
                 return .nothingRecorded
             }
 
             try JSONEncoder().encode(MeetingTranscriptFile(utterances: utterances, warnings: warnings)).write(to: dir.transcript, options: .atomic)
 
             onStage?(.writingNotes)
+            let notesStart = clock.now
             let (generated, failure) = await generateNotes(utterances, meta: meta, config: config)
+            let notesMs = Self.milliseconds(clock.now - notesStart)
             let url = try writeNotes(
                 MeetingDocument(startedAt: meta.startedAt, duration: meta.durationSeconds, utterances: utterances,
                                 notes: generated, notesFailure: failure, warnings: warnings),
                 startedAt: meta.startedAt, folder: config.notesFolder, suffix: nil
             )
-            finishAudio(id, retention: config.retention)
+            await finishAudio(id, retention: config.retention)
 
             meta.state = .done
             meta.title = generated?.title
             meta.notesPath = url.path
             meta.failureReason = nil
             try? store.save(meta)
-            AppLog.meetings.info("processed \(Int(meta.durationSeconds)) s meeting in \(clock.now - began, privacy: .public); call mode \(callMode); notes \(generated == nil ? "failed" : "ok", privacy: .public)")
+            let speakers = Set(utterances.map(\.speaker)).count
+            let transcriptTokens = utterances.reduce(0) { $0 + $1.text.utf8.count } / 4
+            AppLog.meetings.info("""
+                processed meeting: duration \(Int(meta.durationSeconds)) s, systemAudio \(callMode), \
+                transcribeMic \(micMs) ms, transcribeSystem \(systemMs) ms, diarize \(diarizeMs) ms, merge \(mergeMs) ms, notes \(notesMs) ms, \
+                speakers \(speakers), transcriptTokens ~\(transcriptTokens), notes \(generated == nil ? "failed" : "ok", privacy: .public), \
+                total \(clock.now - began, privacy: .public)
+                """)
             return .written(url)
         } catch {
             meta.state = .failed
@@ -199,13 +254,14 @@ final class MeetingPipeline: MeetingProcessing {
         let config = settings()
         onStage?(.writingNotes)
         let (generated, failure) = await generateNotes(file.utterances, meta: meta, config: config)
+        guard let generated else { return .failed(failure ?? "Notes could not be generated.") }
         do {
             let url = try writeNotes(
                 MeetingDocument(startedAt: meta.startedAt, duration: meta.durationSeconds, utterances: file.utterances,
-                                notes: generated, notesFailure: failure, warnings: file.warnings),
+                                notes: generated, notesFailure: nil, warnings: file.warnings),
                 startedAt: meta.startedAt, folder: config.notesFolder, suffix: "regenerated"
             )
-            if let generated { meta.title = generated.title }
+            meta.title = generated.title
             meta.notesPath = url.path
             try? store.save(meta)
             return .written(url)
@@ -218,6 +274,7 @@ final class MeetingPipeline: MeetingProcessing {
         guard let transcript else { return [] }
         let unattributed = transcript.segments.map { SpeakerSegmentText(speakerID: nil, start: $0.start, end: $0.end, text: $0.text) }
         do {
+            try await diarizer.prepare()
             let segments = try await diarizer.diarize(samples, transcript: transcript)
             return segments.isEmpty ? unattributed : segments
         } catch {
@@ -248,16 +305,21 @@ final class MeetingPipeline: MeetingProcessing {
         return url
     }
 
-    private func finishAudio(_ id: UUID, retention: MeetingAudioRetention) {
+    private func finishAudio(_ id: UUID, retention: MeetingAudioRetention) async {
         guard retention.keepsAudio else {
             store.deleteAudio(id)
             return
         }
         let dir = store.directory(for: id)
-        for (pcm, m4a) in [(dir.micPCM, dir.micM4A), (dir.systemPCM, dir.systemM4A)] where PCMTrackReader.sampleCount(at: pcm) > 0 {
+        let transcoder = transcoder
+        for (pcm, m4a) in [(dir.micPCM, dir.micM4A), (dir.systemPCM, dir.systemM4A)] {
             do {
-                try transcoder.transcode(pcm: pcm, to: m4a)
-                try? FileManager.default.removeItem(at: pcm)
+                let transcoded = try await Self.offMain {
+                    guard PCMTrackReader.sampleCount(at: pcm) > 0 else { return false }
+                    try transcoder.transcode(pcm: pcm, to: m4a)
+                    return true
+                }
+                if transcoded { try? FileManager.default.removeItem(at: pcm) }
             } catch {
                 AppLog.meetings.error("transcode failed; keeping raw audio: \(error.localizedDescription, privacy: .public)")
             }

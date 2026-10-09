@@ -10,6 +10,8 @@ actor SpeakerKitDiarizer: MeetingDiarizing {
 
     init() {}
 
+    func prepare() async throws { _ = try await loadedKit() }
+
     func diarize(_ samples: [Float], transcript: TrackTranscript) async throws -> [SpeakerSegmentText] {
         guard !transcript.segments.isEmpty else { return [] }
         let wordCount = transcript.results.reduce(0) { total, result in

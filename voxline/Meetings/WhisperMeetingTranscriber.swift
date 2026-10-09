@@ -14,6 +14,8 @@ actor WhisperMeetingTranscriber: MeetingTranscribing {
         self.model = model
     }
 
+    func prepare() async throws { _ = try await loadedKit() }
+
     func transcribe(_ samples: [Float]) async throws -> TrackTranscript {
         let kit = try await loadedKit()
         let results = try await kit.transcribe(
