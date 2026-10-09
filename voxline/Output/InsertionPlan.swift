@@ -26,8 +26,8 @@ enum InsertionPlan {
     /// editable text: neither a paste nor the delete key removes it, and a
     /// Backspace deletes before the shell's cursor instead.
     static let terminalBundleIDs: Set<String> = [
-        "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "net.kovidgoyal.kitty",
-        "io.alacritty", "com.mitchellh.ghostty", "com.github.wez.wezterm",
+        "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "dev.warp.Warp-Preview",
+        "net.kovidgoyal.kitty", "org.alacritty", "com.mitchellh.ghostty", "com.github.wez.wezterm",
     ]
 
     static func isTerminal(_ bundleID: String?) -> Bool {

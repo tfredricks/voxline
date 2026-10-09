@@ -40,10 +40,10 @@ import Testing
 
     @Test func terminals_are_listed() {
         let terminals: Set<String> = [
-            "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "net.kovidgoyal.kitty",
-            "io.alacritty", "com.mitchellh.ghostty", "com.github.wez.wezterm",
+            "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "dev.warp.Warp-Preview",
+            "net.kovidgoyal.kitty", "org.alacritty", "com.mitchellh.ghostty", "com.github.wez.wezterm",
         ]
-        #expect(InsertionPlan.terminalBundleIDs.isSuperset(of: terminals))
+        #expect(InsertionPlan.terminalBundleIDs == terminals)
         for bundleID in terminals { #expect(InsertionPlan.isTerminal(bundleID), "\(bundleID)") }
         #expect(!InsertionPlan.isTerminal("com.tinyspeck.slackmacgap"))
         #expect(!InsertionPlan.isTerminal("com.apple.Notes"))

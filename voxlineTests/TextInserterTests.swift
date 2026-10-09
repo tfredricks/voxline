@@ -791,13 +791,22 @@ import Testing
         #expect(h.board.string(forType: .string) == "ORIGINAL")
     }
 
-    @Test func an_empty_edit_in_a_terminal_without_accessible_focus_posts_nothing() async {
-        let h = makeHarness(focused: { .absent })
+    @Test func an_empty_edit_in_a_terminal_is_refused_before_anything_is_read() async {
+        let fake = selectedFake(value: [.value("hello world"), .value("hello ")])
+        let focusReads = LockedBox(0)
+        let h = makeHarness(focused: {
+            focusReads.mutate { $0 += 1 }
+            return .value(fake)
+        })
         defer { h.board.releaseGlobally() }
 
-        let outcome = await insert(h, "", bundleID: "io.alacritty")
+        let outcome = await insert(h, "", bundleID: "org.alacritty")
 
         #expect(outcome == .notInserted(.cannotTarget))
+        #expect(focusReads.read() == 0)
+        #expect(fake.reads.isEmpty)
+        #expect(fake.stringSets.isEmpty)
+        #expect(fake.rangeSets.isEmpty)
         #expect(h.events.read().isEmpty)
         #expect(h.board.string(forType: .string) == "ORIGINAL")
     }
