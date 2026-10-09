@@ -111,9 +111,9 @@ app that is no longer sandboxed.
 - **Main window.** Open Voxline from the menu bar (or click the Dock icon) for
   a window with Home — status, permissions, and recent meetings with a link to
   the notes folder — and Settings, which moved in from its own window. Closing
-  it keeps voxline running in the menu bar. Settings → Show Voxline in Dock
-  keeps the Dock icon all the time; otherwise it shows only while the window
-  is open. Starting at login stays in the menu bar.
+  it keeps voxline running in the menu bar. Settings → General → Show Voxline
+  in Dock keeps the Dock icon all the time; otherwise it shows only while the
+  window is open. Starting at login stays in the menu bar.
 
 ### Changed
 
@@ -145,12 +145,12 @@ app that is no longer sandboxed.
   restores the paste-first behavior of earlier versions; `voxline.insert.pasteFirstExtra`
   (an array of bundle IDs) adds paste-first apps. Neither has a setting.
 - **The command modifier picker is replaced by a second chord.** Settings →
-  General → Hotkey now has a Dictation recorder and a Command mode toggle with
-  its own recorder. On upgrade your old setting carries over: a modifier you
-  had chosen becomes the command chord's second key, beside the dictation
-  chord's first key. "Off", or a modifier that is already one of your
-  dictation keys, gives the default Left Shift + Left Option, or turns
-  command mode off if that is your dictation chord.
+  Dictation has the dictation recorder and Settings → Commands the Command
+  mode toggle with its own recorder. On upgrade your old setting carries
+  over: a modifier you had chosen becomes the command chord's second key,
+  beside the dictation chord's first key. "Off", or a modifier that is
+  already one of your dictation keys, gives the default Left Shift + Left
+  Option, or turns command mode off if that is your dictation chord.
 - **A chord held with another key no longer starts a recording.** Pressing
   Cmd+Shift+4 or Ctrl+Shift+Tab when a hotkey uses those modifiers does
   nothing; if a key or an extra modifier arrives in the first second of a
@@ -202,7 +202,7 @@ app that is no longer sandboxed.
   right after, or after 1.5 seconds, and only if nothing else was copied in
   the meantime (issue 6).
 - Re-recording a hotkey in Settings no longer starts a dictation, and the
-  recorder stops if you leave the Settings window (issue 10).
+  recorder stops if you leave its page or the window (issue 10).
 - A hotkey built from common modifiers no longer fires on every OS shortcut
   that includes them, such as a screenshot (issue 11).
 - Losing Accessibility, or pausing voxline, while you hold the hotkey now

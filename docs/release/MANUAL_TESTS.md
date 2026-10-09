@@ -17,7 +17,7 @@ Configure a staging appcast by setting `SUFeedURL` in a debug build's `Info.plis
 - [ ] Sparkle's modal appears, says a new version is available, shows the release notes from the appcast.
 - [ ] Click Install. Sparkle downloads from the GitHub Release URL, verifies the EdDSA signature, replaces the app, relaunches.
 - [ ] The new version launches without a Gatekeeper warning. Confirm via `spctl -a -v /Applications/voxline.app` (expected: `accepted source=Notarized Developer ID`).
-- [ ] Settings (Software Updates toggle, hotkey, model, API keys) survived the swap.
+- [ ] Settings (the Updates toggle on General, hotkey, model, API keys) survived the swap.
 
 ## Gentle reminder UI
 
@@ -56,7 +56,7 @@ Sparkle running unsandboxed.
 - [ ] Install 0.3.1 from Releases. Complete the wizard, save an API key, add
       two custom vocabulary terms, dictate three times (so history is non-empty).
 - [ ] Install the current build over it (DMG drag, or Sparkle from a staging appcast). Launch.
-- [ ] No wizard appears. Settings → the hotkey, provider, and model are unchanged.
+- [ ] No wizard appears. The hotkey (Settings → Dictation), provider (Settings → AI Provider), and model (Settings → Commands) are unchanged.
 - [ ] Settings → AI Provider shows the saved key (no re-entry).
 - [ ] Custom vocabulary still lists both terms. Show history… lists the three dictations.
 - [ ] No model download happens. `ls ~/Library/Application\ Support/voxline/huggingface/models/argmaxinc/whisperkit-coreml/` lists the variant.
@@ -685,8 +685,10 @@ Show Voxline in Dock is off unless a step says otherwise.
 
 - [ ] Each page fits at 720×480 and at full screen, with the scroll bar at the window edge.
 - [ ] Scrolling over a style note on Vocabulary scrolls the page.
+- [ ] In a style note, Return ends editing and ⌥Return inserts a line break.
 - [ ] The mic-in-use indicator is on only on Dictation.
 - [ ] An API key typed and left by switching pages shows as Saved on return.
-- [ ] ⌘, opens General.
+- [ ] Menu bar → Settings… opens General; with the main window already open on Home, ⌘, switches it to General.
 - [ ] Removing the API key shows an orange mark on AI Provider and a Setup row on Home, whose button opens AI Provider.
+- [ ] After re-saving the key, the AI Provider mark and the Home Setup row clear.
 - [ ] Reset to Defaults… asks before resetting.

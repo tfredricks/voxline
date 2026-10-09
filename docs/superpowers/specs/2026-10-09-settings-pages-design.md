@@ -105,9 +105,11 @@ match Home. A shared `SettingsPage` wrapper applies this.
   - **OpenAI Realtime:** the note and the key warning, plus the OpenAI key
     rows when `showsOpenAIKeyInRecognition`.
   - **Apple:** nothing extra.
-- The mic level monitor lives on this page only. It starts on appear, stops
-  on disappear, and stops while recording. That is today's logic, moved here
-  from `SettingsView`.
+- The mic level monitor lives on this page only. The page creates it once,
+  on first appear (not as an `@State` initial value, which would build a
+  throwaway monitor and audio engine on every redraw). It starts on appear,
+  stops on disappear, restarts when the input device changes, and stops
+  while recording. That is today's logic, moved here from `SettingsView`.
 
 ### AI Provider
 - **Provider:** the segmented Anthropic/OpenAI picker. Footnote: "Cleans up
@@ -119,11 +121,12 @@ match Home. A shared `SettingsPage` wrapper applies this.
   - The row is rebuilt per provider with `.id(provider)`, as today.
 
 ### Commands
-- **Command mode:** a switch labelled "Command mode". When on, a "Hotkey" chord
-  recorder appears below it. Then the footnote "Hold to speak an edit: rewrite
-  the selection, draft a reply, or change part of the field." Then the
-  "Model" text field, with the cleanup model as placeholder and its existing
-  note.
+- An untitled first section: a switch labelled "Command mode". When on, a
+  "Hotkey" chord recorder appears below it. Then the footnote "Hold to speak
+  an edit: rewrite the selection, draft a reply, or change part of the
+  field."
+- **Model:** the "Command model" text field, with the cleanup model as
+  placeholder and its existing note.
 - **Presets:** the preset rows, "Add preset", "Restore default presets", and
   the existing ⌥-key note. Presets show whether or not command mode is on,
   because they run independently of the command chord.
@@ -132,7 +135,7 @@ match Home. A shared `SettingsPage` wrapper applies this.
 - **Custom vocabulary:** unchanged from `CustomVocabularyListView`.
 - **Learning:** the two switches and their notes, the per-category style
   notes, Regenerate, and Reset Learning….
-  - Each note becomes `TextField(axis: .vertical)` with `.lineLimit(3...10)`
+  - Each note becomes `TextField(axis: .vertical)` with `.lineLimit(3...)`
     and the rounded-border style, instead of `TextEditor`. It grows with its
     text and never scrolls inside the page (fixes problem 3).
   - Drafts still commit on disappear, through `commitAllDrafts()`.
@@ -153,8 +156,13 @@ page. Issues:
 |---|---|---|
 | Saved mic missing, or no input devices | "Microphone not found" | Dictation |
 | Engine `.unavailable(reason)` | the reason | Dictation |
-| Engine `.needsPreparation(mb)` | "<engine> needs a one-time download (N MB)", or without the size when nil | Dictation |
+| Engine `.needsPreparation(mb)` | Whisper: "The Whisper model needs a one-time download (N MB)"; other engines: "<engine shortName> needs a one-time download (N MB)"; without the size when nil | Dictation |
 | Selected provider's key not saved | "No <provider> API key" | AI Provider |
+
+When OpenAI is both the engine and the provider and its key isn't saved,
+the engine's `.unavailable` issue is left out: its reason points at
+Dictation, which shows no key row in that case, and the "No OpenAI API key"
+issue already sends the user to AI Provider, where the key is entered.
 
 An engine readiness that hasn't been checked yet (nil, including "engines not
 built yet") is **not** an issue. This differs from today's strip, which
@@ -164,10 +172,15 @@ marks.
 
 ## Architecture
 
-- **`SettingsModel`** (new, `voxline/Settings/SettingsModel.swift`,
-  `@Observable @MainActor`):
+- **`SettingsModel`** (new, `voxline/Settings/SettingsModel.swift`, a plain
+  `@MainActor final class`):
   - It owns `general`, `apiKeys`, `command`, `meetings`, `vocabulary`,
-    `learning` (the `LearningSettingsViewModel`) and `status`.
+    `learningSettings` (the `LearningSettingsViewModel`), `status` and
+    `learning` (the `LearningCoordinator`). All are `let`s, so the model
+    itself isn't observable; views observe the child view models.
+  - Its init takes an injectable `vocabularyStore` (default
+    `CustomVocabularyStore()`), shared by `vocabulary` and
+    `learningSettings`, so tests can use a temporary store.
   - The window's content closure in `AppDelegate` builds it once per window
     build, replacing `makeSettingsView()`. It is released with the window
     content on close, as the content is today.
