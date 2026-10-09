@@ -39,15 +39,17 @@ final class ModeStore {
     }
 
     /// For each mode whose bundle ID has a shipped default, replace its prompt
-    /// with the current shipped prompt. Everything else (displayName, model,
-    /// temperature, plus modes with unknown bundle IDs) is untouched.
+    /// and category with the shipped ones. Everything else (displayName,
+    /// model, temperature, fieldKind, plus modes with unknown bundle IDs) is
+    /// untouched.
     /// Pure function — exported for testing.
     static func reconcileShippedPrompts(_ modes: [Mode]) -> [Mode] {
-        let shippedPromptByID = Dictionary(uniqueKeysWithValues: shippedDefaults.map { ($0.bundleID, $0.prompt) })
+        let shippedByID = Dictionary(uniqueKeysWithValues: shippedDefaults.map { ($0.bundleID, $0) })
         return modes.map { mode in
-            guard let shipped = shippedPromptByID[mode.bundleID] else { return mode }
+            guard let shipped = shippedByID[mode.bundleID] else { return mode }
             var updated = mode
-            updated.prompt = shipped
+            updated.prompt = shipped.prompt
+            updated.category = shipped.category
             return updated
         }
     }

@@ -38,7 +38,23 @@ struct Mode: Codable, Equatable, Identifiable {
     /// nil = matches any focused field for this bundleID. A specific value
     /// makes this mode win only when the AX inspector reports the same kind.
     var fieldKind: FieldKind? = nil
-    /// Coarse category for History display. Defaults to `.general` so older
-    /// on-disk JSON missing the field decodes cleanly.
+    /// Coarse category for History display. JSON saved before the field
+    /// existed decodes as `.general`; `ModeStore` then takes the shipped
+    /// category for shipped apps.
     var category: ModeCategory = .general
+}
+
+extension Mode {
+    /// Synthesized decoding ignores default values, so fields added after
+    /// a modes.json was saved must be optional here.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        bundleID = try container.decode(String.self, forKey: .bundleID)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        prompt = try container.decode(String.self, forKey: .prompt)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        temperature = try container.decodeIfPresent(Double.self, forKey: .temperature)
+        fieldKind = try container.decodeIfPresent(FieldKind.self, forKey: .fieldKind)
+        category = try container.decodeIfPresent(ModeCategory.self, forKey: .category) ?? .general
+    }
 }

@@ -161,6 +161,36 @@ import Foundation
         #expect(ModeStore.reconcileShippedPrompts(custom) == custom)
     }
 
+    @Test func load_reads_a_file_saved_before_categories_and_takes_shipped_ones() throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let json = #"""
+        [{"bundleID":"com.tinyspeck.slackmacgap","displayName":"Slack","prompt":"old wording"},
+         {"bundleID":"com.example.custom","displayName":"Custom","prompt":"mine"}]
+        """#
+        try Data(json.utf8).write(to: store.fileURL)
+
+        let loaded = try store.load()
+        let slack = try #require(loaded.first { $0.bundleID == "com.tinyspeck.slackmacgap" })
+        let shippedSlack = try #require(ModeStore.shippedDefaults.first { $0.bundleID == "com.tinyspeck.slackmacgap" })
+        #expect(slack.category == shippedSlack.category)
+        #expect(slack.prompt == ModeStore.chatPrompt)
+        let custom = try #require(loaded.first { $0.bundleID == "com.example.custom" })
+        #expect(custom.category == .general)
+        #expect(custom.prompt == "mine")
+
+        let again = try ModeStore(fileURL: store.fileURL).load()
+        #expect(again == loaded)
+    }
+
+    @Test func reconcile_takes_the_shipped_category_for_shipped_bundle_ids() {
+        let stale = [Mode(bundleID: "com.apple.mail", displayName: "Mail", prompt: "old",
+                          model: nil, temperature: nil, category: .general)]
+        let shippedMail = ModeStore.shippedDefaults.first { $0.bundleID == "com.apple.mail" }
+        #expect(ModeStore.reconcileShippedPrompts(stale).first?.category == shippedMail?.category)
+        #expect(shippedMail?.category != .general)
+    }
+
     @Test func load_rewrites_disk_when_prompts_drift() throws {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }

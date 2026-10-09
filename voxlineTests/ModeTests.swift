@@ -30,6 +30,15 @@ import Foundation
         #expect(decoded == mode)
     }
 
+    @Test func decodes_json_saved_before_category_and_fieldKind_existed() throws {
+        let json = #"{"bundleID":"com.example.app","displayName":"Example","prompt":"Keep it short."}"#
+        let decoded = try JSONDecoder().decode(Mode.self, from: Data(json.utf8))
+        #expect(decoded.bundleID == "com.example.app")
+        #expect(decoded.prompt == "Keep it short.")
+        #expect(decoded.fieldKind == nil)
+        #expect(decoded.category == .general)
+    }
+
     @Test func wildcard_bundle_id_is_a_well_known_constant() {
         #expect(Mode.wildcardBundleID == "*")
     }

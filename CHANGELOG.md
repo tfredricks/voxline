@@ -161,6 +161,9 @@ once it reaches its first tagged release.
   the OpenAI cloud engine.
 - An OpenAI API key that can't be read from the keychain is reported as a
   keychain error, not as a missing key.
+- Per-app modes saved by an older version load again. A modes file written
+  before mode categories existed failed to load, and voxline silently used the
+  built-in modes instead.
 - Brief status messages in the pill now all appear and clear the same way
   (issue 26).
 - Command mode no longer copies the whole line in editors such as VS Code
