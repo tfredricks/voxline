@@ -82,7 +82,16 @@ struct HomeView: View {
         }
     }
 
+    @ViewBuilder
     private func meetingRow(_ meeting: RecentMeeting) -> some View {
+        if meeting.notesURL != nil {
+            meetingRowContent(meeting).help("Open notes")
+        } else {
+            meetingRowContent(meeting)
+        }
+    }
+
+    private func meetingRowContent(_ meeting: RecentMeeting) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(meeting.title)
@@ -109,6 +118,5 @@ struct HomeView: View {
         .onTapGesture {
             if let url = meeting.notesURL { NSWorkspace.shared.open(url) }
         }
-        .help(meeting.notesURL == nil ? "" : "Open notes")
     }
 }

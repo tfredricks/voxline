@@ -61,8 +61,8 @@ final class AppCoordinator {
     private var permissionPollTimer: Timer?
     private var firstRunWindow: FirstRunWindowController?
     /// Tracks the required-permission state across reconcile ticks so we can
-    /// raise the permissions window on a granted→missing transition (runtime
-    /// revocation) without re-raising it every tick while it stays missing.
+    /// open Home on a granted→missing transition (runtime revocation)
+    /// without reopening it every tick while it stays missing.
     private var lastRequiredGranted: Bool?
 
     /// Brings up the main window; set by `AppDelegate` before `startIfNeeded`.
@@ -379,9 +379,9 @@ final class AppCoordinator {
         let ax = perms.accessibilityStatus
 
         // Open Home on a granted→missing transition (runtime
-        // revocation). Gated on the previous tick's state so it isn't re-raised
-        // every second while permissions stay missing — which would fight a
-        // user who deliberately closed it.
+        // revocation). Gated on the previous tick's state so the main window
+        // isn't reopened every second while permissions stay missing — which
+        // would fight a user who deliberately closed it.
         let requiredGranted = (ax == .granted && perms.microphoneStatus == .granted)
         if lastRequiredGranted == true && !requiredGranted {
             presentMainWindow(.home)
