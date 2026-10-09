@@ -207,3 +207,8 @@ final class MeetingRecorder: MeetingRecording {
         }
     }
 }
+
+extension MeetingRecorder.Track {
+    /// The live transcript's speaker label for this track.
+    var liveLabel: String { self == .mic ? "Me" : "Them" }
+}
