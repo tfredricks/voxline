@@ -21,7 +21,12 @@ final class PCMTrackWriter: @unchecked Sendable {
             }
         }
         handle = try FileHandle(forWritingTo: url)
-        count = Int(try handle.seekToEnd()) / 2
+        let size = Int(try handle.seekToEnd())
+        count = size / 2
+        if size % 2 != 0 {
+            try handle.truncate(atOffset: UInt64(count * 2))
+            try handle.seek(toOffset: UInt64(count * 2))
+        }
         self.onFailure = onFailure
     }
 
@@ -34,7 +39,7 @@ final class PCMTrackWriter: @unchecked Sendable {
         data.withUnsafeMutableBytes { raw in
             let out = raw.bindMemory(to: Int16.self)
             for (i, sample) in samples.enumerated() {
-                out[i] = Int16((max(-1, min(1, sample)) * 32_767).rounded()).littleEndian
+                out[i] = Int16((sample.isNaN ? 0 : max(-1, min(1, sample)) * 32_767).rounded()).littleEndian
             }
         }
         write { _ in (data, samples.count, AudioFormat.peakLevel(samples: samples)) }
@@ -104,7 +109,7 @@ enum PCMTrackReader {
             let samples = data.withUnsafeBytes { raw in
                 raw.bindMemory(to: Int16.self).map { Float(Int16(littleEndian: $0)) / 32_767 }
             }
-            try body(samples)
+            if !samples.isEmpty { try body(samples) }
         }
     }
 }
