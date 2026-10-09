@@ -31,7 +31,6 @@ struct ChordRecorderView: View {
             LabeledContent(title) {
                 HStack(spacing: 12) {
                     Text(chord.displayName)
-                        .monospaced()
                         .fixedSize()
                     if isRecording {
                         Button("Cancel") { stop() }

@@ -21,9 +21,11 @@ struct LearningSection: View {
                 ForEach(ModeCategory.allCases, id: \.self) { category in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(category.displayName).font(.headline)
-                        TextEditor(text: noteBinding(category))
+                        TextField("Style note", text: noteBinding(category), axis: .vertical)
+                            .labelsHidden()
+                            .textFieldStyle(.roundedBorder)
+                            .lineLimit(3...10)
                             .font(.callout)
-                            .frame(minHeight: 60)
                         HStack {
                             Text(model.status(for: category))
                                 .font(.caption)

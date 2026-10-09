@@ -162,7 +162,9 @@ struct SettingsView: View {
                     .id(SettingsAnchor.recognition)
 
                     if generalVM.showsOpenAIKeyInRecognition {
-                        OpenAIKeyRow(general: generalVM, keys: apiKeysVM, revealed: $recognitionKeyRevealed)
+                        Section("OpenAI API key") {
+                            OpenAIKeyRow(general: generalVM, keys: apiKeysVM, revealed: $recognitionKeyRevealed)
+                        }
                     }
 
                     CleanupSection(general: generalVM, keys: apiKeysVM)

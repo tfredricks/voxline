@@ -23,7 +23,6 @@ struct KeyComboRecorderView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Text(isRecording ? "Press a shortcut…" : (combo?.displayName ?? "None"))
-                    .monospaced()
                     .foregroundStyle(combo != nil && !isRecording ? .primary : .secondary)
                     .fixedSize()
                 if isRecording {

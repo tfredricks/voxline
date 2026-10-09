@@ -17,66 +17,65 @@ struct APIKeyRow: View {
 
     @FocusState private var focused: Bool
 
-    var body: some View {
-        Section(title) {
-            HStack {
-                Group {
-                    if revealed {
-                        TextField("API key", text: $key)
-                    } else {
-                        SecureField("API key", text: $key)
-                    }
-                }
-                .textContentType(.password)
-                .focused($focused)
-                .onSubmit(onCommit)
-
-                Button {
-                    revealed.toggle()
-                } label: {
-                    Image(systemName: revealed ? "eye.slash" : "eye")
-                }
-                .buttonStyle(.borderless)
-                .help(revealed ? "Hide key" : "Reveal key")
-
-                saveAffordance
-            }
-
-            HStack(spacing: 8) {
-                Link("Get a \(title) key →", destination: getKeyURL).font(.callout)
-                Spacer()
-                let trimmed = key.trimmed
-                let prefixMismatch = !trimmed.isEmpty && !trimmed.hasPrefix(expectedPrefix)
-                let antInOpenAI = (provider == .openai) && trimmed.hasPrefix("sk-ant-")
-                if prefixMismatch || antInOpenAI {
-                    Label(
-                        antInOpenAI ? "This looks like an Anthropic key" : "Expected prefix \(expectedPrefix)",
-                        systemImage: "exclamationmark.triangle.fill"
-                    )
-                    .foregroundStyle(.orange)
-                    .font(.callout)
+    @ViewBuilder var body: some View {
+        HStack {
+            Group {
+                if revealed {
+                    TextField("API key", text: $key)
+                } else {
+                    SecureField("API key", text: $key)
                 }
             }
+            .textContentType(.password)
+            .focused($focused)
+            .onSubmit(onCommit)
 
-            HStack {
-                // Commit the live value before hitting the network so the
-                // user doesn't end up with a successful test against an
-                // unsaved key. macOS SwiftUI doesn't reliably defocus a
-                // SecureField when another button in the same Form is
-                // clicked, so .onChange(of: focused) can't be relied on.
-                Button("Test") { onCommit(); onTest() }
-                    .disabled(testing != nil || key.isBlank)
-                if testing == provider { ProgressView().controlSize(.small) }
-                testResultLabel
-                Spacer()
+            Button {
+                revealed.toggle()
+            } label: {
+                Image(systemName: revealed ? "eye.slash" : "eye")
             }
+            .buttonStyle(.borderless)
+            .help(revealed ? "Hide key" : "Reveal key")
 
-            if let err = lastError {
-                Text(err).foregroundStyle(.red).font(.callout)
-            }
+            saveAffordance
         }
         .onChange(of: focused) { _, isFocused in
             if !isFocused { onCommit() }
+        }
+        .onDisappear { onCommit() }
+
+        HStack(spacing: 8) {
+            Link("Get a \(title) key →", destination: getKeyURL).font(.callout)
+            Spacer()
+            let trimmed = key.trimmed
+            let prefixMismatch = !trimmed.isEmpty && !trimmed.hasPrefix(expectedPrefix)
+            let antInOpenAI = (provider == .openai) && trimmed.hasPrefix("sk-ant-")
+            if prefixMismatch || antInOpenAI {
+                Label(
+                    antInOpenAI ? "This looks like an Anthropic key" : "Expected prefix \(expectedPrefix)",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .foregroundStyle(.orange)
+                .font(.callout)
+            }
+        }
+
+        HStack {
+            // Commit the live value before hitting the network so the
+            // user doesn't end up with a successful test against an
+            // unsaved key. macOS SwiftUI doesn't reliably defocus a
+            // SecureField when another button in the same Form is
+            // clicked, so .onChange(of: focused) can't be relied on.
+            Button("Test") { onCommit(); onTest() }
+                .disabled(testing != nil || key.isBlank)
+            if testing == provider { ProgressView().controlSize(.small) }
+            testResultLabel
+            Spacer()
+        }
+
+        if let err = lastError {
+            Text(err).foregroundStyle(.red).font(.callout)
         }
     }
 

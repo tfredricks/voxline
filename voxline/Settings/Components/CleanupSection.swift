@@ -24,9 +24,11 @@ struct CleanupSection: View {
         // previous provider can't bleed through. `revealed` is intentionally
         // reset on switch so we never reveal the new provider's key just
         // because the previous one was being shown in plaintext.
-        keyRow(for: general.provider)
-            .id(general.provider)
-            .onChange(of: general.provider) { _, _ in revealed = false }
+        Section("\(general.provider.displayName) API key") {
+            keyRow(for: general.provider)
+                .id(general.provider)
+        }
+        .onChange(of: general.provider) { _, _ in revealed = false }
     }
 
     @ViewBuilder
