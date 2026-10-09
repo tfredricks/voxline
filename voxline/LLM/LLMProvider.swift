@@ -126,8 +126,3 @@ enum LLMError: Error, LocalizedError {
 protocol LLMClient: Sendable {
     func complete(_ request: LLMRequest) async throws -> String
 }
-
-extension LLMClient {
-    /// Transitional alias; `APIKeysSettingsViewModel` still calls it. Task 10 deletes both.
-    func cleanup(_ request: LLMRequest) async throws -> String { try await complete(request) }
-}

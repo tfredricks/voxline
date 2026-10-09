@@ -457,17 +457,6 @@ import Foundation
         }
         #expect(mock.capturedRequests.count == 1)
     }
-
-    @Test func cleanup_alias_forwards_to_complete() async throws {
-        let mock = MockHTTPClient()
-        mock.stubResponse = (data: Data(#"{"content":[{"type":"text","text":"aliased"}]}"#.utf8), status: 200)
-        let client = AnthropicClient(apiKey: "k", http: mock)
-
-        let out = try await client.cleanup(LLMRequest(model: "claude-haiku-4-5", systemPrompt: "s", userPrompt: "u", temperature: nil))
-
-        #expect(out == "aliased")
-        #expect(mock.capturedRequests.count == 1)
-    }
 }
 
 /// LLMError needs Equatable for these tests AND for tests in OpenAIClientTests

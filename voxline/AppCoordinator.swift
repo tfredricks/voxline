@@ -17,6 +17,7 @@ final class AppCoordinator {
 
     private var pillWindow: RecordingPillWindow?
     private var escapeInterceptor: EscapeKeyInterceptor?
+    private var shortcutCaptureSuspender: ShortcutCaptureSuspender?
     private var downloadWindow: ModelDownloadWindow?
     private var modelPrepTask: Task<Void, Never>?
     /// Monotonic identity for the current modelPrepTask. The inner Task
@@ -83,7 +84,8 @@ final class AppCoordinator {
             }
         }
 
-        let settings = AppSettings()
+        var settings = AppSettings()
+        settings.migrateCommandChordIfNeeded()
         logLaunchTrace(settings: settings)
         if !settings.hasCompletedFirstRun {
             startWizardThenApp(state: state, settings: settings, historyStore: historyStore)
@@ -173,11 +175,11 @@ final class AppCoordinator {
 
         // Output
         let focusedTextSystem = AXFocusedTextSystem()
-        let chordProvider: @Sendable () -> HotkeyChord = { AppSettings().hotkeyChord }
-        let commandModifierProvider: @Sendable () -> HotkeyChord.Modifier? = { AppSettings().commandModifier }
         let injector = ClipboardInjector(
             focusedTextSystem: focusedTextSystem,
-            chordIsHeld: ClipboardInjector.makeChordIsHeld(chord: chordProvider, command: commandModifierProvider)
+            chordIsHeld: {
+                ModifierReleaseGate.isHeld(AppSettings().chords.families, in: CGEventSource.flagsState(.combinedSessionState))
+            }
         )
         let frontmost = FrontmostApp()
         let fieldInspector = AXFocusedFieldInspector()
@@ -214,13 +216,7 @@ final class AppCoordinator {
 
     private func installHotkey(state: AppState, settings: AppSettings) {
         let monitor = HotkeyMonitor()
-        monitor.chords = ChordSet(
-            dictation: settings.hotkeyChord,
-            command: CommandChordMigration.commandChord(
-                dictation: settings.hotkeyChord,
-                stored: settings.defaults.string(forKey: AppSettings.Key.commandModifier)
-            )
-        )
+        monitor.chords = settings.chords
         monitor.onStartRecording = { [weak self, weak state] kind in
             self?.soundPlayer?.playStart()
             self?.pipeline?.startRecording(command: kind == .command)
@@ -291,6 +287,11 @@ final class AppCoordinator {
         }
         reconcileEscapeInterceptor(state: state)
         observeCancellableChanges(state: state)
+        shortcutCaptureSuspender = ShortcutCaptureSuspender(
+            state: state,
+            suspend: { [weak self] in self?.hotkeyMonitor?.suspend() },
+            resume: { [weak self] in self?.hotkeyMonitor?.resume() }
+        )
 
         startPermissionAndStateLoop(state: state)
 
@@ -606,7 +607,7 @@ final class AppCoordinator {
         let version = (info["CFBundleShortVersionString"] as? String) ?? "?"
         let build = (info["CFBundleVersion"] as? String) ?? "?"
         AppLog.pipeline.info("launch: voxline \(version) (build \(build))")
-        AppLog.pipeline.info("launch: hotkey=\(settings.hotkeyChord.displayName), llm=\(settings.llmProvider.rawValue)/\(settings.llmModel), engine=\(settings.transcriptionEngine.rawValue), whisper=\(settings.whisperModel.rawValue)")
+        AppLog.pipeline.info("launch: hotkey=\(settings.hotkeyChord.displayName), command=\(settings.commandChord?.displayName ?? "off"), llm=\(settings.llmProvider.rawValue)/\(settings.llmModel), engine=\(settings.transcriptionEngine.rawValue), whisper=\(settings.whisperModel.rawValue)")
         let perms = PermissionsService()
         AppLog.permissions.info("launch: mic=\(String(describing: perms.microphoneStatus)), ax=\(String(describing: perms.accessibilityStatus)), im=\(String(describing: perms.inputMonitoringStatus))")
     }
@@ -616,13 +617,7 @@ extension AppCoordinator {
     func apply(_ snapshot: GeneralSettingsSnapshot) {
         // snapshot.provider is consumed by LLMService at the next dictation;
         // no per-snapshot action needed here.
-        hotkeyMonitor?.chords = ChordSet(
-            dictation: snapshot.chord,
-            command: CommandChordMigration.commandChord(
-                dictation: snapshot.chord,
-                stored: snapshot.commandModifier?.rawValue ?? "off"
-            )
-        )
+        hotkeyMonitor?.chords = ChordSet(dictation: snapshot.chord, command: snapshot.commandChord)
 
         // AudioCaptureService applies preferredInputDeviceUID at next start();
         // CapturePipeline restarts the engine on every chord, so the new device

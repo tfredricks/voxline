@@ -366,58 +366,185 @@ import Foundation
         #expect(vm.launchAtLogin == true)
     }
 
-    @Test func loads_command_modifier_on_init() {
-        var settings = AppSettings(defaults: defaults())
-        settings.commandModifier = .rightShift
-        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
-        #expect(vm.commandModifier == .rightShift)
-    }
-
-    @Test func command_modifier_mutation_persists_and_applies() {
-        let d = defaults()
-        let settings = AppSettings(defaults: d)
-        let recorder = ApplyRecorder()
-        let vm = GeneralSettingsViewModel(settings: settings, onApply: { recorder.record($0) })
-
-        vm.commandModifier = .rightControl
-        #expect(recorder.applied?.commandModifier == .rightControl)
-        #expect(AppSettings(defaults: d).commandModifier == .rightControl)
-
-        vm.commandModifier = nil   // "Off"
-        #expect(recorder.applied?.commandModifier == nil)
-        #expect(AppSettings(defaults: d).commandModifier == nil)
-    }
-
-    @Test func command_modifier_warning_fires_when_equal_to_chord_key() {
-        let settings = AppSettings(defaults: defaults())
-        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
-        vm.chord = HotkeyChord(modifierA: .leftShift, modifierB: .leftControl)
-        vm.commandModifier = .leftShift
-        #expect(vm.commandModifierWarning != nil)
-    }
-
-    @Test func command_modifier_warning_nil_for_clean_default() {
-        let settings = AppSettings(defaults: defaults())
-        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
-        vm.chord = HotkeyChord(modifierA: .leftShift, modifierB: .leftControl)
-        vm.commandModifier = .leftCommand
-        #expect(vm.commandModifierWarning == nil)
-    }
-
-    @Test func reset_restores_default_command_modifier() {
-        let d = defaults()
-        var settings = AppSettings(defaults: d)
-        settings.commandModifier = .rightShift
-        let recorder = ApplyRecorder()
-        let vm = GeneralSettingsViewModel(
+    private func resettableVM(
+        _ d: UserDefaults,
+        settings: AppSettings,
+        recorder: ApplyRecorder
+    ) -> GeneralSettingsViewModel {
+        GeneralSettingsViewModel(
             settings: settings,
             onApply: { recorder.record($0) },
             loginItemService: LoginItemService(),
             vocabulary: CustomVocabularyStore(defaults: d)
         )
+    }
+
+    @Test func loads_command_chord_and_model_on_init() {
+        var settings = AppSettings(defaults: defaults())
+        let command = HotkeyChord(modifierA: .rightCommand, modifierB: .rightOption)
+        settings.commandChord = command
+        settings.commandModel = "claude-opus-5-5"
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
+        #expect(vm.commandChord == command)
+        #expect(vm.commandModel == "claude-opus-5-5")
+        #expect(vm.commandModeEnabled)
+    }
+
+    @Test func absent_command_model_loads_as_empty_text() {
+        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: defaults()), onApply: noopApply)
+        #expect(vm.commandModel == "")
+    }
+
+    @Test func snapshot_carries_the_command_chord_and_model() {
+        let d = defaults()
+        let recorder = ApplyRecorder()
+        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: d), onApply: { recorder.record($0) })
+
+        let command = HotkeyChord(modifierA: .rightCommand, modifierB: .rightOption)
+        vm.commandChord = command
+        #expect(recorder.applied?.commandChord == command)
+        #expect(AppSettings(defaults: d).commandChord == command)
+
+        vm.commandModel = "claude-opus-5-5"
+        #expect(recorder.applied?.commandModel == "claude-opus-5-5")
+        #expect(AppSettings(defaults: d).commandModel == "claude-opus-5-5")
+
+        vm.commandModel = ""
+        #expect(recorder.applied?.commandModel == nil)
+        #expect(AppSettings(defaults: d).commandModel == nil)
+    }
+
+    @Test func command_chord_refreshes_from_writes_made_elsewhere() {
+        let d = defaults()
+        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: d), onApply: noopApply)
+        var elsewhere = AppSettings(defaults: d)
+        elsewhere.commandChord = nil
+        elsewhere.commandModel = "gpt-5"
+        vm.refreshFromUserDefaults()
+        #expect(vm.commandChord == nil)
+        #expect(vm.commandModel == "gpt-5")
+    }
+
+    @Test func command_recorder_rejects_the_dictation_chord() {
+        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: defaults()), onApply: noopApply)
+        #expect(vm.validateCommandChord(vm.chord) == "That's your dictation hotkey")
+        let reversed = HotkeyChord(modifierA: vm.chord.modifierB, modifierB: vm.chord.modifierA)
+        #expect(vm.validateCommandChord(reversed) == "That's your dictation hotkey")
+    }
+
+    @Test func dictation_recorder_rejects_the_command_chord() throws {
+        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: defaults()), onApply: noopApply)
+        let command = try #require(vm.commandChord)
+        #expect(vm.validateDictationChord(command) == "That's your command hotkey")
+    }
+
+    @Test func recorders_accept_chords_that_share_only_one_key() {
+        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: defaults()), onApply: noopApply)
+        let distinct = HotkeyChord(modifierA: .leftShift, modifierB: .rightCommand)
+        #expect(vm.validateCommandChord(distinct) == nil)
+        #expect(vm.validateDictationChord(distinct) == nil)
+    }
+
+    @Test func dictation_recorder_accepts_anything_while_command_mode_is_off() {
+        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: defaults()), onApply: noopApply)
+        vm.commandModeEnabled = false
+        #expect(vm.validateDictationChord(.defaultCommand) == nil)
+        #expect(vm.validateDictationChord(.default) == nil)
+    }
+
+    @Test func turning_command_mode_off_applies_a_nil_command_chord() {
+        let d = defaults()
+        let recorder = ApplyRecorder()
+        let vm = GeneralSettingsViewModel(settings: AppSettings(defaults: d), onApply: { recorder.record($0) })
+        vm.commandModeEnabled = false
+        #expect(vm.commandChord == nil)
+        #expect(recorder.applied?.commandChord == nil)
+        #expect(recorder.applied != nil)
+        #expect(d.string(forKey: AppSettings.Key.commandChord) == "off")
+        #expect(AppSettings(defaults: d).commandChord == nil)
+    }
+
+    @Test func turning_command_mode_on_uses_the_default_command_chord() {
+        let d = defaults()
+        var settings = AppSettings(defaults: d)
+        settings.commandChord = nil
+        let recorder = ApplyRecorder()
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: { recorder.record($0) })
+        vm.commandModeEnabled = true
+        #expect(vm.commandChord == .defaultCommand)
+        #expect(recorder.applied?.commandChord == .defaultCommand)
+    }
+
+    @Test func turning_command_mode_on_avoids_the_dictation_chord() throws {
+        let d = defaults()
+        var settings = AppSettings(defaults: d)
+        settings.hotkeyChord = HotkeyChord(modifierA: .leftShift, modifierB: .leftOption)
+        settings.commandChord = nil
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
+        vm.commandModeEnabled = true
+        let command = try #require(vm.commandChord)
+        #expect(command.keys != vm.chord.keys)
+        #expect(command == HotkeyChord(modifierA: .leftShift, modifierB: .leftControl))
+        #expect(vm.validateCommandChord(command) == nil)
+    }
+
+    @Test func changing_the_provider_clears_the_command_model() {
+        let d = defaults()
+        var settings = AppSettings(defaults: d)
+        settings.llmProvider = .anthropic
+        settings.commandModel = "claude-opus-5-5"
+        let recorder = ApplyRecorder()
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: { recorder.record($0) })
+        vm.provider = .openai
+        #expect(vm.commandModel == "")
+        #expect(recorder.applied?.commandModel == nil)
+        #expect(AppSettings(defaults: d).commandModel == nil)
+    }
+
+    @Test func unrelated_changes_keep_the_command_model() {
+        let d = defaults()
+        var settings = AppSettings(defaults: d)
+        settings.commandModel = "claude-opus-5-5"
+        let vm = GeneralSettingsViewModel(settings: settings, onApply: noopApply)
+        vm.playHotkeySounds = false
+        #expect(AppSettings(defaults: d).commandModel == "claude-opus-5-5")
+    }
+
+    @Test func reset_restores_both_chords_and_clears_the_command_model() {
+        let d = defaults()
+        var settings = AppSettings(defaults: d)
+        settings.hotkeyChord = HotkeyChord(modifierA: .rightCommand, modifierB: .rightShift)
+        settings.commandChord = nil
+        settings.commandModel = "claude-opus-5-5"
+        let recorder = ApplyRecorder()
+        let vm = resettableVM(d, settings: settings, recorder: recorder)
+
         vm.resetToDefaults()
-        #expect(vm.commandModifier == AppSettings.defaultCommandModifier)
-        #expect(recorder.applied?.commandModifier == AppSettings.defaultCommandModifier)
+
+        #expect(vm.chord == .default)
+        #expect(vm.commandChord == .defaultCommand)
+        #expect(vm.commandModel == "")
+        #expect(recorder.applied?.chord == .default)
+        #expect(recorder.applied?.commandChord == .defaultCommand)
+        #expect(recorder.applied?.commandModel == nil)
+        #expect(AppSettings(defaults: d).commandChord == .defaultCommand)
+        #expect(AppSettings(defaults: d).commandModel == nil)
+    }
+
+    @Test func reset_leaves_presets_alone() {
+        let d = defaults()
+        let custom = [PresetShortcut(
+            id: UUID(),
+            combo: KeyCombo(keyCode: 0, modifiers: .command),
+            name: "Shout",
+            instruction: "Make it louder."
+        )]
+        PresetStore(defaults: d).save(custom)
+        let vm = resettableVM(d, settings: AppSettings(defaults: d), recorder: ApplyRecorder())
+
+        vm.resetToDefaults()
+
+        #expect(PresetStore(defaults: d).load() == custom)
     }
 
 }

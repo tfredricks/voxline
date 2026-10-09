@@ -106,4 +106,18 @@ final class AppState {
 
     /// True while Esc may cancel: recording, and thinking until insert begins.
     var isCancellable: Bool = false
+
+    /// Number of Settings recorders capturing a shortcut right now. Above
+    /// zero, hotkey input is suspended so recording a chord can't start a
+    /// dictation (issue 10).
+    private(set) var shortcutCaptureDepth: Int = 0
+
+    func beginShortcutCapture() {
+        shortcutCaptureDepth += 1
+    }
+
+    /// Never takes the depth below zero.
+    func endShortcutCapture() {
+        shortcutCaptureDepth = max(0, shortcutCaptureDepth - 1)
+    }
 }

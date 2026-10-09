@@ -460,6 +460,65 @@ import CoreGraphics
         #expect(monitor.state == .idle)
     }
 
+    @Test func turning_command_mode_off_while_recording_a_command_finalizes_it() {
+        let (monitor, _, log) = makeMonitor()
+        press(monitor, c, keyCode: 58)
+        monitor.chords = ChordSet(dictation: .default, command: nil)
+        #expect(log.events == ["start:command", "finalize:command"])
+        #expect(monitor.state == .finalizing(.command))
+        monitor.recordingFinished()
+        #expect(monitor.state == .blocked)
+        press(monitor, [])
+        #expect(monitor.state == .idle)
+        #expect(log.events == ["start:command", "finalize:command"])
+    }
+
+    @Test func changing_the_recording_chord_finalizes_it() {
+        let (monitor, _, log) = makeMonitor()
+        press(monitor, d)
+        monitor.chords = ChordSet(
+            dictation: HotkeyChord(modifierA: .leftShift, modifierB: .rightCommand),
+            command: .defaultCommand
+        )
+        #expect(log.events == ["start:dictation", "finalize:dictation"])
+        #expect(monitor.state == .finalizing(.dictation))
+    }
+
+    @Test func changing_only_the_other_chord_keeps_the_recording() {
+        let (monitor, _, log) = makeMonitor()
+        press(monitor, d)
+        monitor.chords = ChordSet(
+            dictation: HotkeyChord(modifierA: .leftControl, modifierB: .leftShift),
+            command: HotkeyChord(modifierA: .leftShift, modifierB: .rightCommand)
+        )
+        #expect(log.events == ["start:dictation"])
+        #expect(monitor.state == .recording(.dictation))
+    }
+
+    @Test func reassigning_chords_while_suspended_skips_the_stale_resync() {
+        let (monitor, _, _) = makeMonitor()
+        press(monitor, [.leftShift])
+        monitor.suspend()
+        #expect(monitor.state == .idle)
+        monitor.chords = ChordSet(dictation: .default, command: nil)
+        #expect(monitor.state == .idle)
+        #expect(monitor.chords == ChordSet(dictation: .default, command: nil))
+    }
+
+    @Test func resuming_during_finalizing_with_the_chord_held_blocks_after_finishing() {
+        let (monitor, _, log) = makeMonitor(heldNow: HotkeyChord.default.keys)
+        press(monitor, d)
+        monitor.suspend()
+        monitor.resume()
+        #expect(monitor.state == .finalizing(.dictation))
+        monitor.recordingFinished()
+        #expect(monitor.state == .blocked)
+        #expect(log.events == ["start:dictation", "finalize:dictation"])
+        press(monitor, [])
+        press(monitor, d)
+        #expect(log.events == ["start:dictation", "finalize:dictation", "start:dictation"])
+    }
+
     @Test func reassigning_chords_while_idle_stays_idle() {
         let (monitor, _, log) = makeMonitor()
         monitor.chords = ChordSet(dictation: .default, command: nil)

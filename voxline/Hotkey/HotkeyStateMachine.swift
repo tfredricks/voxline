@@ -32,6 +32,9 @@ final class HotkeyStateMachine {
     private(set) var state: State = .idle
     private var lastHeld: Set<HotkeyChord.Modifier> = []
     private var shortcutWindowOpen = false
+    /// A resync during finalizing found keys down: like `blocked`, they can't
+    /// start a recording until every modifier is up.
+    private var blockedAfterFinalizing = false
 
     init(chords: ChordSet = .default) {
         self.chords = chords
@@ -84,15 +87,27 @@ final class HotkeyStateMachine {
             state = .finalizing(kind)
             return [.finalizeRecording(kind)]
 
-        case (.finalizing, .modifiersChanged(let h)), (.finalizing, .resync(let h)):
+        case (.finalizing, .modifiersChanged(let h)):
             lastHeld = h
+            if h.isEmpty { blockedAfterFinalizing = false }
+            return []
+
+        case (.finalizing, .resync(let h)):
+            lastHeld = h
+            blockedAfterFinalizing = !h.isEmpty
             return []
 
         case (.finalizing, .inputLost):
             lastHeld = []
+            blockedAfterFinalizing = false
             return []
 
         case (.finalizing, .recordingFinished):
+            if blockedAfterFinalizing {
+                blockedAfterFinalizing = false
+                state = .blocked
+                return []
+            }
             return evaluate(lastHeld)
 
         case (.idle, .inputLost), (.armed, .inputLost), (.blocked, .inputLost):

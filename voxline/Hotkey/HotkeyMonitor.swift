@@ -71,10 +71,17 @@ final class HotkeyMonitor {
     var onMaxDurationReached: (() -> Void)?
 
     /// Setting it resyncs the machine against the keys held now, so a chord
-    /// change never starts a recording from keys that are already down.
+    /// change never starts a recording from keys that are already down. A
+    /// recording whose chord changed or was removed finalizes. While
+    /// suspended there is no resync; `resume()` does it.
     var chords: ChordSet = .default {
         didSet {
             machine.chords = chords
+            if case .recording(let kind) = machine.state,
+               oldValue.chord(for: kind)?.keys != chords.chord(for: kind)?.keys {
+                feed(.inputLost)
+            }
+            guard !isSuspended else { return }
             feed(.resync(tracker.held))
         }
     }

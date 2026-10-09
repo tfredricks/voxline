@@ -72,19 +72,23 @@ struct SettingsView: View {
                     }
 
                     Section("Hotkey") {
-                        ChordRecorderView(chord: $generalVM.chord)
-                        Picker("Command modifier", selection: $generalVM.commandModifier) {
-                            Text("Off").tag(HotkeyChord.Modifier?.none)
-                            ForEach(HotkeyChord.Modifier.allCases, id: \.self) { m in
-                                Text(m.displayName).tag(HotkeyChord.Modifier?.some(m))
-                            }
+                        ChordRecorderView(
+                            chord: $generalVM.chord,
+                            title: "Dictation",
+                            validate: generalVM.validateDictationChord
+                        )
+                        Toggle("Command mode", isOn: $generalVM.commandModeEnabled)
+                        if generalVM.commandModeEnabled {
+                            ChordRecorderView(
+                                chord: Binding(
+                                    get: { generalVM.commandChord ?? .defaultCommand },
+                                    set: { generalVM.commandChord = $0 }
+                                ),
+                                title: "Command mode",
+                                validate: generalVM.validateCommandChord
+                            )
                         }
-                        if let warning = generalVM.commandModifierWarning {
-                            Text(warning)
-                                .foregroundStyle(.orange)
-                                .font(.callout)
-                        }
-                        Text("Hold the command modifier together with your hotkey to transform the selected text by voice instead of dictating. Set to Off for pure dictation — voxline then never touches the clipboard.")
+                        Text("Hold to speak an edit: rewrite the selection, draft a reply, or change part of the field.")
                             .foregroundStyle(.secondary)
                             .font(.callout)
                     }

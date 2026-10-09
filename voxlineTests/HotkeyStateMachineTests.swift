@@ -324,10 +324,57 @@ import Foundation
         #expect(m.state == .blocked)
     }
 
-    @Test func resync_during_finalizing_is_stored_for_finished() {
+    @Test func chord_held_at_a_resync_during_finalizing_blocks_instead_of_recording() {
         let m = finalizing()
         #expect(m.handle(.resync(d)).isEmpty)
         #expect(m.state == .finalizing(.dictation))
+        #expect(m.handle(.recordingFinished).isEmpty)
+        #expect(m.state == .blocked)
+        m.handle(.modifiersChanged([]))
+        #expect(m.state == .idle)
+        #expect(m.handle(.modifiersChanged(d)) == [.startRecording(.dictation)])
+    }
+
+    @Test func full_release_after_a_resync_during_finalizing_clears_the_block() {
+        let m = finalizing()
+        m.handle(.resync(d))
+        m.handle(.modifiersChanged([]))
+        m.handle(.modifiersChanged(d))
+        #expect(m.handle(.recordingFinished) == [.startRecording(.dictation)])
+    }
+
+    @Test func partial_release_after_a_resync_during_finalizing_still_blocks() {
+        let m = finalizing()
+        m.handle(.resync(d))
+        m.handle(.modifiersChanged(shift))
+        #expect(m.handle(.recordingFinished).isEmpty)
+        #expect(m.state == .blocked)
+    }
+
+    @Test func empty_resync_during_finalizing_goes_idle() {
+        let m = finalizing()
+        m.handle(.resync([]))
+        #expect(m.handle(.recordingFinished).isEmpty)
+        #expect(m.state == .idle)
+    }
+
+    @Test func input_lost_after_a_resync_during_finalizing_goes_idle() {
+        let m = finalizing()
+        m.handle(.resync(d))
+        m.handle(.inputLost)
+        #expect(m.handle(.recordingFinished).isEmpty)
+        #expect(m.state == .idle)
+    }
+
+    @Test func the_block_from_a_resync_does_not_outlive_its_finalizing() {
+        let m = finalizing()
+        m.handle(.resync(d))
+        m.handle(.recordingFinished)
+        m.handle(.inputLost)
+        m.handle(.modifiersChanged(d))
+        m.handle(.modifiersChanged(shift))
+        #expect(m.state == .finalizing(.dictation))
+        m.handle(.modifiersChanged(d))
         #expect(m.handle(.recordingFinished) == [.startRecording(.dictation)])
     }
 

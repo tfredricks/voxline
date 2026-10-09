@@ -58,4 +58,29 @@ import Foundation
         #expect(!AppStatus.error("oops").blocksRecording)
         #expect(!AppStatus.permissionsError("oops").blocksRecording)
     }
+
+    @Test func shortcut_capture_depth_starts_at_zero() {
+        #expect(AppState().shortcutCaptureDepth == 0)
+    }
+
+    @Test func shortcut_capture_depth_counts_nested_captures() {
+        let state = AppState()
+        state.beginShortcutCapture()
+        state.beginShortcutCapture()
+        #expect(state.shortcutCaptureDepth == 2)
+        state.endShortcutCapture()
+        #expect(state.shortcutCaptureDepth == 1)
+        state.endShortcutCapture()
+        #expect(state.shortcutCaptureDepth == 0)
+    }
+
+    @Test func ending_a_capture_never_drops_the_depth_below_zero() {
+        let state = AppState()
+        state.endShortcutCapture()
+        #expect(state.shortcutCaptureDepth == 0)
+        state.beginShortcutCapture()
+        state.endShortcutCapture()
+        state.endShortcutCapture()
+        #expect(state.shortcutCaptureDepth == 0)
+    }
 }

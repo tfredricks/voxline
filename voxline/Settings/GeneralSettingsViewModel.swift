@@ -4,7 +4,8 @@ import Observation
 /// Snapshot the General settings VM hands to the coordinator on save.
 struct GeneralSettingsSnapshot: Equatable {
     let chord: HotkeyChord
-    let commandModifier: HotkeyChord.Modifier?
+    let commandChord: HotkeyChord?
+    let commandModel: String?
     let audioInputDeviceUID: String?
     let engine: EngineID
     let whisperModel: WhisperModel
@@ -23,12 +24,21 @@ struct AudioDeviceRow: Identifiable, Equatable {
 final class GeneralSettingsViewModel {
 
     var chord: HotkeyChord { didSet { if loaded { commit() } } }
-    var commandModifier: HotkeyChord.Modifier? { didSet { if loaded { commit() } } }
+    var commandChord: HotkeyChord? { didSet { if loaded { commit() } } }
+    /// Command model id as typed; `""` means the cleanup model.
+    var commandModel: String { didSet { if loaded { commit() } } }
     var audioInputDeviceUID: String? { didSet { if loaded { commit() } } }
     var engine: EngineID { didSet { if loaded { commit() } } }
     var whisperModel: WhisperModel { didSet { if loaded { commit() } } }
     var playHotkeySounds: Bool { didSet { if loaded { commit() } } }
-    var provider: LLMProvider { didSet { if loaded { commit() } } }
+    /// A real provider change also clears `commandModel`, as `AppSettings` does.
+    var provider: LLMProvider {
+        didSet {
+            guard loaded else { return }
+            if provider != oldValue { withoutCommitting { commandModel = "" } }
+            commit()
+        }
+    }
 
     var launchAtLogin: Bool {
         didSet {
@@ -85,7 +95,8 @@ final class GeneralSettingsViewModel {
         self.vocabulary = vocabulary
         self.hasOpenAIKey = hasOpenAIKey
         self.chord = settings.hotkeyChord
-        self.commandModifier = settings.commandModifier
+        self.commandChord = settings.commandChord
+        self.commandModel = settings.commandModel ?? ""
         self.audioInputDeviceUID = settings.audioInputDeviceUID
         self.engine = settings.transcriptionEngine
         self.whisperModel = settings.whisperModel
@@ -146,9 +157,28 @@ final class GeneralSettingsViewModel {
         return !key.isBlank
     }
 
-    /// Soft warning for the current command-modifier choice, or nil when clean.
-    var commandModifierWarning: String? {
-        HotkeyChord.commandModifierConflictWarning(command: commandModifier, chord: chord)
+    var commandModeEnabled: Bool {
+        get { commandChord != nil }
+        set {
+            guard newValue != commandModeEnabled else { return }
+            commandChord = newValue ? defaultCommandChordAvoidingCollision() : nil
+        }
+    }
+
+    /// Rejection for a dictation chord that is the command chord, or nil.
+    func validateDictationChord(_ chord: HotkeyChord) -> String? {
+        commandChord?.keys == chord.keys ? "That's your command hotkey" : nil
+    }
+
+    /// Rejection for a command chord that is the dictation chord, or nil.
+    func validateCommandChord(_ chord: HotkeyChord) -> String? {
+        chord.keys == self.chord.keys ? "That's your dictation hotkey" : nil
+    }
+
+    private func defaultCommandChordAvoidingCollision() -> HotkeyChord {
+        guard HotkeyChord.defaultCommand.keys == chord.keys else { return .defaultCommand }
+        let spare = HotkeyChord.Modifier.allCases.first { !chord.keys.contains($0) }!
+        return HotkeyChord(modifierA: chord.modifierA, modifierB: spare)
     }
 
     func refreshDevices() {
@@ -176,7 +206,8 @@ final class GeneralSettingsViewModel {
     func refreshFromUserDefaults() {
         withoutCommitting {
             chord = settings.hotkeyChord
-            commandModifier = settings.commandModifier
+            commandChord = settings.commandChord
+            commandModel = settings.commandModel ?? ""
             audioInputDeviceUID = settings.audioInputDeviceUID
             engine = settings.transcriptionEngine
             whisperModel = settings.whisperModel
@@ -186,16 +217,18 @@ final class GeneralSettingsViewModel {
         openAIKeyDidChange()
     }
 
-    /// Restore Spec defaults: hotkey to Left Shift + Left Control, system-default
-    /// mic, the default engine, large-v3-turbo, sounds on. Performs one batched
-    /// commit so the applier sees a single coherent snapshot rather than
-    /// several partial ones.
-    /// Launch-at-Login is intentionally left untouched — Reset is for pipeline
-    /// settings, not OS-level integration.
+    /// Restore Spec defaults: hotkey to Left Shift + Left Control, command
+    /// chord to Left Shift + Left Option, the cleanup model for commands,
+    /// system-default mic, the default engine, large-v3-turbo, sounds on.
+    /// Performs one batched commit so the applier sees a single coherent
+    /// snapshot rather than several partial ones.
+    /// Launch-at-Login and the presets (`PresetStore`) are intentionally left
+    /// untouched — Reset is for pipeline settings, not OS-level integration.
     func resetToDefaults() {
         withoutCommitting {
             chord = .default
-            commandModifier = AppSettings.defaultCommandModifier
+            commandChord = .defaultCommand
+            commandModel = ""
             audioInputDeviceUID = nil
             engine = .default
             whisperModel = .default
@@ -216,16 +249,18 @@ final class GeneralSettingsViewModel {
     private func commit() {
         var s = settings
         s.hotkeyChord = chord
-        s.commandModifier = commandModifier
+        s.commandChord = commandChord
         s.audioInputDeviceUID = audioInputDeviceUID
         s.transcriptionEngine = engine
         s.whisperModel = whisperModel
         s.playHotkeySounds = playHotkeySounds
         s.llmProvider = provider
+        s.commandModel = commandModel
         settings = s
         onApply(GeneralSettingsSnapshot(
             chord: chord,
-            commandModifier: commandModifier,
+            commandChord: commandChord,
+            commandModel: s.commandModel,
             audioInputDeviceUID: audioInputDeviceUID,
             engine: engine,
             whisperModel: whisperModel,

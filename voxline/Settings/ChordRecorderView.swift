@@ -4,29 +4,48 @@ import Carbon.HIToolbox
 import IOKit.hidsystem
 import SwiftUI
 
+/// Records a two-modifier chord. While recording, hotkey input is suspended
+/// through `AppState.beginShortcutCapture()`, ended exactly once by `stop()`
+/// or disappearing. A chord `validate` rejects shows its message and keeps
+/// waiting for a different second modifier.
 struct ChordRecorderView: View {
 
+    @Environment(AppState.self) private var appState
+
     @Binding var chord: HotkeyChord
+    let title: String
+    let validate: @MainActor (HotkeyChord) -> String?
 
     @State private var isRecording = false
     @State private var flagsMonitor: Any?
     @State private var keyMonitor: Any?
     @State private var firstModifier: HotkeyChord.Modifier?
     @State private var unsupportedHint: String?
+    @State private var rejection: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
-                Text(chord.displayName)
-                    .monospaced()
-                    .fixedSize()
-                if isRecording {
-                    Text(firstModifier == nil ? "Press first modifier… (Esc to cancel)" : "Now press second modifier… (Esc to cancel)")
-                        .foregroundStyle(.secondary)
-                    Button("Cancel") { stop() }
-                } else {
-                    Button("Record hotkey…") { start() }
+            LabeledContent(title) {
+                HStack(spacing: 12) {
+                    Text(chord.displayName)
+                        .monospaced()
+                        .fixedSize()
+                    if isRecording {
+                        Button("Cancel") { stop() }
+                    } else {
+                        Button("Record hotkey…") { start() }
+                    }
                 }
+            }
+            if isRecording {
+                Text(firstModifier == nil ? "Press first modifier… (Esc to cancel)" : "Now press second modifier… (Esc to cancel)")
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+            }
+            if let rejection {
+                Text(rejection)
+                    .foregroundStyle(.orange)
+                    .font(.callout)
             }
             if let hint = unsupportedHint {
                 Text(hint)
@@ -43,9 +62,12 @@ struct ChordRecorderView: View {
     }
 
     private func start() {
+        guard !isRecording else { return }
         firstModifier = nil
         unsupportedHint = nil
+        rejection = nil
         isRecording = true
+        appState.beginShortcutCapture()
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             handle(event)
             return event
@@ -67,7 +89,10 @@ struct ChordRecorderView: View {
         keyMonitor = nil
         firstModifier = nil
         unsupportedHint = nil
+        rejection = nil
+        guard isRecording else { return }
         isRecording = false
+        appState.endShortcutCapture()
     }
 
     private func handle(_ event: NSEvent) {
@@ -82,7 +107,12 @@ struct ChordRecorderView: View {
             unsupportedHint = nil
             if let first = firstModifier {
                 guard pressed != first else { return }
-                chord = HotkeyChord(modifierA: first, modifierB: pressed)
+                let candidate = HotkeyChord(modifierA: first, modifierB: pressed)
+                if let message = validate(candidate) {
+                    rejection = message
+                    return
+                }
+                chord = candidate
                 stop()
             } else {
                 firstModifier = pressed

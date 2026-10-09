@@ -8,7 +8,9 @@ struct AppSettings {
         static let provider = "voxline.llm.provider"
         static let model = "voxline.llm.model"
         static let hotkeyChord = "voxline.hotkey.chord"
-        static let commandModifier = "voxline.hotkey.commandModifier"
+        static let commandChord = "voxline.hotkey.commandChord"
+        static let legacyCommandModifier = "voxline.hotkey.commandModifier"
+        static let commandModel = "voxline.llm.commandModel"
         static let audioInputDeviceUID = "voxline.audio.inputDeviceUID"
         static let whisperModel = "voxline.whisper.model"
         static let hasCompletedFirstRun = "voxline.firstRun.completed"
@@ -20,19 +22,15 @@ struct AppSettings {
 
     let defaults: UserDefaults
 
-    /// Command modifier applied when the defaults key is unset. `nil` here would
-    /// mean "off by default"; we ship command mode ON with Left Option.
-    static let defaultCommandModifier: HotkeyChord.Modifier? = .leftOption
-
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
 
     /// LLM provider choice. Defaults to .anthropic.
-    /// Changing the provider clears any model override so the spec default
-    /// for the new provider takes over (a model id from one provider is
-    /// almost never valid for another). Re-assigning the same provider is
-    /// a no-op — the override survives.
+    /// Changing the provider clears the model override and `commandModel` so
+    /// the spec default for the new provider takes over (a model id from one
+    /// provider is almost never valid for another). Re-assigning the same
+    /// provider is a no-op — the overrides survive.
     var llmProvider: LLMProvider {
         get {
             guard
@@ -53,6 +51,7 @@ struct AppSettings {
             if previous != newValue {
                 AppLog.llm.info("provider changed: \(previous?.rawValue ?? "(none)") → \(newValue.rawValue)")
                 defaults.removeObject(forKey: Key.model)
+                defaults.removeObject(forKey: Key.commandModel)
             }
         }
     }
@@ -78,25 +77,55 @@ struct AppSettings {
         }
     }
 
-    /// Optional modifier held together with the dictation chord to mean "this
-    /// utterance is a command." Absent key → `defaultCommandModifier`
-    /// (`.leftOption`). The sentinel string `"off"` → `nil` (command mode off:
-    /// pure dictation, clipboard never touched).
-    var commandModifier: HotkeyChord.Modifier? {
+    /// The command-mode chord, or nil when command mode is off. Stored as
+    /// JSON, or the string `"off"` for nil. Absent → `.defaultCommand`,
+    /// unless that is the dictation chord, then off.
+    var commandChord: HotkeyChord? {
         get {
-            guard let raw = defaults.string(forKey: Key.commandModifier) else {
-                return AppSettings.defaultCommandModifier
+            if defaults.string(forKey: Key.commandChord) == "off" { return nil }
+            if let data = defaults.data(forKey: Key.commandChord),
+               let chord = try? JSONDecoder().decode(HotkeyChord.self, from: data) {
+                return chord
             }
-            if raw == "off" { return nil }
-            return HotkeyChord.Modifier(rawValue: raw) ?? AppSettings.defaultCommandModifier
+            return HotkeyChord.defaultCommand.keys == hotkeyChord.keys ? nil : .defaultCommand
         }
         set {
-            if let newValue {
-                defaults.set(newValue.rawValue, forKey: Key.commandModifier)
+            if let newValue, let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Key.commandChord)
             } else {
-                defaults.set("off", forKey: Key.commandModifier)
+                defaults.set("off", forKey: Key.commandChord)
             }
         }
+    }
+
+    var chords: ChordSet { ChordSet(dictation: hotkeyChord, command: commandChord) }
+
+    /// Model id for commands; nil means the cleanup model. A blank value is
+    /// stored as absent.
+    var commandModel: String? {
+        get {
+            guard let raw = defaults.string(forKey: Key.commandModel), !raw.isBlank else { return nil }
+            return raw.trimmed
+        }
+        set {
+            if let newValue, !newValue.isBlank {
+                defaults.set(newValue.trimmed, forKey: Key.commandModel)
+            } else {
+                defaults.removeObject(forKey: Key.commandModel)
+            }
+        }
+    }
+
+    /// Writes `commandChord` from the legacy command modifier
+    /// (`CommandChordMigration`) and removes the legacy key. Does nothing
+    /// once `commandChord` is stored, so it runs at most once per install.
+    mutating func migrateCommandChordIfNeeded() {
+        guard defaults.object(forKey: Key.commandChord) == nil else { return }
+        let stored = defaults.string(forKey: Key.legacyCommandModifier)
+        let migrated = CommandChordMigration.commandChord(dictation: hotkeyChord, stored: stored)
+        commandChord = migrated
+        defaults.removeObject(forKey: Key.legacyCommandModifier)
+        AppLog.hotkey.info("migrated command modifier \(stored ?? "(absent)", privacy: .public) → \(migrated?.displayName ?? "off", privacy: .public)")
     }
 
     var audioInputDeviceUID: String? {

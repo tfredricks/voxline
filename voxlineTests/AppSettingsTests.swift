@@ -130,23 +130,165 @@ import Foundation
         #expect(AppSettings(defaults: d).playHotkeySounds == true)
     }
 
-    @Test func unset_command_modifier_defaults_to_left_option() {
+    @Test func unset_command_chord_with_default_dictation_is_the_default_command_chord() {
         let d = makeDefaults()
-        #expect(AppSettings(defaults: d).commandModifier == .leftOption)
+        #expect(AppSettings(defaults: d).commandChord == .defaultCommand)
     }
 
-    @Test func command_modifier_round_trips_a_modifier() {
+    @Test func unset_command_chord_is_off_when_dictation_uses_the_default_command_keys() {
         let d = makeDefaults()
         var s = AppSettings(defaults: d)
-        s.commandModifier = .rightShift
-        #expect(AppSettings(defaults: d).commandModifier == .rightShift)
+        s.hotkeyChord = HotkeyChord(modifierA: .leftShift, modifierB: .leftOption)
+        #expect(AppSettings(defaults: d).commandChord == nil)
     }
 
-    @Test func command_modifier_off_round_trips_as_nil() {
+    @Test func command_chord_round_trips() {
         let d = makeDefaults()
         var s = AppSettings(defaults: d)
-        s.commandModifier = nil   // explicit "off"
-        #expect(AppSettings(defaults: d).commandModifier == nil)
+        let chord = HotkeyChord(modifierA: .rightCommand, modifierB: .rightOption)
+        s.commandChord = chord
+        #expect(AppSettings(defaults: d).commandChord == chord)
+    }
+
+    @Test func command_chord_off_is_stored_as_off_and_reads_nil() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.commandChord = nil
+        #expect(d.string(forKey: AppSettings.Key.commandChord) == "off")
+        #expect(AppSettings(defaults: d).commandChord == nil)
+    }
+
+    @Test func command_chord_keys_match_the_spec() {
+        #expect(AppSettings.Key.commandChord == "voxline.hotkey.commandChord")
+        #expect(AppSettings.Key.legacyCommandModifier == "voxline.hotkey.commandModifier")
+        #expect(AppSettings.Key.commandModel == "voxline.llm.commandModel")
+    }
+
+    @Test func chords_pair_the_dictation_and_command_chords() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        let dictation = HotkeyChord(modifierA: .rightCommand, modifierB: .rightShift)
+        let command = HotkeyChord(modifierA: .rightCommand, modifierB: .rightOption)
+        s.hotkeyChord = dictation
+        s.commandChord = command
+        #expect(s.chords == ChordSet(dictation: dictation, command: command))
+        s.commandChord = nil
+        #expect(s.chords == ChordSet(dictation: dictation, command: nil))
+    }
+
+    @Test func chord_families_cover_both_chords_for_the_paste_release_gate() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.hotkeyChord = .default
+        s.commandChord = HotkeyChord(modifierA: .leftShift, modifierB: .rightCommand)
+        #expect(s.chords.families == [.shift, .control, .command])
+        s.commandChord = nil
+        #expect(s.chords.families == [.shift, .control])
+    }
+
+    @Test(arguments: [
+        ("rightCommand", HotkeyChord?.some(HotkeyChord(modifierA: .leftShift, modifierB: .rightCommand))),
+        ("off", HotkeyChord?.some(.defaultCommand)),
+        ("leftShift", HotkeyChord?.some(.defaultCommand)),
+    ])
+    func migration_from_a_stored_command_modifier(stored: String, expected: HotkeyChord?) {
+        let d = makeDefaults()
+        d.set(stored, forKey: AppSettings.Key.legacyCommandModifier)
+        var s = AppSettings(defaults: d)
+        s.migrateCommandChordIfNeeded()
+        #expect(AppSettings(defaults: d).commandChord == expected)
+        #expect(d.object(forKey: AppSettings.Key.commandChord) != nil)
+        #expect(d.object(forKey: AppSettings.Key.legacyCommandModifier) == nil)
+    }
+
+    @Test func migration_with_no_stored_command_modifier_writes_the_default_command_chord() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.migrateCommandChordIfNeeded()
+        #expect(AppSettings(defaults: d).commandChord == .defaultCommand)
+        #expect(d.data(forKey: AppSettings.Key.commandChord) != nil)
+    }
+
+    @Test func migration_writes_off_when_the_default_command_chord_is_the_dictation_chord() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.hotkeyChord = HotkeyChord(modifierA: .leftShift, modifierB: .leftOption)
+        d.set("off", forKey: AppSettings.Key.legacyCommandModifier)
+        s.migrateCommandChordIfNeeded()
+        #expect(d.string(forKey: AppSettings.Key.commandChord) == "off")
+        #expect(AppSettings(defaults: d).commandChord == nil)
+    }
+
+    @Test func migrating_twice_changes_nothing_the_second_time() throws {
+        let d = makeDefaults()
+        d.set("rightCommand", forKey: AppSettings.Key.legacyCommandModifier)
+        var s = AppSettings(defaults: d)
+        s.migrateCommandChordIfNeeded()
+        let first = try #require(d.data(forKey: AppSettings.Key.commandChord))
+
+        d.set("leftCommand", forKey: AppSettings.Key.legacyCommandModifier)
+        s.migrateCommandChordIfNeeded()
+
+        #expect(d.data(forKey: AppSettings.Key.commandChord) == first)
+        #expect(d.string(forKey: AppSettings.Key.legacyCommandModifier) == "leftCommand")
+        #expect(AppSettings(defaults: d).commandChord == HotkeyChord(modifierA: .leftShift, modifierB: .rightCommand))
+    }
+
+    @Test func migration_leaves_an_existing_command_chord_and_the_stale_legacy_key_alone() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.commandChord = nil
+        d.set("rightCommand", forKey: AppSettings.Key.legacyCommandModifier)
+        s.migrateCommandChordIfNeeded()
+        #expect(AppSettings(defaults: d).commandChord == nil)
+        #expect(d.string(forKey: AppSettings.Key.legacyCommandModifier) == "rightCommand")
+    }
+
+    @Test func command_model_is_nil_when_absent() {
+        #expect(AppSettings(defaults: makeDefaults()).commandModel == nil)
+    }
+
+    @Test func blank_command_model_reads_nil_and_removes_the_key() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.commandModel = "claude-opus-5-5"
+        s.commandModel = "  "
+        #expect(AppSettings(defaults: d).commandModel == nil)
+        #expect(d.object(forKey: AppSettings.Key.commandModel) == nil)
+    }
+
+    @Test func blank_stored_command_model_reads_nil() {
+        let d = makeDefaults()
+        d.set("  ", forKey: AppSettings.Key.commandModel)
+        #expect(AppSettings(defaults: d).commandModel == nil)
+    }
+
+    @Test func command_model_round_trips_and_nil_removes_it() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.commandModel = "claude-opus-5-5"
+        #expect(AppSettings(defaults: d).commandModel == "claude-opus-5-5")
+        s.commandModel = nil
+        #expect(AppSettings(defaults: d).commandModel == nil)
+        #expect(d.object(forKey: AppSettings.Key.commandModel) == nil)
+    }
+
+    @Test func command_model_is_cleared_when_the_provider_changes() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.llmProvider = .anthropic
+        s.commandModel = "claude-opus-5-5"
+        s.llmProvider = .openai
+        #expect(AppSettings(defaults: d).commandModel == nil)
+    }
+
+    @Test func command_model_survives_reassigning_the_same_provider() {
+        let d = makeDefaults()
+        var s = AppSettings(defaults: d)
+        s.llmProvider = .anthropic
+        s.commandModel = "claude-opus-5-5"
+        s.llmProvider = .anthropic
+        #expect(AppSettings(defaults: d).commandModel == "claude-opus-5-5")
     }
 
     @Test func unset_transcription_engine_defaults_to_engine_default() {

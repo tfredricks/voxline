@@ -100,7 +100,7 @@ final class APIKeysSettingsViewModel {
             temperature: nil
         )
         do {
-            _ = try await clientFactory(provider, key).cleanup(request)
+            _ = try await clientFactory(provider, key).complete(request)
             testResult = .success(provider)
         } catch let err as LLMError {
             testResult = .failed(provider, err.errorDescription ?? "Failed")
