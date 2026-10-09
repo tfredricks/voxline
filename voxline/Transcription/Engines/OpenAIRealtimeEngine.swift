@@ -53,6 +53,7 @@ final class OpenAIRealtimeEngine: TranscriptionEngine {
     nonisolated static let model = "gpt-4o-transcribe"
     nonisolated static let endpoint = URL(string: "wss://api.openai.com/v1/realtime?intent=transcription")!
     nonisolated static let missingKeyReason = "Add an OpenAI API key in Settings → General → Recognition to use OpenAI transcription."
+    nonisolated static let keychainReadFailedReason = "Couldn't read the OpenAI API key from the keychain."
     nonisolated static let errorDomain = "com.voxline.openai-realtime"
 
     let id: EngineID = .openAIRealtime
@@ -74,14 +75,21 @@ final class OpenAIRealtimeEngine: TranscriptionEngine {
     }
 
     func readiness() async -> EngineReadiness {
-        storedKey() == nil ? .unavailable(Self.missingKeyReason) : .ready
+        switch storedKey() {
+        case .key:                     return .ready
+        case .unavailable(let reason): return .unavailable(reason)
+        }
     }
 
     func prepare(progress: @escaping @Sendable (Double) -> Void) async throws {}
 
     func openSession(_ config: SessionConfig) async throws -> any TranscriptionSession {
-        guard let key = storedKey() else {
-            throw NSError(domain: Self.errorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: Self.missingKeyReason])
+        let key: String
+        switch storedKey() {
+        case .key(let stored):
+            key = stored
+        case .unavailable(let reason):
+            throw NSError(domain: Self.errorDomain, code: 0, userInfo: [NSLocalizedDescriptionKey: reason])
         }
         let transport = makeTransport(Self.request(apiKey: key))
         do {
@@ -113,9 +121,24 @@ final class OpenAIRealtimeEngine: TranscriptionEngine {
         locale.language.languageCode?.identifier(.alpha2)
     }
 
-    private func storedKey() -> String? {
-        guard let key = try? keychain.string(forKey: KeychainAccount.openai), !key.isBlank else { return nil }
-        return key.trimmed
+    private enum StoredKey {
+        case key(String)
+        /// The user-facing reason there is no key to use.
+        case unavailable(String)
+    }
+
+    /// The trimmed key, or why there is none: a keychain that can't be read
+    /// is reported as such, not as a missing key.
+    private func storedKey() -> StoredKey {
+        let key: String?
+        do {
+            key = try keychain.string(forKey: KeychainAccount.openai)
+        } catch {
+            AppLog.pipeline.error("openai realtime: keychain read failed: \(error.localizedDescription, privacy: .public)")
+            return .unavailable(Self.keychainReadFailedReason)
+        }
+        guard let key, !key.isBlank else { return .unavailable(Self.missingKeyReason) }
+        return .key(key.trimmed)
     }
 }
 

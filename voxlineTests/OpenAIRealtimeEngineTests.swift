@@ -232,13 +232,39 @@ private func type(_ event: [String: Any]) -> String? { event["type"] as? String 
         #expect(await engine(key: "   ").readiness() == .unavailable(reason))
     }
 
-    @Test func an_unreadable_keychain_is_unavailable() async {
+    /// A keychain that can't be read isn't a missing key: asking the user
+    /// to add one they already stored would send them the wrong way.
+    @Test func an_unreadable_keychain_is_unavailable_with_its_own_reason() async {
         let keychain = InMemoryKeychain(seed: [KeychainAccount.openai: Self.key])
         keychain.readError = KeychainError.dataProtectionKeychainUnavailable
         let e = OpenAIRealtimeEngine(keychain: keychain, transport: { _ in FakeRealtimeTransport() })
-        guard case .unavailable = await e.readiness() else {
-            Issue.record("expected unavailable")
-            return
+        #expect(await e.readiness() == .unavailable("Couldn't read the OpenAI API key from the keychain."))
+        #expect(OpenAIRealtimeEngine.keychainReadFailedReason == "Couldn't read the OpenAI API key from the keychain.")
+    }
+
+    @Test func opening_with_an_unreadable_keychain_throws_its_reason_and_never_connects() async {
+        let keychain = InMemoryKeychain(seed: [KeychainAccount.openai: Self.key])
+        keychain.readError = KeychainError.unhandledStatus(-25308)
+        let requests = RequestLog()
+        let e = OpenAIRealtimeEngine(keychain: keychain, transport: { request in
+            requests.record(request)
+            return FakeRealtimeTransport()
+        })
+        do {
+            _ = try await e.openSession(SessionConfig())
+            Issue.record("expected the open to throw")
+        } catch {
+            #expect(error.localizedDescription == OpenAIRealtimeEngine.keychainReadFailedReason)
+        }
+        #expect(requests.requests.isEmpty)
+    }
+
+    @Test func opening_without_a_key_throws_the_missing_key_reason() async {
+        do {
+            _ = try await engine(key: nil).openSession(SessionConfig())
+            Issue.record("expected the open to throw")
+        } catch {
+            #expect(error.localizedDescription == OpenAIRealtimeEngine.missingKeyReason)
         }
     }
 

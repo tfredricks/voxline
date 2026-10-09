@@ -77,11 +77,16 @@ import Testing
         #expect(!EnginePrep.rechecksAfterOpenAIKeyChange(selected: .apple))
     }
 
-    @Test func only_the_missing_key_error_is_cleared_before_the_recheck() {
-        #expect(EnginePrep.isMissingOpenAIKeyError(.error(OpenAIRealtimeEngine.missingKeyReason)))
-        #expect(!EnginePrep.isMissingOpenAIKeyError(.error("Transcription failed. Try again or pick a different engine in Settings → General.")))
-        #expect(!EnginePrep.isMissingOpenAIKeyError(.idle))
-        #expect(!EnginePrep.isMissingOpenAIKeyError(.thinking))
+    @Test(arguments: [OpenAIRealtimeEngine.missingKeyReason, OpenAIRealtimeEngine.keychainReadFailedReason])
+    func an_openai_key_error_is_cleared_before_the_recheck(reason: String) {
+        #expect(EnginePrep.isOpenAIKeyError(.error(reason)))
+    }
+
+    @Test func only_an_openai_key_error_is_cleared_before_the_recheck() {
+        #expect(!EnginePrep.isOpenAIKeyError(.error("Transcription failed. Try again or pick a different engine in Settings → General.")))
+        #expect(!EnginePrep.isOpenAIKeyError(.permissionsError(OpenAIRealtimeEngine.missingKeyReason)))
+        #expect(!EnginePrep.isOpenAIKeyError(.idle))
+        #expect(!EnginePrep.isOpenAIKeyError(.thinking))
     }
 
     // MARK: Stale engine error
@@ -89,13 +94,13 @@ import Testing
     private static let pipelineError = "Transcription failed. Try again or pick a different engine in Settings → General."
     private static let setupFailed = "Model setup failed: The Internet connection appears to be offline.. Try Retry or relaunch Voxline."
 
-    /// Switching from OpenAI without a key to an engine that only needs
-    /// warming is silent, so without the clear the old error would stay.
-    /// The pipeline and a key change write this error too, so it is cleared
-    /// whoever wrote it.
-    @Test(arguments: [nil, setupFailed])
-    func a_warm_plan_clears_the_missing_key_error(lastPrepError: String?) {
-        #expect(EnginePrep.clearsStaleError(plan: .warm, current: .error(OpenAIRealtimeEngine.missingKeyReason), lastPrepError: lastPrepError))
+    /// Switching from OpenAI without a usable key to an engine that only
+    /// needs warming is silent, so without the clear the old error would
+    /// stay. The pipeline and a key change write these errors too, so they
+    /// are cleared whoever wrote them.
+    @Test(arguments: [OpenAIRealtimeEngine.missingKeyReason, OpenAIRealtimeEngine.keychainReadFailedReason], [nil, setupFailed])
+    func a_warm_plan_clears_an_openai_key_error(reason: String, lastPrepError: String?) {
+        #expect(EnginePrep.clearsStaleError(plan: .warm, current: .error(reason), lastPrepError: lastPrepError))
     }
 
     /// An offline launch with an uncached Whisper model, then a switch to

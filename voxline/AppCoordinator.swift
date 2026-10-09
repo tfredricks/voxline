@@ -498,7 +498,7 @@ final class AppCoordinator {
     /// error and clearing the key shows it.
     func openAIKeyDidChange() {
         guard let engines, EnginePrep.rechecksAfterOpenAIKeyChange(selected: engines.current.id) else { return }
-        if let appState, EnginePrep.isMissingOpenAIKeyError(appState.status) {
+        if let appState, EnginePrep.isOpenAIKeyError(appState.status) {
             appState.status = .idle
         }
         runModelPrepTask(

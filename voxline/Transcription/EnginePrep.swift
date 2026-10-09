@@ -86,22 +86,24 @@ enum EnginePrep {
         selected == .openAIRealtime
     }
 
-    /// Whether `status` is the missing-key error a re-check replaces. It is
-    /// cleared before the re-check, so a saved key leaves the status idle;
-    /// a key that is still missing gets the error back from the re-check.
-    static func isMissingOpenAIKeyError(_ status: AppStatus) -> Bool {
+    /// Whether `status` is an OpenAI key error (missing, or unreadable from
+    /// the keychain), which a re-check replaces. It is cleared before the
+    /// re-check, so a saved key leaves the status idle; a key that is still
+    /// unusable gets the error back from the re-check.
+    static func isOpenAIKeyError(_ status: AppStatus) -> Bool {
         status == .error(OpenAIRealtimeEngine.missingKeyReason)
+            || status == .error(OpenAIRealtimeEngine.keychainReadFailedReason)
     }
 
     /// Whether a prepare task resets `current` to idle once its plan is known.
     /// A warm plan means the selected engine runs, so an error a previous
-    /// prepare task wrote (`lastPrepError`) is stale, and so is OpenAI's
-    /// missing-key error, which the pipeline and a key change write too. A
+    /// prepare task wrote (`lastPrepError`) is stale, and so is an OpenAI key
+    /// error, which the pipeline and a key change write too. A
     /// settings switch warms silently and would otherwise leave them showing.
     /// Every other status stays: a pipeline error keeps the pill's Retry.
     static func clearsStaleError(plan: Plan, current: AppStatus, lastPrepError: String?) -> Bool {
         guard plan == .warm, case .error(let message) = current else { return false }
-        return message == lastPrepError || isMissingOpenAIKeyError(current)
+        return message == lastPrepError || isOpenAIKeyError(current)
     }
 
     /// The error a prepare task wrote, while `current` still shows it; nil

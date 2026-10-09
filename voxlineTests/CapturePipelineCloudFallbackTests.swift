@@ -286,6 +286,29 @@ import Foundation
         #expect(h.pipe.metrics.items.isEmpty)
     }
 
+    /// An unreadable keychain is a setup problem like a missing key, and
+    /// says so instead of asking for a key the user already stored.
+    @Test func an_unreadable_openai_key_shows_its_error_instead_of_falling_back() async {
+        let keychain = InMemoryKeychain(seed: [KeychainAccount.openai: "sk-test-key"])
+        keychain.readError = KeychainError.dataProtectionKeychainUnavailable
+        let openAI = OpenAIRealtimeEngine(
+            keychain: keychain,
+            transport: { _ in
+                Issue.record("no connection without a readable key")
+                return FakeRealtimeTransport()
+            }
+        )
+        let h = makeHarness(current: openAI)
+        await dictate(h)
+
+        #expect(h.local.openedConfigs.isEmpty)
+        #expect(h.state.status == .error(OpenAIRealtimeEngine.keychainReadFailedReason))
+        #expect(h.state.toastMessage == nil)
+        #expect(h.llm.calls.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
+        #expect(h.pipe.metrics.items.isEmpty)
+    }
+
     @Test func an_on_device_engine_failure_does_not_fall_back() async {
         let apple = FakeTranscriptionEngine(id: .apple, metricsID: "fake:apple")
         let session = FakeTranscriptionSession()

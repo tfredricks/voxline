@@ -464,8 +464,9 @@ final class CapturePipeline {
     }
 
     /// Why a cloud engine whose session failed to open can't run at all, such
-    /// as OpenAI without a key. That is a setting to fix, so it is shown as
-    /// is: the fallback would hide it on every dictation.
+    /// as OpenAI without a key or with a keychain it can't read. That is
+    /// setup to fix, so it is shown as is: the fallback would hide it on
+    /// every dictation.
     private func cloudUnavailableReason(_ engine: any TranscriptionEngine, after error: Error) async -> String? {
         guard engine.capabilities.contains(.sendsAudioOffDevice), !(error is CancellationError),
               case .unavailable(let reason) = await engine.readiness() else { return nil }
