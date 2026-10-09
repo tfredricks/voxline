@@ -477,10 +477,20 @@ struct WhisperKitStreamingSessionTests {
     @Test func a_pause_needs_enough_speech_since_the_last_pass() async throws {
         let fake = FakeWhisperPass()
         let session = fake.session()
-        session.append(speech(3_200))
+        session.append(speech(480))
         session.append(silence(8_000))
         try await Task.sleep(for: .milliseconds(350))
         #expect(fake.calls.isEmpty)
+        session.cancel()
+    }
+
+    @Test func a_pause_after_a_twentieth_of_a_second_of_speech_triggers_a_pass() async throws {
+        let fake = FakeWhisperPass()
+        let session = fake.session()
+        session.append(speech(800))
+        session.append(silence(5_600))
+        #expect(await eventually { fake.calls.count == 1 })
+        #expect(fake.calls == [.init(sampleCount: 6_400, clipStart: 0)])
         session.cancel()
     }
 

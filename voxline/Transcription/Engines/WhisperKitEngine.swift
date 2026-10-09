@@ -98,9 +98,11 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
 
     static let samplesPerPass = 16_000
     /// A pause: this much trailing silence after at least
-    /// `minimumSpeechSamples` of non-silent audio since the last pass.
+    /// `minimumSpeechSamples` of non-silent audio since the last pass. The
+    /// speech minimum only rules out a single noise blip, so a pause just
+    /// after a rolling pass still gets a pass of its own.
     static let pauseSamples = 4_800
-    static let minimumSpeechSamples = 4_800
+    static let minimumSpeechSamples = 800
     /// Non-silent audio is counted in frames of this many samples (10 ms).
     static let peakFrameSamples = 160
     static let pollInterval: Duration = .milliseconds(100)
