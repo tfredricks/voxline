@@ -24,9 +24,11 @@ final class FakeTranscriber: MeetingTranscribing, @unchecked Sendable {
 final class FakeDiarizer: MeetingDiarizing, @unchecked Sendable {
     var response: Result<[SpeakerSegmentText], Error> = .success([])
     private(set) var receivedSegments: [TimedSegment]?
+    private(set) var receivedSampleCount: Int?
     func prepare() async throws {}
     func diarize(_ samples: [Float], transcript: TrackTranscript) async throws -> [SpeakerSegmentText] {
         receivedSegments = transcript.segments
+        receivedSampleCount = samples.count
         return try response.get()
     }
     func release() async {}
@@ -60,6 +62,8 @@ final class FakeTranscoder: MeetingAudioTranscoding, @unchecked Sendable {
     private let transcoder = FakeTranscoder()
     private let speech: [Float] = [Float](repeating: 0.3, count: 16_000)
     private let silence: [Float] = [Float](repeating: 0, count: 16_000)
+    private let chime: [Float] = [Float](repeating: 0.5, count: 800)
+    private let callLine = "Thanks for joining everyone, today we need to settle the pricing for the fourth quarter and agree who sends the revised quote."
 
     private func makePipeline(retention: MeetingAudioRetention = .days14, download: Bool = false) -> MeetingPipeline {
         let folder = notesFolder
@@ -95,8 +99,8 @@ final class FakeTranscoder: MeetingAudioTranscoding, @unchecked Sendable {
 
     @Test func call_meeting_writes_notes_with_me_and_diarized_speakers() async throws {
         let id = try meeting(mic: speech, system: speech)
-        transcriber.responses = [.success(transcript("I can do eight.", at: 5)), .success(transcript("Thanks for joining."))]
-        diarizer.response = .success([SpeakerSegmentText(speakerID: 4, start: 0, end: 1, text: "Thanks for joining.")])
+        transcriber.responses = [.success(transcript("I can do eight.", at: 5)), .success(transcript(callLine))]
+        diarizer.response = .success([SpeakerSegmentText(speakerID: 4, start: 0, end: 1, text: callLine)])
         let pipeline = makePipeline()
         var stages: [MeetingStage] = []
         pipeline.onStage = { stages.append($0) }
@@ -104,10 +108,10 @@ final class FakeTranscoder: MeetingAudioTranscoding, @unchecked Sendable {
         let text = try written(await pipeline.process(id))
 
         #expect(text.hasPrefix("# Pricing sync\n"))
-        #expect(text.contains("**Speaker 1** [00:00:00] Thanks for joining."))
+        #expect(text.contains("**Speaker 1** [00:00:00] \(callLine)"))
         #expect(text.contains("**Me** [00:00:05] I can do eight."))
         #expect(stages == [.transcribing(track: 1, of: 2), .transcribing(track: 2, of: 2), .identifyingSpeakers, .writingNotes])
-        #expect(diarizer.receivedSegments == transcript("Thanks for joining.").segments)
+        #expect(diarizer.receivedSegments == transcript(callLine).segments)
         #expect(notes.requests.first?.vocabulary == ["Acme"])
         #expect(transcriber.released)
         let meta = try store.load(id)
@@ -158,19 +162,67 @@ final class FakeTranscoder: MeetingAudioTranscoding, @unchecked Sendable {
 
     @Test func diarization_failure_labels_call_audio_them() async throws {
         let id = try meeting(mic: nil, system: speech)
-        transcriber.responses = [.success(transcript("Hi from the call."))]
+        transcriber.responses = [.success(transcript(callLine))]
         diarizer.response = .failure(Boom())
         let text = try written(await makePipeline().process(id))
-        #expect(text.contains("**Them** [00:00:00] Hi from the call."))
+        #expect(text.contains("**Them** [00:00:00] \(callLine)"))
         #expect(text.contains(MeetingPipeline.speakersWarning("boom.")))
     }
 
-    @Test func system_transcription_failure_keeps_mic() async throws {
+    @Test func system_transcription_failure_keeps_mic_and_processes_in_person() async throws {
         let id = try meeting(mic: speech, system: speech)
         transcriber.responses = [.success(transcript("Mine.")), .failure(Boom())]
         let text = try written(await makePipeline().process(id))
-        #expect(text.contains("**Me** [00:00:00] Mine."))
+        #expect(text.contains("**Speaker** [00:00:00] Mine."))
+        #expect(!text.contains("**Me**"))
+        #expect(diarizer.receivedSampleCount == speech.count)
         #expect(text.contains(MeetingPipeline.systemMissingWarning("boom.")))
+    }
+
+    @Test func notification_sound_on_the_system_track_keeps_in_person_speakers() async throws {
+        let id = try meeting(mic: speech, system: chime)
+        transcriber.responses = [
+            .success(TrackTranscript(segments: [
+                TimedSegment(start: 0, end: 1, text: "Hello everyone."),
+                TimedSegment(start: 4, end: 5, text: "Morning."),
+            ])),
+            .success(transcript("Ding.")),
+        ]
+        diarizer.response = .success([
+            SpeakerSegmentText(speakerID: 0, start: 0, end: 1, text: "Hello everyone."),
+            SpeakerSegmentText(speakerID: 1, start: 4, end: 5, text: "Morning."),
+        ])
+
+        let text = try written(await makePipeline().process(id))
+
+        #expect(transcriber.calls == 2)
+        #expect(diarizer.receivedSampleCount == speech.count)
+        #expect(diarizer.receivedSegments?.map(\.text) == ["Hello everyone.", "Morning."])
+        #expect(text.contains("**Speaker 1** [00:00:00] Hello everyone."))
+        #expect(text.contains("**Speaker 2** [00:00:04] Morning."))
+        #expect(!text.contains("**Me**"))
+        #expect(!text.contains("Ding."))
+        #expect(!text.contains(MeetingPipeline.silentSystemWarning))
+    }
+
+    @Test func saved_transcript_is_reused_without_transcribing() async throws {
+        let id = try meeting(mic: nil, system: nil)
+        let saved = MeetingTranscriptFile(
+            utterances: [MeetingUtterance(speaker: "Speaker 1", start: 3, end: 4, text: "Saved line.")],
+            warnings: ["Saved warning."]
+        )
+        try JSONEncoder().encode(saved).write(to: store.directory(for: id).transcript)
+        let pipeline = makePipeline()
+        var stages: [MeetingStage] = []
+        pipeline.onStage = { stages.append($0) }
+
+        let text = try written(await pipeline.process(id))
+
+        #expect(transcriber.calls == 0)
+        #expect(stages == [.writingNotes])
+        #expect(text.contains("**Speaker 1** [00:00:03] Saved line."))
+        #expect(text.contains("> Saved warning."))
+        #expect(try store.load(id).state == .done)
     }
 
     @Test func all_transcription_failing_marks_failed() async throws {

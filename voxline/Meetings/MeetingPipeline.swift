@@ -43,15 +43,22 @@ protocol MeetingProcessing: AnyObject {
     func regenerateNotes(_ id: UUID) async -> MeetingOutcome
 }
 
-/// Recorded tracks → transcript → notes file. Call mode (system audio
-/// present) labels the mic "Me" and diarizes the system track; otherwise
-/// the mic track is diarized.
+/// Recorded tracks → transcript → notes file. Call mode (the system track's
+/// transcript has real speech) labels the mic "Me" and diarizes the system
+/// track; otherwise the system transcript is dropped and the mic track is
+/// diarized. A saved `transcript.json` is reused instead of transcribing.
 @MainActor
 final class MeetingPipeline: MeetingProcessing {
 
     static let silencePeak: Float = 0.02
 
-    static let silentSystemWarning = "System audio was silent, so this was processed as an in-person meeting. If this was a call, allow voxline under System Settings → Privacy & Security → Screen & System Audio Recording."
+    /// The system track counts as a call only when its transcript has at
+    /// least this many words in total. A notification sound, or Whisper's
+    /// hallucination on one, stays well below it; a call's far side passes
+    /// it within a minute.
+    static let callMinimumWords = 20
+
+    static let silentSystemWarning = "No sound from your Mac was captured, so this was processed as an in-person meeting. If this was a call, allow voxline under System Settings → Privacy & Security → Screen & System Audio Recording."
 
     static func speakersWarning(_ reason: String) -> String { "Speakers couldn't be separated: \(reason)" }
     static func micMissingWarning(_ reason: String) -> String { "Your microphone track couldn't be transcribed: \(reason)" }
@@ -101,6 +108,18 @@ final class MeetingPipeline: MeetingProcessing {
         return Int(parts.seconds * 1000 + parts.attoseconds / 1_000_000_000_000_000)
     }
 
+    static func isCall(_ transcript: TrackTranscript) -> Bool {
+        transcript.segments.reduce(0) { $0 + TranscriptMerger.normalizedWords($1.text).count } >= callMinimumWords
+    }
+
+    private static func savedTranscript(at url: URL) -> MeetingTranscriptFile? {
+        guard let data = try? Data(contentsOf: url),
+              let file = try? JSONDecoder().decode(MeetingTranscriptFile.self, from: data),
+              !file.utterances.isEmpty
+        else { return nil }
+        return file
+    }
+
     private func run(_ id: UUID) async -> MeetingOutcome {
         guard var meta = try? store.load(id) else { return .failed("This meeting's files are missing.") }
         let dir = store.directory(for: id)
@@ -110,6 +129,16 @@ final class MeetingPipeline: MeetingProcessing {
         let began = clock.now
 
         do {
+            if let saved = Self.savedTranscript(at: dir.transcript) {
+                AppLog.meetings.info("reusing saved transcript; skipping transcription")
+                let result = try await writeDocument(&meta, utterances: saved.utterances, warnings: saved.warnings, config: settings())
+                AppLog.meetings.info("""
+                    processed meeting from saved transcript: notes \(result.notesOK ? "ok" : "failed", privacy: .public), \
+                    total \(clock.now - began, privacy: .public)
+                    """)
+                return .written(result.url)
+            }
+
             let micURL = dir.micPCM
             let systemURL = dir.systemPCM
             let (micPeak, systemPeak, sampleCount) = try await Self.offMain {
@@ -122,9 +151,9 @@ final class MeetingPipeline: MeetingProcessing {
             if meta.durationSeconds <= 0 {
                 meta.durationSeconds = Double(sampleCount) / AudioFormat.whisperSampleRate
             }
-            let callMode = systemPeak >= Self.silencePeak
+            let systemHasSound = systemPeak >= Self.silencePeak
             let micHasSpeech = micPeak >= Self.silencePeak
-            guard callMode || micHasSpeech else {
+            guard systemHasSound || micHasSpeech else {
                 store.delete(id)
                 AppLog.meetings.info("nothing recorded; meeting discarded")
                 return .nothingRecorded
@@ -132,7 +161,6 @@ final class MeetingPipeline: MeetingProcessing {
 
             let config = settings()
             var warnings: [String] = []
-            if meta.systemTapStarted && systemPeak == 0 { warnings.append(Self.silentSystemWarning) }
             if config.modelsNeedDownload {
                 onStage?(.downloadingModels)
                 do {
@@ -142,9 +170,8 @@ final class MeetingPipeline: MeetingProcessing {
                 }
             }
 
-            let trackCount = (micHasSpeech ? 1 : 0) + (callMode ? 1 : 0)
+            let trackCount = (micHasSpeech ? 1 : 0) + (systemHasSound ? 1 : 0)
             var trackIndex = 0
-            var micSamples: [Float]?
             var micTranscript: TrackTranscript?
             var systemSamples: [Float]?
             var systemTranscript: TrackTranscript?
@@ -164,9 +191,8 @@ final class MeetingPipeline: MeetingProcessing {
                     warnings.append(Self.micMissingWarning(error.localizedDescription))
                 }
                 micMs = Self.milliseconds(clock.now - t0)
-                if !callMode { micSamples = samples }
             }
-            if callMode {
+            if systemHasSound {
                 trackIndex += 1
                 onStage?(.transcribing(track: trackIndex, of: trackCount))
                 let samples = try await Self.offMain { try PCMTrackReader.samples(at: systemURL) }
@@ -184,16 +210,27 @@ final class MeetingPipeline: MeetingProcessing {
             guard micTranscript != nil || systemTranscript != nil else {
                 throw MeetingPipelineError.transcriptionFailed(firstError ?? "unknown error")
             }
+            let callMode = systemTranscript.map(Self.isCall) ?? false
+            if !callMode {
+                if systemTranscript != nil {
+                    AppLog.meetings.info("system track had too little speech for a call; processing in person")
+                }
+                systemTranscript = nil
+                systemSamples = nil
+                if meta.systemTapStarted && systemPeak == 0 { warnings.insert(Self.silentSystemWarning, at: 0) }
+            }
 
             onStage?(.identifyingSpeakers)
             let diarizeStart = clock.now
             let others: [SpeakerSegmentText]
             if callMode {
                 others = await diarized(systemSamples ?? [], systemTranscript, warnings: &warnings)
+            } else if let micTranscript {
+                let samples = try await Self.offMain { try PCMTrackReader.samples(at: micURL) }
+                others = await diarized(samples, micTranscript, warnings: &warnings)
             } else {
-                others = await diarized(micSamples ?? [], micTranscript, warnings: &warnings)
+                others = []
             }
-            micSamples = nil
             systemSamples = nil
             await diarizer.release()
             let diarizeMs = Self.milliseconds(clock.now - diarizeStart)
@@ -212,31 +249,16 @@ final class MeetingPipeline: MeetingProcessing {
 
             try JSONEncoder().encode(MeetingTranscriptFile(utterances: utterances, warnings: warnings)).write(to: dir.transcript, options: .atomic)
 
-            onStage?(.writingNotes)
-            let notesStart = clock.now
-            let (generated, failure) = await generateNotes(utterances, meta: meta, config: config)
-            let notesMs = Self.milliseconds(clock.now - notesStart)
-            let url = try writeNotes(
-                MeetingDocument(startedAt: meta.startedAt, duration: meta.durationSeconds, utterances: utterances,
-                                notes: generated, notesFailure: failure, warnings: warnings),
-                startedAt: meta.startedAt, folder: config.notesFolder, suffix: nil
-            )
-            await finishAudio(id, retention: config.retention)
-
-            meta.state = .done
-            meta.title = generated?.title
-            meta.notesPath = url.path
-            meta.failureReason = nil
-            try? store.save(meta)
+            let result = try await writeDocument(&meta, utterances: utterances, warnings: warnings, config: config)
             let speakers = Set(utterances.map(\.speaker)).count
             let transcriptTokens = utterances.reduce(0) { $0 + $1.text.utf8.count } / 4
             AppLog.meetings.info("""
                 processed meeting: duration \(Int(meta.durationSeconds)) s, systemAudio \(callMode), \
-                transcribeMic \(micMs) ms, transcribeSystem \(systemMs) ms, diarize \(diarizeMs) ms, merge \(mergeMs) ms, notes \(notesMs) ms, \
-                speakers \(speakers), transcriptTokens ~\(transcriptTokens), notes \(generated == nil ? "failed" : "ok", privacy: .public), \
+                transcribeMic \(micMs) ms, transcribeSystem \(systemMs) ms, diarize \(diarizeMs) ms, merge \(mergeMs) ms, notes \(result.notesMs) ms, \
+                speakers \(speakers), transcriptTokens ~\(transcriptTokens), notes \(result.notesOK ? "ok" : "failed", privacy: .public), \
                 total \(clock.now - began, privacy: .public)
                 """)
-            return .written(url)
+            return .written(result.url)
         } catch {
             meta.state = .failed
             meta.failureReason = error.localizedDescription
@@ -244,6 +266,30 @@ final class MeetingPipeline: MeetingProcessing {
             AppLog.meetings.error("processing failed: \(error.localizedDescription, privacy: .public)")
             return .failed(error.localizedDescription)
         }
+    }
+
+    /// Notes → Markdown file → audio retention → meta marked done.
+    private func writeDocument(
+        _ meta: inout MeetingMeta, utterances: [MeetingUtterance], warnings: [String], config: MeetingPipelineSettings
+    ) async throws -> (url: URL, notesOK: Bool, notesMs: Int) {
+        onStage?(.writingNotes)
+        let clock = ContinuousClock()
+        let notesStart = clock.now
+        let (generated, failure) = await generateNotes(utterances, meta: meta, config: config)
+        let notesMs = Self.milliseconds(clock.now - notesStart)
+        let url = try writeNotes(
+            MeetingDocument(startedAt: meta.startedAt, duration: meta.durationSeconds, utterances: utterances,
+                            notes: generated, notesFailure: failure, warnings: warnings),
+            startedAt: meta.startedAt, folder: config.notesFolder, suffix: nil
+        )
+        await finishAudio(meta.id, retention: config.retention)
+
+        meta.state = .done
+        meta.title = generated?.title
+        meta.notesPath = url.path
+        meta.failureReason = nil
+        try? store.save(meta)
+        return (url, generated != nil, notesMs)
     }
 
     func regenerateNotes(_ id: UUID) async -> MeetingOutcome {
