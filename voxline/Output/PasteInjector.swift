@@ -72,13 +72,13 @@ final class PasteInjector {
 
     /// Waits for a pending restore, snapshots, writes the promised item, runs
     /// the gate for `trigger`, settles, checks cancellation and focus, posts
-    /// Cmd+V, verifies, and schedules the restore tail. `element` is read for verification;
-    /// `focused` is re-read to detect a focus shift. When `element` is given
-    /// it must be the focused element the caller already checked, and its
-    /// ref is the focus baseline. Without one, `focused()` read just before
-    /// the promised write is the baseline. A move away from the baseline
-    /// during the waits skips the Cmd+V; a move after it is `focusMoved`.
-    /// An unreadable focus never counts as a move.
+    /// Cmd+V, verifies, and schedules the restore tail. `element` is read for
+    /// verification; `focused` is re-read to detect a focus shift. When
+    /// `element` is given it must be the focused element the caller already
+    /// checked, and its ref is the focus baseline. Without one, `focused()`
+    /// read just before the promised write is the baseline. A move away from
+    /// the baseline during the waits skips the Cmd+V; a move after it is
+    /// `focusMoved`. An unreadable focus never counts as a move.
     ///
     /// The tail restores `restoreAfterProvider` after the first provider call
     /// that follows the Cmd+V, or `restoreCeiling` after the Cmd+V, whichever
