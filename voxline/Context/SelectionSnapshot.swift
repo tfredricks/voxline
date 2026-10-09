@@ -48,7 +48,7 @@ struct DefaultSelectionSnapshot: SelectionSnapshotting {
                 return nil
             }
             let changeCountBeforeCopy = pasteboard.changeCount
-            ClipboardInjector.defaultPostKey(ClipboardInjector.kVirtualKeyC, [.maskCommand])
+            SyntheticKeys.postCopy()
             return (snapshot, changeCountBeforeCopy)
         }
         guard let prepared else { return nil }

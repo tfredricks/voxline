@@ -5,9 +5,18 @@ import AppKit
 /// Promised/lazy types are not captured.
 struct PasteboardSnapshot: Equatable {
 
+    struct Entry: Equatable {
+        let type: NSPasteboard.PasteboardType
+        let data: Data
+    }
+
     struct ItemSnapshot: Equatable {
-        /// type → raw data. Order preserved from the source item.
-        let typedData: [NSPasteboard.PasteboardType: Data]
+        /// Source order, restored in the same order (issue 17).
+        let entries: [Entry]
+
+        func data(forType type: NSPasteboard.PasteboardType) -> Data? {
+            entries.first { $0.type == type }?.data
+        }
     }
 
     enum SnapshotError: Error, Equatable {
@@ -29,19 +38,19 @@ struct PasteboardSnapshot: Equatable {
 
         var captured: [ItemSnapshot] = []
         for item in pbItems {
-            var dict: [NSPasteboard.PasteboardType: Data] = [:]
+            var entries: [Entry] = []
             for type in item.types {
                 if let data = item.data(forType: type) {
-                    dict[type] = data
+                    entries.append(Entry(type: type, data: data))
                 }
             }
             // An item with zero concrete types is a promised/dynamic-only
             // item; if the WHOLE board is like this, we'd silently destroy
             // the user's clipboard. Track for the all-promised guard below.
-            captured.append(ItemSnapshot(typedData: dict))
+            captured.append(ItemSnapshot(entries: entries))
         }
 
-        if !captured.isEmpty && captured.allSatisfy({ $0.typedData.isEmpty }) {
+        if !captured.isEmpty && captured.allSatisfy({ $0.entries.isEmpty }) {
             throw SnapshotError.refuseToClobber(reason: "all items contain only promised/owner-served types")
         }
 
@@ -55,8 +64,8 @@ struct PasteboardSnapshot: Equatable {
         var pbItems: [NSPasteboardItem] = []
         for snap in items {
             let pbItem = NSPasteboardItem()
-            for (type, data) in snap.typedData {
-                pbItem.setData(data, forType: type)
+            for entry in snap.entries {
+                pbItem.setData(entry.data, forType: entry.type)
             }
             pbItems.append(pbItem)
         }
