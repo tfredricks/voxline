@@ -352,6 +352,18 @@ Left Control.
 - [ ] `metrics` shows `strategy=ax` for Notes and `strategy=paste` for Slack,
       VS Code, and Safari (they are paste-first), with `action=replace_selection`.
       If an app lands on `copy` or `none`, note it.
+- [ ] Copy a word you will recognize. Select a sentence and say "delete this"
+      with the command chord in Notes, TextEdit, Slack, and Chrome (a text
+      area on a web page). Each time the selection is deleted: `strategy=ax`
+      in Notes and TextEdit, `strategy=typing` in Slack and Chrome (voxline
+      presses the delete key). If Slack shows "Couldn't delete in place —
+      nothing was changed" instead, note it: its selection was readable only
+      through ⌘C.
+- [ ] In Terminal, type a few characters at the prompt without pressing
+      Return, select some earlier output, and say "delete this". The toast
+      reads "Couldn't delete in place — nothing was changed" and the prompt
+      line is untouched. Repeat in iTerm2. After all of these, ⌘V pastes the
+      word you copied: the clipboard never changed.
 - [ ] VS Code, nothing selected, cursor on a non-empty line: run a command that
       inserts text ("add a TODO comment"). The cursor's line is not replaced
       or deleted. The built-in untrusted-field list for VS Code and Cursor is
@@ -395,7 +407,8 @@ blip may play on the discarded ones.
 - [ ] In Safari with several tabs open, press ⌃⇧Tab with the default
       dictation chord. The tab switches and no recording starts.
 - [ ] In Notes, type ⇧⌥- (an em dash) with the default command chord. The
-      character is typed and no recording starts.
+      dash is typed. A recording may start and is discarded (you hear the
+      start sound and see the microphone indicator); nothing else is typed.
 - [ ] Type a paragraph with capital letters for 20 seconds. The system mic
       indicator never appears (Shift alone no longer starts the microphone).
 - [ ] Hold Left Shift + Left Control, and within a second add Left Option. The
@@ -415,6 +428,11 @@ blip may play on the discarded ones.
 - [ ] Press ⌥1 and ⌥3 on selections in Notes and Slack. Each works.
 - [ ] Open voxline's own Settings window, focus a text field, and press ⌥2. It
       types ™ (presets are off while voxline is frontmost).
+- [ ] Select a paragraph in Notes and hold ⌥2 down for two seconds. Make
+      concise runs once: key repeat neither runs it again nor types ™.
+- [ ] Add a preset, record a shortcut for it, and leave its instruction
+      empty. The row warns "This preset has no instruction, so its shortcut
+      does nothing.", and the shortcut types its usual character in Notes.
 - [ ] Remap Make concise to another shortcut (for example ⌃⌥C). It works at
       once without relaunching, and ⌥2 types ™ again in other apps.
 - [ ] In the shortcut recorder, try Esc, a combo with only ⇧, a combo already
@@ -518,6 +536,23 @@ joins the paste-first list before release.
       comes back inconclusive, as in some Electron apps), start a command,
       and press Esc right after releasing the chord. The pill says
       "Cancelled", nothing is inserted, and the previous clipboard is intact.
+- [ ] Hold the command chord, speak, and while still holding, click "Play
+      sound on record start/stop" in Settings → General (an ⇧⌥-click). The
+      recording is not interrupted: the pill keeps recording until you
+      release. Then hold Left Shift alone, click the toggle back (a
+      shift-click), and add Left Control: a dictation starts.
+- [ ] Open Settings → General, hold the command chord without speaking, and
+      click the Command mode toggle off while still holding. The recording
+      finishes at once (stop sound, microphone indicator off), no command
+      runs, and releasing the keys starts nothing. Turn Command mode back on.
+- [ ] With the default presets, choose Pause Voxline from the menu bar. In
+      Notes, ⌥2 on a selection types ™ and nothing runs. Choose Resume
+      Voxline: ⌥2 on a selection runs Make concise again, and Esc while it
+      runs cancels it ("Cancelled").
+- [ ] Over Screen Sharing (as in issue 22), open Settings on the remote Mac
+      and, from the controlling Mac's keyboard, record a new dictation chord
+      and a new preset shortcut. Both recorders register the keys you
+      pressed, and both work afterwards. Put both back afterwards.
 
 ## Safety
 
@@ -536,6 +571,19 @@ joins the paste-first list before release.
       once, never twice. Repeat with a preset shortcut, with dictation
       (expect "Field isn't responding — copied"), and with Slack as in the
       0.4.0 pass.
+- [ ] Freeze an app at insert time: click into Slack's message box, run
+      `sleep 6; kill -STOP $(pgrep -x Slack)` in Terminal, click back into
+      Slack, and hold the dictation chord, speaking, until the 6 s are up;
+      then release. voxline beachballs for at most about 2 s, then copies
+      with a toast, and `scripts/tail-logs.sh --debug --last 2m context`
+      shows the insert's focused-element read failing once ("focused
+      element: read failed (cannotComplete)"), not a run of slow reads. Run
+      `kill -CONT $(pgrep -x Slack)`.
+- [ ] In a busy Electron app (Slack or Discord while a large workspace
+      loads) and in an app that exposes no focused element to Accessibility
+      (Alacritty, kitty, or a VM or remote-desktop window), dictate, then
+      select text and run a command ("make this formal"). Each lands, or is
+      copied with a toast; nothing hangs or fails silently.
 
 ## Latency targets
 
