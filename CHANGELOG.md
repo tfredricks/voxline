@@ -49,6 +49,12 @@ once it reaches its first tagged release.
 
 ### Changed
 
+- **Whisper finishes sooner when you pause before letting go.** It keeps
+  transcribing while you talk; if nothing but silence follows its last pass,
+  it uses that result instead of transcribing the clip again (median finish
+  731 ms → 475 ms on the synthetic bake-off with a half-second pause). Soft
+  final words still get a full pass: silence is judged against how loud you
+  have been speaking.
 - **The recording pill sits at the bottom center** of the screen the mouse is
   on, instead of following the text cursor, and grows to fit the live
   transcript.

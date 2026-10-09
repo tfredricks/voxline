@@ -272,9 +272,11 @@ several items below check it.
       with the Targets table in
       `docs/superpowers/specs/2026-10-08-transcription-engine-design.md`
       (transcribe ≤ 300 ms, total ≤ 1,500 ms, first words within 1 s).
-- [ ] The synthetic bake-off put Whisper's finish median near 730 ms, so expect
-      to miss the transcribe target until the early-finish follow-up listed at
-      the end of that spec lands. Record the number either way.
+- [ ] On the synthetic bake-off Whisper finishes in about 475 ms (median) when
+      you pause about half a second before releasing, and about 660 ms when
+      you release mid-word, so the 300 ms transcribe target is still likely to
+      be missed with Whisper. Record the number either way; Apple Speech
+      finishes in about 120 ms if you want to compare.
 
 ## Bake-off on real clips
 

@@ -582,3 +582,14 @@ release, so the final pass still decodes the whole clip. Two follow-ups are
 recorded: finish early when the audio after the last rolling pass is silent
 (Task 12 below), and, for Todd to decide, a hybrid that shows Apple's fast
 partials while Whisper produces the final text.
+
+**Update (Task 12, early finalize).** WhisperKit now runs a rolling pass when
+speech pauses and, at release, reuses the last pass when only silence
+(relative to the speaker's level) follows it. Same 20 clips with 600 ms of
+trailing silence: finish median 475 ms, p90 654 ms, 15 of 20 clips finished
+without a final pass; WER 4.9% (+0.3, one clip's wording), term miss 12.1%
+(unchanged). Without trailing silence: median 661 ms. The bake-off loader
+was also found to clip up to ~64 ms off each clip and was fixed (Task 13), so
+earlier numbers ran on slightly shortened audio. The ≤ 300 ms target is
+still missed with WhisperKit; Apple Speech meets it (~120 ms) but loses the
+accuracy comparison on these clips.
