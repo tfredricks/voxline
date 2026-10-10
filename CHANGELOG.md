@@ -203,6 +203,9 @@ app that is no longer sandboxed.
   text is handed over as the app asks for it, and your clipboard is restored
   right after, or after 1.5 seconds, and only if nothing else was copied in
   the meantime (issue 6).
+- Something copied in the moment before voxline pastes, by you, Universal
+  Clipboard, or a virtual machine, is no longer pasted in place of the
+  dictation. voxline types the text instead and leaves your clipboard alone.
 - Re-recording a hotkey in Settings no longer starts a dictation, and the
   recorder stops if you leave its page or the window (issue 10).
 - A hotkey built from common modifiers no longer fires on every OS shortcut

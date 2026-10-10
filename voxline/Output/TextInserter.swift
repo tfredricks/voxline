@@ -80,7 +80,8 @@ final class TextInserter: TextInserting {
     /// that timed out is `outcomeUnknown`, and a posted Cmd+V is `inserted`
     /// (or `pasteVerificationFailed` when focus moved during it). Focus that
     /// moves before the Cmd+V is posted is `focusMoved`. Only a rejected AX
-    /// write, a refused clipboard snapshot, or typing that left the value
+    /// write, a refused clipboard snapshot, a clipboard that something else
+    /// wrote before the Cmd+V (left as it is), or typing that left the value
     /// unchanged moves on to the next strategy.
     ///
     /// An app that exposes no focused element (a terminal like Alacritty, a
@@ -209,6 +210,9 @@ final class TextInserter: TextInserting {
                 case .snapshotRefused(let reason):
                     failures.append("Clipboard paste skipped: \(reason)")
                     AppLog.paste.debug("insert: paste refused (\(reason, privacy: .public)); moving on")
+                case .clipboardChangedBeforePaste:
+                    failures.append("Clipboard paste skipped: the clipboard changed before the paste")
+                    AppLog.paste.debug("insert: clipboard changed before the paste; moving on")
                 case .focusMovedBeforePaste:
                     return notInserted(.focusMoved)
                 case .cancelled:

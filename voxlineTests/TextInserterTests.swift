@@ -231,6 +231,29 @@ import Testing
         #expect(h.typed.read() == [Array(" world".utf16)])
     }
 
+    @Test func clipboard_changed_before_the_cmd_v_falls_to_typing_and_keeps_it() async {
+        let fake = editableFake(value: [])
+        let board = LockedBox<NSPasteboard?>(nil)
+        let calls = LockedBox(0)
+        let h = makeHarness(focused: {
+            calls.mutate { $0 += 1 }
+            if calls.read() >= 2, let board = board.read() {
+                board.clearContents()
+                board.setString("USER", forType: .string)
+            }
+            return .value(fake)
+        })
+        board.write(h.board)
+        defer { h.board.releaseGlobally() }
+
+        let outcome = await insert(h, bundleID: Self.slack)
+
+        #expect(outcome == .inserted(.typing, verified: false))
+        #expect(h.pastes.read() == 0)
+        #expect(h.typed.read() == [Array(" world".utf16)])
+        #expect(h.board.string(forType: .string) == "USER")
+    }
+
     @Test func typing_verified_when_value_changes() async {
         let fake = editableFake(value: [.value("hello"), .value("hello world")])
         let h = makeHarness(element: fake, snapshotter: ThrowingSnapshotter())

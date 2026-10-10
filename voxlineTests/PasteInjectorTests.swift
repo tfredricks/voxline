@@ -334,6 +334,24 @@ import Testing
         #expect(h.clock.pendingCount == 0)
     }
 
+    @Test func a_clipboard_change_before_the_cmd_v_posts_nothing_and_keeps_it() async {
+        let h = makeHarness()
+        defer { h.board.releaseGlobally() }
+        let task = Task { await h.injector.paste("PASTED", element: nil, trigger: [], focused: { nil }) }
+        #expect(await eventually { h.clock.pendingCount == 1 })
+        #expect(isOurs(h.board))
+        h.board.clearContents()
+        h.board.setString("USER", forType: .string)
+
+        await h.clock.advance(by: .milliseconds(50))
+
+        #expect(await task.value == .clipboardChangedBeforePaste)
+        #expect(h.posts.read() == 0)
+        await h.injector.pendingRestore?.value
+        #expect(h.clock.pendingCount == 0)
+        #expect(h.board.string(forType: .string) == "USER")
+    }
+
     @Test func element_focus_lost_before_the_cmd_v_posts_nothing() async {
         let h = makeHarness()
         defer { h.board.releaseGlobally() }

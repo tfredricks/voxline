@@ -79,7 +79,7 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 
 ### How text lands
 
-voxline writes the result into the focused field through Accessibility where the app supports it, so ⌘Z undoes it in one step in native apps. Electron and Chromium apps, browsers, terminals, and any web content, where Accessibility writes are unreliable, get a paste instead, and apps with no accessible focus (some terminals, virtual machines, remote desktops) get a plain paste. A pasted result is handed to the app as it asks for it, and your clipboard is restored right after the app reads it (or after 1.5 seconds), and only if you haven't copied something else in the meantime. If nothing editable is focused, or the text can't be inserted, it is copied to the clipboard and the pill says so.
+voxline writes the result into the focused field through Accessibility where the app supports it, so ⌘Z undoes it in one step in native apps. Electron and Chromium apps, browsers, terminals, and any web content, where Accessibility writes are unreliable, get a paste instead, and apps with no accessible focus (some terminals, virtual machines, remote desktops) get a plain paste. A pasted result is handed to the app as it asks for it, and your clipboard is restored right after the app reads it (or after 1.5 seconds), and only if you haven't copied something else in the meantime. If something else lands on the clipboard just before the paste, voxline types the text instead and leaves the clipboard alone. If nothing editable is focused, or the text can't be inserted, it is copied to the clipboard and the pill says so.
 
 ### Command mode
 

@@ -24,12 +24,16 @@ final class PasteInjector {
     /// touched. `focusMovedBeforePaste` means focus left the baseline element
     /// before the Cmd+V, and `cancelled` that the calling task was cancelled
     /// before it; in both, nothing was posted and the board was restored.
+    /// `clipboardChangedBeforePaste` means something else wrote the board
+    /// after voxline's item and before the Cmd+V: nothing was posted, the
+    /// board was left as that writer left it, and another strategy may run.
     enum Outcome: Equatable {
         case pasted(verified: Bool)
         case snapshotRefused(String)
         case focusMovedBeforePaste
         case focusMoved
         case cancelled
+        case clipboardChangedBeforePaste
     }
 
     /// The last paste's slot, claimed before its first suspension. It
@@ -74,14 +78,15 @@ final class PasteInjector {
     }
 
     /// Waits for a pending restore, snapshots, writes the promised item, runs
-    /// the gate for `trigger`, settles, checks cancellation and focus, posts
-    /// Cmd+V, verifies, and schedules the restore tail. `element` is read for
-    /// verification; `focused` is re-read to detect a focus shift. When
-    /// `element` is given it must be the focused element the caller already
-    /// checked, and its ref is the focus baseline. Without one, `focused()`
-    /// read just before the promised write is the baseline. A move away from
-    /// the baseline during the waits skips the Cmd+V; a move after it is
-    /// `focusMoved`. An unreadable focus never counts as a move.
+    /// the gate for `trigger`, settles, checks cancellation, focus, and that
+    /// the board still holds the item, posts Cmd+V, verifies, and schedules
+    /// the restore tail. `element` is read for verification; `focused` is
+    /// re-read to detect a focus shift. When `element` is given it must be
+    /// the focused element the caller already checked, and its ref is the
+    /// focus baseline. Without one, `focused()` read just before the
+    /// promised write is the baseline. A move away from the baseline during
+    /// the waits skips the Cmd+V; a move after it is `focusMoved`. An
+    /// unreadable focus never counts as a move.
     ///
     /// The tail restores `restoreAfterProvider` after the first provider call
     /// that follows the Cmd+V, or `restoreCeiling` after the Cmd+V, whichever
@@ -126,6 +131,10 @@ final class PasteInjector {
             if pasteboard.changeCount == ourChangeCount { snapshot.restore(to: pasteboard) }
             AppLog.paste.debug("paste skipped: focus moved before the Cmd+V")
             return .focusMovedBeforePaste
+        }
+        guard pasteboard.changeCount == ourChangeCount else {
+            AppLog.paste.debug("paste skipped: the clipboard changed before the Cmd+V")
+            return .clipboardChangedBeforePaste
         }
         provider.arm()
         postPaste()
@@ -208,6 +217,7 @@ final class PasteInjector {
         case .focusMovedBeforePaste: return "skipped, focus moved"
         case .focusMoved: return "focus moved"
         case .cancelled: return "cancelled"
+        case .clipboardChangedBeforePaste: return "skipped, clipboard changed"
         }
     }
 }
