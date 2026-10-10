@@ -555,7 +555,7 @@ import Foundation
         #expect(h.state.retryTranscript == nil)
         #expect(h.state.lastTranscript == nil)
         #expect(h.state.lastCleanedText == nil)
-        #expect(!PillLayout.offersRetry(status: h.state.status, hasRetryTranscript: h.state.retryTranscript != nil))
+        #expect(!PillLayout.offersRetry(status: h.state.status, retryable: h.state.errorOffersRetry))
 
         await h.pipe.retryLastDictation()
         #expect(h.llm.calls.count == 1)
@@ -634,6 +634,29 @@ import Foundation
         #expect(h.state.status == .error(expected))
         #expect(h.fallback.read() == ["hello world"])
         #expect(h.state.retryTranscript == "hello world")
+        #expect(h.state.errorOffersRetry)
+    }
+
+    @Test func a_dictation_cleanup_failure_offers_retry() async {
+        let h = makeHarness()
+        h.llm.nextResult = .failure(LLMError.rateLimited)
+        await dictate(h)
+        #expect(h.state.errorOffersRetry)
+        #expect(PillLayout.offersRetry(status: h.state.status, retryable: h.state.errorOffersRetry))
+    }
+
+    @Test func a_transcription_failure_offers_no_retry() async {
+        struct Boom: Error {}
+        let h = makeHarness()
+        await dictate(h)
+        let failing = FakeTranscriptionSession()
+        failing.finishResult = .failure(Boom())
+        h.engine.nextSessions = [failing]
+        await dictate(h)
+        guard case .error = h.state.status else {
+            Issue.record("expected .error, got \(h.state.status)"); return
+        }
+        #expect(!h.state.errorOffersRetry)
     }
 
     @Test func retry_without_a_text_field_copies() async {

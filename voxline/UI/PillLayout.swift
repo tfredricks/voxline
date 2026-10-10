@@ -35,10 +35,11 @@ enum PillLayout {
         }
     }
 
-    /// Whether a status change to `status` starts a Retry offer.
-    static func offersRetry(status: AppStatus, hasRetryTranscript: Bool) -> Bool {
+    /// Whether a status change to `status` starts a Retry offer: only for an
+    /// error the pipeline marked `retryable` (`AppState.errorOffersRetry`).
+    static func offersRetry(status: AppStatus, retryable: Bool) -> Bool {
         guard case .error = status else { return false }
-        return hasRetryTranscript
+        return retryable
     }
 
     /// Whether the pill takes clicks: while it offers Retry, and while a

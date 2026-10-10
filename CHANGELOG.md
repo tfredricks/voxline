@@ -299,6 +299,10 @@ app that is no longer sandboxed.
   recorded a duplicate), and pressing Esc while it runs can no longer leave
   the selection on your clipboard. It also goes on as soon as the copy lands
   instead of always waiting 150 ms.
+- The pill offers Retry only for a dictation that failed after transcription.
+  A failed preset, or an engine error, after a successful dictation offered
+  it too, and Retry then inserted that earlier dictation, for example over
+  the paragraph the preset was meant to fix.
 - Dictating into a password field no longer sends the text to the AI provider
   or keeps it in History or for Retry: voxline stops right after
   transcription with the same "secure text field" error.

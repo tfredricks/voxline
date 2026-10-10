@@ -167,6 +167,9 @@ several items below check it.
 - [ ] On a fresh launch, "Retry last dictation" is disabled.
 - [ ] Select text, hold the command chord, and speak a
       command with Wi-Fi off. The error appears without a Retry button.
+- [ ] Dictate into Notes with Wi-Fi on, then turn Wi-Fi off, select a
+      paragraph, and press ⌥1. The preset's error appears without a Retry
+      button, and the paragraph is unchanged.
 
 ## Microphone disconnected
 

@@ -53,7 +53,9 @@ struct ToastAction {
 @Observable
 @MainActor
 final class AppState {
-    var status: AppStatus = .idle
+    var status: AppStatus = .idle {
+        didSet { errorOffersRetry = false }
+    }
     var hotkeyEnabled: Bool = true
 
     /// Transient feedback string ("Copied" after a history-row click), or nil.
@@ -120,6 +122,18 @@ final class AppState {
     /// so it can be cleaned and inserted again. Cleared when a new recording
     /// starts.
     var retryTranscript: String?
+
+    /// Whether the pill offers Retry for the error showing: set with the error
+    /// of a dictation or retry that failed after transcription, while
+    /// `retryTranscript` holds its transcript. Any status change clears it,
+    /// so an unrelated error never offers to insert an old dictation.
+    private(set) var errorOffersRetry = false
+
+    /// Shows `message` as an error the pill offers Retry for.
+    func showRetryableError(_ message: String) {
+        status = .error(message)
+        errorOffersRetry = retryTranscript != nil
+    }
 
     /// Whether `CapturePipeline.retryLastDictation` would run now: a
     /// transcript is kept and the pipeline is idle or showing an error.

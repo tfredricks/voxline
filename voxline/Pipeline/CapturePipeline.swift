@@ -494,7 +494,7 @@ final class CapturePipeline {
             return refuseSecureField()
         }
         guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
-            return setError(Self.noModeMessage(bundleID: snapshot.bundleID))
+            return setError(Self.noModeMessage(bundleID: snapshot.bundleID), retryable: true)
         }
         cancellableDictation = (transcript, mode, snapshot.context)
         await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: timing, bakeoffAudio: bakeoffAudio, generation: generation)
@@ -595,7 +595,7 @@ final class CapturePipeline {
         guard generation == self.generation else { return }
         guard snapshot.field?.kind != .secure else { return refuseSecureField() }
         guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
-            return setError(Self.noModeMessage(bundleID: snapshot.bundleID))
+            return setError(Self.noModeMessage(bundleID: snapshot.bundleID), retryable: true)
         }
         cancellableDictation = (transcript, mode, snapshot.context)
         await performDictation(transcript: transcript, mode: mode, snapshot: snapshot, timing: nil, bakeoffAudio: nil, generation: generation)
@@ -644,11 +644,11 @@ final class CapturePipeline {
             } catch let e as LLMError {
                 guard generation == self.generation else { return }
                 transcriptFallback(transcript)
-                return setError("\(e.errorDescription ?? "LLM cleanup failed.") Raw transcript copied to the clipboard — paste to recover it.")
+                return setError("\(e.errorDescription ?? "LLM cleanup failed.") Raw transcript copied to the clipboard — paste to recover it.", retryable: true)
             } catch {
                 guard generation == self.generation else { return }
                 transcriptFallback(transcript)
-                return setError("LLM cleanup failed: \(error.localizedDescription) Raw transcript copied to the clipboard — paste to recover it.")
+                return setError("LLM cleanup failed: \(error.localizedDescription) Raw transcript copied to the clipboard — paste to recover it.", retryable: true)
             }
             let cleanupDuration = cleanupStart.duration(to: .now)
             state.lastCleanupDuration = Self.seconds(cleanupDuration)
@@ -680,14 +680,14 @@ final class CapturePipeline {
             resetIdle()
             learning?.didInsert(InsertedDictation(text: cleaned, bundleID: snapshot.bundleID, category: mode.category))
         case .notInserted(.secure):
-            setError(TextInsertionError.secureFieldUnsupported.errorDescription!)
+            setError(TextInsertionError.secureFieldUnsupported.errorDescription!, retryable: true)
         case .notInserted(let reason):
             transcriptFallback(cleaned)
             recordMetrics(kind: .dictation, timing: timing, cleanupMs: cleanupMs, insertMs: 0, skippedCleanup: skippedCleanup, insertStrategy: .copy, mode: mode, text: cleaned)
             resetIdle()
             showToast(reason == .notResponding ? "Field isn't responding — copied" : "Couldn't insert — copied, ⌘V to paste")
         case .failed(let error):
-            setError(error.errorDescription ?? "Text insertion failed.", permissions: error == .accessibilityNotGranted)
+            setError(error.errorDescription ?? "Text insertion failed.", permissions: error == .accessibilityNotGranted, retryable: true)
         }
     }
 
@@ -811,12 +811,18 @@ final class CapturePipeline {
         state.status = .idle
     }
 
-    /// A plain error never replaces a permissions error showing.
-    func setError(_ message: String, permissions: Bool = false) {
+    /// A plain error never replaces a permissions error showing. `retryable`
+    /// marks the failure of a dictation or retry after transcription, which
+    /// the pill offers Retry for.
+    func setError(_ message: String, permissions: Bool = false, retryable: Bool = false) {
         if permissions {
             state.status = .permissionsError(message)
         } else if !showsPermissionsError {
-            state.status = .error(message)
+            if retryable {
+                state.showRetryableError(message)
+            } else {
+                state.status = .error(message)
+            }
         }
         clearRecordingState()
     }

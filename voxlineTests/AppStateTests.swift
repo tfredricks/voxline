@@ -21,6 +21,30 @@ import Foundation
         #expect(state.status == .idle)
     }
 
+    @Test func a_retryable_error_offers_retry_while_a_transcript_is_kept() {
+        let state = AppState()
+        state.retryTranscript = "hello"
+        state.showRetryableError("boom")
+        #expect(state.status == .error("boom"))
+        #expect(state.errorOffersRetry)
+    }
+
+    @Test func a_retryable_error_without_a_transcript_offers_nothing() {
+        let state = AppState()
+        state.showRetryableError("boom")
+        #expect(state.status == .error("boom"))
+        #expect(!state.errorOffersRetry)
+    }
+
+    @Test func any_status_change_withdraws_the_retry_offer() {
+        let state = AppState()
+        state.retryTranscript = "hello"
+        state.showRetryableError("boom")
+        state.status = .error("engine failed")
+        #expect(!state.errorOffersRetry)
+        #expect(state.retryTranscript == "hello")
+    }
+
     @Test func newStateHasZeroAudioLevel() {
         #expect(AppState().audioLevel == 0)
     }

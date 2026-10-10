@@ -97,8 +97,8 @@ final class RecordingPillWindow {
         anchorScreen = nil
     }
 
-    /// Starts an offer when status becomes an error with a retryable
-    /// transcript; withdraws it on any other status change or when it expires.
+    /// Starts an offer when status becomes an error that offers Retry;
+    /// withdraws it on any other status change or when it expires.
     private func updateRetryOffer(state: AppState) {
         if let retryUntil, Date() >= retryUntil {
             withdrawRetryOffer()
@@ -106,7 +106,7 @@ final class RecordingPillWindow {
         guard state.status != observedStatus else { return }
         observedStatus = state.status
         withdrawRetryOffer()
-        guard PillLayout.offersRetry(status: state.status, hasRetryTranscript: state.retryTranscript != nil) else { return }
+        guard PillLayout.offersRetry(status: state.status, retryable: state.errorOffersRetry) else { return }
         retryUntil = Date().addingTimeInterval(PillLayout.retryDuration)
         retryTimer = Timer.scheduledTimer(withTimeInterval: PillLayout.retryDuration, repeats: false) { [weak self, weak state] _ in
             MainActor.assumeIsolated {

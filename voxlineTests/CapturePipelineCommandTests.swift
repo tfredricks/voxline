@@ -1122,6 +1122,24 @@ import Testing
         #expect(!h.pipe.wasCancelled)
     }
 
+    @Test func a_preset_that_fails_after_a_dictation_offers_no_retry() async {
+        let h = makeHarness(reader: reader(Self.notesContext(selecting: Self.cat)))
+        h.pipe.startRecording()
+        await h.pipe.finalizeRecording()
+        #expect(h.state.retryTranscript == Self.instruction)
+        h.llm.commandResults = [.failure(LLMError.rateLimited)]
+
+        await h.pipe.runPreset(Self.makeConcise)
+
+        guard case .error(let message) = h.state.status else {
+            Issue.record("expected .error, got \(h.state.status)"); return
+        }
+        #expect(message.hasSuffix("Nothing was changed."))
+        #expect(!h.state.errorOffersRetry)
+        #expect(!PillLayout.offersRetry(status: h.state.status, retryable: h.state.errorOffersRetry))
+        #expect(h.state.canRetryLastDictation, "the menu bar's Retry last dictation stays available")
+    }
+
     @Test func esc_while_a_preset_is_editing_drops_the_result() async {
         let h = makeHarness(reader: reader(Self.notesContext(selecting: Self.cat)))
         h.llm.holdCommand = true
