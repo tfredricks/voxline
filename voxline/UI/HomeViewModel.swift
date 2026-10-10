@@ -38,7 +38,6 @@ final class HomeViewModel {
         recentMeetings = RecentMeetings.rows(
             metas: store?.all() ?? [],
             phase: state.meetings?.phase ?? .idle,
-            lastFailed: state.meetings?.lastFailedMeeting,
             fileExists: fileExists
         )
     }

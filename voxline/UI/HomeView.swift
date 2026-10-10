@@ -123,7 +123,7 @@ struct HomeView: View {
                     .foregroundStyle(.secondary)
             }
             if meeting.showsRetry {
-                Button("Retry") { model.state.meetings?.retryFailed() }
+                Button("Retry") { model.state.meetings?.retryFailed(meeting.id) }
                     .disabled(model.state.meetings?.phase != .idle)
             }
             if meeting.notesURL == nil && meeting.stageLabel == nil {

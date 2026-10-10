@@ -24,16 +24,31 @@ final class FakeRecorder: MeetingRecording {
     }
 }
 
+/// With a `store`, `process` leaves the meeting on disk the way
+/// `MeetingPipeline` does: done, failed, or deleted.
 @MainActor
 final class FakeProcessing: MeetingProcessing {
     var onStage: ((MeetingStage) -> Void)?
     var outcome: MeetingOutcome = .written(URL(fileURLWithPath: "/tmp/n.md"))
+    var store: MeetingStore?
     private(set) var processed: [UUID] = []
     private(set) var regenerated: [UUID] = []
     func process(_ id: UUID) async -> MeetingOutcome {
         processed.append(id)
         onStage?(.writingNotes)
+        if let store {
+            switch outcome {
+            case .written:         mark(id, .done, in: store)
+            case .failed:          mark(id, .failed, in: store)
+            case .nothingRecorded: store.delete(id)
+            }
+        }
         return outcome
+    }
+    private func mark(_ id: UUID, _ state: MeetingState, in store: MeetingStore) {
+        guard var meta = try? store.load(id) else { return }
+        meta.state = state
+        try? store.save(meta)
     }
     func regenerateNotes(_ id: UUID) async -> MeetingOutcome {
         regenerated.append(id)
@@ -93,9 +108,12 @@ final class FakeLiveTranscript: LiveMeetingTranscribing {
     private let live = FakeLiveTranscript()
     private let observers = LockedBox<[MeetingSampleObserver?]>([])
 
-    private func makeController(now: Date = Date(timeIntervalSince1970: 1_000), live: FakeLiveTranscript? = nil) -> MeetingController {
+    private func makeController(
+        now: @escaping () -> Date = { Date(timeIntervalSince1970: 1_000) }, live: FakeLiveTranscript? = nil
+    ) -> MeetingController {
         let recorder = recorder
         let observers = observers
+        processing.store = store
         return MeetingController(
             store: store, settings: AppSettings(defaults: defaults),
             makeRecorder: { _, observer in
@@ -104,7 +122,7 @@ final class FakeLiveTranscript: LiveMeetingTranscribing {
             },
             makeLiveTranscript: { live },
             pipeline: processing, notifier: notifier, prompts: prompts,
-            now: { now }
+            now: now
         )
     }
 
@@ -261,7 +279,7 @@ final class FakeLiveTranscript: LiveMeetingTranscribing {
         old.state = .done
         try store.save(old)
         try Data("{}".utf8).write(to: store.directory(for: old.id).transcript)
-        let controller = makeController(now: Date(timeIntervalSince1970: 100 * 86_400))
+        let controller = makeController(now: { Date(timeIntervalSince1970: 100 * 86_400) })
         #expect(controller.regenerableMeetings.map(\.id) == [old.id])
 
         controller.start()
@@ -303,6 +321,58 @@ final class FakeLiveTranscript: LiveMeetingTranscribing {
         await controller.processingTask?.value
         #expect(processing.processed == [id, id])
         #expect(controller.lastFailedMeeting == nil)
+    }
+
+    @Test func failed_meta_on_disk_at_init_is_retryable() async throws {
+        var failed = try store.create(startedAt: Date(timeIntervalSince1970: 1), systemTapStarted: false)
+        failed.state = .failed
+        try store.save(failed)
+        let controller = makeController()
+        #expect(controller.lastFailedMeeting == failed.id)
+
+        controller.retryFailed()
+        await controller.processingTask?.value
+
+        #expect(processing.processed == [failed.id])
+        #expect(controller.lastFailedMeeting == nil)
+    }
+
+    @Test func two_failures_keep_both_retryable() async throws {
+        processing.outcome = .failed("x")
+        let clock = LockedBox(Date(timeIntervalSince1970: 1_000))
+        let controller = makeController(now: { clock.read() })
+        controller.start()
+        controller.stop()
+        await controller.processingTask?.value
+        let first = try #require(controller.lastFailedMeeting)
+        clock.write(Date(timeIntervalSince1970: 2_000))
+        controller.start()
+        controller.stop()
+        await controller.processingTask?.value
+        let second = try #require(controller.lastFailedMeeting)
+        #expect(second != first)
+
+        processing.outcome = .written(URL(fileURLWithPath: "/tmp/n.md"))
+        controller.retryFailed()
+        await controller.processingTask?.value
+        #expect(processing.processed.last == second)
+        #expect(controller.lastFailedMeeting == first)
+
+        controller.retryFailed(first)
+        await controller.processingTask?.value
+        #expect(processing.processed.last == first)
+        #expect(controller.lastFailedMeeting == nil)
+    }
+
+    @Test func retry_of_a_named_meeting_waits_for_idle() async throws {
+        var failed = try store.create(startedAt: Date(timeIntervalSince1970: 1), systemTapStarted: false)
+        failed.state = .failed
+        try store.save(failed)
+        let controller = makeController()
+        controller.start()
+        controller.retryFailed(failed.id)
+        #expect(processing.processed.isEmpty)
+        #expect(controller.phase.isRecording)
     }
 
     @Test func toggle_starts_and_stops_but_ignores_processing() async throws {

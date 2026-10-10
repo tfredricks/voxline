@@ -91,8 +91,10 @@ app that is no longer sandboxed.
 - **Meeting recording and notes.** Up to 60 minutes of mic + system audio,
   on-device transcription (WhisperKit) and speaker separation (SpeakerKit),
   and LLM notes written as Markdown to a folder you choose. Start and stop
-  from the menu or a shortcut; recovery after a quit or crash; Regenerate
-  Notes; an audio retention setting.
+  from the menu or a shortcut; recovery after a quit or crash; Retry
+  Processing for a meeting whose processing failed, from the menu or its row
+  on Home, also after a relaunch; Regenerate Notes; an audio retention
+  setting.
 - **Live transcript during meetings.** The recording timer has a chevron;
   expand it to see the last few things said, labeled Me (your mic) and Them
   (your Mac's sound output), with words that may still change shown dim.

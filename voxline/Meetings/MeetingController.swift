@@ -16,10 +16,12 @@ final class MeetingController {
     private(set) var phase: Phase = .idle
     /// The live transcript for the recording in progress; nil otherwise.
     private(set) var liveTranscript: (any LiveMeetingTranscribing)?
+    /// The newest meeting whose processing failed, which the menu's Retry
+    /// Processing reruns. Read from disk, so it outlives a relaunch.
     private(set) var lastFailedMeeting: UUID?
-    /// Cached so the menu doesn't read every `meta.json` on each redraw;
-    /// refreshed when processing finishes, after retention, and after a
-    /// recovery discard.
+    /// Cached, like `lastFailedMeeting`, so the menu doesn't read every
+    /// `meta.json` on each redraw; both are refreshed when processing
+    /// finishes, after retention, and after a recovery discard.
     private(set) var regenerableMeetings: [MeetingMeta] = []
     @ObservationIgnored private(set) var processingTask: Task<Void, Never>?
 
@@ -54,7 +56,7 @@ final class MeetingController {
         self.prompts = prompts
         self.now = now
         pipeline.onStage = { [weak self] stage in self?.phase = .processing(stage) }
-        refreshRegenerable()
+        refreshLists()
     }
 
     static let sleepStopMessage = "Your Mac went to sleep"
@@ -122,7 +124,12 @@ final class MeetingController {
     }
 
     func retryFailed() {
-        guard phase == .idle, let id = lastFailedMeeting else { return }
+        guard let id = lastFailedMeeting else { return }
+        retryFailed(id)
+    }
+
+    func retryFailed(_ id: UUID) {
+        guard phase == .idle else { return }
         runProcessing(id)
     }
 
@@ -132,7 +139,7 @@ final class MeetingController {
         processingTask = Task { [weak self] in
             guard let self else { return }
             let outcome = await pipeline.regenerateNotes(id)
-            finish(outcome, id: id, retryable: false)
+            finish(outcome, retryable: false)
         }
     }
 
@@ -147,18 +154,19 @@ final class MeetingController {
                 await processingTask?.value
             } else {
                 store.delete(meta.id)
-                refreshRegenerable()
+                refreshLists()
             }
         }
     }
 
     func applyRetention() {
         store.applyRetention(settings.meetingAudioRetention, now: now())
-        refreshRegenerable()
+        refreshLists()
     }
 
-    private func refreshRegenerable() {
+    private func refreshLists() {
         regenerableMeetings = store.regenerable()
+        lastFailedMeeting = store.all().first { $0.state == .failed }?.id
     }
 
     private func recordingStopped(_ id: UUID, reason: MeetingStopReason) {
@@ -191,22 +199,19 @@ final class MeetingController {
         processingTask = Task { [weak self] in
             guard let self else { return }
             let outcome = await pipeline.process(id)
-            finish(outcome, id: id)
+            finish(outcome)
         }
     }
 
-    private func finish(_ outcome: MeetingOutcome, id: UUID, retryable: Bool = true) {
+    private func finish(_ outcome: MeetingOutcome, retryable: Bool = true) {
         phase = .idle
-        refreshRegenerable()
+        refreshLists()
         switch outcome {
         case .written(let url):
-            if lastFailedMeeting == id { lastFailedMeeting = nil }
             notifier.post(.notesReady(url))
         case .nothingRecorded:
-            if lastFailedMeeting == id { lastFailedMeeting = nil }
             notifier.post(.nothingRecorded)
         case .failed(let message):
-            if retryable { lastFailedMeeting = id }
             notifier.post(.failed(message, retryable: retryable))
         }
     }

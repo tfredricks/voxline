@@ -620,6 +620,7 @@ Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meeti
 - [ ] `kill -9` voxline mid-recording → relaunch → recovery works the same.
 - [ ] Hold the dictation hotkey during a meeting: dictation works as usual.
 - [ ] No API key: file has the transcript and "Notes not generated…"; add a key; Regenerate Notes writes a "(regenerated)" file.
+- [ ] Offline, with no Whisper model downloaded, record two short meetings: each fails with a notification. Quit and relaunch → the menu still has Retry Processing, and both Home rows show Failed with Retry. Go online; the menu item retries the newer meeting, and each Home row's Retry retries its own.
 - [ ] Offline first run with no SpeakerKit model: notes say speakers couldn't be separated; call audio labeled "Them".
 - [ ] Settings → Meetings: folder picker, shortcut (rejects a preset's combo and the dictation chord), notes model placeholder, retention, timer toggle.
 - [ ] Settings → Meetings: record ⌘M as the shortcut → it is kept, and an orange "common app shortcut" warning stays under the recorder. Record ⌃⌥M, then change the dictation chord to Left Control + Left Option → back on Meetings, the warning says ⌃⌥ is your dictation hotkey.

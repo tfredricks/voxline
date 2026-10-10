@@ -16,7 +16,6 @@ enum RecentMeetings {
     static func rows(
         metas: [MeetingMeta],
         phase: MeetingController.Phase,
-        lastFailed: UUID?,
         fileExists: (URL) -> Bool,
         limit: Int = 5
     ) -> [RecentMeeting] {
@@ -34,7 +33,7 @@ enum RecentMeetings {
                     durationSeconds: meta.durationSeconds,
                     notesURL: notesURL,
                     stageLabel: stageLabel(meta.state, phase: phase),
-                    showsRetry: meta.id == lastFailed
+                    showsRetry: meta.state == .failed
                 )
             }
     }
