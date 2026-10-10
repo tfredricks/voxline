@@ -175,6 +175,7 @@ final class AppCoordinator {
 
     private func buildServices(state: AppState, settings: AppSettings, historyStore: DictationHistoryStore) {
         let capture = AudioCaptureService()
+        capture.preferredInputDeviceUID = settings.audioInputDeviceUID
         self.capture = capture
         self.soundPlayer = HotkeySoundPlayer(settings: settings)
         let transcriber = TranscriptionService(model: settings.whisperModel)

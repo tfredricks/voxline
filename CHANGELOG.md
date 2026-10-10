@@ -283,6 +283,9 @@ app that is no longer sandboxed.
   voxline no longer says Accessibility "was revoked".
 - The History window's Time column is current when you reopen it, and moves
   on each minute while it is open, instead of saying "1 min. ago" for hours.
+- Dictation uses the microphone picked in Settings → Dictation from launch.
+  Before, after every relaunch it recorded from the system default until you
+  changed a setting (meetings already used the picked microphone).
 - Settings can no longer delete or overwrite an API key saved somewhere else.
   A Settings window opened before the setup wizard saved a key used to delete
   it the next time a key field lost focus, and the wizard's Continue deleted a
