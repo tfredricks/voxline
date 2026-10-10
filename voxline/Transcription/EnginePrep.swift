@@ -21,9 +21,13 @@ enum EnginePrep {
 
     /// Who a prepare task reports to.
     enum Audience: Equatable {
-        /// Launch, wizard retry, or a switch that takes their place: owns
-        /// `AppState.status` from the start and shows the download window.
+        /// Launch, or a switch that takes its place: owns `AppState.status`
+        /// from the start and shows the download window.
         case launch
+        /// The first-run wizard and its Retry: owns the status from the
+        /// start, never shows the window (the wizard's speech-engine step
+        /// shows the progress).
+        case wizard
         /// A settings switch replacing a task that was driving the status:
         /// owns the status from the start, never shows the window.
         case inheritedStatus
@@ -50,7 +54,7 @@ enum EnginePrep {
     static func status(for plan: Plan, audience: Audience, current: AppStatus) -> AppStatus? {
         let canReport: Bool
         switch audience {
-        case .launch, .inheritedStatus:
+        case .launch, .wizard, .inheritedStatus:
             canReport = current.blocksRecording
         case .settingsSwitch:
             switch (plan, current) {

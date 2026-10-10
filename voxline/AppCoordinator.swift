@@ -34,12 +34,13 @@ final class AppCoordinator {
     /// task from clobbering its successor's registration.
     private var modelPrepTaskToken: UInt64 = 0
     /// True while the in-flight prep task reports into `AppState` and owns
-    /// the download window (launch and wizard-retry paths). A settings-driven
-    /// engine or model switch in that time inherits both, so the status is
-    /// never left stuck on a cancelled task's value.
+    /// the download window (the launch path). A settings-driven engine or
+    /// model switch in that time inherits both, so the status is never left
+    /// stuck on a cancelled task's value.
     private var modelPrepOwnsLaunchUI = false
     /// True while the in-flight prep task drives `AppState.status` (always
-    /// for launch; for a settings switch, only while it reports a download).
+    /// for launch and the wizard; for a settings switch, only while it
+    /// reports a download).
     /// A switch in that time takes the status over.
     private var modelPrepDrivesStatus = false
     /// The `.error` message a prep task last wrote, while it may still be
@@ -153,7 +154,7 @@ final class AppCoordinator {
                 chord: settings.hotkeyChord,
                 onRetryDownload: { [weak self] in
                     guard let self, let engine = self.engines?.current else { return }
-                    self.prepareIfNeeded(state: state, engine: engine)
+                    self.runModelPrepTask(state: state, engine: engine, audience: .wizard)
                 },
                 onComplete: { [weak self] in
                     guard let self else { return }
@@ -166,7 +167,7 @@ final class AppCoordinator {
 
         // Eagerly start preparing the engine so by the time the user reaches
         // the speech-engine step, progress is already advancing.
-        prepareIfNeeded(state: state, engine: engine)
+        runModelPrepTask(state: state, engine: engine, audience: .wizard)
     }
 
     private func startApp(state: AppState, settings: AppSettings, historyStore: DictationHistoryStore) {
@@ -653,9 +654,10 @@ final class AppCoordinator {
     /// - Parameters:
     ///   - state: `AppState` the task may report into.
     ///   - engine: The engine to bring to ready.
-    ///   - audience: `.launch` for the launch path, wizard retry, or a switch
-    ///     that takes their place (the only audience that manages the download
-    ///     window); otherwise from `EnginePrep.Audience.forSwitch`.
+    ///   - audience: `.launch` for the launch path or a switch that takes its
+    ///     place (the only audience that manages the download window);
+    ///     `.wizard` for the first-run wizard and its Retry; otherwise from
+    ///     `EnginePrep.Audience.forSwitch`.
     private func runModelPrepTask(
         state: AppState?,
         engine: any TranscriptionEngine,

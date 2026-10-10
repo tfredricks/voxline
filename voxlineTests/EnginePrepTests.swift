@@ -36,20 +36,21 @@ import Testing
 
     @Test func provisional_status_is_set_only_by_status_owners() {
         #expect(EnginePrep.Audience.launch.ownsStatusFromStart)
+        #expect(EnginePrep.Audience.wizard.ownsStatusFromStart)
         #expect(EnginePrep.Audience.inheritedStatus.ownsStatusFromStart)
         #expect(!EnginePrep.Audience.settingsSwitch.ownsStatusFromStart)
     }
 
     // MARK: Status path
 
-    @Test(arguments: [EnginePrep.Audience.launch, .inheritedStatus])
+    @Test(arguments: [EnginePrep.Audience.launch, .wizard, .inheritedStatus])
     func status_owners_report_every_plan(audience: EnginePrep.Audience) {
         #expect(EnginePrep.status(for: .warm, audience: audience, current: .preparingModel) == .preparingModel)
         #expect(EnginePrep.status(for: .download, audience: audience, current: .preparingModel) == .downloadingModel(progress: 0))
         #expect(EnginePrep.status(for: .fail(Self.reason), audience: audience, current: .preparingModel) == .error(Self.reason))
     }
 
-    @Test(arguments: [EnginePrep.Audience.launch, .inheritedStatus])
+    @Test(arguments: [EnginePrep.Audience.launch, .wizard, .inheritedStatus])
     func status_owners_yield_to_a_status_someone_else_set(audience: EnginePrep.Audience) {
         let permissions = AppStatus.permissionsError("Grant Accessibility.")
         #expect(EnginePrep.status(for: .download, audience: audience, current: permissions) == nil)
@@ -181,5 +182,12 @@ import Testing
         #expect(!EnginePrep.showsDownloadWindow(for: .fail(Self.reason), audience: .launch))
         #expect(!EnginePrep.showsDownloadWindow(for: .download, audience: .inheritedStatus))
         #expect(!EnginePrep.showsDownloadWindow(for: .download, audience: .settingsSwitch))
+    }
+
+    /// The wizard's speech-engine step shows the same progress, so a second
+    /// window on top of it would only duplicate it.
+    @Test func the_wizard_never_shows_the_download_window() {
+        #expect(!EnginePrep.showsDownloadWindow(for: .download, audience: .wizard))
+        #expect(!EnginePrep.showsDownloadWindow(for: .warm, audience: .wizard))
     }
 }

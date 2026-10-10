@@ -239,6 +239,9 @@ several items below check it.
       Microphone. Turn voxline on there: the row turns green within 2 s and,
       with Accessibility granted, Continue enables. Turn it off again: Home's
       Microphone row offers the same button.
+- [ ] While the wizard downloads the speech engine, and after its Retry, no
+      separate "Preparing Voxline" window opens over it: the progress shows
+      only in the "Speech engine" step.
 
 ## Five-minute cap
 
