@@ -84,17 +84,6 @@ struct CustomVocabularyStore: @unchecked Sendable {
         return learned
     }
 
-    /// Convert the Settings text field's contents (comma- or newline-separated)
-    /// into a list. Same normalization rules as `save`.
-    static func parse(_ text: String) -> [String] {
-        // Accept all newline variants (\n, \r\n, \r, U+2028, U+2029) so paste
-        // from Windows or other-platform text editors doesn't smuggle \r into
-        // a term name.
-        let separators = CharacterSet(charactersIn: ",").union(.newlines)
-        let pieces = text.components(separatedBy: separators)
-        return normalize(pieces)
-    }
-
     private func learnedTerms() -> [String] {
         defaults.stringArray(forKey: Self.learnedKey) ?? []
     }

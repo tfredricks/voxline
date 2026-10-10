@@ -34,11 +34,6 @@ import Foundation
         #expect(store.load() == ["Cursor", "cursor"])
     }
 
-    @Test func parse_from_text_handles_comma_and_newline_separated() {
-        let parsed = CustomVocabularyStore.parse("Cursor, LangGraph\ncanonical_title,,  ")
-        #expect(parsed == ["Cursor", "LangGraph", "canonical_title"])
-    }
-
     @Test func entries_without_a_sidecar_are_all_user() {
         let store = CustomVocabularyStore(defaults: suite())
         store.save(["Cursor", "LangGraph"])
