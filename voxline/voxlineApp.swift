@@ -178,6 +178,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard appState.meetings?.needsQuitConfirmation == true else { return .terminateNow }
+        if QuitReason.endsSession(QuitReason.current) {
+            AppLog.meetings.notice("quit for logout, restart, or shutdown: meeting stopped without asking")
+            appState.meetings?.stop()
+            return .terminateNow
+        }
         let alert = NSAlert()
         alert.messageText = "Quit while a meeting is recording or being processed?"
         alert.informativeText = "The audio is saved. Voxline will offer to finish the notes the next time it opens."

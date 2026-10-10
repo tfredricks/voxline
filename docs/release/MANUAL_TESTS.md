@@ -612,6 +612,7 @@ Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meeti
 - [ ] Warning notification at the cap minus the lead; automatic stop at the cap; notes still written.
 - [ ] Unplug headphones / switch input device mid-meeting: recording continues; transcript has a gap at most.
 - [ ] Quit during recording → confirmation; relaunch → "Process unfinished meeting…?" → Process writes notes for the recorded part.
+- [ ] Log out (and separately Restart, Shut Down) during recording and during processing → no confirmation, the Mac doesn't say Voxline interrupted it, and it goes through; log back in / start up → "Process unfinished meeting…?" offers the meeting.
 - [ ] `kill -9` voxline mid-recording → relaunch → recovery works the same.
 - [ ] Hold the dictation hotkey during a meeting: dictation works as usual.
 - [ ] No API key: file has the transcript and "Notes not generated…"; add a key; Regenerate Notes writes a "(regenerated)" file.
