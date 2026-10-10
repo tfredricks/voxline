@@ -40,8 +40,8 @@ final class TranscriptionService {
     /// successor replaced me" cannot be done with the variant string alone.
     private final class LoadEntry {
         let variant: String
-        let task: Task<WhisperKit, Error>
-        init(variant: String, task: Task<WhisperKit, Error>) {
+        let task: Task<WhisperKitHandle, Error>
+        init(variant: String, task: Task<WhisperKitHandle, Error>) {
             self.variant = variant
             self.task = task
         }
@@ -152,24 +152,24 @@ final class TranscriptionService {
             // still want. A variant mismatch here means model.didSet ran
             // during the load — drop the stale task and start a fresh one.
             if let entry = loadTask, entry.variant == currentVariant {
-                return try await entry.task.value
+                return try await entry.task.value.kit
             }
             let variant = currentVariant
             let downloadBase = try AppPaths.modelCacheDirectory()
-            let task = Task<WhisperKit, Error> {
+            let task = Task<WhisperKitHandle, Error> {
                 let config = WhisperModelCache.config(variant: variant, downloadBase: downloadBase, prewarm: true)
                 let kit = try await WhisperKit(config)
                 // WhisperKit's init doesn't reliably observe cancellation
                 // mid-flight. Check explicitly so a cancelled load doesn't
                 // race the next load to assign whisperKit.
                 try Task.checkCancellation()
-                return kit
+                return WhisperKitHandle(kit: kit)
             }
             let entry = LoadEntry(variant: variant, task: task)
             loadTask = entry
             let loadStart = Date()
             do {
-                let kit = try await task.value
+                let kit = try await task.value.kit
                 // The model may have been swapped between Task creation and
                 // now. Assigning the wrong-variant kit into `whisperKit`
                 // would silently cause subsequent transcribes to run against
@@ -194,3 +194,12 @@ final class TranscriptionService {
     }
 }
 
+/// Carries a loaded `WhisperKit`, which isn't Sendable, from the task that
+/// loads it to the code that transcribes with it. Unchecked because nothing
+/// mutates a kit outside its own `transcribe`, and those never overlap: a
+/// session's passes run one at a time, dictation runs one session at a time,
+/// and meetings load a kit of their own and transcribe one track at a time.
+final class WhisperKitHandle: @unchecked Sendable {
+    let kit: WhisperKit
+    init(kit: WhisperKit) { self.kit = kit }
+}

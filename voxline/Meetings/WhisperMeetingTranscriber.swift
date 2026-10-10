@@ -8,7 +8,7 @@ actor WhisperMeetingTranscriber: MeetingTranscribing {
 
     private let model: @Sendable () -> WhisperModel
     private var kit: WhisperKit?
-    private var loading: Task<WhisperKit, Error>?
+    private var loading: Task<WhisperKitHandle, Error>?
 
     init(model: @escaping @Sendable () -> WhisperModel) {
         self.model = model
@@ -36,16 +36,16 @@ actor WhisperMeetingTranscriber: MeetingTranscribing {
 
     private func loadedKit() async throws -> WhisperKit {
         if let kit { return kit }
-        if let loading { return try await loading.value }
+        if let loading { return try await loading.value.kit }
         let config = WhisperModelCache.config(
             variant: model().whisperKitIdentifier,
             downloadBase: try AppPaths.modelCacheDirectory(),
             prewarm: false
         )
-        let task = Task { try await WhisperKit(config) }
+        let task = Task { WhisperKitHandle(kit: try await WhisperKit(config)) }
         loading = task
         do {
-            let loaded = try await task.value
+            let loaded = try await task.value.kit
             if loading == task { kit = loaded; loading = nil }
             return loaded
         } catch {

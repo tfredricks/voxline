@@ -364,11 +364,3 @@ final class WhisperKitStreamingSession: TranscriptionSession, @unchecked Sendabl
         segments.reduce("") { TranscriptPartial.join($0, $1.text) }
     }
 }
-
-/// One transcribe at a time per kit: a session's passes never overlap, and
-/// across sessions this relies on the pipeline running one dictation at a
-/// time.
-private final class WhisperKitHandle: @unchecked Sendable {
-    let kit: WhisperKit
-    init(kit: WhisperKit) { self.kit = kit }
-}
