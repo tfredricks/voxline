@@ -67,6 +67,31 @@ import Testing
         #expect(result.map(\.speaker) == ["Speaker 1"])
     }
 
+    @Test func echo_spanning_several_diarized_fragments_is_dropped() {
+        let result = TranscriptMerger.merge(
+            mic: [mic(20.3, 27.4, "Finance reviewed those numbers and we think launch should move into early December instead because marketing needs more time for prep.")],
+            others: [
+                other(1, 20.0, 21.4, "Finance reviewed those numbers"),
+                other(1, 21.6, 24.8, "and we think launch should move into early December instead"),
+                other(1, 25.0, 27.0, "because marketing needs more time for prep."),
+            ],
+            unattributedLabel: "Them"
+        )
+        #expect(result.map(\.speaker) == ["Speaker 1"])
+    }
+
+    @Test func reply_sharing_common_words_with_speech_around_it_is_kept() {
+        let result = TranscriptMerger.merge(
+            mic: [mic(33.3, 34.5, "Yes, that works for me.")],
+            others: [
+                other(1, 30, 33, "So does that work for you?"),
+                other(1, 34.8, 38, "Great, we could do it next week if that works."),
+            ],
+            unattributedLabel: "Them"
+        )
+        #expect(result.map(\.speaker) == ["Speaker 1", "Me", "Speaker 1"])
+    }
+
     @Test func mic_segment_outside_time_tolerance_is_kept() {
         let result = TranscriptMerger.merge(
             mic: [mic(14.1, 16, "they asked for a ten percent discount")],
@@ -80,6 +105,12 @@ import Testing
         let others = [other(1, 0, 5, "alpha beta gamma delta epsilon")]
         #expect(TranscriptMerger.isEcho(mic(0, 5, "alpha beta gamma zulu yankee"), of: others))
         #expect(!TranscriptMerger.isEcho(mic(0, 5, "alpha beta xray zulu yankee"), of: others))
+    }
+
+    @Test func ordered_match_count_is_the_longest_common_subsequence() {
+        #expect(TranscriptMerger.orderedMatchCount(["a", "b", "c", "d"], ["x", "a", "c", "y", "d"]) == 3)
+        #expect(TranscriptMerger.orderedMatchCount(["d", "c", "b", "a"], ["a", "b", "c", "d"]) == 1)
+        #expect(TranscriptMerger.orderedMatchCount(["a"], []) == 0)
     }
 
     @Test func normalized_words_ignore_case_and_punctuation() {

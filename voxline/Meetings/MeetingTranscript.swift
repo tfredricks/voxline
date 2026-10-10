@@ -42,15 +42,32 @@ enum TranscriptMerger {
         return join(ordered)
     }
 
+    /// True when at least `echoWordOverlap` of the mic segment's words
+    /// appear, in order, in the other segments within `echoTolerance` of it,
+    /// taken together: diarization splits one remote passage into many short
+    /// segments. Requiring the order keeps a reply that shares common words
+    /// with the speech around it.
     static func isEcho(_ mic: TimedSegment, of others: [SpeakerSegmentText]) -> Bool {
         let micWords = normalizedWords(mic.text)
         guard !micWords.isEmpty else { return false }
-        return others.contains { other in
-            guard mic.start <= other.end + echoTolerance, mic.end >= other.start - echoTolerance else { return false }
-            let otherWords = Set(normalizedWords(other.text))
-            let shared = micWords.filter(otherWords.contains).count
-            return Double(shared) / Double(micWords.count) >= echoWordOverlap
+        let nearbyWords = others
+            .filter { mic.start <= $0.end + echoTolerance && mic.end >= $0.start - echoTolerance }
+            .sorted { $0.start < $1.start }
+            .flatMap { normalizedWords($0.text) }
+        return Double(orderedMatchCount(micWords, nearbyWords)) / Double(micWords.count) >= echoWordOverlap
+    }
+
+    /// The length of the longest common subsequence of `a` and `b`.
+    static func orderedMatchCount(_ a: [String], _ b: [String]) -> Int {
+        var previous = [Int](repeating: 0, count: b.count + 1)
+        var current = previous
+        for word in a {
+            for (j, other) in b.enumerated() {
+                current[j + 1] = word == other ? previous[j] + 1 : max(previous[j + 1], current[j])
+            }
+            swap(&previous, &current)
         }
+        return previous[b.count]
     }
 
     static func normalizedWords(_ text: String) -> [String] {
