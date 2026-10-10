@@ -38,7 +38,7 @@ struct voxlineApp: App {
                     )
                 },
                 openMainWindow: { page in
-                    delegate.mainWindow.show(page)
+                    delegate.showMainWindow(page)
                 },
                 retryLastDictation: {
                     delegate.coordinator.retryLastDictation()
@@ -53,7 +53,7 @@ struct voxlineApp: App {
         .menuBarExtraStyle(.menu)
         .commands {
             CommandGroup(replacing: .appSettings) {
-                Button("Settings…") { delegate.mainWindow.show(.general) }
+                Button("Settings…") { delegate.showMainWindow(.general) }
                     .keyboardShortcut(",")
             }
         }
@@ -132,6 +132,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    /// Shows the main window on `page`, except while the first-run wizard
+    /// runs: the wizard comes forward instead, so nothing opens over it.
+    func showMainWindow(_ page: MainWindowPage) {
+        guard !coordinator.bringFirstRunForward() else { return }
+        mainWindow.show(page)
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !coordinator.bringFirstRunForward() {
             mainWindow.reopen()
@@ -153,7 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         activationPolicy.start()
         coordinator.learning = learning
-        coordinator.presentMainWindow = { [weak self] page in self?.mainWindow.show(page) }
+        coordinator.presentMainWindow = { [weak self] page in self?.showMainWindow(page) }
         coordinator.startIfNeeded(state: appState, historyStore: historyStore, launchedAtLogin: launchedAtLogin)
         _ = updateService // force-init so Sparkle's scheduler starts
         observeStatusForUpdates()

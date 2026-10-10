@@ -674,7 +674,7 @@ Show Voxline in Dock is off unless a step says otherwise.
 - [ ] Put Safari in full screen, then menu bar → Open Voxline → the window appears over the full-screen Space.
 - [ ] Turn Show Voxline in Dock on → close the window → the Dock icon stays. Click it → Home opens. Turn it off with no window open → the icon goes.
 - [ ] Open Settings → AI Provider, switch to another app, click the Dock icon → the window comes forward still on AI Provider.
-- [ ] First run: from the wizard's permissions step open System Settings, then click voxline's Dock icon → the wizard comes forward and no main window opens.
+- [ ] First run: from the wizard's permissions step open System Settings, then click voxline's Dock icon → the wizard comes forward and no main window opens. Do the same with menu bar → Open Voxline, menu bar → Settings…, and ⌘, → each brings the wizard forward instead.
 - [ ] Launch at login on, log out and back in → no window and no Dock icon. The menu bar works.
 - [ ] Revoke Accessibility while running → Home opens with Accessibility missing. Re-grant → it turns green within about a second.
 - [ ] Quit, turn Accessibility off for voxline (Input Monitoring on), and launch → once the model is ready, the menu-bar icon shows the warning triangle, the menu has "Fix permissions…", and Home's status says Accessibility is required (never "Ready", never "revoked"). Grant it → "Ready" within about a second and the hotkey works. Repeat by pausing voxline, turning Accessibility off, and resuming → the same warning.
