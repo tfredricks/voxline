@@ -20,12 +20,25 @@ import Testing
         }
     }
 
-    @Test func tracks_count_and_peak() throws {
+    @Test func tracks_count() throws {
         let writer = try PCMTrackWriter(url: tempURL())
         writer.append([0.1, -0.4])
         writer.append([0.2])
         #expect(writer.sampleCount == 3)
-        #expect(abs(writer.peak - 0.4) < 0.0001)
+    }
+
+    @Test func a_long_pad_is_written_in_bounded_chunks() throws {
+        let url = tempURL()
+        let sizes = LockedBox<[Int]>([])
+        let writer = try PCMTrackWriter(url: url, write: { handle, data in
+            sizes.mutate { $0.append(data.count) }
+            try handle.write(contentsOf: data)
+        })
+        let target = PCMTrackWriter.padChunkSamples * 2 + 5
+        writer.padSilence(toSampleCount: target)
+        writer.close()
+        #expect(sizes.read() == [PCMTrackWriter.padChunkSamples * 2, PCMTrackWriter.padChunkSamples * 2, 10])
+        #expect(PCMTrackReader.sampleCount(at: url) == target)
     }
 
     @Test func pads_silence_up_to_target_only() throws {

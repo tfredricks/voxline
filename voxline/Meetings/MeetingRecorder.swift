@@ -1,8 +1,9 @@
-import Foundation
+import AppKit
 
 enum MeetingStopReason: Equatable {
     case user
     case cap
+    case systemSleep
     case failed(String)
 }
 
@@ -14,7 +15,6 @@ protocol MeetingRecording: AnyObject {
     /// recording.
     var onSystemTrackLost: (() -> Void)? { get set }
     var systemTapStarted: Bool { get }
-    var elapsed: Duration { get }
     func start() throws
     func stop()
 }
@@ -22,7 +22,9 @@ protocol MeetingRecording: AnyObject {
 /// One meeting recording: the mic and, when it starts, the system tap,
 /// each written to its raw track in `directory`. A mic that can't be
 /// restarted stops the recording; a system tap that can't be restarted is
-/// dropped and the mic keeps recording.
+/// dropped and the mic keeps recording. The Mac going to sleep stops the
+/// recording, so a closed lid never records the next morning or pads the
+/// tracks with the hours asleep.
 @MainActor
 final class MeetingRecorder: MeetingRecording {
 
@@ -57,6 +59,8 @@ final class MeetingRecorder: MeetingRecording {
     private let sleep: @MainActor (Duration) async throws -> Void
     private let clock: @Sendable () -> Duration
     private let observer: MeetingSampleObserver?
+    private let sleepNotifications: NotificationCenter
+    private var sleepObserver: NSObjectProtocol?
     private let live = LiveFlag()
     private var startedAt: Duration = .zero
     private var isRecording = false
@@ -73,7 +77,8 @@ final class MeetingRecorder: MeetingRecording {
         cap: Duration = MeetingRecorder.defaultCap,
         sleep: @escaping @MainActor (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
         clock: @escaping @Sendable () -> Duration = MeetingRecorder.wallClock(),
-        observer: MeetingSampleObserver? = nil
+        observer: MeetingSampleObserver? = nil,
+        sleepNotifications: NotificationCenter? = nil
     ) {
         self.mic = mic
         self.system = system
@@ -82,6 +87,7 @@ final class MeetingRecorder: MeetingRecording {
         self.sleep = sleep
         self.clock = clock
         self.observer = observer
+        self.sleepNotifications = sleepNotifications ?? NSWorkspace.shared.notificationCenter
     }
 
     nonisolated static func wallClock() -> @Sendable () -> Duration {
@@ -89,7 +95,7 @@ final class MeetingRecorder: MeetingRecording {
         return { ContinuousClock.now - base }
     }
 
-    var elapsed: Duration { isRecording ? clock() - startedAt : .zero }
+    private var elapsed: Duration { isRecording ? clock() - startedAt : .zero }
 
     func start() throws {
         guard !isRecording else { return }
@@ -108,6 +114,11 @@ final class MeetingRecorder: MeetingRecording {
         }
         isRecording = true
         live.set(true)
+        sleepObserver = sleepNotifications.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.stop(reason: .systemSleep) }
+        }
         if system != nil {
             do {
                 try startSource(.system)
@@ -137,6 +148,8 @@ final class MeetingRecorder: MeetingRecording {
         guard isRecording else { return }
         isRecording = false
         live.set(false)
+        if let sleepObserver { sleepNotifications.removeObserver(sleepObserver) }
+        sleepObserver = nil
         capTask?.cancel()
         restartTasks.forEach { $0.cancel() }
         restartTasks = []

@@ -11,7 +11,6 @@ final class PCMTrackWriter: @unchecked Sendable {
     private let onFailure: @Sendable (Error) -> Void
     private let performWrite: @Sendable (FileHandle, Data) throws -> Void
     private var count: Int
-    private var maxPeak: Float = 0
     private var failed = false
     private var closed = false
 
@@ -37,7 +36,6 @@ final class PCMTrackWriter: @unchecked Sendable {
     }
 
     var sampleCount: Int { lock.withLock { count } }
-    var peak: Float { lock.withLock { maxPeak } }
 
     func append(_ samples: [Float]) {
         guard !samples.isEmpty else { return }
@@ -48,15 +46,22 @@ final class PCMTrackWriter: @unchecked Sendable {
                 out[i] = Int16((sample.isNaN ? 0 : max(-1, min(1, sample)) * 32_767).rounded()).littleEndian
             }
         }
-        write { _ in (data, samples.count, AudioFormat.peakLevel(samples: samples)) }
+        write { _ in (data, samples.count) }
     }
 
+    /// Writes zeros in chunks of at most `padChunkSamples`, so a long gap
+    /// never needs one allocation the size of the gap.
     func padSilence(toSampleCount target: Int) {
-        write { current in
-            let missing = target - current
-            return missing > 0 ? (Data(count: missing * 2), missing, 0) : nil
+        var wrote = true
+        while wrote {
+            wrote = write { current in
+                let missing = min(target - current, Self.padChunkSamples)
+                return missing > 0 ? (Data(count: missing * 2), missing) : nil
+            }
         }
     }
+
+    static let padChunkSamples = 160_000
 
     func close() {
         lock.withLock {
@@ -66,23 +71,27 @@ final class PCMTrackWriter: @unchecked Sendable {
         }
     }
 
-    private func write(_ make: (Int) -> (Data, Int, Float)?) {
-        let error: Error? = lock.withLock {
-            guard !failed, !closed, let chunk = make(count) else { return nil }
-            let (data, samples, peak) = chunk
+    /// Returns true when `make` produced a chunk and it was written.
+    @discardableResult
+    private func write(_ make: (Int) -> (Data, Int)?) -> Bool {
+        let result: Result<Bool, Error> = lock.withLock {
+            guard !failed, !closed, let (data, samples) = make(count) else { return .success(false) }
             do {
                 try performWrite(handle, data)
                 count += samples
-                maxPeak = max(maxPeak, peak)
-                return nil
+                return .success(true)
             } catch {
                 failed = true
-                return error
+                return .failure(error)
             }
         }
-        if let error {
+        switch result {
+        case .success(let wrote):
+            return wrote
+        case .failure(let error):
             AppLog.meetings.error("track write failed: \(error.localizedDescription, privacy: .public)")
             onFailure(error)
+            return false
         }
     }
 }

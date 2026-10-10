@@ -8,7 +8,6 @@ final class FakeRecorder: MeetingRecording {
     var onStopped: ((MeetingStopReason) -> Void)?
     var onSystemTrackLost: (() -> Void)?
     var systemTapStarted = true
-    var elapsed: Duration = .zero
     var startError: Error?
     private(set) var started = false
     private(set) var startCount = 0
@@ -219,6 +218,15 @@ final class FakeLiveTranscript: LiveMeetingTranscribing {
         recorder.finish(.cap)
         await controller.processingTask?.value
         #expect(notifier.notices.first == .capWarning)
+        #expect(processing.processed.count == 1)
+    }
+
+    @Test func sleep_stop_says_why_and_processes() async throws {
+        let controller = makeController()
+        controller.start()
+        recorder.finish(.systemSleep)
+        #expect(notifier.notices == [.recordingStopped(MeetingController.sleepStopMessage)])
+        await controller.processingTask?.value
         #expect(processing.processed.count == 1)
     }
 

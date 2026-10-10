@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import voxline
@@ -52,6 +53,8 @@ final class FakeSampleObserver: MeetingSampleObserver, @unchecked Sendable {
     /// their sleeps) before the clock moves.
     private func settle() async { await clock.advance(by: .zero) }
 
+    private let sleepNotifications = NotificationCenter()
+
     private func makeRecorder(
         cap: Duration = MeetingRecorder.defaultCap,
         system: FakeMeetingSource? = nil,
@@ -62,8 +65,36 @@ final class FakeSampleObserver: MeetingSampleObserver, @unchecked Sendable {
             mic: mic, system: system ?? self.system, directory: directory, cap: cap,
             sleep: { @MainActor in try await clock.sleep($0) },
             clock: { clock.now },
-            observer: observer
+            observer: observer,
+            sleepNotifications: sleepNotifications
         )
+    }
+
+    @Test func the_mac_going_to_sleep_stops_the_recording() throws {
+        let recorder = makeRecorder()
+        var stopped: [MeetingStopReason] = []
+        recorder.onStopped = { stopped.append($0) }
+        try recorder.start()
+        mic.emit([0.5])
+
+        sleepNotifications.post(name: NSWorkspace.willSleepNotification, object: nil)
+        sleepNotifications.post(name: NSWorkspace.willSleepNotification, object: nil)
+
+        #expect(stopped == [.systemSleep])
+        #expect(mic.stopCount >= 1 && system.stopCount >= 1)
+        #expect(PCMTrackReader.sampleCount(at: directory.micPCM) == 1)
+    }
+
+    @Test func sleep_after_a_stop_does_nothing() throws {
+        let recorder = makeRecorder()
+        var stopped: [MeetingStopReason] = []
+        recorder.onStopped = { stopped.append($0) }
+        try recorder.start()
+        recorder.stop()
+
+        sleepNotifications.post(name: NSWorkspace.willSleepNotification, object: nil)
+
+        #expect(stopped == [.user])
     }
 
     @Test func writes_both_tracks_and_stops_sources() async throws {

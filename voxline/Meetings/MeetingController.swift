@@ -57,6 +57,8 @@ final class MeetingController {
         refreshRegenerable()
     }
 
+    static let sleepStopMessage = "Your Mac went to sleep"
+
     var needsQuitConfirmation: Bool { phase != .idle }
 
     func toggle() {
@@ -172,9 +174,14 @@ final class MeetingController {
         } catch {
             AppLog.meetings.error("updating recorded meeting failed: \(error.localizedDescription, privacy: .public)")
         }
-        if case .failed(let message) = reason {
+        switch reason {
+        case .failed(let message):
             AppLog.meetings.error("recording ended early: \(message, privacy: .public)")
             notifier.post(.recordingStopped(message))
+        case .systemSleep:
+            notifier.post(.recordingStopped(Self.sleepStopMessage))
+        case .user, .cap:
+            break
         }
         runProcessing(id)
     }
