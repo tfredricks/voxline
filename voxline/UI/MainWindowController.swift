@@ -118,6 +118,9 @@ struct MainWindowView: View {
             detail(for: selection.page ?? .home)
         }
         .task { settings.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            settings.refresh()
+        }
         .task(id: settings.status.readinessKey) {
             await settings.status.refreshEngineReadiness()
         }

@@ -65,18 +65,52 @@ final class APIKeysSettingsViewModel {
     }
 
     /// Persist the Anthropic key. Whitespace is trimmed; an empty/whitespace
-    /// value deletes the keychain entry.
+    /// value deletes the keychain entry. A field with no edit since the last
+    /// load or commit writes nothing, so a stale view model never overwrites
+    /// or deletes a key saved elsewhere (the wizard, another window build).
     func commitAnthropic() {
-        persist(value: anthropicKey, account: KeychainAccount.anthropic)
-        anthropicPersisted = anthropicKey.trimmed
+        let value = anthropicKey.trimmed
+        guard value != anthropicPersisted,
+              persist(value: value, account: KeychainAccount.anthropic) else { return }
+        anthropicPersisted = value
     }
 
     /// Persist the OpenAI key. Same rules as commitAnthropic.
     func commitOpenAI() {
-        let previous = openaiPersisted
-        persist(value: openaiKey, account: KeychainAccount.openai)
-        openaiPersisted = openaiKey.trimmed
-        if openaiPersisted != previous { onOpenAIKeyChange() }
+        let value = openaiKey.trimmed
+        guard value != openaiPersisted,
+              persist(value: value, account: KeychainAccount.openai) else { return }
+        openaiPersisted = value
+        onOpenAIKeyChange()
+    }
+
+    /// Re-reads each saved key whose field has no unsaved edit, so keys saved
+    /// or removed elsewhere show up here. A failed read leaves the slot as is.
+    func reloadSavedKeys() {
+        if isPersisted(.anthropic) {
+            reload(KeychainAccount.anthropic, persisted: &anthropicPersisted, readFailed: &anthropicReadFailed) {
+                anthropicKey = $0
+            }
+        }
+        if isPersisted(.openai) {
+            reload(KeychainAccount.openai, persisted: &openaiPersisted, readFailed: &openaiReadFailed) {
+                openaiKey = $0
+            }
+        }
+    }
+
+    private func reload(
+        _ account: String,
+        persisted: inout String,
+        readFailed: inout Bool,
+        assign: (String) -> Void
+    ) {
+        let loaded = Self.load(account, from: keychain)
+        guard !loaded.failed else { return }
+        readFailed = false
+        guard loaded.value != persisted else { return }
+        persisted = loaded.value
+        assign(loaded.value)
     }
 
     /// Issue a tiny no-op LLM call to verify the current in-memory key for
@@ -144,9 +178,10 @@ final class APIKeysSettingsViewModel {
     /// An empty value deletes the entry — unless the entry could not be read
     /// at load time, in which case deleting would destroy a key the user
     /// never saw. A successful non-empty save clears that guard.
-    private func persist(value: String, account: String) {
-        let v = value.trimmed
-        if v.isEmpty && readFailed(for: account) { return }
+    /// Returns false when nothing was written, so the caller keeps its last
+    /// persisted value and the row keeps offering Save.
+    private func persist(value v: String, account: String) -> Bool {
+        if v.isEmpty && readFailed(for: account) { return false }
         do {
             if v.isEmpty {
                 try keychain.delete(forKey: account)
@@ -154,8 +189,10 @@ final class APIKeysSettingsViewModel {
                 try keychain.set(v, forKey: account)
             }
             setReadFailed(false, for: account)
+            return true
         } catch {
             lastError = "Save failed: \(error.localizedDescription)"
+            return false
         }
     }
 

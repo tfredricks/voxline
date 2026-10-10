@@ -11,7 +11,13 @@ final class MeetingSettingsViewModel {
 
     private(set) var notesFolder: URL
     private(set) var shortcut: KeyCombo?
-    var notesModel: String { didSet { settings.meetingNotesModel = notesModel; onChange() } }
+    var notesModel: String {
+        didSet {
+            guard !reloading else { return }
+            settings.meetingNotesModel = notesModel
+            onChange()
+        }
+    }
     var retention: MeetingAudioRetention { didSet { settings.meetingAudioRetention = retention; onChange() } }
     var showTimer: Bool { didSet { settings.showMeetingTimer = showTimer; onChange() } }
     var liveTranscript: Bool { didSet { settings.meetingLiveTranscript = liveTranscript; onChange() } }
@@ -21,6 +27,7 @@ final class MeetingSettingsViewModel {
     @ObservationIgnored private let chords: () -> ChordSet
     @ObservationIgnored private let onChange: () -> Void
     @ObservationIgnored private let translate: KeyComboValidator.Translator
+    @ObservationIgnored private var reloading = false
 
     init(
         settings: AppSettings = AppSettings(),
@@ -40,6 +47,16 @@ final class MeetingSettingsViewModel {
         retention = settings.meetingAudioRetention
         showTimer = settings.showMeetingTimer
         liveTranscript = settings.meetingLiveTranscript
+    }
+
+    /// Re-reads the notes model, which a provider change on another page
+    /// clears, without writing it back.
+    func reload() {
+        let stored = settings.meetingNotesModel ?? ""
+        guard stored != notesModel.trimmed else { return }
+        reloading = true
+        notesModel = stored
+        reloading = false
     }
 
     /// The model notes use when `notesModel` is empty.

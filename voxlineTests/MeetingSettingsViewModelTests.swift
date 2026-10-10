@@ -27,6 +27,21 @@ import Testing
         #expect(changes.read() == 1)
     }
 
+    @Test func reload_shows_a_notes_model_cleared_by_a_provider_change() {
+        let changes = LockedBox(0)
+        var settings = AppSettings(defaults: defaults)
+        settings.llmProvider = .anthropic
+        let vm = model(changes: changes)
+        vm.notesModel = "claude-sonnet-5-5"
+        settings.llmProvider = .openai
+
+        vm.reload()
+
+        #expect(vm.notesModel == "")
+        #expect(AppSettings(defaults: defaults).meetingNotesModel == nil)
+        #expect(changes.read() == 1)
+    }
+
     @Test func shortcut_used_by_a_preset_is_rejected() {
         var preset = PresetShortcut.defaults[0]
         preset.combo = combo

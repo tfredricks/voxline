@@ -54,7 +54,7 @@ struct GeneralSettingsPage: View {
         .confirmationDialog("Reset settings to defaults?", isPresented: $confirmingReset) {
             Button("Reset", role: .destructive) { general.resetToDefaults() }
         } message: {
-            Text("Hotkeys, microphone, recognition, AI provider, command model and sounds go back to their defaults. API keys, presets, vocabulary, learning and meeting settings stay.")
+            Text("Hotkeys, microphone, recognition, AI provider, command model and sounds go back to their defaults. API keys, presets, vocabulary, learning and meeting settings stay, except a meeting notes model when the provider changes.")
         }
     }
 }

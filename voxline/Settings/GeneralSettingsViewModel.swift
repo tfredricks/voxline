@@ -210,8 +210,8 @@ final class GeneralSettingsViewModel {
     /// stored, so the Settings UI reflects writes made elsewhere in the app
     /// (e.g., the wizard's `advance()` persisting `selectedProvider` and the
     /// keys). The view model otherwise caches the value from init and would
-    /// show stale state on subsequent window opens. Called via `.task` when the
-    /// main window is built, together with `refreshLoginItemStatus()`.
+    /// show stale state. `SettingsModel.refresh()` calls it when the main
+    /// window is built and each time a window becomes key.
     func refreshFromUserDefaults() {
         withoutCommitting {
             chord = settings.hotkeyChord

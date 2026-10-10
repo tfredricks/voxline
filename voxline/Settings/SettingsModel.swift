@@ -36,8 +36,13 @@ final class SettingsModel {
         self.status = SettingsStatusViewModel(general: general, keys: apiKeys, engineReadiness: engineReadiness)
     }
 
+    /// Re-reads everything another window or page can change: the wizard's
+    /// keys and provider, a provider change clearing the notes model, login
+    /// item approval in System Settings.
     func refresh() {
         general.refreshFromUserDefaults()
         general.refreshLoginItemStatus()
+        apiKeys.reloadSavedKeys()
+        meetings.reload()
     }
 }

@@ -204,6 +204,70 @@ import Foundation
         #expect(changes == 2)
     }
 
+    @Test func commit_without_an_edit_keeps_a_key_saved_elsewhere() throws {
+        let kc = keychain()
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        try kc.set("sk-ant-from-wizard", forKey: KeychainAccount.anthropic)
+        try kc.set("sk-openai-from-wizard", forKey: KeychainAccount.openai)
+
+        vm.commitAnthropic()
+        vm.commitOpenAI()
+
+        #expect(try kc.string(forKey: KeychainAccount.anthropic) == "sk-ant-from-wizard")
+        #expect(try kc.string(forKey: KeychainAccount.openai) == "sk-openai-from-wizard")
+    }
+
+    @Test func failed_save_keeps_offering_save() throws {
+        let kc = FailingWriteKeychain()
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        vm.anthropicKey = "sk-ant-new"
+        vm.commitAnthropic()
+        #expect(!vm.isPersisted(.anthropic))
+        #expect(!vm.hasSavedKey(.anthropic))
+        #expect(vm.lastError?.hasPrefix("Save failed") == true)
+    }
+
+    @Test func reload_picks_up_keys_saved_elsewhere() throws {
+        let kc = keychain()
+        var openAIChanges = 0
+        let vm = APIKeysSettingsViewModel(keychain: kc, onOpenAIKeyChange: { openAIChanges += 1 })
+        try kc.set("sk-ant-from-wizard", forKey: KeychainAccount.anthropic)
+        try kc.set("sk-openai-from-wizard", forKey: KeychainAccount.openai)
+
+        vm.reloadSavedKeys()
+
+        #expect(vm.anthropicKey == "sk-ant-from-wizard")
+        #expect(vm.openaiKey == "sk-openai-from-wizard")
+        #expect(vm.isPersisted(.anthropic))
+        #expect(vm.hasSavedKey(.openai))
+        #expect(openAIChanges == 0)
+    }
+
+    @Test func reload_keeps_an_unsaved_edit() throws {
+        let kc = keychain()
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        vm.anthropicKey = "sk-ant-typing"
+        try kc.set("sk-ant-from-wizard", forKey: KeychainAccount.anthropic)
+
+        vm.reloadSavedKeys()
+
+        #expect(vm.anthropicKey == "sk-ant-typing")
+        #expect(!vm.isPersisted(.anthropic))
+    }
+
+    @Test func reload_after_a_read_failure_recovers_the_key() throws {
+        let kc = keychain()
+        try kc.set("sk-real", forKey: KeychainAccount.anthropic)
+        kc.readError = KeychainError.dataProtectionKeychainUnavailable
+        let vm = APIKeysSettingsViewModel(keychain: kc)
+        kc.readError = nil
+
+        vm.reloadSavedKeys()
+
+        #expect(vm.anthropicKey == "sk-real")
+        #expect(vm.hasSavedKey(.anthropic))
+    }
+
     @Test func typed_key_after_read_failure_saves_and_reenables_delete() throws {
         let kc = keychain()
         kc.readError = KeychainError.dataProtectionKeychainUnavailable
@@ -216,6 +280,16 @@ import Foundation
         vm.anthropicKey = ""
         vm.commitAnthropic()
         #expect(try kc.string(forKey: KeychainAccount.anthropic) == nil)
+    }
+}
+
+private struct FailingWriteKeychain: KeychainStorage {
+    func string(forKey account: String) throws -> String? { nil }
+    func set(_ value: String, forKey account: String) throws {
+        throw KeychainError.dataProtectionKeychainUnavailable
+    }
+    func delete(forKey account: String) throws {
+        throw KeychainError.dataProtectionKeychainUnavailable
     }
 }
 
