@@ -313,20 +313,12 @@ final class AppCoordinator {
             Task { _ = await perms.requestMicrophone() }
         }
 
-        // Save the monitor immediately so the unified reconcile loop owns it.
-        // The first start() attempt may fail (e.g. AX not granted yet); the
-        // loop retries on every tick and clears the error once the tap installs.
+        // The reconcile loop owns the monitor from here. macOS doesn't tell a
+        // running process when Accessibility is granted, so without it the
+        // loop shows the missing permission and installs the tap once it
+        // polls a grant; the user does NOT need to restart the app.
         hotkeyMonitor = monitor
-        do {
-            try monitor.start()
-        } catch {
-            // macOS doesn't deliver a permission-changed notification to the
-            // running process, so the reconcile loop polls until AX/IM are
-            // granted and then installs the tap. The user does NOT need to
-            // restart the app.
-            state.status = .permissionsError("Hotkey monitoring requires Accessibility permission. Grant it in System Settings → Privacy & Security — Voxline will pick it up automatically.")
-        }
-        reconcileKeyInterceptor()
+        reconcileTap(state: state, axGranted: perms.accessibilityStatus == .granted)
         observeCancellableChanges(state: state)
         observeFrontmostApp()
         shortcutCaptureSuspender = ShortcutCaptureSuspender(
@@ -385,32 +377,35 @@ final class AppCoordinator {
             capture?.warmUp()
         }
 
-        guard let monitor = hotkeyMonitor else { return }
-        // Accessibility is the hard gate. Input Monitoring is informational
-        // and not required to install the tap.
-        let permissionsOK = (ax == .granted)
-        let shouldBeInstalled = state.hotkeyEnabled && permissionsOK
-        let isInstalled = monitor.isTapInstalled
+        reconcileTap(state: state, axGranted: ax == .granted)
+    }
 
-        if shouldBeInstalled && !isInstalled {
+    /// Installs or removes the hotkey tap and sets the permissions status as
+    /// `TapReconcile` decides, then brings the key interceptor in line.
+    private func reconcileTap(state: AppState, axGranted: Bool) {
+        guard let monitor = hotkeyMonitor else { return }
+        let decision = TapReconcile.decide(
+            hotkeyEnabled: state.hotkeyEnabled,
+            axGranted: axGranted,
+            isInstalled: monitor.isTapInstalled,
+            status: state.status
+        )
+        var applied = true
+        switch decision.tap {
+        case .install:
             do {
                 try monitor.start()
-                // Clear only the permissions banner that this loop owns.
-                // A pipeline or modelPrep error in flight is unrelated to
-                // tap installation and must not be silently dismissed.
-                if case .permissionsError = state.status {
-                    state.status = .idle
-                }
             } catch {
                 // tapCreate can lag behind AXIsProcessTrusted; retry next tick.
+                applied = false
             }
-        } else if !shouldBeInstalled && isInstalled {
+        case .uninstall:
             monitor.stop()
-            // Distinguish user-initiated pause from involuntary revocation —
-            // only the latter deserves an error banner.
-            if state.hotkeyEnabled && !permissionsOK {
-                state.status = .permissionsError("Accessibility permission was revoked. Re-grant it in System Settings → Privacy & Security; Voxline will recover automatically.")
-            }
+        case .keep:
+            break
+        }
+        if applied, let status = decision.status {
+            state.status = status
         }
         reconcileKeyInterceptor()
     }

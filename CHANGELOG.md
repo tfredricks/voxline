@@ -260,6 +260,10 @@ app that is no longer sandboxed.
 - The live microphone level in Settings → Dictation stops while the window is
   minimised, hidden, or behind another app, so the microphone stays off (and
   Bluetooth headsets leave call mode) until you come back to it.
+- Launching without Accessibility, or resuming after it was turned off while
+  paused, now shows the missing permission and "Fix permissions…" instead of
+  "Ready" with a hotkey that does nothing. With only Input Monitoring granted,
+  voxline no longer says Accessibility "was revoked".
 
 ## [0.3.1] - 2026-07-12
 
