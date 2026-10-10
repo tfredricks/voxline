@@ -264,6 +264,8 @@ app that is no longer sandboxed.
   paused, now shows the missing permission and "Fix permissions…" instead of
   "Ready" with a hotkey that does nothing. With only Input Monitoring granted,
   voxline no longer says Accessibility "was revoked".
+- The History window's Time column is current when you reopen it, and moves
+  on each minute while it is open, instead of saying "1 min. ago" for hours.
 
 ## [0.3.1] - 2026-07-12
 

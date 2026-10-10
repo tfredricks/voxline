@@ -81,8 +81,10 @@ struct HistoryView: View {
     private var table: some View {
         Table(store.items, selection: $selectedID) {
             TableColumn("Time") { item in
-                Text(Self.relativeTime(item.timestamp))
-                    .help(Self.tooltip(item))
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    Text(Self.relativeTime(item.timestamp, now: context.date))
+                        .help(Self.tooltip(item))
+                }
             }
             .width(min: 70, ideal: 90, max: 110)
 
@@ -127,10 +129,10 @@ struct HistoryView: View {
         state.flashToast("Copied", for: .milliseconds(1200))
     }
 
-    private static func relativeTime(_ when: Date) -> String {
+    private static func relativeTime(_ when: Date, now: Date) -> String {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
-        return f.localizedString(for: when, relativeTo: Date())
+        return f.localizedString(for: when, relativeTo: now)
     }
 
     private static func tooltip(_ item: DictationHistoryItem) -> String {

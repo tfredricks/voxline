@@ -277,6 +277,10 @@ several items below check it.
       focused — copied".
 - [ ] Show history… lists these dictations with the raw transcript next to the
       cleaned text.
+- [ ] Dictate, open Show history…, and close it. A few minutes later reopen
+      it: the Time column says how long ago that is now, not "1 min. ago",
+      and the window is where you left it. Left open, the times move on
+      each minute.
 
 ## Latency targets
 
