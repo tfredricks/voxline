@@ -1,8 +1,11 @@
 import AppKit
 import SwiftUI
 
+/// The permission rows on Home and in the first-run wizard.
 struct PermissionRows: View {
     let summary: PermissionsSummary
+    /// The wizard asks only for the required permissions.
+    var includesInputMonitoring = true
     var onChange: () -> Void = {}
 
     @State private var perms = PermissionsService()
@@ -20,19 +23,21 @@ struct PermissionRows: View {
             row(
                 title: "Microphone",
                 tag: .required,
-                detail: "Captures your voice for on-device transcription.",
+                detail: "Captures your voice for transcription.",
                 status: summary.microphone,
                 grantLabel: "Grant",
                 action: { Task { _ = await perms.requestMicrophone(); onChange() } }
             )
-            row(
-                title: "Input Monitoring",
-                tag: .recommended,
-                detail: "Improves global hotkey reliability on some Macs. Grant this if the hotkey doesn't trigger outside voxline's own window.",
-                status: summary.inputMonitoring,
-                grantLabel: "Grant",
-                action: openInputMonitoringSettings
-            )
+            if includesInputMonitoring {
+                row(
+                    title: "Input Monitoring",
+                    tag: .recommended,
+                    detail: "Improves global hotkey reliability on some Macs. Grant this if the hotkey doesn't trigger outside voxline's own window.",
+                    status: summary.inputMonitoring,
+                    grantLabel: "Grant",
+                    action: openInputMonitoringSettings
+                )
+            }
         }
     }
 
