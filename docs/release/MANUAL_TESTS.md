@@ -503,6 +503,9 @@ joins the paste-first list before release.
       and the original text is back on the clipboard afterwards.
 - [ ] Copy rich text (bold in Pages), dictate into Slack, then paste into
       Pages. The paste is still rich.
+- [ ] With Maccy or another clipboard manager running, click into a Slack
+      message box with nothing selected and press ⌥2. The toast reads "Select
+      text to transform" and the clipboard manager records no new entry.
 
 ## Issues 10, 12, 20, and 22
 

@@ -294,6 +294,11 @@ app that is no longer sandboxed.
   the front, and a key that fails to save keeps offering Save.
 - A shortcut that starts with the command chord, such as ⇧⌥→, no longer
   cancels a preset or Retry that is running.
+- The ⌘C fallback that reads a selection Accessibility can't see no longer
+  rewrites your clipboard when nothing was selected (clipboard managers
+  recorded a duplicate), and pressing Esc while it runs can no longer leave
+  the selection on your clipboard. It also goes on as soon as the copy lands
+  instead of always waiting 150 ms.
 
 ## [0.3.1] - 2026-07-12
 
