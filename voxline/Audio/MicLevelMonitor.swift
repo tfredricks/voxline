@@ -1,5 +1,4 @@
 import AVFoundation
-import CoreAudio
 import Observation
 
 /// Settings-only audio level tap. Publishes peak amplitude in [0, 1] while
@@ -23,20 +22,7 @@ final class MicLevelMonitor {
         guard !running else { return }
         let input = engine.inputNode
         input.removeTap(onBus: 0)
-
-        if let uid = preferredInputDeviceUID,
-           let deviceID = AudioDeviceEnumerator.deviceID(forUID: uid),
-           let au = engine.inputNode.audioUnit {
-            var mutableID = deviceID
-            _ = AudioUnitSetProperty(
-                au,
-                kAudioOutputUnitProperty_CurrentDevice,
-                kAudioUnitScope_Global,
-                0,
-                &mutableID,
-                UInt32(MemoryLayout<AudioDeviceID>.size)
-            )
-        }
+        AudioDeviceEnumerator.route(input, preferring: preferredInputDeviceUID)
 
         let hwFormat = input.inputFormat(forBus: 0)
         guard hwFormat.sampleRate > 0, hwFormat.channelCount > 0 else {

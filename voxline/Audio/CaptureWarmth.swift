@@ -16,6 +16,9 @@ struct CaptureWarmth: Equatable {
         /// An armed chord was released without recording.
         case prewarmCancelled
         case keepWarmElapsed
+        /// The preferred input device changed with no capture running. The
+        /// engine must stop to take it: a running engine keeps its device.
+        case inputChanged
     }
 
     enum Action: Equatable {
@@ -41,6 +44,9 @@ struct CaptureWarmth: Equatable {
         case .keepWarmElapsed:
             keepWarmPending = false
             return [.stopEngine]
+        case .inputChanged:
+            keepWarmPending = false
+            return [.cancelKeepWarmStop, .stopEngine]
         }
     }
 }

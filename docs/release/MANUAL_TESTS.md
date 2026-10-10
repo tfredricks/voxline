@@ -181,6 +181,12 @@ several items below check it.
 - [ ] If that toast never appears, note the mic and macOS version in the test
       log instead of failing the pass: the interruption only fires when the
       audio engine actually stops, and some devices keep it running.
+- [ ] With a USB mic plugged in, dictate once, then within 90 seconds pick
+      the USB mic in Settings → Dictation → Microphone and dictate again
+      → the second dictation records from the USB mic. Pick System default
+      and dictate again → it records from the system default input, not the
+      USB mic. Change the mic while holding the chord → that recording
+      finishes on the old mic and the next one uses the new one.
 
 ## Switching engines
 

@@ -47,7 +47,7 @@ enum AudioDeviceEnumerator {
         return status == noErr ? ids : []
     }
 
-    private static func defaultInputDeviceID() -> AudioDeviceID? {
+    static func defaultInputDeviceID() -> AudioDeviceID? {
         var id: AudioDeviceID = 0
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         var addr = AudioObjectPropertyAddress(
@@ -122,13 +122,42 @@ enum AudioDeviceEnumerator {
         return status == noErr && deviceID != 0 ? deviceID : nil
     }
 
+    /// The input device to capture from: the one with `uid` while it is
+    /// present, otherwise the system default input.
+    static func inputDeviceID(preferring uid: String?) -> AudioDeviceID? {
+        uid.flatMap(deviceID(forUID:)) ?? defaultInputDeviceID()
+    }
+
+    /// The device `node`'s audio unit is bound to, or nil when it can't be read.
+    static func currentDevice(of node: AVAudioInputNode) -> AudioDeviceID? {
+        guard let au = node.audioUnit else { return nil }
+        var id: AudioDeviceID = 0
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = AudioUnitGetProperty(au, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &id, &size)
+        return status == noErr && id != 0 ? id : nil
+    }
+
+    /// Points `node` at `inputDeviceID(preferring: uid)`. A unit already on
+    /// that device is left alone, so one that follows the system default is
+    /// never pinned to it. The change only lands on an uninitialized unit:
+    /// call it with the engine stopped.
+    static func route(_ node: AVAudioInputNode, preferring uid: String?) {
+        guard let target = inputDeviceID(preferring: uid), target != currentDevice(of: node) else { return }
+        setCurrentDevice(target, of: node)
+    }
+
     /// Points `node`'s audio unit at the input device with `uid`. Does
-    /// nothing when the device is gone or the node has no audio unit, so
-    /// capture falls through to the system default.
+    /// nothing when the device is gone, so a fresh engine captures from the
+    /// system default.
     static func route(_ node: AVAudioInputNode, toDeviceUID uid: String) {
-        guard let deviceID = deviceID(forUID: uid), let au = node.audioUnit else { return }
+        guard let deviceID = deviceID(forUID: uid) else { return }
+        setCurrentDevice(deviceID, of: node)
+    }
+
+    static func setCurrentDevice(_ deviceID: AudioDeviceID, of node: AVAudioInputNode) {
+        guard let au = node.audioUnit else { return }
         var mutableID = deviceID
-        _ = AudioUnitSetProperty(
+        let status = AudioUnitSetProperty(
             au,
             kAudioOutputUnitProperty_CurrentDevice,
             kAudioUnitScope_Global,
@@ -136,6 +165,9 @@ enum AudioDeviceEnumerator {
             &mutableID,
             UInt32(MemoryLayout<AudioDeviceID>.size)
         )
+        if status != noErr {
+            AppLog.audio.error("couldn't route input to device \(deviceID): OSStatus \(status)")
+        }
     }
 }
 

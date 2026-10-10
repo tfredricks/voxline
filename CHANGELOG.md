@@ -309,6 +309,10 @@ app that is no longer sandboxed.
   added seconds to "Preparing model" online. A download that was interrupted
   partway now counts as not downloaded, so it resumes instead of failing to
   load.
+- A new choice in Settings → Dictation → Microphone applies to the next
+  dictation, even right after another one, and choosing System default after
+  a specific mic records from the system default again instead of the old
+  mic. The Settings level meter follows System default the same way.
 
 ## [0.3.1] - 2026-07-12
 

@@ -767,9 +767,8 @@ extension AppCoordinator {
         hotkeyMonitor?.chords = ChordSet(dictation: snapshot.chord, command: snapshot.commandChord)
         refreshInterceptorConfig()
 
-        // AudioCaptureService applies preferredInputDeviceUID at next start();
-        // CapturePipeline restarts the engine on every chord, so the new device
-        // takes effect on the next dictation.
+        // A new device stops the warm engine (or the recording one once it
+        // stops), so it takes effect on the next dictation.
         capture?.preferredInputDeviceUID = snapshot.audioInputDeviceUID
 
         guard let engines else { return }

@@ -15,9 +15,20 @@ import Foundation
 @MainActor
 final class AudioCaptureService {
 
-    /// Optional CoreAudio UID for the preferred input device. nil = system default.
-    /// AppCoordinator applies this from AppSettings before each capture.
-    var preferredInputDeviceUID: String?
+    /// Optional CoreAudio UID for the preferred input device. nil, or a
+    /// device that is gone, means the system default. A running engine keeps
+    /// its device, so a change stops the idle engine at once, or the running
+    /// one when its capture stops.
+    var preferredInputDeviceUID: String? {
+        didSet {
+            guard preferredInputDeviceUID != oldValue, inputBound else { return }
+            if isCapturing {
+                inputChangedDuringCapture = true
+            } else {
+                apply(warmth.handle(.inputChanged))
+            }
+        }
+    }
 
     /// Called periodically (~60 Hz) with the current peak level [0, 1] of the
     /// most recently captured chunk. Used by the recording pill's waveform.
@@ -52,6 +63,12 @@ final class AudioCaptureService {
     private var warmth = CaptureWarmth()
     private var keepWarmStop: Task<Void, Never>?
 
+    /// True once `inputNode` has been read, which binds the input device
+    /// and can block on the microphone permission prompt. Until then a new
+    /// preferred device has nothing to re-route.
+    private var inputBound = false
+    private var inputChangedDuringCapture = false
+
     init() {
         configurationObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
@@ -71,11 +88,17 @@ final class AudioCaptureService {
         }
     }
 
-    /// Route the engine's input AU to the preferred device, when set and still
-    /// present. Falls through silently to the system default otherwise.
-    private func applyPreferredDevice() {
-        guard let uid = preferredInputDeviceUID else { return }
-        AudioDeviceEnumerator.route(engine.inputNode, toDeviceUID: uid)
+    /// Binds the input to the preferred device, or to the system default when
+    /// none is set or it is gone. Never call it on a running engine. A device
+    /// change only lands on an uninitialized unit, so the engine is stopped
+    /// (which drops its preparation) only when the device actually changes.
+    private func routeInput() {
+        let input = engine.inputNode
+        inputBound = true
+        guard let target = AudioDeviceEnumerator.inputDeviceID(preferring: preferredInputDeviceUID),
+              target != AudioDeviceEnumerator.currentDevice(of: input) else { return }
+        engine.stop()
+        AudioDeviceEnumerator.setCurrentDevice(target, of: input)
     }
 
     /// Binds the input device and pre-allocates the engine ahead of the first
@@ -85,7 +108,7 @@ final class AudioCaptureService {
     /// engine runs.
     func warmUp() {
         guard !engine.isRunning else { return }
-        applyPreferredDevice()
+        routeInput()
         _ = engine.inputNode.inputFormat(forBus: 0)
         engine.prepare()
     }
@@ -99,7 +122,7 @@ final class AudioCaptureService {
     /// the chord.
     func prewarm() {
         guard !engine.isRunning else { return }
-        applyPreferredDevice()
+        routeInput()
         // Touch the input format so the engine builds its input graph before
         // start — an engine started with no configured input does not open
         // the microphone and would prewarm nothing.
@@ -128,11 +151,8 @@ final class AudioCaptureService {
         let input = engine.inputNode
         input.removeTap(onBus: 0)
 
-        // When prewarm already has the engine running, the preferred device was
-        // applied on the armed edge milliseconds ago — don't reconfigure a
-        // running engine. Cold path applies it as before.
         if !engine.isRunning {
-            applyPreferredDevice()
+            routeInput()
         }
 
         // Use inputFormat(forBus:), not outputFormat. On macOS 26.x,
@@ -203,6 +223,10 @@ final class AudioCaptureService {
         isCapturing = false
         currentEpoch &+= 1
         apply(warmth.handle(.captureStopped))
+        if inputChangedDuringCapture {
+            inputChangedDuringCapture = false
+            apply(warmth.handle(.inputChanged))
+        }
     }
 
     // MARK: - Private
@@ -223,6 +247,9 @@ final class AudioCaptureService {
                 keepWarmStop = nil
             case .stopEngine:
                 engine.stop()
+                if inputBound {
+                    routeInput()
+                }
                 // A prepared engine starts in about half the time.
                 engine.prepare()
             }

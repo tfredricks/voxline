@@ -51,4 +51,33 @@ import Testing
         #expect(warmth.handle(.captureStopped) == [.scheduleKeepWarmStop])
         #expect(warmth.keepWarmPending)
     }
+
+    @Test func a_new_input_inside_the_window_stops_the_warm_engine_at_once() {
+        var warmth = CaptureWarmth()
+        warmth.handle(.captureStopped)
+        #expect(warmth.handle(.inputChanged) == [.cancelKeepWarmStop, .stopEngine])
+        #expect(!warmth.keepWarmPending)
+    }
+
+    @Test func a_new_input_with_no_window_stops_the_engine() {
+        var warmth = CaptureWarmth()
+        #expect(warmth.handle(.inputChanged) == [.cancelKeepWarmStop, .stopEngine])
+        #expect(!warmth.keepWarmPending)
+    }
+
+    @Test func after_a_new_input_a_cancelled_prewarm_stops_the_engine() {
+        var warmth = CaptureWarmth()
+        warmth.handle(.captureStopped)
+        warmth.handle(.inputChanged)
+        #expect(warmth.handle(.prewarmCancelled) == [.stopEngine])
+    }
+
+    @Test func a_new_input_applied_when_a_capture_stops_skips_the_window() {
+        var warmth = CaptureWarmth()
+        warmth.handle(.captureStarted)
+        warmth.handle(.captureStopped)
+        #expect(warmth.handle(.inputChanged) == [.cancelKeepWarmStop, .stopEngine])
+        #expect(!warmth.keepWarmPending)
+        #expect(warmth.handle(.captureStarted) == [], "no window left to cancel")
+    }
 }
