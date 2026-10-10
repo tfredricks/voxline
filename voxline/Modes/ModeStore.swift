@@ -26,8 +26,9 @@ final class ModeStore {
             // current shipped one. User-added modes (unknown bundle IDs) and
             // per-mode model/temperature overrides are passed through. There's
             // no UI to hand-edit prompts in voxline today, so we deliberately
-            // don't try to preserve user prompt edits.
-            let reconciled = Self.reconcileShippedPrompts(onDisk)
+            // don't try to preserve user prompt edits. Shipped apps the file
+            // lacks are added, so new ones reach existing users.
+            let reconciled = Self.addMissingShippedModes(Self.reconcileShippedPrompts(onDisk))
             if reconciled != onDisk {
                 try? save(reconciled)
             }
@@ -52,6 +53,20 @@ final class ModeStore {
             updated.category = shipped.category
             return updated
         }
+    }
+
+    /// Appends each shipped mode whose bundle ID has no catch-all mode
+    /// (`fieldKind == nil`) in `modes`, then moves the wildcard modes to the
+    /// end so exact matches stay ahead of them. Returns `modes` unchanged when
+    /// nothing is missing. A shipped mode deleted from the file by hand comes
+    /// back. Pure.
+    static func addMissingShippedModes(_ modes: [Mode]) -> [Mode] {
+        let covered = Set(modes.filter { $0.fieldKind == nil }.map(\.bundleID))
+        let missing = shippedDefaults.filter { !covered.contains($0.bundleID) }
+        guard !missing.isEmpty else { return modes }
+        func isWildcard(_ mode: Mode) -> Bool { mode.bundleID == Mode.wildcardBundleID }
+        return modes.filter { !isWildcard($0) } + missing.filter { !isWildcard($0) }
+            + modes.filter(isWildcard) + missing.filter(isWildcard)
     }
 
     func save(_ modes: [Mode]) throws {

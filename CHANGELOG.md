@@ -245,6 +245,9 @@ app that is no longer sandboxed.
 - Per-app modes saved by an older version load again. A modes file written
   before mode categories existed failed to load, and voxline silently used the
   built-in modes instead.
+- Apps that gain a built-in mode in a new version now get it on Macs that
+  already have a modes file, and a modes file without the Default mode no
+  longer leaves every unlisted app with no mode.
 - Brief status messages in the pill now all appear and clear the same way
   (issue 26).
 - Command mode no longer copies the whole line in editors such as VS Code

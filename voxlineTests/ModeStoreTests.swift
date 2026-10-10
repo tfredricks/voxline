@@ -30,10 +30,49 @@ import Foundation
         // Custom modes (unknown bundle IDs) pass through reconcile untouched.
         let custom = [
             Mode(bundleID: "com.apple.notes", displayName: "Notes", prompt: "casual", model: nil, temperature: nil)
-        ]
+        ] + ModeStore.shippedDefaults
         try store.save(custom)
         let loaded = try store.load()
         #expect(loaded == custom)
+    }
+
+    @Test func load_adds_shipped_modes_missing_from_the_file_and_keeps_the_wildcard_last() throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let custom = Mode(bundleID: "com.example.custom", displayName: "Custom", prompt: "mine", model: nil, temperature: nil)
+        let slack = Mode(bundleID: "com.tinyspeck.slackmacgap", displayName: "My Slack", prompt: "old",
+                         model: "gpt-5-mini", temperature: 0.2, category: .chat)
+        try store.save([slack, custom])
+
+        let loaded = try store.load()
+        let catchAllIDs = Set(loaded.filter { $0.fieldKind == nil }.map(\.bundleID))
+        #expect(catchAllIDs.isSuperset(of: ModeStore.shippedDefaults.map(\.bundleID)))
+        #expect(loaded.count == ModeStore.shippedDefaults.count + 1)
+        #expect(loaded.prefix(2).map(\.bundleID) == [slack.bundleID, custom.bundleID])
+        #expect(loaded[0].displayName == "My Slack" && loaded[0].model == "gpt-5-mini")
+        #expect(loaded.first { $0.bundleID == "com.apple.mail" } == ModeStore.shippedDefaults.first { $0.bundleID == "com.apple.mail" })
+        #expect(loaded.last?.bundleID == Mode.wildcardBundleID)
+        #expect(ModeRouter(modes: loaded).mode(for: "com.example.unlisted")?.bundleID == Mode.wildcardBundleID)
+
+        let again = try ModeStore(fileURL: store.fileURL).load()
+        #expect(again == loaded)
+    }
+
+    @Test func load_keeps_a_wildcard_from_the_file_and_moves_it_after_added_modes() throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let wildcard = Mode(bundleID: Mode.wildcardBundleID, displayName: "Mine", prompt: "old",
+                            model: "gpt-5-mini", temperature: nil)
+        let mailSearch = Mode(bundleID: "com.apple.mail", displayName: "Mail search", prompt: "terse",
+                              model: nil, temperature: nil, fieldKind: .search)
+        try store.save([wildcard, mailSearch])
+
+        let loaded = try store.load()
+        #expect(loaded.filter { $0.bundleID == Mode.wildcardBundleID }.count == 1)
+        #expect(loaded.last?.displayName == "Mine")
+        #expect(loaded.last?.model == "gpt-5-mini")
+        #expect(loaded.contains { $0.bundleID == "com.apple.mail" && $0.fieldKind == nil })
+        #expect(loaded.first == ModeStore.reconcileShippedPrompts([mailSearch])[0])
     }
 
     @Test func shipped_defaults_include_wildcard_fallback() {
