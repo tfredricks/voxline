@@ -79,7 +79,7 @@ struct VocabCleanupIntegrationTests {
         let cleaned = try await llm.cleanup(transcript: transcript, mode: mode, context: context)
         print("[integration] cleaned=\(cleaned)")
 
-        // 3. The cleanup preamble (LLMService.transcriptionPreamble) instructs
+        // 3. The vocabulary paragraph (LLMService.vocabularyParagraph) instructs
         // the model to snap phonetic near-misses to the canonical spelling.
         // We assert case-sensitively on all three canonical terms.
         #expect(cleaned.contains("LangGraph"),

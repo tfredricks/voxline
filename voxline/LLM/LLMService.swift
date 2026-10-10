@@ -66,22 +66,11 @@ struct LLMService: LLMServing, MeetingNotesGenerating, StyleNoteGenerating {
 
     static let styleHeader = "Style guidance for this dictation:"
 
-    /// Every part joined: the full prompt a dictation with context and
-    /// vocabulary receives, before the mode's style guidance.
-    static let transcriptionPreamble =
-        preambleCore + "\n\n" + contextParagraph + "\n\n" + vocabularyParagraph + "\n\n" + styleHeader
-
-    /// Assemble the system prompt: fixed preamble + the mode's style guidance.
-    /// Pure function so prompt assembly is unit-testable without an HTTP
-    /// round-trip.
-    static func systemPrompt(mode: Mode) -> String {
-        transcriptionPreamble + "\n" + mode.prompt
-    }
-
-    /// Lean variant used for cleanup: the Context and custom-vocabulary
-    /// paragraphs are included only when the user message will carry them.
-    /// A learned style, when the context carries one with something to say,
-    /// follows the mode's style guidance.
+    /// The cleanup system prompt: the fixed preamble, then the Context and
+    /// custom-vocabulary paragraphs only when the user message will carry
+    /// them, then the mode's style guidance. A learned style, when the
+    /// context carries one with something to say, follows it. Pure, so
+    /// prompt assembly is unit-testable without an HTTP round-trip.
     static func systemPrompt(mode: Mode, context: CapturedContext) -> String {
         var parts = [preambleCore]
         let userMessage = ContextBlockFormatter.format(transcript: "", context: context)

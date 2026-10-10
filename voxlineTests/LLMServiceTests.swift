@@ -206,28 +206,22 @@ import Foundation
         #expect(userContent.contains(ContextBlockFormatter.trailingInstruction))
     }
 
-    @Test func transcriptionPreamble_contains_canonical_vocab_rule() {
-        let preamble = LLMService.transcriptionPreamble
-        #expect(preamble.contains("Custom vocabulary"))
-        #expect(preamble.contains("canonical spelling"))
-        #expect(preamble.contains("Never invent terms that are not in the vocabulary list"))
-        #expect(preamble.contains("collapse it to a single occurrence"))
+    @Test func vocabularyParagraph_contains_canonical_vocab_rule() {
+        let paragraph = LLMService.vocabularyParagraph
+        #expect(paragraph.contains("Custom vocabulary"))
+        #expect(paragraph.contains("canonical spelling"))
+        #expect(paragraph.contains("Never invent terms that are not in the vocabulary list"))
+        #expect(paragraph.contains("collapse it to a single occurrence"))
         // Word-segmentation directive + at least one of the worked examples.
-        #expect(preamble.contains("Word-segmentation fixes are the most important"))
-        #expect(preamble.contains("`lang graph` → `LangGraph`"))
+        #expect(paragraph.contains("Word-segmentation fixes are the most important"))
+        #expect(paragraph.contains("`lang graph` → `LangGraph`"))
     }
 
-    @Test func transcriptionPreamble_keeps_existing_cleaning_rules() {
-        let preamble = LLMService.transcriptionPreamble
+    @Test func preambleCore_keeps_existing_cleaning_rules() {
+        let preamble = LLMService.preambleCore
         #expect(preamble.contains("Strip fillers"))
         #expect(preamble.contains("Resolve self-corrections"))
         #expect(preamble.contains("Preserve proper nouns"))
-    }
-
-    @Test func systemPrompt_isPreambleAndModePrompt() {
-        let mode = Mode(bundleID: "*", displayName: "d", prompt: "MODE_STYLE", model: nil, temperature: nil)
-        let prompt = LLMService.systemPrompt(mode: mode)
-        #expect(prompt == LLMService.transcriptionPreamble + "\n" + "MODE_STYLE")
     }
 
     @Test func systemPrompt_with_empty_context_and_no_vocabulary_is_lean() {
@@ -273,13 +267,7 @@ import Foundation
         ].joined(separator: "\n\n"))
     }
 
-    @Test func transcriptionPreamble_is_the_four_parts_joined() {
-        #expect(LLMService.transcriptionPreamble == [
-            LLMService.preambleCore,
-            LLMService.contextParagraph,
-            LLMService.vocabularyParagraph,
-            LLMService.styleHeader
-        ].joined(separator: "\n\n"))
+    @Test func styleHeader_wording() {
         #expect(LLMService.styleHeader == "Style guidance for this dictation:")
     }
 

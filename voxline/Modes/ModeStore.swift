@@ -71,11 +71,12 @@ final class ModeStore {
     /// overwrites prompts for any shipped bundle ID, so the active prompt is
     /// always whatever ships here.
     ///
-    /// Mode prompts are appended to `LLMService.transcriptionPreamble` as the
-    /// system prompt. The preamble carries the shared cleaning rules (fillers,
-    /// disfluencies, self-corrections, word-choice preservation) so each mode
-    /// prompt is a focused style delta — punctuation density, paragraph
-    /// behavior, and what the model must not invent.
+    /// Mode prompts follow `LLMService.preambleCore` in the system prompt
+    /// built by `LLMService.systemPrompt(mode:context:)`. The preamble
+    /// carries the shared cleaning rules (fillers, disfluencies,
+    /// self-corrections, word-choice preservation) so each mode prompt is a
+    /// focused style delta — punctuation density, paragraph behavior, and
+    /// what the model must not invent.
     ///
     /// - `chatPrompt`    — Slack, Discord, Messages, Teams, etc.
     /// - `emailPrompt`   — Mail, Outlook, Spark.

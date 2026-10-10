@@ -4,7 +4,7 @@ import SwiftUI
 /// each term, marked when Learning added it, with a delete button; an inline
 /// Add field appends after trim + dedupe; the footer counts terms and offers
 /// Clear All, which asks first. Vocab biasing flows through the LLM cleanup
-/// prompt — see `LLMService.transcriptionPreamble`.
+/// prompt — see `LLMService.vocabularyParagraph`.
 struct CustomVocabularyListView: View {
 
     @Bindable var viewModel: CustomVocabularyListViewModel
