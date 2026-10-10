@@ -486,6 +486,13 @@ final class CapturePipeline {
             await runCommand(instruction: transcript, context: commandContext, snapshot: snapshot, generation: generation, timing: timing)
             return
         }
+        // Speech meant for a password field never reaches the LLM, History,
+        // or Retry.
+        if snapshot.field?.kind == .secure {
+            state.lastTranscript = nil
+            state.retryTranscript = nil
+            return refuseSecureField()
+        }
         guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
             return setError(Self.noModeMessage(bundleID: snapshot.bundleID))
         }
@@ -586,6 +593,7 @@ final class CapturePipeline {
     private func runRetry(transcript: String, generation: UInt64) async {
         let snapshot = await snapshotFocus().value
         guard generation == self.generation else { return }
+        guard snapshot.field?.kind != .secure else { return refuseSecureField() }
         guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
             return setError(Self.noModeMessage(bundleID: snapshot.bundleID))
         }
@@ -598,6 +606,11 @@ final class CapturePipeline {
         capHit = false
         guard state.toastMessage == nil else { return }
         showToast("Stopped at 5 minutes")
+    }
+
+    private func refuseSecureField() {
+        AppLog.pipeline.info("dictation: secure field focused; refused before cleanup")
+        setError(TextInsertionError.secureFieldUnsupported.errorDescription!)
     }
 
     private static func noModeMessage(bundleID: String?) -> String {

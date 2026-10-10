@@ -741,6 +741,26 @@ import Foundation
         #expect(pipe.metrics.items.isEmpty)
     }
 
+    @Test func dictation_into_a_secure_field_never_reaches_the_llm_or_history() async {
+        let (pipe, state, _, _, llm, _, _, inserter, history) = makePipeline(
+            focusedField: FocusedField(role: "AXTextField", subrole: "AXSecureTextField")
+        )
+        let copied = LockedBox<[String]>([])
+        pipe.transcriptFallback = { text in copied.mutate { $0.append(text) } }
+
+        await startAndFinalize(pipe, state: state)
+
+        #expect(state.status == .error(TextInsertionError.secureFieldUnsupported.errorDescription!))
+        #expect(llm.calls.isEmpty)
+        #expect(history.items.isEmpty)
+        #expect(inserter.calls.isEmpty)
+        #expect(copied.read().isEmpty)
+        #expect(pipe.metrics.items.isEmpty)
+        #expect(state.retryTranscript == nil)
+        #expect(state.lastTranscript == nil)
+        #expect(state.lastCleanedText == nil)
+    }
+
     @Test func accessibility_not_granted_is_a_permissions_error() async {
         let (pipe, state, _, _, _, _, _, inserter, _) = makePipeline()
         inserter.outcomes = [.failed(.accessibilityNotGranted)]

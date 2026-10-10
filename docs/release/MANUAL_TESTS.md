@@ -569,7 +569,10 @@ joins the paste-first list before release.
       The toast reads "Command mode is off in password fields" and nothing is
       sent.
 - [ ] Dictate into a password field. Nothing is inserted into it, and the
-      pill reports why.
+      pill reports why, with no Retry. History has no entry for it, "Retry
+      last dictation" is disabled, and `scripts/tail-logs.sh --debug --last
+      2m pipeline llm` shows "secure field focused; refused before cleanup"
+      and no POST.
 - [ ] Select text in Notes, then from Terminal run
       `sleep 3; kill -STOP $(pgrep -x Notes)` and click back into Notes during
       the 3 s. Hold the command chord, speak, release. voxline must not

@@ -662,6 +662,20 @@ import Foundation
         #expect(h.pipe.metrics.items.count == 1, "retry records no metrics")
     }
 
+    @Test func retry_into_a_secure_field_never_reaches_the_llm_or_history() async {
+        let h = makeHarness()
+        await dictate(h)
+        h.inspector.field = FocusedField(role: "AXTextField", subrole: "AXSecureTextField")
+
+        await h.pipe.retryLastDictation()
+
+        #expect(h.state.status == .error(TextInsertionError.secureFieldUnsupported.errorDescription!))
+        #expect(h.llm.calls.count == 1)
+        #expect(h.history.items.count == 1)
+        #expect(h.inserter.calls.count == 1)
+        #expect(h.state.retryTranscript == "hello world", "the dictation wasn't spoken into the secure field")
+    }
+
     @Test func retry_honors_the_fast_path() async {
         let h = makeHarness(transcript: "Sounds good.", skipShortUtterances: true)
         await dictate(h)

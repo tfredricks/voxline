@@ -299,6 +299,9 @@ app that is no longer sandboxed.
   recorded a duplicate), and pressing Esc while it runs can no longer leave
   the selection on your clipboard. It also goes on as soon as the copy lands
   instead of always waiting 150 ms.
+- Dictating into a password field no longer sends the text to the AI provider
+  or keeps it in History or for Retry: voxline stops right after
+  transcription with the same "secure text field" error.
 
 ## [0.3.1] - 2026-07-12
 
