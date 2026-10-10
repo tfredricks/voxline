@@ -98,4 +98,4 @@ PLIST="$DEST/Contents/Info.plist"
 SHORT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST")
 SHA=$(/usr/libexec/PlistBuddy -c "Print :GitCommit" "$PLIST")
-echo "==> Installed voxline $SHORT ($BUILD, $SHA). Launch with: open -a voxline"
+echo "==> Installed voxline $SHORT ($BUILD, $SHA). Launch with: open \"$DEST\""
