@@ -157,51 +157,53 @@ import Testing
     }
 
     @Test func an_emptied_field_after_a_changed_poll_uses_the_last_good_snapshot() async throws {
-        let h = makeHarness(values: [.value(Self.fixed), .value("")])
+        let h = makeHarness(values: [.value(Self.fixed), .value(Self.fixed), .value("")])
         h.window.start(inserted: Self.original)
-        await runTicks(1, h)
+        await runTicks(2, h)
         #expect(await eventually { h.clock.pendingCount == 1 })
         h.window.endForNewCapture()
         let r = try #require(await result(h))
         #expect(r.match == .changed(Self.fixed))
         #expect(r.source == .lastGood)
-        #expect(r.ticks == 1)
+        #expect(r.ticks == 2)
     }
 
     @Test func an_ambiguous_or_unreadable_final_read_uses_the_last_good_snapshot() async throws {
         let prefixed = makeHarness(
             anchors: { [FakeCorrectionReader.anchored($0, value: "Hi Bob, " + Self.original, inserted: Self.original)] },
-            values: [.value("Hi Bob, " + Self.fixed), .value("Hi Rob, " + Self.fixed)]
+            values: [.value("Hi Bob, " + Self.fixed), .value("Hi Bob, " + Self.fixed), .value("Hi Rob, " + Self.fixed)]
         )
         prefixed.window.start(inserted: Self.original)
-        await runTicks(1, prefixed)
+        await runTicks(2, prefixed)
         #expect(await eventually { prefixed.clock.pendingCount == 1 })
         prefixed.window.endForNewCapture()
         let ambiguous = try #require(await result(prefixed))
         #expect(ambiguous.match == .changed(Self.fixed))
         #expect(ambiguous.source == .lastGood)
 
-        let gone = makeHarness(values: [.value(Self.fixed), .failed])
+        let gone = makeHarness(values: [.value(Self.fixed), .value(Self.fixed), .failed])
         gone.window.start(inserted: Self.original)
-        await runTicks(1, gone)
+        await runTicks(2, gone)
         #expect(await eventually { gone.clock.pendingCount == 1 })
         gone.window.endForNewCapture()
         #expect(try #require(await result(gone)).source == .lastGood)
     }
 
     @Test func only_changed_polls_replace_the_snapshot() async throws {
-        let h = makeHarness(values: [.value(Self.fixed), .value(Self.original), .failed])
+        let h = makeHarness(values: [.value(Self.fixed), .value(Self.fixed), .value(Self.original), .failed])
         h.window.start(inserted: Self.original)
-        await runTicks(3, h)
+        await runTicks(4, h)
         #expect(await eventually { h.clock.pendingCount == 1 })
         h.window.endForNewCapture()
         #expect(try #require(await result(h)).match == .changed(Self.fixed))
     }
 
     @Test func a_later_changed_poll_replaces_an_earlier_one() async throws {
-        let h = makeHarness(values: [.value(Self.fixed), .value("ask Kubernetes now"), .failed])
+        let h = makeHarness(values: [
+            .value(Self.fixed), .value(Self.fixed), .value("ask Kubernetes now"), .value("ask Kubernetes now"), .failed,
+        ])
         h.window.start(inserted: Self.original)
-        await runTicks(2, h)
+        await runTicks(4, h)
         #expect(await eventually { h.clock.pendingCount == 1 })
         h.window.endForNewCapture()
         #expect(try #require(await result(h)).match == .changed("ask Kubernetes now"))
@@ -219,15 +221,15 @@ import Testing
     }
 
     @Test func the_region_going_away_ends_the_window_with_the_last_good_snapshot() async throws {
-        let h = makeHarness(values: [.value(Self.fixed), .value(""), .value("next message")])
+        let h = makeHarness(values: [.value(Self.fixed), .value(Self.fixed), .value(""), .value("next message")])
         h.window.start(inserted: Self.original)
-        await runTicks(2, h)
+        await runTicks(3, h)
         let r = try #require(await result(h))
         #expect(r.reason == .regionGone)
         #expect(r.match == .changed(Self.fixed))
         #expect(r.source == .lastGood)
-        #expect(r.ticks == 2)
-        #expect(h.reader.valueCalls == 2)
+        #expect(r.ticks == 3)
+        #expect(h.reader.valueCalls == 3)
         #expect(await eventually { h.clock.pendingCount == 0 })
         try? await Task.sleep(for: .milliseconds(50))
         #expect(h.ends.read().count == 1)
@@ -243,6 +245,34 @@ import Testing
         #expect(h.reader.valueCalls == 1)
     }
 
+    @Test(arguments: [
+        ("use lang graph for this", ["use LangGr for this", ""]),
+        ("use Argmax", ["use Argm", ""]),
+        ("use Argmax", ["use Argm", "use Argm", ""]),
+    ])
+    func a_region_caught_mid_edit_then_gone_is_discarded(inserted: String, polls: [String]) async throws {
+        let h = makeHarness(
+            anchors: { [FakeCorrectionReader.anchored($0, value: inserted, inserted: inserted)] },
+            values: polls.map { .value($0) }
+        )
+        h.window.start(inserted: inserted)
+        await runTicks(polls.count, h)
+        let r = try #require(await result(h))
+        #expect(r.reason == .regionGone)
+        #expect(r.match == .discarded)
+        #expect(r.source == .final)
+    }
+
+    @Test func a_changed_poll_read_once_keeps_the_earlier_snapshot() async throws {
+        let h = makeHarness(values: [.value(Self.fixed), .value(Self.fixed), .value("ask Kubernetes t"), .value("")])
+        h.window.start(inserted: Self.original)
+        await runTicks(4, h)
+        let r = try #require(await result(h))
+        #expect(r.reason == .regionGone)
+        #expect(r.match == .changed(Self.fixed))
+        #expect(r.source == .lastGood)
+    }
+
     @Test func cancel_reports_nothing() async {
         let h = makeHarness()
         h.window.start(inserted: Self.original)
@@ -255,6 +285,7 @@ import Testing
     }
 
     @Test func resolve_prefers_a_located_final_read() {
+        let inserted = "send it now"
         let table: [(RegionMatch, String?, RegionMatch, WindowResult.Source)] = [
             (.changed("b"), "a", .changed("b"), .final),
             (.unchanged, "a", .unchanged, .final),
@@ -264,9 +295,12 @@ import Testing
             (.discarded, nil, .discarded, .final),
             (.ambiguous, nil, .ambiguous, .final),
             (.unreadable, nil, .unreadable, .final),
+            (.discarded, "send it", .discarded, .final),
+            (.ambiguous, "send it", .changed("send it"), .lastGood),
+            (.unreadable, "send it", .changed("send it"), .lastGood),
         ]
         for (final, lastGood, match, source) in table {
-            let resolved = CorrectionWindow.resolve(final: final, lastGood: lastGood)
+            let resolved = CorrectionWindow.resolve(final: final, lastGood: lastGood, inserted: inserted)
             #expect(resolved.match == match && resolved.source == source, "\(final), \(String(describing: lastGood))")
         }
     }

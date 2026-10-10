@@ -112,7 +112,9 @@ app that is no longer sandboxed.
   fields or terminals, and still catches a fix you made before dictating
   again. The window ends early when the dictated text leaves the field, for
   example when you send the message, so what you type next is never read as
-  a correction.
+  a correction. A fix counts only once it has stayed put for a second, so a
+  word caught half typed or half deleted is never learned, and a dictation
+  you delete is not kept.
 - **Style notes.** voxline keeps a short note on how you write in each kind of
   app (chat, email, writing, code, general), refreshed every 20 dictations,
   and sends it with cleanup together with two recent dictations from the same

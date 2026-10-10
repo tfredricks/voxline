@@ -29,10 +29,12 @@ private enum WindowPoll: Sendable {
 
 /// One correction window after a dictation insert: anchor the text, poll the
 /// field once a second for `tickCount` seconds (focus, value, locate), keep
-/// the last poll whose region was located and changed, then read the value
-/// once more. A poll that finds the region gone (cleared, sent, deleted) ends
-/// the window with no final read, so what is typed afterward is never taken
-/// for the dictation. Reports exactly one `WindowEnd`, unless cancelled. Every AX
+/// the last changed region that two polls in a row read the same, then read
+/// the value once more. A changed region seen by one poll only may be a word
+/// half typed or half deleted, so it never stands in for the user's fix. A
+/// poll that finds the region gone (cleared, sent, deleted) ends the window
+/// with no final read, so what is typed afterward is never taken for the
+/// dictation. Reports exactly one `WindowEnd`, unless cancelled. Every AX
 /// read runs detached.
 @MainActor
 final class CorrectionWindow {
@@ -50,6 +52,7 @@ final class CorrectionWindow {
     private var task: Task<Void, Never>?
     private var anchor: InsertAnchor?
     private var lastGood: String?
+    private var pendingGood: String?
     private var ticks = 0
 
     init(reader: any CorrectionReading,
@@ -84,11 +87,14 @@ final class CorrectionWindow {
         task?.cancel()
     }
 
-    /// A located final read wins; otherwise the last `.changed` poll, if
-    /// any, stands in for it.
-    nonisolated static func resolve(final: RegionMatch, lastGood: String?) -> (match: RegionMatch, source: WindowResult.Source) {
+    /// A located final read wins; otherwise the last good snapshot, if any,
+    /// stands in for it. A region that went away after a snapshot holding
+    /// only the start of `inserted` was being deleted, so it stays discarded.
+    nonisolated static func resolve(final: RegionMatch, lastGood: String?, inserted: String) -> (match: RegionMatch, source: WindowResult.Source) {
         switch final {
         case .changed, .unchanged:
+            return (final, .final)
+        case .discarded where lastGood.map(inserted.hasPrefix) == true:
             return (final, .final)
         case .discarded, .ambiguous, .unreadable:
             guard let lastGood else { return (final, .final) }
@@ -126,7 +132,7 @@ final class CorrectionWindow {
                 return
             case .stayed(let match):
                 ticks += 1
-                if case .changed(let text) = match { lastGood = text }
+                keepIfSettled(match)
                 if case .discarded = match {
                     endRegionGone(anchor: anchor)
                     return
@@ -134,6 +140,15 @@ final class CorrectionWindow {
             }
         }
         await beginFinal(.timeout, anchor: anchor)
+    }
+
+    private func keepIfSettled(_ match: RegionMatch) {
+        guard case .changed(let text) = match else {
+            pendingGood = nil
+            return
+        }
+        if text == pendingGood { lastGood = text }
+        pendingGood = text
     }
 
     private func beginFinal(_ reason: WindowEndReason, anchor: InsertAnchor) async {
@@ -145,7 +160,7 @@ final class CorrectionWindow {
     private func endRegionGone(anchor: InsertAnchor) {
         guard phase == .running else { return }
         phase = .finishing
-        let resolved = Self.resolve(final: .discarded, lastGood: lastGood)
+        let resolved = Self.resolve(final: .discarded, lastGood: lastGood, inserted: anchor.text.inserted)
         finish(.finished(WindowResult(
             reason: .regionGone, anchor: anchor.text, match: resolved.match, source: resolved.source, ticks: ticks
         )))
@@ -155,7 +170,7 @@ final class CorrectionWindow {
         let reader = self.reader
         let final = await Task.detached(priority: .utility) { CorrectionWindow.locate(anchor, with: reader) }.value
         guard phase == .finishing else { return }
-        let resolved = Self.resolve(final: final, lastGood: lastGood)
+        let resolved = Self.resolve(final: final, lastGood: lastGood, inserted: anchor.text.inserted)
         finish(.finished(WindowResult(
             reason: reason, anchor: anchor.text, match: resolved.match, source: resolved.source, ticks: ticks
         )))

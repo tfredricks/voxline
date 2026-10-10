@@ -190,13 +190,34 @@ import Testing
     }
 
     @Test func fix_then_send_learns_from_the_last_good_snapshot() async {
-        let h = makeHarness(values: [.value(Self.fixed), .value("")])
+        let h = makeHarness(values: [.value(Self.fixed), .value(Self.fixed), .value("")])
         h.learning.didInsert(InsertedDictation(text: Self.original, bundleID: Self.messages, category: .chat))
-        #expect(await eventually { h.clock.pendingCount == 1 })
-        await h.clock.advance(by: CorrectionWindow.tick)
-        #expect(await eventually { h.reader.valueCalls == 1 && h.clock.pendingCount == 1 })
+        for tick in 1...2 {
+            #expect(await eventually { h.clock.pendingCount == 1 })
+            await h.clock.advance(by: CorrectionWindow.tick)
+            #expect(await eventually { h.reader.valueCalls == tick && h.clock.pendingCount == 1 })
+        }
         h.learning.captureWillStart()
         #expect(await eventually { h.vocabulary.load() == ["Kubernetes"] })
+    }
+
+    @Test(arguments: [
+        ("use lang graph for this", ["use LangGr for this", ""]),
+        ("use Argmax", ["use Argm", ""]),
+        ("use Argmax", ["use Argm", "use Argm", ""]),
+    ])
+    func a_half_typed_or_half_deleted_region_then_a_send_records_nothing(inserted: String, polls: [String]) async {
+        let h = makeHarness(original: inserted, values: polls.map { .value($0) })
+        h.learning.didInsert(InsertedDictation(text: inserted, bundleID: Self.messages, category: .chat))
+        for tick in 1...polls.count {
+            #expect(await eventually { h.clock.pendingCount == 1 })
+            await h.clock.advance(by: CorrectionWindow.tick)
+            #expect(await eventually { h.reader.valueCalls == tick })
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(h.clock.pendingCount == 0)
+        #expect(h.vocabulary.load().isEmpty)
+        #expect(h.store.data == LearningData())
     }
 
     @Test func the_announcement_waits_for_idle() async {
