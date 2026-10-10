@@ -45,8 +45,9 @@ struct HotkeyChord: Codable, Equatable, Hashable, Sendable {
             }
         }
 
-        /// True when this modifier's device-mask bit is set in `flags`.
-        /// Bit-equivalent to the chord matching in `HotkeyMonitor`'s tap callback.
+        /// True when this modifier's device-mask bit is set in `flags`. An
+        /// event that carries only the generic family bit sets none;
+        /// `ModifierTracker` resolves the side for those.
         func isHeld(in flags: CGEventFlags) -> Bool {
             flags.contains(CGEventFlags(rawValue: deviceMaskBit))
         }

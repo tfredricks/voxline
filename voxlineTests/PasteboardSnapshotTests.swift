@@ -5,8 +5,49 @@ import AppKit
 
 @Suite struct PasteboardSnapshotTests {
 
+    final class StringProvider: NSObject, NSPasteboardItemDataProvider {
+        private(set) var requests = 0
+        func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem, provideDataForType type: NSPasteboard.PasteboardType) {
+            requests += 1
+            item.setString("promised", forType: type)
+        }
+    }
+
     private func makeBoard() -> NSPasteboard {
         NSPasteboard(name: NSPasteboard.Name("voxline-test-\(UUID())"))
+    }
+
+    @Test func captures_a_promised_type_by_asking_its_provider() throws {
+        let board = makeBoard()
+        defer { board.releaseGlobally() }
+        let provider = StringProvider()
+        let item = NSPasteboardItem()
+        item.setDataProvider(provider, forTypes: [.string])
+        board.clearContents()
+        board.writeObjects([item])
+
+        let snap = try PasteboardSnapshot.capture(from: board)
+
+        #expect(provider.requests == 1)
+        #expect(snap.items.first?.data(forType: .string) == Data("promised".utf8))
+    }
+
+    @Test func restore_replaces_what_the_board_holds() throws {
+        let src = makeBoard()
+        let dst = makeBoard()
+        defer { src.releaseGlobally(); dst.releaseGlobally() }
+        src.clearContents()
+        src.setString("hello", forType: .string)
+        let snap = try PasteboardSnapshot.capture(from: src)
+        dst.clearContents()
+        dst.setString("stale", forType: .string)
+        dst.setString("<b>stale</b>", forType: .html)
+
+        snap.restore(to: dst)
+
+        #expect(dst.pasteboardItems?.count == 1)
+        #expect(dst.string(forType: .string) == "hello")
+        #expect(dst.string(forType: .html) == nil)
     }
 
     @Test func captures_string_and_restores_to_empty_board() throws {

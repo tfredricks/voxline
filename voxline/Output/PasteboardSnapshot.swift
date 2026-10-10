@@ -2,7 +2,8 @@
 import AppKit
 
 /// In-memory snapshot of every data-bearing pasteboard type, per item.
-/// Promised/lazy types are not captured.
+/// A promised type is captured by asking its owner for the data at capture
+/// time; a type that yields no data is left out.
 struct PasteboardSnapshot: Equatable {
 
     struct Entry: Equatable {
@@ -57,9 +58,8 @@ struct PasteboardSnapshot: Equatable {
         return PasteboardSnapshot(items: captured)
     }
 
-    /// Replaces `pasteboard`'s contents with the snapshot. Caller is
-    /// expected to have cleared the pasteboard already, or accept that
-    /// the previous contents remain alongside.
+    /// Replaces `pasteboard`'s contents with the snapshot: clears the board,
+    /// then writes one item per captured item, its types in source order.
     func restore(to pasteboard: NSPasteboard) {
         var pbItems: [NSPasteboardItem] = []
         for snap in items {
