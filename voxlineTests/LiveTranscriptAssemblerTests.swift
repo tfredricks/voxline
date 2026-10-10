@@ -72,6 +72,29 @@ import Testing
         #expect(transcript.lines.map(\.text) == ["line 1.", "line 2.", "line 3."])
     }
 
+    @Test func one_long_speaker_is_split_into_lines_within_the_length_budget() {
+        var assembler = LiveTranscriptAssembler()
+        var stable = ""
+        var last = ""
+        for i in 0..<500 {
+            last = "s\(i)".padding(toLength: 49, withPad: "a", startingAt: 0) + "."
+            stable += " " + last
+            _ = assembler.apply(TranscriptPartial(stable: stable), track: .mic)
+        }
+        let lines = assembler.transcript.lines
+        #expect(lines.count == LiveTranscriptAssembler.defaultMaxLines)
+        #expect(lines.allSatisfy { $0.text.count <= LiveTranscriptAssembler.defaultMaxLineLength })
+        #expect(lines.allSatisfy { $0.track == .mic })
+        #expect(lines.last?.text.hasSuffix(last) == true)
+    }
+
+    @Test func a_segment_longer_than_the_budget_is_one_line() {
+        var assembler = LiveTranscriptAssembler(maxLineLength: 10)
+        _ = assembler.apply(TranscriptPartial(stable: "Short."), track: .mic)
+        let transcript = assembler.apply(TranscriptPartial(stable: "Short. A much longer sentence."), track: .mic)
+        #expect(transcript.lines.map(\.text) == ["Short.", "A much longer sentence."])
+    }
+
     @Test func default_cap_is_fifty() {
         #expect(LiveTranscriptAssembler.defaultMaxLines == 50)
         #expect(LiveTranscriptAssembler().maxLines == 50)

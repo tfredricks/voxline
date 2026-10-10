@@ -13,19 +13,26 @@ struct LiveTranscript: Equatable, Sendable {
 
 /// Turns each track's running `TranscriptPartial` into labeled lines for the
 /// live panel. A finished segment joins the newest line when that line is
-/// from the same track; a `stable` that does not extend the previous one
-/// (a restarted session) is taken whole as a new segment.
+/// from the same track and stays within `maxLineLength` characters, so
+/// `maxLines` bounds the text kept; a `stable` that does not extend the
+/// previous one (a restarted session) is taken whole as a new segment.
 struct LiveTranscriptAssembler {
 
     static let defaultMaxLines = 50
+    static let defaultMaxLineLength = 400
 
     let maxLines: Int
+    let maxLineLength: Int
     private(set) var transcript = LiveTranscript()
     private var stable: [MeetingRecorder.Track: String] = [:]
     private var nextID = 0
 
-    init(maxLines: Int = LiveTranscriptAssembler.defaultMaxLines) {
+    init(
+        maxLines: Int = LiveTranscriptAssembler.defaultMaxLines,
+        maxLineLength: Int = LiveTranscriptAssembler.defaultMaxLineLength
+    ) {
         self.maxLines = maxLines
+        self.maxLineLength = maxLineLength
     }
 
     mutating func apply(_ partial: TranscriptPartial, track: MeetingRecorder.Track) -> LiveTranscript {
@@ -43,8 +50,11 @@ struct LiveTranscriptAssembler {
 
     private mutating func append(_ text: String, track: MeetingRecorder.Track) {
         if let last = transcript.lines.indices.last, transcript.lines[last].track == track {
-            transcript.lines[last].text = TranscriptPartial.join(transcript.lines[last].text, text)
-            return
+            let joined = TranscriptPartial.join(transcript.lines[last].text, text)
+            if joined.count <= maxLineLength {
+                transcript.lines[last].text = joined
+                return
+            }
         }
         transcript.lines.append(LiveLine(id: nextID, track: track, text: text))
         nextID += 1
