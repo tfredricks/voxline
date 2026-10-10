@@ -313,6 +313,9 @@ app that is no longer sandboxed.
   dictation, even right after another one, and choosing System default after
   a specific mic records from the system default again instead of the old
   mic. The Settings level meter follows System default the same way.
+- On a Mac with no microphone connected, dictating says "Audio capture
+  failed: No microphone input is available." instead of an internal error
+  code.
 - Switching from Whisper to another speech engine frees the Whisper model's
   memory (about 1 GB for large-v3 turbo) instead of holding it until you
   quit.

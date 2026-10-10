@@ -299,8 +299,16 @@ final class SampleDelivery: @unchecked Sendable {
     }
 }
 
-enum AudioCaptureError: Error {
+enum AudioCaptureError: LocalizedError {
     case noInputDevice
     case targetFormatUnavailable
     case cannotConvertFormat
+
+    var errorDescription: String? {
+        switch self {
+        case .noInputDevice:           return "No microphone input is available."
+        case .targetFormatUnavailable: return "Couldn't set up audio conversion."
+        case .cannotConvertFormat:     return "The microphone's audio format isn't supported."
+        }
+    }
 }
