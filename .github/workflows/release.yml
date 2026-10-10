@@ -59,8 +59,16 @@ jobs:
             TAG="v0.0.0-dryrun.${{ github.run_number }}"
             VERSION="0.0.0-dryrun.${{ github.run_number }}"
           else
+            if [[ "$GITHUB_REF" != refs/tags/v* ]]; then
+              echo "ERROR: a release must run from a v* tag, not $GITHUB_REF. Tick dry_run to build from a branch." >&2
+              exit 1
+            fi
             TAG="${GITHUB_REF##*/}"      # v1.0.1
             VERSION="${TAG#v}"            # 1.0.1
+            if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "ERROR: tag $TAG is not vMAJOR.MINOR.PATCH." >&2
+              exit 1
+            fi
           fi
           BUILD="$(git rev-list --count HEAD)"
           {
