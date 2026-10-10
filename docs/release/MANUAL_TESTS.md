@@ -714,6 +714,7 @@ Show Voxline in Dock is off unless a step says otherwise.
 - [ ] In a style note, Return ends editing and ⌥Return inserts a line break.
 - [ ] The mic-in-use indicator is on only on Dictation.
 - [ ] The mic indicator goes off when the main window is in the background on Dictation: leave it on Dictation, then minimise it, hide voxline with ⌘H, and click into another app → the indicator turns off each time. Bring the window back to the front → the live level and the indicator come back.
+- [ ] With Dictation open, change the input in System Settings → Sound → the "(default)" mark in the Microphone picker moves to the new device without reopening the page.
 - [ ] An API key typed and left by switching pages shows as Saved on return.
 - [ ] Menu bar → Settings… opens General; with the main window already open on Home, ⌘, switches it to General.
 - [ ] Removing the API key shows an orange mark on AI Provider and a Setup row on Home, whose button opens AI Provider.

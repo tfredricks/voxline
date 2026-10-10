@@ -1,3 +1,4 @@
+import CoreAudio
 import Testing
 import Foundation
 @testable import voxline
@@ -14,5 +15,10 @@ import Foundation
             _ = listener   // silence "unused" — we want it alive in the scope
         }
         #expect(fired == 0)   // no spurious callback at install or teardown
+    }
+
+    @Test func listens_for_a_new_system_default_input_as_well_as_the_device_list() {
+        #expect(AudioDeviceListener.watchedSelectors.contains(kAudioHardwarePropertyDevices))
+        #expect(AudioDeviceListener.watchedSelectors.contains(kAudioHardwarePropertyDefaultInputDevice), "the picker's (default) suffix follows System Settings → Sound")
     }
 }

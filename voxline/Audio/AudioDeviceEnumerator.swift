@@ -171,40 +171,50 @@ enum AudioDeviceEnumerator {
     }
 }
 
-/// Watches kAudioHardwarePropertyDevices and invokes `onChange` on the main
-/// queue when the device list changes (mic plug/unplug, Bluetooth connect,
-/// etc.). The listener block is detached automatically on deinit.
+/// Watches the device list and the system default input, and invokes
+/// `onChange` on the main queue when either changes (mic plug/unplug,
+/// Bluetooth connect, a new default picked in System Settings → Sound,
+/// etc.). The listener blocks are detached automatically on deinit.
 final class AudioDeviceListener {
+
+    static let watchedSelectors: [AudioObjectPropertySelector] = [
+        kAudioHardwarePropertyDevices,
+        kAudioHardwarePropertyDefaultInputDevice,
+    ]
 
     // Stored as `let` so the same block instance is passed to both Add and Remove — CoreAudio matches listeners by block identity.
     private let block: AudioObjectPropertyListenerBlock
 
     init(onChange: @escaping () -> Void) {
         self.block = { _, _ in onChange() }
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDevices,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        AudioObjectAddPropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &address,
-            DispatchQueue.main,
-            block
-        )
+        for selector in Self.watchedSelectors {
+            var address = Self.address(of: selector)
+            AudioObjectAddPropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &address,
+                DispatchQueue.main,
+                block
+            )
+        }
     }
 
     deinit {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDevices,
+        for selector in Self.watchedSelectors {
+            var address = Self.address(of: selector)
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &address,
+                DispatchQueue.main,
+                block
+            )
+        }
+    }
+
+    private static func address(of selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(
+            mSelector: selector,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
-        )
-        AudioObjectRemovePropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &address,
-            DispatchQueue.main,
-            block
         )
     }
 }

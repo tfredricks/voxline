@@ -317,6 +317,8 @@ app that is no longer sandboxed.
   of a multi-input audio interface no longer records silence ("No audio
   captured"), and meeting transcripts no longer drop the right channel of
   your Mac's sound output.
+- The Microphone picker's "(default)" mark follows a new default input chosen
+  in System Settings → Sound while the page is open.
 - On a Mac with no microphone connected, dictating says "Audio capture
   failed: No microphone input is available." instead of an internal error
   code.
