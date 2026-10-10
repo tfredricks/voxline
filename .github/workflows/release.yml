@@ -233,7 +233,7 @@ jobs:
           # Pinned to match the Sparkle SPM dependency version. The
           # SPM-distributed Sparkle.framework doesn't bundle generate_appcast
           # / sign_update, so we fetch them from the official tarball.
-          SPARKLE_VERSION=2.9.2
+          SPARKLE_VERSION=2.9.5
           DEST="$RUNNER_TEMP/sparkle"
           mkdir -p "$DEST"
           curl -sSL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" \
