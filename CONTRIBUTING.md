@@ -35,8 +35,10 @@ Then build and run with `⌘R`.
 > wrapper scripts (`scripts/build-local.sh` and CI). Building straight
 > from the Xcode IDE skips that, so dev builds will show
 > `CFBundleVersion = 1` and an empty `GitCommit`. That's fine for
-> day-to-day work — use `./scripts/build-local.sh` when you need a
-> realistically-versioned bundle.
+> day-to-day work, but such a build never starts the Sparkle updater (it
+> would offer the latest release over itself) — use
+> `./scripts/build-local.sh` when you need a realistically-versioned bundle
+> or want to test updates.
 
 ## Running tests
 

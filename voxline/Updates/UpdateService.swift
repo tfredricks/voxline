@@ -35,13 +35,29 @@ final class UpdateService: NSObject {
     init(dictationActivity: DictationActivityMonitor) {
         self.dictationActivity = dictationActivity
         super.init()
+        let startsUpdater = Self.shouldStartUpdater(
+            isRunningTests: LaunchEnvironment.isRunningTests,
+            bundleVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        )
+        if !startsUpdater, !LaunchEnvironment.isRunningTests {
+            AppLog.updates.notice("updater not started: unstamped build (CFBundleVersion 1)")
+        }
         // Delegate references are set after super.init(), so construct the
         // controller here once self is fully initialised.
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: !LaunchEnvironment.isRunningTests,
+            startingUpdater: startsUpdater,
             updaterDelegate: self,
             userDriverDelegate: self
         )
+    }
+
+    /// Sparkle runs only in a stamped build. Xcode's Run leaves
+    /// `CFBundleVersion` at 1 while sharing the installed app's bundle ID and
+    /// defaults, so every appcast build would look newer and be offered over
+    /// it. `build-local.sh` (Debug included) and releases stamp the commit count.
+    nonisolated static func shouldStartUpdater(isRunningTests: Bool, bundleVersion: String?) -> Bool {
+        guard !isRunningTests, let bundleVersion else { return false }
+        return bundleVersion != "1"
     }
 
     func checkForUpdates() {

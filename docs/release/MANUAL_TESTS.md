@@ -21,7 +21,7 @@ Configure a staging appcast by setting `SUFeedURL` in a debug build's `Info.plis
 
 ## Gentle reminder UI
 
-- [ ] With a known pending update on the staging feed, leave voxline running idle for >24h (or temporarily reduce `SUScheduledCheckInterval` to ~120s in a debug build for testing).
+- [ ] With a known pending update on the staging feed, leave voxline running idle for >24h (or temporarily reduce `SUScheduledCheckInterval` to ~120s in a debug build from `scripts/build-local.sh --debug`; an Xcode ⌘R build has build number 1 and never starts the updater).
 - [ ] Confirm: no modal appears. A small blue dot appears on the menu-bar icon. The menu contains an "Install update…" row near the top.
 - [ ] Click "Install update…". Sparkle's modal appears (the user explicitly asked).
 

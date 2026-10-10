@@ -1,3 +1,4 @@
+import Testing
 import XCTest
 @testable import voxline
 
@@ -57,5 +58,21 @@ extension UpdateServiceTests {
         monitor.observe(status: .idle, at: t0.addingTimeInterval(1))
         let service = UpdateService(dictationActivity: monitor)
         XCTAssertTrue(service.canSurfaceGentleReminder(now: t0.addingTimeInterval(1 + 121)))
+    }
+}
+
+@Suite struct UpdaterStartTests {
+
+    @Test func a_stamped_build_starts_the_updater() {
+        #expect(UpdateService.shouldStartUpdater(isRunningTests: false, bundleVersion: "512"))
+    }
+
+    @Test func an_unstamped_xcode_build_does_not_start_it() {
+        #expect(!UpdateService.shouldStartUpdater(isRunningTests: false, bundleVersion: "1"))
+        #expect(!UpdateService.shouldStartUpdater(isRunningTests: false, bundleVersion: nil))
+    }
+
+    @Test func tests_never_start_it() {
+        #expect(!UpdateService.shouldStartUpdater(isRunningTests: true, bundleVersion: "512"))
     }
 }
