@@ -64,8 +64,10 @@ import Testing
         defer { controller.window?.close() }
 
         controller.show(store: store, state: AppState())
-        let moved = NSRect(x: 120, y: 140, width: 940, height: 500)
-        try #require(controller.window).setFrame(moved, display: false)
+        let window = try #require(controller.window)
+        let visible = try #require(window.screen ?? NSScreen.main).visibleFrame
+        let moved = NSRect(x: visible.minX + 40, y: visible.minY + 30, width: 600, height: 400)
+        window.setFrame(moved, display: false)
         controller.window?.close()
         controller.show(store: store, state: AppState())
 
