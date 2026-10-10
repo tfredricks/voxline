@@ -207,6 +207,10 @@ app that is no longer sandboxed.
   recorder stops if you leave its page or the window (issue 10).
 - A hotkey built from common modifiers no longer fires on every OS shortcut
   that includes them, such as a screenshot (issue 11).
+- A shortcut pressed while the last dictation is still processing no longer
+  starts a recording when it ends. Extending a selection with ⌥⇧→ under the
+  default command chord used to start a command recording if you still held
+  ⌥⇧, and a preset shortcut could leave the microphone warming up.
 - Losing Accessibility, or pausing voxline, while you hold the hotkey now
   finishes the recording, instead of leaving the microphone on and dictation
   stuck until you relaunch (issue 12).

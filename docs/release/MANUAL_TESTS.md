@@ -392,6 +392,13 @@ blip may play on the discarded ones.
 - [ ] Hold Left Shift + Left Control, and within a second add Left Option. The
       recording is silently discarded. Release all keys: a normal dictation
       then works.
+- [ ] In Notes, dictate a long sentence. While the pill still shows it
+      processing, hold ⇧⌥ (the default command chord) and tap → to extend a
+      selection, and keep holding until the text lands. No recording starts
+      (no start sound, no microphone indicator), and → still extends the
+      selection after a pause of more than a second. Repeat pressing ⌥1
+      while it processes and holding ⌥ until the text lands: the microphone
+      indicator never appears.
 
 ## Preset shortcuts
 

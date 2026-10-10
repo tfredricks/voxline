@@ -32,8 +32,10 @@ final class HotkeyStateMachine {
     private(set) var state: State = .idle
     private var lastHeld: Set<HotkeyChord.Modifier> = []
     private var shortcutWindowOpen = false
-    /// A resync during finalizing found keys down: like `blocked`, they can't
-    /// start a recording until every modifier is up.
+    /// Keys held during finalizing were part of a shortcut: a resync found
+    /// them down, a key went down while they were held, or they formed a set
+    /// that `blocked` would hold. Like `blocked`, they can't start a recording
+    /// until every modifier is up.
     private var blockedAfterFinalizing = false
 
     init(chords: ChordSet = .default) {
@@ -62,6 +64,7 @@ final class HotkeyStateMachine {
             if !chordKeys.isSubset(of: h) {
                 shortcutWindowOpen = false
                 state = .finalizing(kind)
+                noteHeldWhileFinalizing(h)
                 return [.finalizeRecording(kind)]
             }
             if shortcutWindowOpen, !h.isSubset(of: chordKeys) {
@@ -88,8 +91,11 @@ final class HotkeyStateMachine {
             return [.finalizeRecording(kind)]
 
         case (.finalizing, .modifiersChanged(let h)):
-            lastHeld = h
-            if h.isEmpty { blockedAfterFinalizing = false }
+            noteHeldWhileFinalizing(h)
+            return []
+
+        case (.finalizing, .keyDown):
+            if !lastHeld.isEmpty { blockedAfterFinalizing = true }
             return []
 
         case (.finalizing, .resync(let h)):
@@ -124,6 +130,18 @@ final class HotkeyStateMachine {
 
         default:
             return []
+        }
+    }
+
+    /// The rule `evaluate` applies from idle: a set that is neither a chord
+    /// nor inside one blocks until every modifier is up, even if it shrinks
+    /// back to a chord.
+    private func noteHeldWhileFinalizing(_ held: Set<HotkeyChord.Modifier>) {
+        lastHeld = held
+        if held.isEmpty {
+            blockedAfterFinalizing = false
+        } else if chords.kind(matching: held) == nil, !chords.isStrictSubsetOfAny(held) {
+            blockedAfterFinalizing = true
         }
     }
 

@@ -324,6 +324,70 @@ import Foundation
         #expect(m.state == .blocked)
     }
 
+    @Test func key_down_on_the_held_chord_during_finalizing_blocks_instead_of_recording() {
+        let m = finalizing(.command)
+        m.handle(.modifiersChanged(c))
+        #expect(m.handle(.keyDown).isEmpty)
+        #expect(m.state == .finalizing(.command))
+        #expect(m.handle(.recordingFinished).isEmpty)
+        #expect(m.state == .blocked)
+        m.handle(.modifiersChanged([]))
+        #expect(m.state == .idle)
+    }
+
+    @Test func key_down_on_a_shared_key_during_finalizing_blocks_instead_of_arming() {
+        let m = finalizing(.command)
+        m.handle(.modifiersChanged([.leftOption]))
+        m.handle(.keyDown)
+        #expect(m.handle(.recordingFinished).isEmpty)
+        #expect(m.state == .blocked)
+    }
+
+    @Test func key_down_with_nothing_held_during_finalizing_does_not_block() {
+        let m = finalizing()
+        m.handle(.keyDown)
+        m.handle(.modifiersChanged(d))
+        #expect(m.handle(.recordingFinished) == [.startRecording(.dictation)])
+    }
+
+    @Test func superset_shrinking_to_the_chord_during_finalizing_blocks() {
+        let m = finalizing()
+        m.handle(.modifiersChanged(d.union([.leftCommand])))
+        m.handle(.modifiersChanged(d))
+        #expect(m.handle(.recordingFinished).isEmpty)
+        #expect(m.state == .blocked)
+        m.handle(.modifiersChanged([]))
+        #expect(m.state == .idle)
+    }
+
+    @Test func superset_left_by_the_finalizing_release_keeps_the_chord_blocked() {
+        let m = recording()
+        m.handle(.shortcutWindowClosed)
+        m.handle(.modifiersChanged(d.union([.leftCommand])))
+        #expect(m.handle(.modifiersChanged([.leftShift, .leftCommand])) == [.finalizeRecording(.dictation)])
+        m.handle(.modifiersChanged(shift))
+        m.handle(.modifiersChanged(d))
+        #expect(m.handle(.recordingFinished).isEmpty)
+        #expect(m.state == .blocked)
+    }
+
+    @Test func full_release_after_a_key_down_during_finalizing_clears_the_block() {
+        let m = finalizing(.command)
+        m.handle(.modifiersChanged(c))
+        m.handle(.keyDown)
+        m.handle(.modifiersChanged([]))
+        m.handle(.modifiersChanged(c))
+        #expect(m.handle(.recordingFinished) == [.startRecording(.command)])
+    }
+
+    @Test func full_release_after_a_superset_during_finalizing_clears_the_block() {
+        let m = finalizing()
+        m.handle(.modifiersChanged(d.union([.leftCommand])))
+        m.handle(.modifiersChanged([]))
+        m.handle(.modifiersChanged(d))
+        #expect(m.handle(.recordingFinished) == [.startRecording(.dictation)])
+    }
+
     @Test func chord_held_at_a_resync_during_finalizing_blocks_instead_of_recording() {
         let m = finalizing()
         #expect(m.handle(.resync(d)).isEmpty)

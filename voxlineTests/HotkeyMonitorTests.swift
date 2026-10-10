@@ -406,6 +406,22 @@ import CoreGraphics
         #expect(log.events == ["start:dictation"])
     }
 
+    @Test func swallowed_key_during_finalizing_blocks_instead_of_arming() {
+        let (monitor, timers, log) = makeMonitor()
+        press(monitor, c)
+        timers.fire(HotkeyMonitor.shortcutWindow)
+        press(monitor, [.leftOption], keyCode: 56)
+        #expect(monitor.state == .finalizing(.command))
+
+        monitor.noteSwallowedKeyDown()
+        monitor.recordingFinished()
+
+        #expect(monitor.state == .blocked)
+        #expect(log.events == ["start:command", "finalize:command"])
+        press(monitor, [], keyCode: 58)
+        #expect(monitor.state == .idle)
+    }
+
     @Test func swallowed_key_while_idle_changes_nothing() {
         let (monitor, timers, log) = makeMonitor()
         monitor.noteSwallowedKeyDown()
