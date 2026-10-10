@@ -72,4 +72,41 @@ import Testing
 
         #expect(probe.lastSelection?.page == .general)
     }
+
+    @Test func reopen_keeps_the_page_of_an_open_window() {
+        let probe = ContentProbe()
+        let controller = makeController(probe)
+        defer { tearDown(controller) }
+
+        controller.show(.aiProvider)
+        controller.reopen()
+
+        #expect(probe.lastSelection?.page == .aiProvider)
+        #expect(probe.builds == 1)
+    }
+
+    @Test func reopen_after_close_shows_home() {
+        let probe = ContentProbe()
+        let controller = makeController(probe)
+        defer { tearDown(controller) }
+
+        controller.show(.aiProvider)
+        controller.window?.close()
+        controller.reopen()
+
+        #expect(controller.window != nil)
+        #expect(probe.lastSelection?.page == .home)
+        #expect(probe.builds == 2)
+    }
+
+    @Test func reopen_with_no_window_yet_shows_home() {
+        let probe = ContentProbe()
+        let controller = makeController(probe)
+        defer { tearDown(controller) }
+
+        controller.reopen()
+
+        #expect(controller.window != nil)
+        #expect(probe.lastSelection?.page == .home)
+    }
 }

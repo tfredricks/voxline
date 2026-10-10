@@ -133,7 +133,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        mainWindow.show(.home)
+        if !coordinator.bringFirstRunForward() {
+            mainWindow.reopen()
+        }
         return false
     }
 

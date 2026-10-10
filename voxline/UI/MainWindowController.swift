@@ -86,6 +86,16 @@ final class MainWindowController {
         win.presentInAccessoryApp()
     }
 
+    /// A Dock click: brings an open window forward on the page it shows, or
+    /// opens Home when the window is closed.
+    func reopen() {
+        if let window {
+            window.presentInAccessoryApp()
+        } else {
+            show(.home)
+        }
+    }
+
     private func releaseWindow() {
         if let closeObserver {
             NotificationCenter.default.removeObserver(closeObserver)

@@ -55,6 +55,10 @@ final class FirstRunWindowController {
         win.presentInAccessoryApp()
     }
 
+    func bringForward() {
+        window?.presentInAccessoryApp()
+    }
+
     func close() {
         window?.close()
         window = nil

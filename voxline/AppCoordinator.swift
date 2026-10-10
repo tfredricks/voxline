@@ -98,6 +98,14 @@ final class AppCoordinator {
         }
     }
 
+    /// Brings the first-run wizard forward while it runs, so nothing opens
+    /// over it; false once it has completed (or never ran).
+    func bringFirstRunForward() -> Bool {
+        guard let firstRunWindow else { return false }
+        firstRunWindow.bringForward()
+        return true
+    }
+
     /// Cleans up and inserts the last dictation's transcript again, into the
     /// field focused now. Does nothing unless a transcript is retryable and
     /// the pipeline is idle or showing an error.
