@@ -9,19 +9,19 @@ import Testing
     }
 
     @Test func steps_advance_in_order() {
-        #expect(WizardStep.welcome.next == .permissions)
-        #expect(WizardStep.permissions.next == .apiKey)
-        #expect(WizardStep.apiKey.next == .modelDownload)
-        #expect(WizardStep.modelDownload.next == .done)
-        #expect(WizardStep.done.next == nil)
+        #expect(WizardStep.welcome.next(in: WizardStep.allCases) == .permissions)
+        #expect(WizardStep.permissions.next(in: WizardStep.allCases) == .apiKey)
+        #expect(WizardStep.apiKey.next(in: WizardStep.allCases) == .modelDownload)
+        #expect(WizardStep.modelDownload.next(in: WizardStep.allCases) == .done)
+        #expect(WizardStep.done.next(in: WizardStep.allCases) == nil)
     }
 
     @Test func steps_go_back_in_order() {
-        #expect(WizardStep.welcome.previous == nil)
-        #expect(WizardStep.permissions.previous == .welcome)
-        #expect(WizardStep.apiKey.previous == .permissions)
-        #expect(WizardStep.modelDownload.previous == .apiKey)
-        #expect(WizardStep.done.previous == .modelDownload)
+        #expect(WizardStep.welcome.previous(in: WizardStep.allCases) == nil)
+        #expect(WizardStep.permissions.previous(in: WizardStep.allCases) == .welcome)
+        #expect(WizardStep.apiKey.previous(in: WizardStep.allCases) == .permissions)
+        #expect(WizardStep.modelDownload.previous(in: WizardStep.allCases) == .apiKey)
+        #expect(WizardStep.done.previous(in: WizardStep.allCases) == .modelDownload)
     }
 
     @Test func full_sequence_includes_every_step() {

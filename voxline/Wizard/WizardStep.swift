@@ -14,10 +14,6 @@ enum WizardStep: CaseIterable {
         skippingEngineStep ? allCases.filter { $0 != .modelDownload } : allCases
     }
 
-    var next: WizardStep? { next(in: Self.allCases) }
-
-    var previous: WizardStep? { previous(in: Self.allCases) }
-
     func next(in steps: [WizardStep]) -> WizardStep? {
         guard let i = steps.firstIndex(of: self), i + 1 < steps.count else { return nil }
         return steps[i + 1]
