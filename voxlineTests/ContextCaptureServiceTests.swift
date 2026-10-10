@@ -19,14 +19,7 @@ import Foundation
         func probe(deadline: CaptureDeadline) -> AXContextProbeResult { result }
     }
 
-    private func suite() -> UserDefaults {
-        let name = "voxline-test-\(UUID().uuidString)"
-        let d = UserDefaults(suiteName: name)!
-        d.removePersistentDomain(forName: name)
-        return d
-    }
-
-    @Test func capture_aggregates_app_field_probe_and_vocab() async {
+    @Test func capture_aggregates_app_field_and_probe() async {
         let front = FakeFrontmost(); front.bundleID = "com.tinyspeck.slackmacgap"
         let inspector = FakeFieldInspector(); inspector.field = FocusedField(role: "AXTextArea", subrole: nil)
         let probe = StubProbe(result: AXContextProbeResult(
@@ -35,15 +28,11 @@ import Foundation
             textAfterCursor: nil,
             selectedText: "highlighted"
         ))
-        let vocab = CustomVocabularyStore(defaults: suite())
-        vocab.save(["Cursor", "LangGraph"])
-
         let svc = DefaultContextCaptureService(
             frontmost: front,
             appNameProvider: { "Slack" },
             fieldInspector: inspector,
             axProbe: probe,
-            vocabulary: vocab,
             isAXTrusted: { true },
             budgetMs: 50
         )
@@ -56,7 +45,7 @@ import Foundation
         #expect(c.isSecureField == false)
         #expect(c.textBeforeCursor == "Hey Kamil,")
         #expect(c.selectedText == "highlighted")
-        #expect(c.customVocabulary == ["Cursor", "LangGraph"])
+        #expect(c.customVocabulary.isEmpty, "the pipeline adds the vocabulary")
         #expect(c.captureNotes.contains("ax-not-trusted") == false)
     }
 
@@ -70,14 +59,11 @@ import Foundation
             textAfterCursor: nil,
             selectedText: "hunter2"
         ))
-        let vocab = CustomVocabularyStore(defaults: suite())
-
         let svc = DefaultContextCaptureService(
             frontmost: front,
             appNameProvider: { "1Password" },
             fieldInspector: inspector,
             axProbe: probe,
-            vocabulary: vocab,
             isAXTrusted: { true },
             budgetMs: 50
         )
@@ -104,14 +90,11 @@ import Foundation
             textAfterCursor: nil,
             selectedText: nil
         ))
-        let vocab = CustomVocabularyStore(defaults: suite())
-
         let svc = DefaultContextCaptureService(
             frontmost: front,
             appNameProvider: { "Safari" },
             fieldInspector: inspector,
             axProbe: probe,
-            vocabulary: vocab,
             isAXTrusted: { true },
             budgetMs: 50
         )
@@ -131,14 +114,11 @@ import Foundation
         let front = FakeFrontmost(); front.bundleID = "com.foo"
         let inspector = FakeFieldInspector()
         let probe = StubProbe(result: AXContextProbeResult())
-        let vocab = CustomVocabularyStore(defaults: suite())
-
         let svc = DefaultContextCaptureService(
             frontmost: front,
             appNameProvider: { nil },
             fieldInspector: inspector,
             axProbe: probe,
-            vocabulary: vocab,
             isAXTrusted: { true },
             budgetMs: 50
         )
@@ -159,24 +139,19 @@ import Foundation
             textAfterCursor: nil,
             selectedText: nil
         ))
-        let vocab = CustomVocabularyStore(defaults: suite())
-        vocab.save(["term"])
-
         let svc = DefaultContextCaptureService(
             frontmost: front,
             appNameProvider: { "Safari" },
             fieldInspector: inspector,
             axProbe: probe,
-            vocabulary: vocab,
             isAXTrusted: { false },
             budgetMs: 50
         )
 
         let c = await svc.capture()
-        // App identity + vocabulary still flow (no AX required).
+        // App identity still flows (no AX required).
         #expect(c.appName == "Safari")
         #expect(c.bundleID == "com.apple.Safari")
-        #expect(c.customVocabulary == ["term"])
         // AX-dependent fields stayed unset; probe results never read.
         #expect(c.windowTitle == nil)
         #expect(c.textBeforeCursor == nil)

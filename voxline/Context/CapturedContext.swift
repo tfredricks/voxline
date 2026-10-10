@@ -32,6 +32,13 @@ struct CapturedContext: Equatable, Sendable {
     /// into the Context block.
     var learnedStyle: LearnedStyle? = nil
 
+    /// The focused field as `FocusedFieldInspecting` reported it: nil when
+    /// it exposed neither a role nor a subrole.
+    var focusedField: FocusedField? {
+        guard fieldRole != nil || fieldSubrole != nil else { return nil }
+        return FocusedField(role: fieldRole, subrole: fieldSubrole)
+    }
+
     static let empty = CapturedContext(
         appName: nil,
         bundleID: nil,

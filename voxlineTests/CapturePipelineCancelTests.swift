@@ -23,6 +23,7 @@ import Foundation
             lock.withLock { _outcomes.append(outcome) }
             var context = CapturedContext.empty
             context.appName = outcome
+            context.bundleID = CapturePipelineCancelTests.slack
             return context
         }
     }
@@ -49,7 +50,7 @@ import Foundation
         transcript: String = "hello world",
         skipShortUtterances: Bool = false,
         focusedField: FocusedField? = nil,
-        context: any ContextCapturing = FakeContextCapture()
+        context: (any ContextCapturing)? = nil
     ) -> Harness {
         let state = AppState()
         let capture = FakeCapture()
@@ -61,6 +62,7 @@ import Foundation
         let inserter = FakeTextInserter()
         let frontmost = LockedFrontmost(Self.slack)
         let inspector = LockedFieldInspector(focusedField)
+        let context = context ?? FakeContextCapture(frontmost: frontmost, inspector: inspector)
         let selection = FakeSelectionSnapshot()
         let suiteName = "voxline-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

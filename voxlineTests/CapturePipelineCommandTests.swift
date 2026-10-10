@@ -80,7 +80,9 @@ import Testing
         let llm = FakeLLM()
         let inserter = FakeTextInserter()
         let copySnapshot = CopySnapshot(copies, log: log)
-        let context = FakeContextCapture()
+        let frontmost = LockedFrontmost(Self.notes)
+        let inspector = LockedFieldInspector(nil)
+        let context = FakeContextCapture(frontmost: frontmost, inspector: inspector)
         let suiteName = "voxline-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -91,8 +93,8 @@ import Testing
             engines: FakeEngineProvider(engine),
             llm: llm,
             modes: ModeRouter(modes: modes),
-            frontmost: LockedFrontmost(Self.notes),
-            fieldInspector: LockedFieldInspector(nil),
+            frontmost: frontmost,
+            fieldInspector: inspector,
             inserter: inserter,
             historyStore: history,
             contextCapture: context,

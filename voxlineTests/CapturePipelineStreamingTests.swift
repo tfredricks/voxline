@@ -134,7 +134,7 @@ import Foundation
             fieldInspector: inspector,
             inserter: inserter,
             historyStore: history,
-            contextCapture: FakeContextCapture(),
+            contextCapture: FakeContextCapture(frontmost: frontmost, inspector: inspector),
             selectionSnapshot: selection,
             editContextReader: FakeEditContextReader.needingCopy(),
             llmModelID: { "test-model" },
@@ -451,6 +451,17 @@ import Foundation
 
         let call = try #require(h.llm.calls.first)
         #expect(call.mode.bundleID == Self.slack)
+        #expect(call.mode.prompt == "slack-search-prompt")
+    }
+
+    @Test func a_dictation_reads_the_app_and_focused_field_once() async throws {
+        let h = makeHarness(focusedField: Self.searchField)
+        h.pipe.startRecording()
+        await h.pipe.finalizeRecording()
+
+        #expect(h.frontmost.reads == 1)
+        #expect(h.inspector.reads == 1)
+        let call = try #require(h.llm.calls.first)
         #expect(call.mode.prompt == "slack-search-prompt")
     }
 

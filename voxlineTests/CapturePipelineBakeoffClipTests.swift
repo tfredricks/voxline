@@ -35,6 +35,7 @@ import Foundation
         let engine = FakeTranscriptionEngine()
         let llm = FakeLLM()
         let inserter = FakeTextInserter()
+        let frontmost = LockedFrontmost("com.example.editor")
         let inspector = LockedFieldInspector(focusedField)
         let selection = FakeSelectionSnapshot()
         let suiteName = "voxline-test-\(UUID().uuidString)"
@@ -50,11 +51,11 @@ import Foundation
             modes: ModeRouter(modes: [
                 Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil)
             ]),
-            frontmost: LockedFrontmost("com.example.editor"),
+            frontmost: frontmost,
             fieldInspector: inspector,
             inserter: inserter,
             historyStore: DictationHistoryStore(defaults: defaults),
-            contextCapture: FakeContextCapture(),
+            contextCapture: FakeContextCapture(frontmost: frontmost, inspector: inspector),
             selectionSnapshot: selection,
             editContextReader: FakeEditContextReader.needingCopy(),
             llmModelID: { "test-model" },

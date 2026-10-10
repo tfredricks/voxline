@@ -118,7 +118,7 @@ import Foundation
             state: state, capture: capture, engines: FakeEngineProvider(engine),
             llm: llm, modes: router, frontmost: front,
             fieldInspector: inspector, inserter: inserter,
-            historyStore: history, contextCapture: FakeContextCapture(),
+            historyStore: history, contextCapture: FakeContextCapture(frontmost: front, inspector: inspector),
             selectionSnapshot: FakeSelectionSnapshot(),
             llmModelID: { "test-model" },
             vocabulary: { [] },
@@ -810,12 +810,32 @@ import Foundation
     }
 }
 
+/// Answers `nextContext`. Given `frontmost` and `inspector`, it reads the app
+/// and focused field from them on each capture, as the real service does.
 final class FakeContextCapture: ContextCapturing, @unchecked Sendable {
     var nextContext = CapturedContext.empty
     var captureCallCount = 0
+    private let frontmost: (any FrontmostAppProviding)?
+    private let inspector: (any FocusedFieldInspecting)?
+
+    init(frontmost: (any FrontmostAppProviding)? = nil, inspector: (any FocusedFieldInspecting)? = nil) {
+        self.frontmost = frontmost
+        self.inspector = inspector
+    }
+
     func capture() async -> CapturedContext {
         captureCallCount += 1
-        return nextContext
+        var context = nextContext
+        if let frontmost {
+            context.bundleID = frontmost.frontmostBundleID()
+        }
+        if let inspector {
+            let field = inspector.inspect()
+            context.fieldRole = field?.role
+            context.fieldSubrole = field?.subrole
+            context.isSecureField = field?.kind == .secure
+        }
+        return context
     }
 }
 

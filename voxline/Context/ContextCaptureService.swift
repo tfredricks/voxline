@@ -9,6 +9,8 @@ import ApplicationServices
 protocol ContextCapturing: Sendable {
     /// Snapshot of the user's current focus + surroundings. Always returns;
     /// fields fall back to nil/empty when the underlying signal is unavailable.
+    /// The pipeline routes the mode on its `bundleID` and field role and
+    /// subrole, and adds the custom vocabulary itself.
     func capture() async -> CapturedContext
 }
 
@@ -21,7 +23,6 @@ struct DefaultContextCaptureService: ContextCapturing {
     let appNameProvider: @Sendable () -> String?
     let fieldInspector: FocusedFieldInspecting
     let axProbe: AXContextProbing
-    let vocabulary: CustomVocabularyStore
     let isAXTrusted: @Sendable () -> Bool
     let budgetMs: Int
 
@@ -34,7 +35,6 @@ struct DefaultContextCaptureService: ContextCapturing {
         },
         fieldInspector: FocusedFieldInspecting = AXFocusedFieldInspector(),
         axProbe: AXContextProbing = DefaultAXContextProbe(),
-        vocabulary: CustomVocabularyStore = CustomVocabularyStore(),
         isAXTrusted: @escaping @Sendable () -> Bool = { AXIsProcessTrusted() },
         budgetMs: Int = 50
     ) {
@@ -42,7 +42,6 @@ struct DefaultContextCaptureService: ContextCapturing {
         self.appNameProvider = appNameProvider
         self.fieldInspector = fieldInspector
         self.axProbe = axProbe
-        self.vocabulary = vocabulary
         self.isAXTrusted = isAXTrusted
         self.budgetMs = budgetMs
     }
@@ -86,9 +85,6 @@ struct DefaultContextCaptureService: ContextCapturing {
                 c.selectedText = probe.selectedText
             }
         }
-
-        // Step 4: custom vocabulary (cheap; UserDefaults).
-        c.customVocabulary = vocabulary.load()
 
         c.captureDurationMs = deadline.elapsedMilliseconds()
         if deadline.isExpired {

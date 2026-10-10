@@ -51,6 +51,8 @@ import Foundation
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let history = DictationHistoryStore(defaults: defaults)
+        let frontmost = LockedFrontmost(Self.slack)
+        let inspector = LockedFieldInspector(nil)
         let pipe = CapturePipeline(
             state: state,
             capture: capture,
@@ -59,11 +61,11 @@ import Foundation
             modes: ModeRouter(modes: [
                 Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil)
             ]),
-            frontmost: LockedFrontmost(Self.slack),
-            fieldInspector: LockedFieldInspector(nil),
+            frontmost: frontmost,
+            fieldInspector: inspector,
             inserter: inserter,
             historyStore: history,
-            contextCapture: FakeContextCapture(),
+            contextCapture: FakeContextCapture(frontmost: frontmost, inspector: inspector),
             selectionSnapshot: FakeSelectionSnapshot(),
             llmModelID: { "test-model" },
             vocabulary: { ["Voxline"] },

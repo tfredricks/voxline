@@ -43,6 +43,7 @@ final class FakeLearning: LearningObserving {
         let learning = FakeLearning()
         let frontmost = CapturePipelineTests.FakeFrontmost()
         frontmost.bundleID = Self.slack
+        let inspector = CapturePipelineTests.FakeFieldInspector()
         let suiteName = "voxline-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -56,10 +57,10 @@ final class FakeLearning: LearningObserving {
                 Mode(bundleID: "*", displayName: "Default", prompt: "default-prompt", model: nil, temperature: nil, category: .general),
             ]),
             frontmost: frontmost,
-            fieldInspector: CapturePipelineTests.FakeFieldInspector(),
+            fieldInspector: inspector,
             inserter: inserter,
             historyStore: DictationHistoryStore(defaults: defaults),
-            contextCapture: FakeContextCapture(),
+            contextCapture: FakeContextCapture(frontmost: frontmost, inspector: inspector),
             selectionSnapshot: CapturePipelineTests.FakeSelectionSnapshot(),
             editContextReader: FakeEditContextReader(.success(EditContext(
                 isEditable: true, element: nil, field: nil, selection: nil, cursor: nil, needsCopyFallback: false

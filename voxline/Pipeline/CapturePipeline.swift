@@ -688,16 +688,18 @@ final class CapturePipeline {
     // MARK: - Snapshot and metrics
 
     /// Frontmost app, focused field, and (unless `capturesContext` is false)
-    /// context, read off the main actor.
+    /// context, read off the main actor. The context capture reads the app
+    /// and field itself, so they are taken from it rather than read twice.
     private func snapshotFocus(capturesContext: Bool = true) -> Task<StartSnapshot, Never> {
         let captor = contextCapture
         let frontmost = frontmost
         let fieldInspector = fieldInspector
         return Task.detached(priority: .userInitiated) {
-            let bundleID = frontmost.frontmostBundleID()
-            let field = fieldInspector.inspect()
-            let context = capturesContext ? await captor.capture() : .empty
-            return StartSnapshot(context: context, bundleID: bundleID, field: field)
+            guard capturesContext else {
+                return StartSnapshot(context: .empty, bundleID: frontmost.frontmostBundleID(), field: fieldInspector.inspect())
+            }
+            let context = await captor.capture()
+            return StartSnapshot(context: context, bundleID: context.bundleID, field: context.focusedField)
         }
     }
 
