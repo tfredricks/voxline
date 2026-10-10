@@ -12,6 +12,8 @@ enum MeetingNotice: Equatable {
     case systemAudioUnavailable
     case recordingStopped(String)
     case systemAudioLost
+    /// The meeting shortcut was pressed while the last meeting is processing.
+    case busy
 }
 
 @MainActor
@@ -63,6 +65,9 @@ final class UserNotificationMeetingNotifier: NSObject, MeetingNotifying, UNUserN
             return ("Meeting recording stopped", "\(sentence) Notes will be written for what was recorded.")
         case .systemAudioLost:
             return ("System audio capture stopped", "Recording continues with your microphone only.")
+        case .busy:
+            return ("Meeting recording didn't start",
+                    "Voxline is still processing the last meeting. Try again when its notes are ready.")
         }
     }
 

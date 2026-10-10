@@ -67,7 +67,7 @@ final class MeetingController {
         switch phase {
         case .idle:       start()
         case .recording:  stop()
-        case .processing: break
+        case .processing: notifier.post(.busy)
         }
     }
 

@@ -625,6 +625,7 @@ Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meeti
 - [ ] Settings → Meetings: folder picker, shortcut (rejects a preset's combo and the dictation chord), notes model placeholder, retention, timer toggle.
 - [ ] Settings → Meetings: record ⌘M as the shortcut → it is kept, and an orange "common app shortcut" warning stays under the recorder. Record ⌃⌥M, then change the dictation chord to Left Control + Left Option → back on Meetings, the warning says ⌃⌥ is your dictation hotkey.
 - [ ] Meeting shortcut starts and stops a recording from any app.
+- [ ] Press the meeting shortcut while the last meeting is still processing → a "Meeting recording didn't start" notification; nothing records, and the processing finishes as usual.
 - [ ] Retention "Don't keep": no `.pcm`/`.m4a` remain in `~/Library/Application Support/voxline/meetings/<id>/` after notes are written.
 - [ ] One-hour real meeting: note the time from Stop to "Meeting notes ready" (spike target ≤ 4 min on synthetic audio with small.en; record the real number).
 - [ ] Live transcript: Start a meeting; the chip has a chevron. Expand: "Listening…", then your own words appear under "Me" within a few seconds, bright once settled, dim while changing.

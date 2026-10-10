@@ -85,7 +85,7 @@ final class AppCoordinator {
     }
 
     /// The meeting shortcut: starts like `startMeetingRecording()` when
-    /// idle, stops while recording, and does nothing while processing.
+    /// idle, stops while recording, and says it can't start while processing.
     func toggleMeetingRecording() {
         guard let meetings = appState?.meetings else { return }
         if meetings.phase == .idle {

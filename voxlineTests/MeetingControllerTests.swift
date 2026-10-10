@@ -375,7 +375,7 @@ final class FakeLiveTranscript: LiveMeetingTranscribing {
         #expect(controller.phase.isRecording)
     }
 
-    @Test func toggle_starts_and_stops_but_ignores_processing() async throws {
+    @Test func toggle_starts_and_stops_but_only_says_busy_while_processing() async throws {
         let controller = makeController()
         controller.toggle()
         guard case .recording = controller.phase else {
@@ -384,11 +384,14 @@ final class FakeLiveTranscript: LiveMeetingTranscribing {
         }
         controller.toggle()
         #expect(controller.phase == .processing(nil))
+        #expect(notifier.notices.isEmpty)
         controller.toggle()
         #expect(controller.phase == .processing(nil))
         #expect(!recorder.started)
+        #expect(notifier.notices == [.busy])
         await controller.processingTask?.value
         #expect(processing.processed.count == 1)
+        #expect(store.all().count == 1)
     }
 
     @Test func recovery_processes_accepted_and_discards_declined() async throws {

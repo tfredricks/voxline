@@ -33,6 +33,12 @@ import Testing
         #expect(text.body == "Recording continues with your microphone only.")
     }
 
+    @Test func busy_says_recording_did_not_start() {
+        let text = UserNotificationMeetingNotifier.text(for: .busy)
+        #expect(text.title == "Meeting recording didn't start")
+        #expect(text.body == "Voxline is still processing the last meeting. Try again when its notes are ready.")
+    }
+
     @Test func notes_ready_names_the_file() {
         let text = UserNotificationMeetingNotifier.text(for: .notesReady(URL(fileURLWithPath: "/tmp/2026-10-09 Standup.md")))
         #expect(text.title == "Meeting notes ready")
