@@ -45,7 +45,11 @@ struct MeetingsSettingsPage: View {
                         Button("Choose…") { chooseFolder() }
                     }
                 }
-                TextField("Meeting notes model", text: $model.notesModel, prompt: Text(model.notesModelPlaceholder))
+                CommittingTextField(
+                    title: "Meeting notes model",
+                    value: model.notesModel,
+                    prompt: model.notesModelPlaceholder
+                ) { model.notesModel = $0 }
             }
         }
     }

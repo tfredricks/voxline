@@ -24,7 +24,11 @@ struct CommandsSettingsPage: View {
             }
 
             Section("Model") {
-                TextField("Command model", text: $general.commandModel, prompt: Text(general.cleanupModelPlaceholder))
+                CommittingTextField(
+                    title: "Command model",
+                    value: general.commandModel,
+                    prompt: general.cleanupModelPlaceholder
+                ) { general.commandModel = $0 }
                 Text("Leave empty to use the cleanup model. A larger model drafts and answers better but responds more slowly.")
                     .foregroundStyle(.secondary)
                     .font(.callout)
@@ -61,6 +65,8 @@ private struct PresetRow: View {
                 CommittingTextField(title: "Name", value: preset.name) {
                     model.updateName($0, for: preset.id)
                 }
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
                 Button {
                     model.remove(preset.id)
                 } label: {
@@ -72,6 +78,8 @@ private struct PresetRow: View {
             CommittingTextField(title: "Instruction", value: preset.instruction, axis: .vertical) {
                 model.updateInstruction($0, for: preset.id)
             }
+            .labelsHidden()
+            .textFieldStyle(.roundedBorder)
             if let warning = model.warning(for: preset.id) {
                 Text(warning)
                     .foregroundStyle(.orange)
@@ -79,39 +87,5 @@ private struct PresetRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-    }
-}
-
-/// Edits a draft and hands it to `commit` on Return, on focus loss, and when
-/// the field goes away, rather than on every keystroke.
-private struct CommittingTextField: View {
-
-    let title: String
-    let value: String
-    let axis: Axis
-    let commit: (String) -> Void
-
-    @State private var draft: String
-    @FocusState private var focused: Bool
-
-    init(title: String, value: String, axis: Axis = .horizontal, commit: @escaping (String) -> Void) {
-        self.title = title
-        self.value = value
-        self.axis = axis
-        self.commit = commit
-        _draft = State(initialValue: value)
-    }
-
-    var body: some View {
-        TextField(title, text: $draft, prompt: Text(title), axis: axis)
-            .labelsHidden()
-            .textFieldStyle(.roundedBorder)
-            .focused($focused)
-            .onSubmit { commit(draft) }
-            .onChange(of: value) { _, newValue in draft = newValue }
-            .onChange(of: focused) { _, isFocused in
-                if !isFocused { commit(draft) }
-            }
-            .onDisappear { commit(draft) }
     }
 }

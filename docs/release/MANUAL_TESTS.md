@@ -662,7 +662,7 @@ Show Voxline in Dock is off unless a step says otherwise.
 - [ ] Home's recent meetings: click a finished meeting → its notes open. "Open meetings folder" → Finder opens the notes folder.
 - [ ] Open Settings → Dictation, close the window → the mic indicator turns off immediately; dictate once with the window closed → it stays on for about 90 seconds after the dictation, then turns off without another dictation.
 - [ ] Dictate once, then within 90 seconds press the chord and speak immediately as you press → the first word lands. Hold Left Control alone for a moment → the mic indicator comes on at once (or stays on inside the 90 seconds); release it → it turns off (or stays on until the 90 seconds end). Hold Left Shift alone and type a capital letter → the indicator never comes on. The start sound plays after the pill appears, never before.
-- [ ] Edit a preset instruction and a style note, close the window with the field focused, reopen → both edits kept.
+- [ ] Edit a preset instruction, a style note, the command model (Commands), and the meeting notes model (Meetings); close the window with the last field focused, reopen → all four edits kept.
 - [ ] Reopen the window → Settings → General shows current Launch at Login approval state.
 
 ### Settings pages
