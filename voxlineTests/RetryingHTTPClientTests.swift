@@ -63,6 +63,15 @@ import Foundation
         #expect(inner.callCount == 2)
     }
 
+    @Test func outOfQuota429IsNotRetried() async throws {
+        let body = Data(#"{"error":{"type":"insufficient_quota","code":"insufficient_quota"}}"#.utf8)
+        let inner = SequencedHTTPClient([(body, 429), (Data("ok".utf8), 200)])
+        let (data, response) = try await makeClient(inner).send(request())
+        #expect(response.statusCode == 429)
+        #expect(data == body)
+        #expect(inner.callCount == 1)
+    }
+
     @Test func nonTransient400IsNotRetried() async throws {
         let inner = SequencedHTTPClient([(Data(), 400)])
         let (_, response) = try await makeClient(inner).send(request())

@@ -68,6 +68,37 @@ import Foundation
         }
     }
 
+    @Test func http_429_out_of_quota_maps_to_quotaExceeded() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: Data(#"{"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","param":null,"code":"insufficient_quota"}}"#.utf8),
+            status: 429
+        )
+        let client = OpenAIClient(apiKey: "k", http: mock)
+        do {
+            _ = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .quotaExceeded)
+            #expect(e.errorDescription?.contains("billing") == true)
+        }
+    }
+
+    @Test func http_429_rate_limit_maps_to_rateLimited() async throws {
+        let mock = MockHTTPClient()
+        mock.stubResponse = (
+            data: Data(#"{"error":{"message":"Rate limit reached for requests","type":"requests","param":null,"code":"rate_limit_exceeded"}}"#.utf8),
+            status: 429
+        )
+        let client = OpenAIClient(apiKey: "k", http: mock)
+        do {
+            _ = try await client.complete(LLMRequest(model: "m", systemPrompt: "s", userPrompt: "u", temperature: nil))
+            Issue.record("expected throw")
+        } catch let e as LLMError {
+            #expect(e == .rateLimited)
+        }
+    }
+
     @Test func empty_choices_throws_badResponseShape() async throws {
         let mock = MockHTTPClient()
         mock.stubResponse = (

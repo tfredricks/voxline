@@ -98,6 +98,7 @@ enum LLMError: Error, LocalizedError {
     case missingAPIKey
     case invalidAPIKey
     case rateLimited
+    case quotaExceeded
     case network(Error)
     case badStatus(code: Int, body: String)
     case badResponseShape(reason: String)
@@ -112,6 +113,8 @@ enum LLMError: Error, LocalizedError {
             return "API key was rejected by the provider."
         case .rateLimited:
             return "Rate limited by the provider; try again in a moment."
+        case .quotaExceeded:
+            return "The provider account is out of credit — check billing."
         case .network(let err):
             return "Network error: \(err.localizedDescription)"
         case .badStatus(let code, _):

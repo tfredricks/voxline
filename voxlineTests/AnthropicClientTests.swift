@@ -466,7 +466,8 @@ extension LLMError: @retroactive Equatable {
         switch (lhs, rhs) {
         case (.missingAPIKey, .missingAPIKey),
              (.invalidAPIKey, .invalidAPIKey),
-             (.rateLimited, .rateLimited):
+             (.rateLimited, .rateLimited),
+             (.quotaExceeded, .quotaExceeded):
             return true
         case (.badStatus(let lc, let lb), .badStatus(let rc, let rb)):
             return lc == rc && lb == rb

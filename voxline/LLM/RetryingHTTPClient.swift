@@ -8,7 +8,8 @@ import Foundation
 /// bounded enough that the pipeline (which blocks new dictations while
 /// waiting) stays responsive. Transport errors pass straight through:
 /// URLSessionHTTPClient owns the -1005 quirk, and retrying a timeout would
-/// double the worst-case wait.
+/// double the worst-case wait. A 429 for an account out of credit is
+/// permanent, so it is returned at once.
 struct RetryingHTTPClient: HTTPClient {
     let wrapped: HTTPClient
     var retryDelay: Duration = .seconds(1)
@@ -19,7 +20,8 @@ struct RetryingHTTPClient: HTTPClient {
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let first = try await wrapped.send(request)
-        guard Self.transientStatuses.contains(first.1.statusCode) else {
+        guard Self.transientStatuses.contains(first.1.statusCode),
+              !isOutOfQuota(statusCode: first.1.statusCode, body: first.0) else {
             return first
         }
         AppLog.llm.info("transient HTTP \(first.1.statusCode); retrying once")

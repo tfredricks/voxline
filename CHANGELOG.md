@@ -203,6 +203,9 @@ app that is no longer sandboxed.
   transcript is copied to the clipboard, and Retry is offered (issue 14).
 - An Anthropic refusal or truncated response now says so, instead of "Could
   not parse provider response" (issue 18).
+- An OpenAI account with no credit left now says "The provider account is
+  out of credit — check billing." in dictation errors and Settings → Test,
+  instead of "try again in a moment", and the request is no longer retried.
 - The first-run wizard is no longer a dead end offline: a failed download now
   offers "Quit Voxline" (issue 21).
 - The last syllable of a dictation is no longer clipped when you release the
