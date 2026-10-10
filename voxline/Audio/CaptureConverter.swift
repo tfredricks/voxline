@@ -1,7 +1,8 @@
 @preconcurrency import AVFoundation
 import Foundation
 
-/// Resamples hardware-rate input to Whisper's format (16 kHz mono Float32).
+/// Resamples hardware-rate input to Whisper's format (16 kHz mono Float32),
+/// mixing every input channel into the one output channel.
 ///
 /// Safe to call from the tap thread and the main actor at the same time: every
 /// conversion runs under one lock, so the underlying AVAudioConverter is never
@@ -27,6 +28,10 @@ final class CaptureConverter: @unchecked Sendable {
         guard let converter = AVAudioConverter(from: inputFormat, to: target) else {
             throw AudioCaptureError.cannotConvertFormat
         }
+        // Without downmix the converter keeps only channel 0, so a mic on a
+        // multi-input interface's second input, or the right half of a
+        // stereo tap, would be dropped.
+        converter.downmix = true
         self.converter = converter
         self.target = target
     }

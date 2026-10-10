@@ -313,6 +313,10 @@ app that is no longer sandboxed.
   dictation, even right after another one, and choosing System default after
   a specific mic records from the system default again instead of the old
   mic. The Settings level meter follows System default the same way.
+- Audio from every input channel is mixed in, so a mic on the second input
+  of a multi-input audio interface no longer records silence ("No audio
+  captured"), and meeting transcripts no longer drop the right channel of
+  your Mac's sound output.
 - On a Mac with no microphone connected, dictating says "Audio capture
   failed: No microphone input is available." instead of an internal error
   code.
