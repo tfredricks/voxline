@@ -11,12 +11,14 @@ final class HotkeySoundPlayer {
 
     private let settings: AppSettings
     private let playSound: (String) -> Void
-    private let primeSound: (String) -> Void
+    private let primeSound: ((String) -> Void)?
+    private var primer: NSSound?
 
+    /// `primeSound` replaces the silent system play in tests.
     init(
         settings: AppSettings = AppSettings(),
         playSound: @escaping (String) -> Void = HotkeySoundPlayer.playSystemSound,
-        primeSound: @escaping (String) -> Void = HotkeySoundPlayer.playSystemSoundSilently
+        primeSound: ((String) -> Void)? = nil
     ) {
         self.settings = settings
         self.playSound = playSound
@@ -29,7 +31,11 @@ final class HotkeySoundPlayer {
     /// capturing yet. Runs regardless of the sounds setting, since it is
     /// silent and a later toggle would pay the stall.
     func prime() {
-        primeSound(Self.startSoundName)
+        if let primeSound {
+            primeSound(Self.startSoundName)
+        } else {
+            primer = Self.playSystemSoundSilently(Self.startSoundName)
+        }
     }
 
     func playStart() {
@@ -46,9 +52,15 @@ final class HotkeySoundPlayer {
         NSSound(named: name)?.play()
     }
 
-    private static func playSystemSoundSilently(_ name: String) {
-        guard let sound = NSSound(named: name) else { return }
+    /// Plays a muted copy of the named sound and returns it; the caller keeps
+    /// it until it finishes. `NSSound(named:)` hands out one shared instance
+    /// per name, the one `playSystemSound` plays, so muting that instance
+    /// would silence the cue for the rest of the session.
+    @discardableResult
+    static func playSystemSoundSilently(_ name: String) -> NSSound? {
+        guard let sound = NSSound(named: name)?.copy() as? NSSound else { return nil }
         sound.volume = 0
         sound.play()
+        return sound
     }
 }

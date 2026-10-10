@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 import Foundation
 @testable import voxline
@@ -61,6 +62,13 @@ import Foundation
         let player = HotkeySoundPlayer(settings: settings, playSound: { _ in }, primeSound: silent.capture)
         player.prime()
         #expect(silent.played == [HotkeySoundPlayer.startSoundName], "priming is silent, so it costs nothing to keep the output path warm for a later toggle")
+    }
+
+    @Test func default_prime_leaves_the_shared_start_sound_audible() {
+        let settings = AppSettings(defaults: makeDefaults())
+        let player = HotkeySoundPlayer(settings: settings, playSound: { _ in })
+        player.prime()
+        #expect(NSSound(named: HotkeySoundPlayer.startSoundName)?.volume == 1, "NSSound(named:) hands out one shared instance, which playStart() plays")
     }
 
     @Test func toggle_takes_effect_on_next_call() {
