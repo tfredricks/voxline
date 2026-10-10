@@ -78,11 +78,16 @@ fi
 
 echo "==> Quitting any running voxline instance..."
 osascript -e 'tell application "voxline" to quit' >/dev/null 2>&1 || true
-# Give it a moment to release file locks before we replace the bundle.
-for _ in 1 2 3 4 5; do
+# Wait up to 10 s for it to exit before we replace the bundle. A quit can be
+# held up by a confirmation, such as the one for a meeting being recorded.
+for _ in $(seq 50); do
     pgrep -x voxline >/dev/null 2>&1 || break
     sleep 0.2
 done
+if pgrep -x voxline >/dev/null 2>&1; then
+    echo "voxline is still running; quit it and re-run" >&2
+    exit 1
+fi
 
 DEST="/Applications/voxline.app"
 echo "==> Installing to ${DEST}..."
