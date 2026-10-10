@@ -1,6 +1,6 @@
 import Foundation
 
-struct AnthropicClient: LLMClient {
+struct AnthropicClient: StructuredOutputClient {
 
     static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     static let apiVersion = "2023-06-01"
@@ -15,23 +15,9 @@ struct AnthropicClient: LLMClient {
         self.support = structuredOutput
     }
 
-    /// Sends `request`, with `output_config.format` when it carries a
-    /// structured output the model hasn't rejected. A 400 naming the field
-    /// marks the model in `support` and retries once prompt-only.
-    func complete(_ request: LLMRequest) async throws -> String {
-        let sendsFormat = request.structuredOutput != nil && !support.rejects(request.model)
-        do {
-            return try await send(request)
-        } catch let error as LLMError where sendsFormat && StructuredOutputSupport.isStructuredOutputRejection(error) {
-            support.markRejected(request.model)
-            AppLog.llm.notice("\(request.model, privacy: .public) rejected structured output; retrying prompt-only")
-            var promptOnly = request
-            promptOnly.structuredOutput = nil
-            return try await send(promptOnly)
-        }
-    }
-
-    private func send(_ request: LLMRequest) async throws -> String {
+    /// One request, with `output_config.format` when it carries a structured
+    /// output the model hasn't rejected.
+    func send(_ request: LLMRequest) async throws -> String {
         var req = URLRequest(url: Self.endpoint)
         req.httpMethod = "POST"
         req.setValue(apiKey, forHTTPHeaderField: "x-api-key")

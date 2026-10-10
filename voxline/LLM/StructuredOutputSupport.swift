@@ -27,3 +27,27 @@ final class StructuredOutputSupport: @unchecked Sendable {
         return fieldNames.contains { lowered.contains($0) }
     }
 }
+
+/// A provider client whose requests may carry a structured output.
+protocol StructuredOutputClient: LLMClient {
+    var support: StructuredOutputSupport { get }
+    /// One request, with no fallback.
+    func send(_ request: LLMRequest) async throws -> String
+}
+
+extension StructuredOutputClient {
+    /// Sends `request`. A 400 naming the structured-output field marks the
+    /// model in `support` and retries once prompt-only.
+    func complete(_ request: LLMRequest) async throws -> String {
+        let sendsFormat = request.structuredOutput != nil && !support.rejects(request.model)
+        do {
+            return try await send(request)
+        } catch let error as LLMError where sendsFormat && StructuredOutputSupport.isStructuredOutputRejection(error) {
+            support.markRejected(request.model)
+            AppLog.llm.notice("\(request.model, privacy: .public) rejected structured output; retrying prompt-only")
+            var promptOnly = request
+            promptOnly.structuredOutput = nil
+            return try await send(promptOnly)
+        }
+    }
+}

@@ -1,7 +1,7 @@
 // voxline/LLM/OpenAIClient.swift
 import Foundation
 
-struct OpenAIClient: LLMClient {
+struct OpenAIClient: StructuredOutputClient {
 
     static let endpoint = URL(string: "https://api.openai.com/v1/chat/completions")!
 
@@ -13,22 +13,6 @@ struct OpenAIClient: LLMClient {
         self.apiKey = apiKey
         self.http = http
         self.support = structuredOutput
-    }
-
-    /// Sends `request`, with a strict `json_schema` `response_format` when it
-    /// carries a structured output the model hasn't rejected. A 400 naming
-    /// the field marks the model in `support` and retries once prompt-only.
-    func complete(_ request: LLMRequest) async throws -> String {
-        let sendsFormat = request.structuredOutput != nil && !support.rejects(request.model)
-        do {
-            return try await send(request)
-        } catch let error as LLMError where sendsFormat && StructuredOutputSupport.isStructuredOutputRejection(error) {
-            support.markRejected(request.model)
-            AppLog.llm.notice("\(request.model, privacy: .public) rejected structured output; retrying prompt-only")
-            var promptOnly = request
-            promptOnly.structuredOutput = nil
-            return try await send(promptOnly)
-        }
     }
 
     private func body(for request: LLMRequest) throws -> [String: Any] {
@@ -53,7 +37,9 @@ struct OpenAIClient: LLMClient {
         return body
     }
 
-    private func send(_ request: LLMRequest) async throws -> String {
+    /// One request, with a strict `json_schema` `response_format` when it
+    /// carries a structured output the model hasn't rejected.
+    func send(_ request: LLMRequest) async throws -> String {
         var req = URLRequest(url: Self.endpoint)
         req.httpMethod = "POST"
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
