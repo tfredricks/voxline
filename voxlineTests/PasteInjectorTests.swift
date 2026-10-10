@@ -18,6 +18,8 @@ import Testing
         let board: NSPasteboard
         let clock: ManualClock
         let posts: LockedBox<Int>
+        /// Added to the clock's time, so a fake read can take time.
+        let readTime: LockedBox<Duration>
         let injector: PasteInjector
     }
 
@@ -29,6 +31,8 @@ import Testing
         board.setString("ORIGINAL", forType: .string)
         let clock = ManualClock()
         let posts = LockedBox(0)
+        let readTime = LockedBox(Duration.zero)
+        let start = ContinuousClock.now
         var gate = ModifierReleaseGate()
         gate.flagsState = { [] }
         gate.forceClear = {}
@@ -37,9 +41,10 @@ import Testing
             snapshotter: snapshotter,
             postPaste: { posts.mutate { $0 += 1 } },
             gate: gate,
-            sleep: { @MainActor in try await clock.sleep($0) }
+            sleep: { @MainActor in try await clock.sleep($0) },
+            now: { start.advanced(by: clock.now + readTime.read()) }
         )
-        return Harness(board: board, clock: clock, posts: posts, injector: injector)
+        return Harness(board: board, clock: clock, posts: posts, readTime: readTime, injector: injector)
     }
 
     private func isOurs(_ board: NSPasteboard) -> Bool {
@@ -47,12 +52,14 @@ import Testing
     }
 
     /// Starts a paste and drives the clock through the 50 ms settle delay
-    /// until Cmd+V is posted and both the verify poll and the restore
-    /// ceiling are waiting.
+    /// until Cmd+V is posted and the restore ceiling is waiting, and the
+    /// verify poll too when the paste `verifies` (it has an element or a
+    /// readable focus baseline).
     private func startPaste(
         _ h: Harness,
         element: (any AXTextElement)? = nil,
         focused: @escaping @Sendable () -> AXElementRef? = { nil },
+        verifies: Bool = false,
         beforeArming: () -> Void = {}
     ) async -> Task<PasteInjector.Outcome, Never> {
         let postsBefore = h.posts.read()
@@ -62,7 +69,7 @@ import Testing
         beforeArming()
         await h.clock.advance(by: .milliseconds(50))
         #expect(await eventually { h.posts.read() == postsBefore + 1 })
-        #expect(await eventually { h.clock.pendingCount == pendingBefore + 2 })
+        #expect(await eventually { h.clock.pendingCount == pendingBefore + (verifies ? 2 : 1) })
         return task
     }
 
@@ -91,10 +98,10 @@ import Testing
         let h = makeHarness()
         defer { h.board.releaseGlobally() }
         let task = await startPaste(h)
-        #expect(await eventually { h.clock.pendingCount == 2 })
+        #expect(await eventually { h.clock.pendingCount == 1 })
 
         #expect(h.board.string(forType: .string) == "PASTED")
-        #expect(await eventually { h.clock.pendingCount == 3 })
+        #expect(await eventually { h.clock.pendingCount == 2 })
 
         await h.clock.advance(by: .milliseconds(149))
         #expect(isOurs(h.board))
@@ -113,7 +120,7 @@ import Testing
         let task = await startPaste(h, beforeArming: {
             #expect(h.board.string(forType: .string) == "PASTED")
         })
-        #expect(await eventually { h.clock.pendingCount == 2 })
+        #expect(await eventually { h.clock.pendingCount == 1 })
         #expect(h.board.string(forType: .string) == "PASTED")
 
         await h.clock.advance(by: .milliseconds(1_499))
@@ -132,7 +139,7 @@ import Testing
         let task = await startPaste(h, beforeArming: {
             #expect(h.board.string(forType: .string) == "PASTED")
         })
-        #expect(await eventually { h.clock.pendingCount == 2 })
+        #expect(await eventually { h.clock.pendingCount == 1 })
         h.board.clearContents()
         h.board.setString("USER", forType: .string)
 
@@ -147,7 +154,7 @@ import Testing
         let h = makeHarness()
         defer { h.board.releaseGlobally() }
         let task = await startPaste(h)
-        #expect(await eventually { h.clock.pendingCount == 2 })
+        #expect(await eventually { h.clock.pendingCount == 1 })
 
         await h.clock.advance(by: .milliseconds(1_499))
         #expect(isOurs(h.board))
@@ -163,7 +170,7 @@ import Testing
         let h = makeHarness()
         defer { h.board.releaseGlobally() }
         let task = await startPaste(h)
-        #expect(await eventually { h.clock.pendingCount == 2 })
+        #expect(await eventually { h.clock.pendingCount == 1 })
         h.board.clearContents()
         h.board.setString("USER", forType: .string)
 
@@ -178,7 +185,7 @@ import Testing
         let h = makeHarness()
         defer { h.board.releaseGlobally() }
         let first = await startPaste(h)
-        #expect(await eventually { h.clock.pendingCount == 2 })
+        #expect(await eventually { h.clock.pendingCount == 1 })
         let second = Task { await h.injector.paste("SECOND", element: nil, trigger: [], focused: { nil }) }
 
         await h.clock.advance(by: .milliseconds(1_499))
@@ -204,7 +211,7 @@ import Testing
         defer { h.board.releaseGlobally() }
         let fake = FakeAXTextElement()
         fake.strings[kAXValueAttribute] = [.value("a"), .value("ab")]
-        let task = await startPaste(h, element: fake)
+        let task = await startPaste(h, element: fake, verifies: true)
 
         await h.clock.advance(by: .milliseconds(300))
 
@@ -218,12 +225,48 @@ import Testing
         defer { h.board.releaseGlobally() }
         let fake = FakeAXTextElement()
         fake.setValue("a")
-        let task = await startPaste(h, element: fake)
+        let task = await startPaste(h, element: fake, verifies: true)
 
         await h.clock.advance(by: .milliseconds(300))
 
         #expect(await task.value == .pasted(verified: false))
         #expect(fake.reads.filter { $0 == kAXValueAttribute }.count == 7)
+        await finish(h, task)
+    }
+
+    @Test func nothing_to_verify_is_unverified_without_a_poll() async {
+        let h = makeHarness()
+        defer { h.board.releaseGlobally() }
+        let outcome = LockedBox<PasteInjector.Outcome?>(nil)
+        let task = await startPaste(h)
+        let watcher = Task { outcome.write(await task.value) }
+
+        #expect(await eventually { outcome.read() == .pasted(verified: false) })
+        #expect(h.posts.read() == 1)
+        #expect(h.clock.pendingCount == 1)
+        await finish(h, task)
+        await watcher.value
+        #expect(h.board.string(forType: .string) == "ORIGINAL")
+    }
+
+    @Test func time_spent_reading_counts_toward_the_verify_window() async {
+        let h = makeHarness()
+        defer { h.board.releaseGlobally() }
+        let baseline = FakeAXTextElement().ref
+        let calls = LockedBox(0)
+        let readTime = h.readTime
+        let slowFocus: @Sendable () -> AXElementRef? = {
+            calls.mutate { $0 += 1 }
+            readTime.mutate { $0 += .milliseconds(200) }
+            return baseline
+        }
+        let task = await startPaste(h, focused: slowFocus, verifies: true)
+        #expect(calls.read() == 2)
+
+        await h.clock.advance(by: .milliseconds(300))
+
+        #expect(await task.value == .pasted(verified: false))
+        #expect(calls.read() == 4)
         await finish(h, task)
     }
 
@@ -237,7 +280,7 @@ import Testing
             calls.mutate { $0 += 1 }
             return calls.read() <= 2 ? first : other
         }
-        let task = await startPaste(h, focused: focused)
+        let task = await startPaste(h, focused: focused, verifies: true)
 
         await h.clock.advance(by: .milliseconds(300))
 
@@ -257,7 +300,7 @@ import Testing
             calls.mutate { $0 += 1 }
             return calls.read() == 1 ? fake.ref : other
         }
-        let task = await startPaste(h, element: fake, focused: focused)
+        let task = await startPaste(h, element: fake, focused: focused, verifies: true)
 
         await h.clock.advance(by: .milliseconds(300))
 
@@ -356,7 +399,7 @@ import Testing
 
         await h.clock.advance(by: .milliseconds(50))
         #expect(await eventually { h.posts.read() == 1 })
-        #expect(await eventually { h.clock.pendingCount == 2 })
+        #expect(await eventually { h.clock.pendingCount == 1 })
         #expect(isOurs(h.board))
 
         await h.clock.advance(by: .milliseconds(1_499))

@@ -20,12 +20,13 @@ struct AXTextEditor: Sendable {
     var pollInterval: Duration = .milliseconds(100)
     var pollTimeout: Duration = .seconds(1)
     var sleep: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    var now: @Sendable () -> ContinuousClock.Instant = { .now }
 
     /// Verified means the read-back value equals the old value with the old
     /// selection replaced. A success that leaves the value unchanged across a
     /// `settleDelay` re-read is `rejected`. A `cannotComplete` write is polled
-    /// for `pollTimeout` and is `unknown` if it never shows up (it never
-    /// falls through, so it can't insert twice).
+    /// for `pollTimeout`, reads included, and is `unknown` if it never shows
+    /// up (it never falls through, so it can't insert twice).
     func replaceSelection(of element: any AXTextElement, with text: String) async -> Outcome {
         guard element.isSettable(kAXSelectedTextAttribute) == .value(true) else { return .rejected }
 
@@ -66,8 +67,10 @@ struct AXTextEditor: Sendable {
         var waited: Duration = .zero
         while waited < pollTimeout {
             try? await sleep(pollInterval)
-            waited += pollInterval
-            guard let value = element.string(kAXValueAttribute).value else { continue }
+            let readStart = now()
+            let read = element.string(kAXValueAttribute)
+            waited += pollInterval + readStart.duration(to: now())
+            guard let value = read.value else { continue }
             if let expected, value == expected { return .applied(verified: true) }
             if let original, value != original { return .applied(verified: false) }
         }

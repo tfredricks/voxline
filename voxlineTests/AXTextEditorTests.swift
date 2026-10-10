@@ -16,9 +16,15 @@ import Testing
         return fake
     }
 
-    private func makeEditor(sleeps: LockedBox<[Duration]>) -> AXTextEditor {
+    private func makeEditor(sleeps: LockedBox<[Duration]>, readTime: Duration = .zero) -> AXTextEditor {
         var editor = AXTextEditor()
         editor.sleep = { duration in sleeps.mutate { $0.append(duration) } }
+        let elapsed = LockedBox(Duration.zero)
+        let start = ContinuousClock.now
+        editor.now = {
+            elapsed.mutate { $0 += readTime }
+            return start.advanced(by: elapsed.read())
+        }
         return editor
     }
 
@@ -141,6 +147,17 @@ import Testing
         #expect(outcome == .unknown)
         #expect(sleeps.read() == Array(repeating: .milliseconds(100), count: 10))
         #expect(fake.stringSets.count == 1)
+    }
+
+    @Test func time_spent_reading_counts_toward_the_late_write_window() async {
+        let fake = makeElement(values: [.value(before)])
+        fake.setResults = [.cannotComplete]
+        let sleeps = LockedBox<[Duration]>([])
+
+        let outcome = await makeEditor(sleeps: sleeps, readTime: .milliseconds(200)).replaceSelection(of: fake, with: "there")
+
+        #expect(outcome == .unknown)
+        #expect(sleeps.read() == Array(repeating: .milliseconds(100), count: 4))
     }
 
     @Test func late_write_with_an_unreadable_starting_value_is_unknown() async {

@@ -240,6 +240,11 @@ app that is no longer sandboxed.
   never shows up, the text is copied instead.
 - A hung target app can no longer stall voxline: every Accessibility request
   times out after half a second.
+- The checks that a paste or a late edit landed now stop on time when the
+  app is slow to answer, instead of running several times longer, and a
+  paste into an app that shows no text field to Accessibility (Alacritty, a
+  VM or remote-desktop window) finishes without waiting on a check it can't
+  make.
 - A keychain read failure no longer looks like "no key configured", and the
   setup wizard can no longer delete saved keys over a transient read error.
 - **Reset to Defaults no longer clears your custom vocabulary** (issue 15).

@@ -952,8 +952,7 @@ import Testing
         let insert = Task { await inserter.insert("PASTED", at: .liveSelection, expectedElement: nil, bundleID: nil, trigger: []) }
         #expect(await eventually { clock.pendingCount == 1 })
         await clock.advance(by: .milliseconds(50))
-        #expect(await eventually { posts.read() == 1 && clock.pendingCount == 2 })
-        await clock.advance(by: .milliseconds(300))
+        #expect(await eventually { posts.read() == 1 && clock.pendingCount == 1 })
         #expect(await insert.value == .inserted(.paste, verified: false))
 
         let restored = LockedBox(false)

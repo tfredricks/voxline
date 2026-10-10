@@ -42,6 +42,7 @@ final class PasteInjector {
     private let postPaste: @Sendable () -> Void
     private let gate: ModifierReleaseGate
     private let sleep: @Sendable (Duration) async throws -> Void
+    private let now: @Sendable () -> ContinuousClock.Instant
     private let settleDelay: Duration
     private let verifyInterval: Duration
     private let verifyTimeout: Duration
@@ -53,6 +54,7 @@ final class PasteInjector {
          postPaste: @escaping @Sendable () -> Void = { SyntheticKeys.postPaste() },
          gate: ModifierReleaseGate = ModifierReleaseGate(),
          sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+         now: @escaping @Sendable () -> ContinuousClock.Instant = { .now },
          settleDelay: Duration = .milliseconds(50),
          verifyInterval: Duration = .milliseconds(50),
          verifyTimeout: Duration = .milliseconds(300),
@@ -63,6 +65,7 @@ final class PasteInjector {
         self.postPaste = postPaste
         self.gate = gate
         self.sleep = sleep
+        self.now = now
         self.settleDelay = settleDelay
         self.verifyInterval = verifyInterval
         self.verifyTimeout = verifyTimeout
@@ -119,36 +122,41 @@ final class PasteInjector {
             AppLog.paste.debug("paste skipped: cancelled before the Cmd+V")
             return .cancelled
         }
-        if let beforeRef, let now = focused(), now != beforeRef {
+        if let beforeRef, let current = focused(), current != beforeRef {
             if pasteboard.changeCount == ourChangeCount { snapshot.restore(to: pasteboard) }
             AppLog.paste.debug("paste skipped: focus moved before the Cmd+V")
             return .focusMovedBeforePaste
         }
         provider.arm()
         postPaste()
-        let pasted = ContinuousClock.now
+        let pasted = now()
 
         restoreTail(snapshot: snapshot, ourChangeCount: ourChangeCount, provider: provider, release: release)
         handedOff = true
 
         let outcome = await verify(element: element, before: before, beforeRef: beforeRef, focused: focused)
-        let elapsed = pasted.duration(to: .now)
+        let elapsed = pasted.duration(to: now())
         AppLog.paste.debug("paste \(Self.label(outcome), privacy: .public) after \(Int(elapsed / .milliseconds(1)), privacy: .public) ms")
         return outcome
     }
 
+    /// Polls for `verifyTimeout`, counting the time the reads take as well
+    /// as the sleeps between them. With no value and no focus baseline there
+    /// is nothing to poll, and the paste is unverified at once.
     private func verify(element: (any AXTextElement)?, before: String?, beforeRef: AXElementRef?,
                         focused: @Sendable () -> AXElementRef?) async -> Outcome {
+        guard before != nil || beforeRef != nil else { return .pasted(verified: false) }
         var waited: Duration = .zero
         while waited < verifyTimeout {
             try? await sleep(verifyInterval)
-            waited += verifyInterval
+            let readStart = now()
             if let before, let after = element?.string(kAXValueAttribute).value, after != before {
                 return .pasted(verified: true)
             }
-            if let beforeRef, let now = focused(), now != beforeRef {
+            if let beforeRef, let current = focused(), current != beforeRef {
                 return .focusMoved
             }
+            waited += verifyInterval + readStart.duration(to: now())
         }
         return .pasted(verified: false)
     }
