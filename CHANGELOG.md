@@ -253,6 +253,10 @@ app that is no longer sandboxed.
 - **Reset to Defaults no longer clears your custom vocabulary** (issue 15).
 - The Dock icon no longer gets stuck with no window behind it after an alert
   or the folder picker (#29).
+- Denying the microphone once no longer strands you in the setup wizard. Its
+  Microphone button, and Home's, now says "Open System Settings" and opens
+  Privacy & Security → Microphone, where a denied permission can be granted;
+  before, it did nothing, and the wizard couldn't continue.
 - The live microphone level in Settings → Dictation stops while the window is
   minimised, hidden, or behind another app, so the microphone stays off (and
   Bluetooth headsets leave call mode) until you come back to it.

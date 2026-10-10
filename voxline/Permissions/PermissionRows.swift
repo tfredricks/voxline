@@ -25,8 +25,8 @@ struct PermissionRows: View {
                 tag: .required,
                 detail: "Captures your voice for transcription.",
                 status: summary.microphone,
-                grantLabel: "Grant",
-                action: { Task { _ = await perms.requestMicrophone(); onChange() } }
+                grantLabel: summary.microphone.microphoneGrantAction.label,
+                action: { grantMicrophone(summary.microphone.microphoneGrantAction) }
             )
             if includesInputMonitoring {
                 row(
@@ -79,6 +79,15 @@ struct PermissionRows: View {
         }
     }
 
+    private func grantMicrophone(_ action: PermissionGrantAction) {
+        switch action {
+        case .request:
+            Task { _ = await perms.requestMicrophone(); onChange() }
+        case .openSystemSettings:
+            openSettingsPane("com.apple.preference.security?Privacy_Microphone")
+        }
+    }
+
     private func openAccessibilitySettings() {
         perms.promptAccessibility()
         openSettingsPane("com.apple.preference.security?Privacy_Accessibility")
@@ -94,5 +103,28 @@ struct PermissionRows: View {
         if let url = URL(string: "x-apple.systempreferences:\(anchor)") {
             NSWorkspace.shared.open(url)
         }
+    }
+}
+
+/// What a permission row's button does.
+enum PermissionGrantAction: Equatable {
+    /// Ask macOS, which prompts only while the user hasn't answered.
+    case request
+    case openSystemSettings
+
+    var label: String {
+        switch self {
+        case .request: "Grant"
+        case .openSystemSettings: "Open System Settings"
+        }
+    }
+}
+
+extension PermissionStatus {
+    /// macOS asks for the microphone once. After "Don't Allow", or under a
+    /// restriction, a request returns at once with no prompt, so only System
+    /// Settings can grant it.
+    var microphoneGrantAction: PermissionGrantAction {
+        self == .denied ? .openSystemSettings : .request
     }
 }

@@ -233,6 +233,12 @@ several items below check it.
       "Speech engine" step shows the failed download and has a "Quit Voxline"
       button that quits the app. Turn Wi-Fi on, relaunch, and confirm the
       download completes and the wizard continues.
+- [ ] `scripts/reset-local-state.sh --keep-model --reset-tcc`, then launch.
+      On Permissions, click Grant on Microphone and choose Don't Allow. The
+      button now reads "Open System Settings" and opens Privacy & Security →
+      Microphone. Turn voxline on there: the row turns green within 2 s and,
+      with Accessibility granted, Continue enables. Turn it off again: Home's
+      Microphone row offers the same button.
 
 ## Five-minute cap
 
