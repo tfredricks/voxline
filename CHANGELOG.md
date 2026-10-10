@@ -303,6 +303,12 @@ app that is no longer sandboxed.
 - Dictating into a password field no longer sends the text to the AI provider
   or keeps it in History or for Retry: voxline stops right after
   transcription with the same "secure text field" error.
+- **Whisper works offline once its model is downloaded.** Loading a cached
+  model no longer asks Hugging Face for the file list first, which failed
+  every Whisper dictation and meeting transcription with no network and
+  added seconds to "Preparing model" online. A download that was interrupted
+  partway now counts as not downloaded, so it resumes instead of failing to
+  load.
 
 ## [0.3.1] - 2026-07-12
 

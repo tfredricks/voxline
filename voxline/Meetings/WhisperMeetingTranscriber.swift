@@ -37,15 +37,10 @@ actor WhisperMeetingTranscriber: MeetingTranscribing {
     private func loadedKit() async throws -> WhisperKit {
         if let kit { return kit }
         if let loading { return try await loading.value }
-        let config = WhisperKitConfig(
-            model: model().whisperKitIdentifier,
+        let config = WhisperModelCache.config(
+            variant: model().whisperKitIdentifier,
             downloadBase: try AppPaths.modelCacheDirectory(),
-            modelRepo: "argmaxinc/whisperkit-coreml",
-            verbose: false,
-            logLevel: .error,
-            prewarm: false,
-            load: true,
-            download: true
+            prewarm: false
         )
         let task = Task { try await WhisperKit(config) }
         loading = task

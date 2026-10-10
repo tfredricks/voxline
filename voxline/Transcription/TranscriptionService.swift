@@ -59,11 +59,15 @@ final class TranscriptionService {
         self.model = model
     }
 
-    /// True if the model variant for `model` is present in the standard
-    /// Hub cache directory. Checked synchronously; safe to call on launch.
-    /// Never creates the cache directory.
+    /// True if every file of the model variant for `model` is in the
+    /// standard Hub cache directory; an interrupted download is not cached.
+    /// Checked synchronously; safe to call on launch. Never creates the
+    /// cache directory.
     static func isModelCached(_ model: WhisperModel) -> Bool {
-        cachedModelFolder(for: model) != nil
+        WhisperModelCache.cachedFolder(
+            forVariant: model.whisperKitIdentifier,
+            in: AppPaths.modelCacheDirectoryIfPresent()
+        ) != nil
     }
 
     /// Headroom (MB) added to the raw model size when checking free space.
@@ -101,7 +105,7 @@ final class TranscriptionService {
         _ = try await WhisperKit.download(
             variant: model.whisperKitIdentifier,
             downloadBase: downloadBase,
-            from: "argmaxinc/whisperkit-coreml"
+            from: WhisperModelCache.repo
         ) { progress in
             progressHandler(progress.fractionCompleted)
         }
@@ -130,19 +134,6 @@ final class TranscriptionService {
 
     // MARK: - Private
 
-    /// Standard Hub cache layout used by huggingface-swift: returns the model
-    /// directory if it exists and is non-empty, otherwise nil.
-    private static func cachedModelFolder(for model: WhisperModel) -> URL? {
-        guard let base = AppPaths.modelCacheDirectoryIfPresent() else { return nil }
-        let path = base
-            .appending(path: "models", directoryHint: .isDirectory)
-            .appending(path: "argmaxinc", directoryHint: .isDirectory)
-            .appending(path: "whisperkit-coreml", directoryHint: .isDirectory)
-            .appending(path: model.whisperKitIdentifier, directoryHint: .isDirectory)
-        let contents = (try? FileManager.default.contentsOfDirectory(atPath: path.path)) ?? []
-        return contents.isEmpty ? nil : path
-    }
-
     private func loadIfNeeded() async throws -> WhisperKit {
         // Loop instead of recursing: each iteration represents one model
         // swap that happened mid-load. Bounded by user behavior (number of
@@ -160,21 +151,7 @@ final class TranscriptionService {
             let variant = currentVariant
             let downloadBase = try AppPaths.modelCacheDirectory()
             let task = Task<WhisperKit, Error> {
-                // Use the standard config: WhisperKit checks cache first,
-                // skips download if files are present, and resolves the
-                // tokenizer (small file) via download as needed. Avoids
-                // modelFolder + download:false combinations that block
-                // tokenizer fetch.
-                let config = WhisperKitConfig(
-                    model: variant,
-                    downloadBase: downloadBase,
-                    modelRepo: "argmaxinc/whisperkit-coreml",
-                    verbose: false,
-                    logLevel: .error,
-                    prewarm: true,
-                    load: true,
-                    download: true
-                )
+                let config = WhisperModelCache.config(variant: variant, downloadBase: downloadBase, prewarm: true)
                 let kit = try await WhisperKit(config)
                 // WhisperKit's init doesn't reliably observe cancellation
                 // mid-flight. Check explicitly so a cancelled load doesn't
