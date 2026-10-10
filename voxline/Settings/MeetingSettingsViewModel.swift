@@ -68,15 +68,34 @@ final class MeetingSettingsViewModel {
         onChange()
     }
 
+    /// A rejected combo is not applied. An accepted one, with or without a
+    /// warning, is applied and saved; `shortcutWarning` keeps showing the
+    /// warning.
     @discardableResult
     func updateShortcut(_ combo: KeyCombo) -> KeyComboValidator.Verdict {
         if KeyInterceptor.presetMap(presets())[combo] != nil { return .rejected(Self.presetTaken) }
-        let verdict = KeyComboValidator.validate(combo, others: [], chords: chords(), translate: translate)
+        let verdict = validate(combo)
         if case .rejected = verdict { return verdict }
         settings.meetingShortcut = combo
         shortcut = combo
         onChange()
         return verdict
+    }
+
+    /// The shortcut validated against the current chords: the app-shortcut
+    /// or typed-character warning it was accepted with, or a conflict with a
+    /// chord changed after it was recorded. Nil when there is no shortcut or
+    /// it is clean.
+    var shortcutWarning: String? {
+        guard let shortcut else { return nil }
+        switch validate(shortcut) {
+        case .ok: return nil
+        case .warning(let message), .rejected(let message): return message
+        }
+    }
+
+    private func validate(_ combo: KeyCombo) -> KeyComboValidator.Verdict {
+        KeyComboValidator.validate(combo, others: [], chords: chords(), translate: translate)
     }
 
     func clearShortcut() {

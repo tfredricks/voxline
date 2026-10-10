@@ -15,6 +15,12 @@ struct MeetingsSettingsPage: View {
                         }
                     }
                 }
+                if let warning = model.shortcutWarning {
+                    Text(warning)
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Toggle("Show recording timer", isOn: $model.showTimer)
                 Toggle("Live transcript", isOn: $model.liveTranscript)
                     .disabled(!model.showTimer)

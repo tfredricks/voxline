@@ -608,6 +608,7 @@ Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meeti
 - [ ] No API key: file has the transcript and "Notes not generated…"; add a key; Regenerate Notes writes a "(regenerated)" file.
 - [ ] Offline first run with no SpeakerKit model: notes say speakers couldn't be separated; call audio labeled "Them".
 - [ ] Settings → Meetings: folder picker, shortcut (rejects a preset's combo and the dictation chord), notes model placeholder, retention, timer toggle.
+- [ ] Settings → Meetings: record ⌘M as the shortcut → it is kept, and an orange "common app shortcut" warning stays under the recorder. Record ⌃⌥M, then change the dictation chord to Left Control + Left Option → back on Meetings, the warning says ⌃⌥ is your dictation hotkey.
 - [ ] Meeting shortcut starts and stops a recording from any app.
 - [ ] Retention "Don't keep": no `.pcm`/`.m4a` remain in `~/Library/Application Support/voxline/meetings/<id>/` after notes are written.
 - [ ] One-hour real meeting: note the time from Stop to "Meeting notes ready" (spike target ≤ 4 min on synthetic audio with small.en; record the real number).

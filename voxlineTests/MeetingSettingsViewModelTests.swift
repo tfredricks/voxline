@@ -58,6 +58,42 @@ import Testing
         }
     }
 
+    @Test func app_shortcut_warning_is_kept_and_shown() {
+        let vm = model()
+        let commandM = KeyCombo(keyCode: 46, modifiers: [.command])
+        guard case .warning(let message) = vm.updateShortcut(commandM) else {
+            Issue.record("expected a warning")
+            return
+        }
+        #expect(vm.shortcut == commandM)
+        #expect(vm.shortcutWarning == message)
+    }
+
+    @Test func clean_shortcut_has_no_warning() {
+        let vm = model()
+        #expect(vm.shortcutWarning == nil)
+        vm.updateShortcut(combo)
+        #expect(vm.shortcutWarning == nil)
+    }
+
+    @Test func shortcut_warning_follows_the_current_chords() {
+        let chords = LockedBox(ChordSet.default)
+        let vm = MeetingSettingsViewModel(
+            settings: AppSettings(defaults: defaults),
+            presets: { [] },
+            chords: { chords.read() },
+            onChange: {},
+            translate: { _, _ in nil }
+        )
+        #expect(vm.updateShortcut(combo) == .ok)
+
+        chords.write(ChordSet(dictation: HotkeyChord(modifierA: .leftControl, modifierB: .leftOption), command: nil))
+        #expect(vm.shortcutWarning == "⌃⌥ is your dictation hotkey")
+
+        chords.write(.default)
+        #expect(vm.shortcutWarning == nil)
+    }
+
     @Test func clear_removes_the_shortcut() {
         let vm = model()
         vm.updateShortcut(combo)
