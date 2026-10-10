@@ -225,9 +225,6 @@ app that is no longer sandboxed.
   starts a recording when it ends. Extending a selection with ⌥⇧→ under the
   default command chord used to start a command recording if you still held
   ⌥⇧, and a preset shortcut could leave the microphone warming up.
-- Losing Accessibility, or pausing voxline, while you hold the hotkey now
-  finishes the recording, instead of leaving the microphone on and dictation
-  stuck until you relaunch (issue 12).
 - Pausing voxline while you hold the hotkey now finishes the recording, and
   losing Accessibility stops the microphone and discards it (nothing can be
   inserted without Accessibility), instead of leaving the microphone on and
