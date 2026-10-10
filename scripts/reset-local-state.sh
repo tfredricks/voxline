@@ -2,16 +2,23 @@
 # Reset voxline local state so the next launch behaves like a brand-new install.
 #
 # Wipes:
-#   - ~/Library/Application Support/voxline (custom modes, Whisper model cache)
-#   - The com.voxline.app defaults domain (settings, history, first-run flag)
+#   - ~/Library/Application Support/voxline, except the recordings below:
+#     modes.json, learning.json (style notes, recent dictations, corrections,
+#     rejected words), and the Whisper model cache (huggingface/)
+#   - The com.voxline.app defaults domain (settings, history, presets,
+#     first-run flag)
 #   - ~/Library/Caches/com.voxline.app (ANE compiled bundle)
 #   - Any leftover 0.3.x sandbox container Data/
 #   - Keychain entries for Anthropic + OpenAI API keys
 #   - Stray voxline-status-test-*.plist files from past test runs
 #
 # Preserves by default:
-#   - The custom vocabulary list. Re-entering vocab on every reset is tedious;
-#     pass --wipe-vocab to clear it too.
+#   - The custom vocabulary list, including which terms Learning added.
+#     Re-entering vocab on every reset is tedious; pass --wipe-vocab to clear
+#     it too.
+#   - Recordings in Application Support/voxline: bakeoff/ (bake-off clips and
+#     hand-corrected references, never committed) and meetings/ (meeting
+#     audio and transcripts). Pass --wipe-recordings to delete them too.
 #
 # Optional flags:
 #   --keep-model      Preserve the cached Whisper model AND the ANE compiled
@@ -20,6 +27,8 @@
 #                     (settings, history, keychain, etc.) is still wiped.
 #   --wipe-vocab      Also wipe the custom vocabulary list (default is to
 #                     preserve it across resets).
+#   --wipe-recordings Also delete bakeoff/ and meetings/ (default is to
+#                     preserve them across resets).
 #   --reset-tcc       Also reset macOS privacy prompts (mic, accessibility,
 #                     input monitoring) so the OS re-asks on next launch.
 #   --reset-keys      Accepted for explicitness. Keychain clearing is part of
@@ -39,23 +48,31 @@ HF_MODEL_PATH="$APP_SUPPORT/huggingface"
 CACHES_DIR="$HOME/Library/Caches/$BUNDLE_ID"
 ANE_BUNDLE_PATH="$CACHES_DIR/com.apple.e5rt.e5bundlecache"
 LEGACY_CONTAINER_DATA="$HOME/Library/Containers/$BUNDLE_ID/Data"
+# Kept in place unless --wipe-recordings; they can't be downloaded again.
+RECORDING_DIRS=(bakeoff meetings)
 # plutil treats `.` in keypaths as nested-dict separators. The actual top-level
-# UserDefaults key contains dots, so each one has to be backslash-escaped when
-# passed to `plutil -extract`/`-insert`. Key must match CustomVocabularyStore.
-VOCAB_KEY='voxline\.context\.customVocabulary'
+# UserDefaults keys contain dots, so each one has to be backslash-escaped when
+# passed to `plutil -extract`/`-insert`. Keys must match CustomVocabularyStore:
+# the list, and the sidecar naming the terms Learning added.
+VOCAB_KEYS=(
+    'voxline\.context\.customVocabulary'
+    'voxline\.context\.learnedVocabulary'
+)
 
 KEEP_MODEL=0
 RESET_TCC=0
 KEEP_VOCAB=1
+KEEP_RECORDINGS=1
 
 for arg in "$@"; do
     case "$arg" in
         --keep-model) KEEP_MODEL=1 ;;
         --wipe-vocab) KEEP_VOCAB=0 ;;
+        --wipe-recordings) KEEP_RECORDINGS=0 ;;
         --reset-tcc)  RESET_TCC=1 ;;
         --reset-keys) ;; # no-op; keychain clearing is part of the default flow
         -h|--help)
-            sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -69,26 +86,31 @@ echo "→ Quitting voxline if running..."
 osascript -e 'tell application "voxline" to quit' >/dev/null 2>&1 || true
 sleep 1
 
-# Stash the custom vocab before the wipe. `defaults export` goes through
-# cfprefsd, so it sees the live domain rather than a possibly stale plist.
-STASHED_VOCAB_PLIST=""
-if [[ $KEEP_VOCAB -eq 1 ]]; then
-    FULL_EXPORT=$(mktemp -t voxline-prefs).plist
-    if defaults export "$PREFS_DOMAIN" "$FULL_EXPORT" 2>/dev/null; then
-        STASHED_VOCAB_PLIST=$(mktemp -t voxline-vocab).plist
-        if plutil -extract "$VOCAB_KEY" xml1 -o "$STASHED_VOCAB_PLIST" "$FULL_EXPORT" 2>/dev/null; then
-            echo "→ Stashing custom vocabulary..."
-        else
-            rm -f "$STASHED_VOCAB_PLIST"
-            STASHED_VOCAB_PLIST=""
-            echo "→ No custom vocabulary to preserve."
-        fi
-    fi
-    rm -f "$FULL_EXPORT"
-fi
-
 STASH=$(mktemp -d -t voxline-reset)
 trap 'rm -rf "$STASH"' EXIT
+
+# Stash the custom vocab before the wipe, one plist per key. `defaults export`
+# goes through cfprefsd, so it sees the live domain rather than a possibly
+# stale plist.
+STASHED_VOCAB=0
+if [[ $KEEP_VOCAB -eq 1 ]]; then
+    FULL_EXPORT="$STASH/prefs.plist"
+    if defaults export "$PREFS_DOMAIN" "$FULL_EXPORT" 2>/dev/null; then
+        for i in "${!VOCAB_KEYS[@]}"; do
+            if plutil -extract "${VOCAB_KEYS[$i]}" xml1 -o "$STASH/vocab-$i.plist" "$FULL_EXPORT" 2>/dev/null; then
+                STASHED_VOCAB=1
+            else
+                rm -f "$STASH/vocab-$i.plist"
+            fi
+        done
+    fi
+    rm -f "$FULL_EXPORT"
+    if [[ $STASHED_VOCAB -eq 1 ]]; then
+        echo "→ Stashing custom vocabulary..."
+    else
+        echo "→ No custom vocabulary to preserve."
+    fi
+fi
 
 if [[ $KEEP_MODEL -eq 1 ]]; then
     if [[ -d "$HF_MODEL_PATH" ]]; then
@@ -102,7 +124,18 @@ if [[ $KEEP_MODEL -eq 1 ]]; then
 fi
 
 echo "→ Clearing $APP_SUPPORT..."
-rm -rf "$APP_SUPPORT" || true
+if [[ $KEEP_RECORDINGS -eq 1 && -d "$APP_SUPPORT" ]]; then
+    find_args=()
+    for dir in "${RECORDING_DIRS[@]}"; do
+        if [[ -d "$APP_SUPPORT/$dir" ]]; then
+            echo "   keeping $dir/ (pass --wipe-recordings to delete it)"
+        fi
+        find_args+=(! -name "$dir")
+    done
+    find "$APP_SUPPORT" -mindepth 1 -maxdepth 1 "${find_args[@]}" -exec rm -rf {} + || true
+else
+    rm -rf "$APP_SUPPORT" || true
+fi
 echo "→ Clearing defaults domain $BUNDLE_ID..."
 defaults delete "$PREFS_DOMAIN" >/dev/null 2>&1 || true
 echo "→ Clearing $CACHES_DIR..."
@@ -126,24 +159,29 @@ if [[ -d "$STASH/anebundle" ]]; then
     mv "$STASH/anebundle" "$ANE_BUNDLE_PATH"
 fi
 
-# Restore vocab after the wipe. The stashed file is a standalone plist whose
-# root element IS the vocab value. Strip the <plist> wrapper, insert it into a
-# fresh plist under the real key, and import that through cfprefsd.
-if [[ -n "$STASHED_VOCAB_PLIST" && -f "$STASHED_VOCAB_PLIST" ]]; then
+# Restore vocab after the wipe. Each stashed file is a standalone plist whose
+# root element IS that key's value. Strip the <plist> wrapper, insert each into
+# one fresh plist under its real key, and import that through cfprefsd.
+if [[ $STASHED_VOCAB -eq 1 ]]; then
     echo "→ Restoring custom vocabulary..."
-    IMPORT_PLIST=$(mktemp -t voxline-import).plist
+    IMPORT_PLIST="$STASH/import.plist"
     plutil -create xml1 "$IMPORT_PLIST"
-    inner_xml=$(awk '
-        /<plist/ { flag=1; next }
-        /<\/plist>/ { flag=0 }
-        flag { print }
-    ' "$STASHED_VOCAB_PLIST")
-    if plutil -insert "$VOCAB_KEY" -xml "$inner_xml" "$IMPORT_PLIST" && defaults import "$PREFS_DOMAIN" "$IMPORT_PLIST"; then
+    inserted=1
+    for i in "${!VOCAB_KEYS[@]}"; do
+        stashed="$STASH/vocab-$i.plist"
+        [[ -f "$stashed" ]] || continue
+        inner_xml=$(awk '
+            /<plist/ { flag=1; next }
+            /<\/plist>/ { flag=0 }
+            flag { print }
+        ' "$stashed")
+        plutil -insert "${VOCAB_KEYS[$i]}" -xml "$inner_xml" "$IMPORT_PLIST" || inserted=0
+    done
+    if [[ $inserted -eq 1 ]] && defaults import "$PREFS_DOMAIN" "$IMPORT_PLIST"; then
         echo "   restored."
     else
         echo "   ⚠ could not restore the custom vocabulary; re-enter it in Settings."
     fi
-    rm -f "$STASHED_VOCAB_PLIST" "$IMPORT_PLIST"
 fi
 
 echo "→ Deleting Keychain entries (service=$KEYCHAIN_SERVICE)..."
