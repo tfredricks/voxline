@@ -122,7 +122,7 @@ import Foundation
         #expect(h.state.toastMessage == "Cancelled")
         #expect(h.state.isCancellable == false)
         #expect(h.state.liveTranscript == nil)
-        #expect(h.pipe.wasCancelled)
+        #expect(!h.pipe.isRecording)
 
         h.session.emit(.init(stable: "late", volatile: ""))
         try? await Task.sleep(for: .milliseconds(50))
@@ -147,13 +147,13 @@ import Foundation
         #expect(h.session.finishCount == 0)
     }
 
-    @Test func wasCancelled_clears_on_next_start() {
+    @Test func a_start_after_a_cancel_is_recording_again() {
         let h = makeHarness()
         h.pipe.startRecording()
         h.pipe.cancel()
-        #expect(h.pipe.wasCancelled)
+        #expect(!h.pipe.isRecording)
         h.pipe.startRecording()
-        #expect(!h.pipe.wasCancelled)
+        #expect(h.pipe.isRecording)
     }
 
     @Test func cancel_with_shortcut_reason_is_silent() async {
@@ -168,7 +168,7 @@ import Foundation
         #expect(h.session.finishCount == 0)
         #expect(h.capture.stopCallCount == 1)
         #expect(h.state.toastMessage == nil)
-        #expect(h.pipe.wasCancelled)
+        #expect(!h.pipe.isRecording)
         #expect(h.state.isCancellable == false)
 
         await h.pipe.finalizeRecording()
@@ -225,7 +225,7 @@ import Foundation
         await awaitWhileHeld(finalize) { session.releaseFinish() }
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == "Cancelled")
-        #expect(h.pipe.wasCancelled)
+        #expect(!h.pipe.isRecording)
     }
 
     @Test func a_shortcut_discard_of_a_refused_recording_leaves_the_retry_running() async {
@@ -249,13 +249,12 @@ import Foundation
         #expect(h.history.items.count == 2)
     }
 
-    @Test func a_refused_start_keeps_wasCancelled() {
+    @Test func a_refused_start_is_not_recording() {
         let h = makeHarness()
-        h.pipe.startRecording()
-        h.pipe.cancel()
         h.state.status = .thinking
         h.pipe.startRecording()
-        #expect(h.pipe.wasCancelled, "a refused start leaves the earlier cancel in place")
+        #expect(!h.pipe.isRecording, "the chord release after a refused press plays no stop sound")
+        #expect(h.capture.startCallCount == 0)
     }
 
     // MARK: - Cancel while thinking
@@ -374,7 +373,7 @@ import Foundation
         h.pipe.cancel()
         #expect(h.state.status == .thinking)
         #expect(h.state.toastMessage == nil)
-        #expect(!h.pipe.wasCancelled)
+        #expect(!h.pipe.isRecording)
 
         h.inserter.releaseInsert()
         await finalize.value
@@ -390,7 +389,7 @@ import Foundation
         h.pipe.cancel()
         #expect(h.state.status == status)
         #expect(h.state.toastMessage == nil)
-        #expect(!h.pipe.wasCancelled)
+        #expect(!h.pipe.isRecording)
     }
 
     // MARK: - Status taken over while recording

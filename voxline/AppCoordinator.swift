@@ -247,7 +247,7 @@ final class AppCoordinator {
             if let state { self?.pillWindow?.updateVisibility(state: state) }
         }
         monitor.onFinalizeRecording = { [weak self, weak state] _ in
-            if self?.pipeline?.wasCancelled != true {
+            if self?.pipeline?.isRecording == true {
                 self?.soundPlayer?.playStop()
             }
             Task { @MainActor in

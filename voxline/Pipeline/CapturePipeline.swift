@@ -58,8 +58,10 @@ final class CapturePipeline {
     private(set) var generation: UInt64 = 0
     /// True from a recording's start until it is finalized or discarded.
     /// Owned here: `state.status` is written by others too, such as a
-    /// permissions error landing mid-recording.
-    private var isRecording = false
+    /// permissions error landing mid-recording. The chord release plays the
+    /// stop sound only while it is true, so a release after Esc, or after a
+    /// press that was refused, stays silent.
+    private(set) var isRecording = false
     /// `generation` as the last recording started. A preset or retry runs
     /// under a newer one.
     private var recordingGeneration: UInt64?
@@ -81,10 +83,6 @@ final class CapturePipeline {
     /// start. A silent `.shortcut` discard of the recording puts them back,
     /// since nothing was dictated; finalizing the recording drops them.
     private var scrubbedTranscripts: (last: String?, cleaned: String?, retry: String?)?
-
-    /// True from `cancel()` until a `startRecording` that isn't refused, so
-    /// the chord release that follows an Esc can skip the stop sound.
-    private(set) var wasCancelled = false
 
     /// Fires on the main actor once the first audio of a recording has been
     /// captured, while it is still recording: the moment a start cue is
@@ -184,7 +182,6 @@ final class CapturePipeline {
         case .idle, .error:
             break
         }
-        wasCancelled = false
         learning?.captureWillStart()
         generation &+= 1
         capHit = false
@@ -359,7 +356,6 @@ final class CapturePipeline {
         default:
             return
         }
-        wasCancelled = true
         capHit = false
         resetIdle()
         if !silent { showToast("Cancelled") }

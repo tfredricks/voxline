@@ -286,6 +286,9 @@ app that is no longer sandboxed.
 - Dictation uses the microphone picked in Settings → Dictation from launch.
   Before, after every relaunch it recorded from the system default until you
   changed a setting (meetings already used the picked microphone).
+- Releasing the hotkey after a press that couldn't start a recording (while a
+  preset or Retry runs, or with a permissions error) no longer plays the stop
+  sound.
 - Settings can no longer delete or overwrite an API key saved somewhere else.
   A Settings window opened before the setup wizard saved a key used to delete
   it the next time a key field lost focus, and the wizard's Continue deleted a

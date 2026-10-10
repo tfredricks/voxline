@@ -1121,7 +1121,7 @@ import Testing
         #expect(h.history.items.count == 1)
         #expect(h.state.status == .idle)
         #expect(h.state.toastMessage == nil)
-        #expect(!h.pipe.wasCancelled)
+        #expect(!h.pipe.isRecording)
     }
 
     @Test func a_preset_that_fails_after_a_dictation_offers_no_retry() async {
