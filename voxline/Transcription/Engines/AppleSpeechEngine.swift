@@ -22,7 +22,7 @@ enum AppleSpeechEngineError: LocalizedError, Equatable {
 @MainActor
 final class AppleSpeechEngine: TranscriptionEngine {
     let id: EngineID = .apple
-    let capabilities: EngineCapabilities = [.streamingPartials]
+    let capabilities: EngineCapabilities = []
 
     private static let fallbackLocale = Locale(identifier: "en-US")
     private static let progressPollInterval: Duration = .milliseconds(200)

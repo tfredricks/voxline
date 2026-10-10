@@ -57,7 +57,7 @@ enum WhisperSegmentText {
 final class WhisperKitEngine: TranscriptionEngine {
     let service: TranscriptionService
     let id: EngineID = .whisperKit
-    let capabilities: EngineCapabilities = [.streamingPartials]
+    let capabilities: EngineCapabilities = []
 
     init(service: TranscriptionService) {
         self.service = service

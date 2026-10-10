@@ -151,7 +151,7 @@ import Foundation
         (savesClip: true, cloud: true, retains: true),
     ])
     func router_retains_audio_only_for_a_clip_or_a_cloud_engine(savesClip: Bool, cloud: Bool, retains: Bool) {
-        let engine = FakeTranscriptionEngine(capabilities: cloud ? [.streamingPartials, .sendsAudioOffDevice] : [.streamingPartials])
+        let engine = FakeTranscriptionEngine(capabilities: cloud ? [.sendsAudioOffDevice] : [])
         let live = CapturePipeline.LiveSession(engine: engine, config: SessionConfig(), savesBakeoffClip: savesClip)
         #expect(live.router.retainsAudio == retains)
         #expect(live.savesBakeoffClip == savesClip)

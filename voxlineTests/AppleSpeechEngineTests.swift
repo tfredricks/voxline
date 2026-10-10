@@ -50,7 +50,7 @@ import AVFoundation
     @Test func identity_before_locale_resolution() {
         let engine = AppleSpeechEngine(locale: Locale(identifier: "en-US"))
         #expect(engine.id == .apple)
-        #expect(engine.capabilities == [.streamingPartials])
+        #expect(engine.capabilities == [])
         #expect(engine.metricsID == "apple:unresolved")
     }
 }

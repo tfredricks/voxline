@@ -221,9 +221,7 @@ private func type(_ event: [String: Any]) -> String? { event["type"] as? String 
         let e = engine()
         #expect(e.id == .openAIRealtime)
         #expect(e.metricsID == "openai:gpt-4o-transcribe")
-        #expect(e.capabilities.contains(.streamingPartials))
-        #expect(e.capabilities.contains(.vocabularyHints))
-        #expect(e.capabilities.contains(.sendsAudioOffDevice))
+        #expect(e.capabilities == [.sendsAudioOffDevice])
     }
 
     @Test func no_key_is_unavailable() async {

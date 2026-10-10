@@ -68,7 +68,7 @@ private func seg(_ text: String, _ start: Float, _ end: Float) -> TimedText {
         let engine = WhisperKitEngine(service: service)
         #expect(engine.id == .whisperKit)
         #expect(engine.metricsID == "whisperkit:" + WhisperModel.largeV3Turbo.whisperKitIdentifier)
-        #expect(engine.capabilities == [.streamingPartials])
+        #expect(engine.capabilities == [])
         #expect(engine.service === service)
     }
 

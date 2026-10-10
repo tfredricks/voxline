@@ -35,7 +35,7 @@ import Foundation
     private func makeHarness(current: (any TranscriptionEngine)? = nil) -> Harness {
         let state = AppState()
         let capture = FakeCapture()
-        let cloud = FakeTranscriptionEngine(id: .openAIRealtime, metricsID: "fake:cloud", capabilities: [.streamingPartials, .sendsAudioOffDevice])
+        let cloud = FakeTranscriptionEngine(id: .openAIRealtime, metricsID: "fake:cloud", capabilities: [.sendsAudioOffDevice])
         let cloudSession = FakeTranscriptionSession()
         cloudSession.finishResult = .success("cloud text")
         cloud.nextSessions = [cloudSession]

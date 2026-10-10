@@ -34,9 +34,7 @@ enum EngineID: String, Codable, CaseIterable, Sendable {
 
 struct EngineCapabilities: OptionSet, Sendable {
     let rawValue: Int
-    static let streamingPartials   = EngineCapabilities(rawValue: 1 << 0)
-    static let vocabularyHints     = EngineCapabilities(rawValue: 1 << 1)
-    static let sendsAudioOffDevice = EngineCapabilities(rawValue: 1 << 2)
+    static let sendsAudioOffDevice = EngineCapabilities(rawValue: 1 << 0)
 }
 
 enum EngineReadiness: Equatable, Sendable {

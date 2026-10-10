@@ -58,7 +58,7 @@ final class OpenAIRealtimeEngine: TranscriptionEngine {
 
     let id: EngineID = .openAIRealtime
     let metricsID = "openai:" + OpenAIRealtimeEngine.model
-    let capabilities: EngineCapabilities = [.streamingPartials, .vocabularyHints, .sendsAudioOffDevice]
+    let capabilities: EngineCapabilities = [.sendsAudioOffDevice]
 
     private let keychain: any KeychainStorage
     private let makeTransport: RealtimeTransportFactory

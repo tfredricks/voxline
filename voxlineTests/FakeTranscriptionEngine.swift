@@ -90,7 +90,7 @@ final class FakeTranscriptionEngine: TranscriptionEngine {
     var nextSessions: [FakeTranscriptionSession] = []
     private(set) var sessions: [FakeTranscriptionSession] = []
 
-    init(id: EngineID = .whisperKit, metricsID: String = "fake:engine", capabilities: EngineCapabilities = [.streamingPartials]) {
+    init(id: EngineID = .whisperKit, metricsID: String = "fake:engine", capabilities: EngineCapabilities = []) {
         self.id = id
         self.metricsID = metricsID
         self.capabilities = capabilities
