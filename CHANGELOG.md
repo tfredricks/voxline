@@ -292,6 +292,8 @@ app that is no longer sandboxed.
   key saved in Settings meanwhile. A key field now saves only what you edited,
   Settings re-reads saved keys and the provider whenever its window comes to
   the front, and a key that fails to save keeps offering Save.
+- A shortcut that starts with the command chord, such as ⇧⌥→, no longer
+  cancels a preset or Retry that is running.
 
 ## [0.3.1] - 2026-07-12
 

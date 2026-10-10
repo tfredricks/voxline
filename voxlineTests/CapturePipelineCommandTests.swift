@@ -1100,6 +1100,28 @@ import Testing
         #expect(h.pipe.metrics.items.first?.editAction == "replace_selection")
     }
 
+    @Test func a_shortcut_discard_of_a_refused_recording_leaves_the_preset_running() async {
+        let h = makeHarness(reader: reader(Self.notesContext(selecting: Self.cat)))
+        h.llm.holdCommand = true
+        defer { h.llm.releaseCommand() }
+        let preset = Task { await h.pipe.runPreset(Self.makeConcise) }
+        #expect(await eventually { h.llm.commandGate.waiting == 1 })
+
+        h.pipe.startRecording(kind: .command)
+        #expect(h.capture.startCallCount == 0)
+        h.pipe.cancel(reason: .shortcut)
+        #expect(h.state.status == .thinking)
+        #expect(h.state.isCancellable)
+
+        h.llm.releaseCommand()
+        await preset.value
+        #expect(h.inserter.calls.map(\.text) == ["transformed"])
+        #expect(h.history.items.count == 1)
+        #expect(h.state.status == .idle)
+        #expect(h.state.toastMessage == nil)
+        #expect(!h.pipe.wasCancelled)
+    }
+
     @Test func esc_while_a_preset_is_editing_drops_the_result() async {
         let h = makeHarness(reader: reader(Self.notesContext(selecting: Self.cat)))
         h.llm.holdCommand = true

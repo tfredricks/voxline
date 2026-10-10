@@ -226,6 +226,36 @@ import Foundation
         #expect(h.pipe.wasCancelled)
     }
 
+    @Test func a_shortcut_discard_of_a_refused_recording_leaves_the_retry_running() async {
+        let h = makeHarness()
+        await dictate(h)
+        h.llm.holdCleanup = true
+        defer { h.llm.releaseCleanup() }
+        let retry = Task { await h.pipe.retryLastDictation() }
+        #expect(await eventually { h.llm.cleanupGate.waiting == 1 })
+
+        h.pipe.startRecording()
+        #expect(h.capture.startCallCount == 1)
+        h.pipe.cancel(reason: .shortcut)
+        #expect(h.state.status == .thinking)
+
+        h.llm.releaseCleanup()
+        await retry.value
+        #expect(h.inserter.calls.map(\.text) == ["cleaned", "cleaned"])
+        #expect(h.state.status == .idle)
+        #expect(h.state.toastMessage == nil)
+        #expect(h.history.items.count == 2)
+    }
+
+    @Test func a_refused_start_keeps_wasCancelled() {
+        let h = makeHarness()
+        h.pipe.startRecording()
+        h.pipe.cancel()
+        h.state.status = .thinking
+        h.pipe.startRecording()
+        #expect(h.pipe.wasCancelled, "a refused start leaves the earlier cancel in place")
+    }
+
     // MARK: - Cancel while thinking
 
     @Test func cancel_while_transcribing_returns_promptly() async {

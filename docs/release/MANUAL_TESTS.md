@@ -424,6 +424,8 @@ blip may play on the discarded ones.
 - [ ] Press ⌥2 with nothing selected. The toast reads "Select text to
       transform" and no ™ is typed.
 - [ ] Press ⌥1 and ⌥3 on selections in Notes and Slack. Each works.
+- [ ] Select a long paragraph in Notes and press ⌥1; while the pill shows
+      "Fix grammar…", press ⇧⌥→. The preset still lands, with no "Cancelled".
 - [ ] Open Settings → Commands, focus a text field, and press ⌥2.
       It types ™ (presets are off while voxline is frontmost).
 - [ ] Select a paragraph in Notes and hold ⌥2 down for two seconds. Make

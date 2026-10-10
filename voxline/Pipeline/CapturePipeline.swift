@@ -60,6 +60,9 @@ final class CapturePipeline {
     /// Owned here: `state.status` is written by others too, such as a
     /// permissions error landing mid-recording.
     private var isRecording = false
+    /// `generation` as the last recording started. A preset or retry runs
+    /// under a newer one.
+    private var recordingGeneration: UInt64?
     private var live: LiveSession?
     private var startTasks: StartTasks?
     /// The command recording's EditContext and Cmd+C fallback, started at
@@ -79,8 +82,8 @@ final class CapturePipeline {
     /// since nothing was dictated; finalizing the recording drops them.
     private var scrubbedTranscripts: (last: String?, cleaned: String?, retry: String?)?
 
-    /// True from `cancel()` until the next `startRecording`, so the chord
-    /// release that follows an Esc can skip the stop sound.
+    /// True from `cancel()` until a `startRecording` that isn't refused, so
+    /// the chord release that follows an Esc can skip the stop sound.
     private(set) var wasCancelled = false
 
     /// Fires on the main actor once the first audio of a recording has been
@@ -163,7 +166,6 @@ final class CapturePipeline {
     /// of the dictation context capture. Neither kind touches the clipboard
     /// while recording.
     func startRecording(kind: CaptureKind = .dictation) {
-        wasCancelled = false
         // Reject re-entry while a recording or its post-recording pipeline
         // (transcribe → LLM → paste) is still in flight. `.thinking` covers
         // the entire await chain in finalizeRecording — `state.status` is set
@@ -182,6 +184,7 @@ final class CapturePipeline {
         case .idle, .error:
             break
         }
+        wasCancelled = false
         learning?.captureWillStart()
         generation &+= 1
         capHit = false
@@ -224,6 +227,7 @@ final class CapturePipeline {
         }
         self.live = live
         isRecording = true
+        recordingGeneration = generation
         scrubbedTranscripts = scrubbed
         state.recordingStartedAt = Date()
         state.audioLevel = 0
@@ -329,7 +333,8 @@ final class CapturePipeline {
     /// history and stays retryable, and any late result is dropped. Ignored once insert has begun, and when
     /// nothing is running. A `.shortcut` discard of a recording shows no
     /// toast and keeps the previous dictation retryable; while thinking it
-    /// acts as `.user`.
+    /// acts as `.user` on the recording's own run, and is ignored during a
+    /// preset or retry, whose chord press started no recording.
     func cancel(reason: CancelReason = .user) {
         var silent = false
         switch state.status {
@@ -343,6 +348,7 @@ final class CapturePipeline {
             }
             scrubbedTranscripts = nil
         case .thinking where state.isCancellable:
+            if reason == .shortcut, generation != recordingGeneration { return }
             generation &+= 1
             finalizeWork?.cancel()
             finalizeWork = nil
