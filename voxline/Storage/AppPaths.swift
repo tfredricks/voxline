@@ -51,6 +51,14 @@ enum AppPaths {
         appDirectory.appending(path: "meetings", directoryHint: .isDirectory)
     }
 
+    /// Where meeting notes files go until the user picks a folder. Never
+    /// creates it.
+    static func defaultMeetingNotesFolder() -> URL {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appending(path: "Documents")
+        return documents.appending(path: "voxline Meetings", directoryHint: .isDirectory)
+    }
+
     /// Learning's style notes, recent texts, correction pairs, and rejected words.
     static func learningFile() throws -> URL {
         learningFile(inAppDirectory: try applicationSupportDirectory())

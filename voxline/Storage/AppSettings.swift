@@ -224,9 +224,7 @@ struct AppSettings: @unchecked Sendable {
             if let path = defaults.string(forKey: Key.meetingNotesFolder), !path.isBlank {
                 return URL(fileURLWithPath: path, isDirectory: true)
             }
-            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-                ?? URL(fileURLWithPath: NSHomeDirectory()).appending(path: "Documents")
-            return documents.appending(path: "voxline Meetings", directoryHint: .isDirectory)
+            return AppPaths.defaultMeetingNotesFolder()
         }
         set { defaults.set(newValue.path, forKey: Key.meetingNotesFolder) }
     }

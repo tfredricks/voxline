@@ -68,6 +68,12 @@ import Foundation
         #expect(url.standardizedFileURL.path == BakeoffFixtures.directory(environment: [:]).standardizedFileURL.path)
     }
 
+    @Test func default_meeting_notes_folder_is_voxline_meetings_in_documents() {
+        let url = AppPaths.defaultMeetingNotesFolder()
+        #expect(Array(url.pathComponents.suffix(2)) == ["Documents", "voxline Meetings"])
+        #expect(url.hasDirectoryPath)
+    }
+
     @Test func learning_file_lives_in_the_app_directory() {
         let dir = URL(filePath: "/tmp/voxline-paths-test", directoryHint: .isDirectory)
         #expect(AppPaths.learningFile(inAppDirectory: dir).path == "/tmp/voxline-paths-test/learning.json")

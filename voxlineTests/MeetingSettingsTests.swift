@@ -12,6 +12,7 @@ import Testing
         let settings = makeSettings()
         #expect(settings.meetingNotesFolder.lastPathComponent == "voxline Meetings")
         #expect(settings.meetingNotesFolder.deletingLastPathComponent().lastPathComponent == "Documents")
+        #expect(settings.meetingNotesFolder == AppPaths.defaultMeetingNotesFolder())
     }
 
     @Test func notes_folder_round_trips() {
