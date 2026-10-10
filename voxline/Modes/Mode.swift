@@ -22,13 +22,8 @@ enum ModeCategory: String, Codable, CaseIterable {
     }
 }
 
-struct Mode: Codable, Equatable, Identifiable {
+struct Mode: Codable, Equatable {
     static let wildcardBundleID = "*"
-
-    /// Stable ID for SwiftUI ForEach. Bundle ID is stable enough as long as
-    /// the user doesn't have two modes with the same bundle ID — the editor
-    /// enforces uniqueness on save.
-    var id: String { bundleID }
 
     var bundleID: String
     var displayName: String
