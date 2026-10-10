@@ -618,6 +618,7 @@ Setup: `defaults write ~/Library/Preferences/com.voxline.app voxline.debug.meeti
 - [ ] Quit during recording → confirmation; relaunch → "Process unfinished meeting…?" → Process writes notes for the recorded part.
 - [ ] Log out (and separately Restart, Shut Down) during recording and during processing → no confirmation, the Mac doesn't say Voxline interrupted it, and it goes through; log back in / start up → "Process unfinished meeting…?" offers the meeting.
 - [ ] `kill -9` voxline mid-recording → relaunch → recovery works the same.
+- [ ] Start a meeting, talk for a minute, then close the lid (or Apple menu → Sleep) for a few minutes. On wake a "Meeting recording stopped — Your Mac went to sleep" notification has appeared, the notes cover the minute before sleep, and the meeting's duration doesn't include the sleep.
 - [ ] Hold the dictation hotkey during a meeting: dictation works as usual.
 - [ ] No API key: file has the transcript and "Notes not generated…"; add a key; Regenerate Notes writes a "(regenerated)" file.
 - [ ] Offline, with no Whisper model downloaded, record two short meetings: each fails with a notification. Quit and relaunch → the menu still has Retry Processing, and both Home rows show Failed with Retry. Go online; the menu item retries the newer meeting, and each Home row's Retry retries its own.

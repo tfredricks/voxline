@@ -95,6 +95,10 @@ app that is no longer sandboxed.
   Processing for a meeting whose processing failed, from the menu or its row
   on Home, also after a relaunch; Regenerate Notes; an audio retention
   setting.
+- A meeting recording stops when the Mac goes to sleep, with a notification
+  saying so, and notes are written for what was recorded. Before, closing the
+  lid kept the meeting "recording": on wake the tracks were padded with the
+  whole sleep as silence and the 60-minute cap fired at once.
 - **Live transcript during meetings.** The recording timer has a chevron;
   expand it to see the last few things said, labeled Me (your mic) and Them
   (your Mac's sound output), with words that may still change shown dim.
@@ -268,6 +272,12 @@ app that is no longer sandboxed.
   voxline no longer says Accessibility "was revoked".
 - The History window's Time column is current when you reopen it, and moves
   on each minute while it is open, instead of saying "1 min. ago" for hours.
+- Settings can no longer delete or overwrite an API key saved somewhere else.
+  A Settings window opened before the setup wizard saved a key used to delete
+  it the next time a key field lost focus, and the wizard's Continue deleted a
+  key saved in Settings meanwhile. A key field now saves only what you edited,
+  Settings re-reads saved keys and the provider whenever its window comes to
+  the front, and a key that fails to save keeps offering Save.
 
 ## [0.3.1] - 2026-07-12
 
