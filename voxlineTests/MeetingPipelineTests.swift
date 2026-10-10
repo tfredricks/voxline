@@ -25,7 +25,8 @@ final class FakeDiarizer: MeetingDiarizing, @unchecked Sendable {
     var response: Result<[SpeakerSegmentText], Error> = .success([])
     private(set) var receivedSegments: [TimedSegment]?
     private(set) var receivedSampleCount: Int?
-    func prepare() async throws {}
+    private(set) var prepareCount = 0
+    func prepare() async throws { prepareCount += 1 }
     func diarize(_ samples: [Float], transcript: TrackTranscript) async throws -> [SpeakerSegmentText] {
         receivedSegments = transcript.segments
         receivedSampleCount = samples.count
@@ -152,6 +153,15 @@ final class FakeTranscoder: MeetingAudioTranscoding, @unchecked Sendable {
         #expect(outcome == .nothingRecorded)
         #expect(transcriber.calls == 0)
         #expect(!FileManager.default.fileExists(atPath: store.directory(for: id).url.path))
+    }
+
+    @Test func empty_in_person_transcript_skips_diarization() async throws {
+        let id = try meeting(mic: speech, system: nil, tap: false)
+        transcriber.responses = [.success(TrackTranscript(segments: []))]
+        let outcome = await makePipeline().process(id)
+        #expect(outcome == .nothingRecorded)
+        #expect(diarizer.prepareCount == 0)
+        #expect(diarizer.receivedSampleCount == nil)
     }
 
     @Test func notes_failure_still_writes_transcript() async throws {

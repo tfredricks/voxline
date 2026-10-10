@@ -225,7 +225,7 @@ final class MeetingPipeline: MeetingProcessing {
             let others: [SpeakerSegmentText]
             if callMode {
                 others = await diarized(systemSamples ?? [], systemTranscript, warnings: &warnings)
-            } else if let micTranscript {
+            } else if let micTranscript, !micTranscript.segments.isEmpty {
                 let samples = try await Self.offMain { try PCMTrackReader.samples(at: micURL) }
                 others = await diarized(samples, micTranscript, warnings: &warnings)
             } else {
