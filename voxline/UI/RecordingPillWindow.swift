@@ -87,16 +87,6 @@ final class RecordingPillWindow {
         }
     }
 
-    func close() {
-        retryTimer?.invalidate()
-        retryTimer = nil
-        retryUntil = nil
-        panel?.orderOut(nil)
-        panel = nil
-        hostingView = nil
-        anchorScreen = nil
-    }
-
     /// Starts an offer when status becomes an error that offers Retry;
     /// withdraws it on any other status change or when it expires.
     private func updateRetryOffer(state: AppState) {

@@ -231,8 +231,6 @@ final class CapturePipeline {
         scrubbedTranscripts = scrubbed
         state.recordingStartedAt = Date()
         state.audioLevel = 0
-        state.lastTranscribeDuration = nil
-        state.lastCleanupDuration = nil
         state.liveTranscript = nil
         state.pipelinePhase = nil
         state.isCancellable = true
@@ -457,7 +455,6 @@ final class CapturePipeline {
         let transcript = transcription.text
         let bakeoffAudio = live.savesBakeoffClip && commandContext == nil ? router.retainedAudio : nil
         endLiveSession()
-        state.lastTranscribeDuration = Self.seconds(transcription.duration)
         state.lastTranscript = transcript
         if state.recordingKind != .command, !transcript.isEmpty {
             state.retryTranscript = transcript
@@ -634,7 +631,6 @@ final class CapturePipeline {
         if skippedCleanup {
             cleaned = transcript
             cleanupMs = 0
-            state.lastCleanupDuration = 0
         } else {
             let cleanupStart = ContinuousClock.now
             do {
@@ -650,9 +646,7 @@ final class CapturePipeline {
                 transcriptFallback(transcript)
                 return setError("LLM cleanup failed: \(error.localizedDescription) Raw transcript copied to the clipboard — paste to recover it.", retryable: true)
             }
-            let cleanupDuration = cleanupStart.duration(to: .now)
-            state.lastCleanupDuration = Self.seconds(cleanupDuration)
-            cleanupMs = Self.milliseconds(cleanupDuration)
+            cleanupMs = Self.milliseconds(cleanupStart.duration(to: .now))
         }
         state.lastCleanedText = cleaned
         historyStore.record(cleanedText: cleaned, rawTranscript: transcript, mode: mode, context: context)
@@ -791,10 +785,6 @@ final class CapturePipeline {
     /// Truncates, so stage times never sum past the total measured around them.
     static func milliseconds(_ duration: Duration) -> Int {
         Int(duration / .milliseconds(1))
-    }
-
-    private static func seconds(_ duration: Duration) -> TimeInterval {
-        duration / .seconds(1)
     }
 
     // MARK: - Terminal states

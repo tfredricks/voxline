@@ -102,15 +102,6 @@ final class AppState {
     /// finalizes.
     var lastRecordingDuration: TimeInterval?
 
-    /// Seconds the transcription session's `finish()` took on the most recent
-    /// dictation. Nil until the first transcription completes.
-    var lastTranscribeDuration: TimeInterval?
-
-    /// Wall-clock seconds spent in the LLM cleanup call on the most recent
-    /// dictation. Nil until the first cleanup completes (or skipped when the
-    /// transcript was empty).
-    var lastCleanupDuration: TimeInterval?
-
     /// The engine's evolving transcript while recording, then the final
     /// transcript while thinking; nil once idle.
     var liveTranscript: TranscriptPartial?
