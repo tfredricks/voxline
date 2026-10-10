@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DictationSettingsPage: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.controlActiveState) private var windowActivity
     @Bindable var general: GeneralSettingsViewModel
     @Bindable var keys: APIKeysSettingsViewModel
     @State private var levelMonitor: MicLevelMonitor?
@@ -78,25 +79,31 @@ struct DictationSettingsPage: View {
         .onAppear {
             if levelMonitor == nil { levelMonitor = MicLevelMonitor() }
             levelMonitor?.preferredInputDeviceUID = general.audioInputDeviceUID
-            startMonitorIfAllowed()
+            updateMonitor()
         }
         .onDisappear { levelMonitor?.stop() }
         .onChange(of: general.audioInputDeviceUID) { _, newValue in
             levelMonitor?.stop()
             levelMonitor?.preferredInputDeviceUID = newValue
-            startMonitorIfAllowed()
+            updateMonitor()
         }
-        .onChange(of: appState.status) { _, newStatus in
-            if newStatus == .recording {
-                levelMonitor?.stop()
-            } else {
-                startMonitorIfAllowed()
-            }
-        }
+        .onChange(of: appState.status) { _, _ in updateMonitor() }
+        .onChange(of: windowActivity) { _, _ in updateMonitor() }
     }
 
-    private func startMonitorIfAllowed() {
-        guard appState.status != .recording else { return }
-        try? levelMonitor?.start()
+    /// The live meter holds the microphone open, so it runs only while
+    /// voxline isn't recording and the window is in front of the active app.
+    /// `onDisappear` doesn't fire for a minimised, hidden, or background
+    /// window; the window going inactive stops the meter instead.
+    static func monitorsLevel(status: AppStatus, windowActivity: ControlActiveState) -> Bool {
+        status != .recording && windowActivity != .inactive
+    }
+
+    private func updateMonitor() {
+        if Self.monitorsLevel(status: appState.status, windowActivity: windowActivity) {
+            try? levelMonitor?.start()
+        } else {
+            levelMonitor?.stop()
+        }
     }
 }
