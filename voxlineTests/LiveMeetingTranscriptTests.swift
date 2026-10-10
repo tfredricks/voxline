@@ -69,6 +69,61 @@ import Testing
         #expect(engine.sessions[1].appended.isEmpty)
     }
 
+    @Test func lost_track_clears_its_volatile_tail() async {
+        let live = await started()
+        engine.sessions[0].emit(TranscriptPartial(stable: "", volatile: "I think"))
+        engine.sessions[1].emit(TranscriptPartial(stable: "Sure.", volatile: "and the next thing we"))
+        await settle()
+        #expect(live.transcript.volatile == [.mic: "I think", .system: "and the next thing we"])
+        live.trackLost(.system)
+        await settle()
+        #expect(live.transcript.volatile == [.mic: "I think"])
+        #expect(live.transcript.lines.map(\.text) == ["Sure."])
+    }
+
+    @Test func session_ending_on_its_own_clears_its_volatile_tail() async {
+        let live = await started()
+        engine.sessions[1].emit(TranscriptPartial(stable: "", volatile: "and the next"))
+        await settle()
+        engine.sessions[1].cancel()
+        await settle()
+        #expect(live.transcript.volatile.isEmpty)
+        #expect(live.availability == .listening)
+    }
+
+    @Test func track_lost_before_open_is_not_opened() async {
+        engine.holdsOpen = true
+        let live = LiveMeetingTranscript(engine: engine)
+        live.start(tracks: [.mic, .system])
+        live.trackLost(.system)
+        engine.releaseOpen()
+        await live.startTask?.value
+        #expect(engine.sessions.count == 1)
+        #expect(live.availability == .listening)
+        engine.sessions[0].cancel()
+        await settle()
+        #expect(live.availability == .unavailable("Apple Speech stopped"))
+    }
+
+    @Test func track_lost_while_opening_cancels_the_late_session() async {
+        engine.holdsOpen = true
+        let live = LiveMeetingTranscript(engine: engine)
+        live.start(tracks: [.mic, .system])
+        await settle()
+        engine.releaseOpen()
+        engine.holdsOpen = true
+        await settle()
+        #expect(engine.openedConfigs.count == 2)
+        live.trackLost(.system)
+        engine.releaseOpen()
+        await live.startTask?.value
+        #expect(engine.sessions.count == 2)
+        #expect(engine.sessions[1].cancelCount == 1)
+        #expect(engine.sessions[0].cancelCount == 0)
+        live.samples([0.1], track: .system)
+        #expect(engine.sessions[1].appended.isEmpty)
+    }
+
     @Test func stop_cancels_every_session_and_keeps_the_transcript() async {
         let live = await started()
         engine.sessions[0].emit(TranscriptPartial(stable: "Keep me."))

@@ -42,6 +42,17 @@ import Testing
         #expect(settled.lines == [LiveLine(id: 0, track: .mic, text: "I think so.")])
     }
 
+    @Test func ending_a_track_drops_only_its_volatile_tail() {
+        var assembler = LiveTranscriptAssembler()
+        _ = assembler.apply(TranscriptPartial(stable: "", volatile: "I thi"), track: .mic)
+        _ = assembler.apply(TranscriptPartial(stable: "Sure.", volatile: "and the next"), track: .system)
+        let ended = assembler.endTrack(.system)
+        #expect(ended.volatile == [.mic: "I thi"])
+        #expect(ended.lines.map(\.text) == ["Sure."])
+        let late = assembler.apply(TranscriptPartial(stable: "Sure. And", volatile: ""), track: .system)
+        #expect(late.lines.map(\.text) == ["Sure. And"])
+    }
+
     @Test func non_extending_stable_text_is_a_fresh_segment() {
         var assembler = LiveTranscriptAssembler()
         _ = assembler.apply(TranscriptPartial(stable: "First session."), track: .mic)

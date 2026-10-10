@@ -48,6 +48,13 @@ struct LiveTranscriptAssembler {
         return transcript
     }
 
+    /// Drops the track's unsettled tail once its session is gone, so it
+    /// isn't pinned below every newer line.
+    mutating func endTrack(_ track: MeetingRecorder.Track) -> LiveTranscript {
+        transcript.volatile[track] = nil
+        return transcript
+    }
+
     private mutating func append(_ text: String, track: MeetingRecorder.Track) {
         if let last = transcript.lines.indices.last, transcript.lines[last].track == track {
             let joined = TranscriptPartial.join(transcript.lines[last].text, text)

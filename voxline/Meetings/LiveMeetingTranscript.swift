@@ -47,6 +47,7 @@ final class LiveMeetingTranscript: LiveMeetingTranscribing {
     @ObservationIgnored private let sessions = SessionTable()
     @ObservationIgnored private var assembler = LiveTranscriptAssembler()
     @ObservationIgnored private var consumers: [MeetingRecorder.Track: Task<Void, Never>] = [:]
+    @ObservationIgnored private var lostTracks: Set<MeetingRecorder.Track> = []
     @ObservationIgnored private var stopped = false
 
     init(engine: any TranscriptionEngine) {
@@ -68,11 +69,15 @@ final class LiveMeetingTranscript: LiveMeetingTranscribing {
                 case .unavailable(let reason):
                     throw LiveTranscriptError.unavailable(reason)
                 }
-                for track in ordered {
+                for track in ordered where !lostTracks.contains(track) {
                     let session = try await engine.openSession(SessionConfig())
                     guard !stopped else {
                         session.cancel()
                         return
+                    }
+                    guard !lostTracks.contains(track) else {
+                        session.cancel()
+                        continue
                     }
                     sessions.set(session, for: track)
                     consumers[track] = consume(session, track: track)
@@ -91,7 +96,9 @@ final class LiveMeetingTranscript: LiveMeetingTranscribing {
     }
 
     func trackLost(_ track: MeetingRecorder.Track) {
+        lostTracks.insert(track)
         sessions.remove(track)?.cancel()
+        transcript = assembler.endTrack(track)
     }
 
     func stop() {
@@ -120,7 +127,9 @@ final class LiveMeetingTranscript: LiveMeetingTranscribing {
     private func sessionEnded(_ track: MeetingRecorder.Track) {
         consumers[track] = nil
         sessions.remove(track)?.cancel()
-        guard !stopped, availability == .listening, sessions.isEmpty else { return }
+        guard !stopped else { return }
+        transcript = assembler.endTrack(track)
+        guard availability == .listening, sessions.isEmpty else { return }
         availability = .unavailable(LiveTranscriptError.stopped.localizedDescription)
         AppLog.meetings.notice("live transcript ended: last session closed")
     }
