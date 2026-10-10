@@ -95,9 +95,7 @@ struct HomeView: View {
                 meetingRow(meeting)
             }
         }
-        Button("Open meetings folder") {
-            NSWorkspace.shared.open(AppSettings().meetingNotesFolder)
-        }
+        Button("Open meetings folder") { model.openMeetingsFolder() }
     }
 
     @ViewBuilder

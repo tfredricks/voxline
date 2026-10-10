@@ -38,4 +38,28 @@ import Testing
         vm.refreshPermissions()
         #expect(vm.permissions.requiredGranted == true)
     }
+
+    /// The default folder is made only when the first notes are written, and
+    /// opening a missing folder does nothing.
+    @Test func opening_the_meetings_folder_creates_it_first() {
+        let parent = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let folder = parent.appending(path: "voxline Meetings")
+        var opened: URL?
+        let vm = HomeViewModel(
+            state: AppState(),
+            store: makeStore(),
+            permissions: { self.granted },
+            fileExists: { _ in true },
+            meetingsFolder: { folder },
+            openInFinder: { opened = $0 }
+        )
+
+        vm.openMeetingsFolder()
+
+        var isDirectory: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory))
+        #expect(isDirectory.boolValue)
+        #expect(opened == folder)
+    }
 }
