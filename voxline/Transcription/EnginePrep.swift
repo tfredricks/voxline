@@ -84,6 +84,13 @@ enum EnginePrep {
         audience == .launch && plan == .download
     }
 
+    /// Whether a switch from `previous` to `selected` should free the loaded
+    /// Whisper model, which stays resident (about 1 GB for large-v3 turbo)
+    /// until something releases it.
+    static func unloadsWhisper(previous: EngineID?, selected: EngineID) -> Bool {
+        previous == .whisperKit && selected != .whisperKit
+    }
+
     /// Whether saving or clearing the OpenAI key calls for re-checking the
     /// selected engine's readiness.
     static func rechecksAfterOpenAIKeyChange(selected: EngineID) -> Bool {

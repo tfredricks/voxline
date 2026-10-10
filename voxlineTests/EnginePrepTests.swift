@@ -20,6 +20,23 @@ import Testing
         #expect(EnginePrep.plan(for: .unavailable(Self.reason)) == .fail(Self.reason))
     }
 
+    // MARK: Unloading Whisper
+
+    @Test(arguments: [EngineID.apple, .openAIRealtime])
+    func switching_away_from_whisper_unloads_its_model(selected: EngineID) {
+        #expect(EnginePrep.unloadsWhisper(previous: .whisperKit, selected: selected))
+    }
+
+    @Test(arguments: EngineID.allCases)
+    func any_other_switch_keeps_whatever_is_loaded(previous: EngineID) {
+        #expect(!EnginePrep.unloadsWhisper(previous: previous, selected: .whisperKit))
+    }
+
+    @Test func a_switch_between_other_engines_has_nothing_to_unload() {
+        #expect(!EnginePrep.unloadsWhisper(previous: .apple, selected: .openAIRealtime))
+        #expect(!EnginePrep.unloadsWhisper(previous: .openAIRealtime, selected: .apple))
+    }
+
     // MARK: Audience for a settings switch
 
     @Test func switch_during_launch_prep_takes_over_the_launch_ui() {

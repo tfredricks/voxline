@@ -773,6 +773,9 @@ extension AppCoordinator {
 
         guard let engines else { return }
         let engineChanged = snapshot.engine != appliedEngine
+        if EnginePrep.unloadsWhisper(previous: appliedEngine, selected: snapshot.engine) {
+            transcriber?.unload()
+        }
         appliedEngine = snapshot.engine
         let selected = engines.engine(for: snapshot.engine)
 

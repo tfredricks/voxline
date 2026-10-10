@@ -27,9 +27,7 @@ final class TranscriptionService {
             // wrong-variant WhisperKit into `whisperKit` — see the variant
             // check in loadIfNeeded for the matching guard on the consumer
             // side.
-            loadTask?.task.cancel()
-            loadTask = nil
-            whisperKit = nil
+            unload()
         }
     }
 
@@ -121,6 +119,14 @@ final class TranscriptionService {
     /// The loaded pipeline, loading it first if needed. Streaming sessions
     /// transcribe against it directly.
     func loadedKit() async throws -> WhisperKit { try await loadIfNeeded() }
+
+    /// Releases the loaded pipeline and cancels any load in flight. Sessions
+    /// already open keep their own reference; the next use loads it again.
+    func unload() {
+        loadTask?.task.cancel()
+        loadTask = nil
+        whisperKit = nil
+    }
 
     /// Transcribe a Float32 PCM buffer at AudioFormat.whisperSampleRate.
     /// Returns the concatenated text across all decoded segments, trimmed.
