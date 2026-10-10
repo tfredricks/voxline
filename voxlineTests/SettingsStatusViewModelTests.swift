@@ -200,6 +200,17 @@ import Foundation
         #expect(f.status.issues.isEmpty)
     }
 
+    @Test func editing_a_saved_key_is_not_an_issue() async throws {
+        let f = try makeFixtures(provider: .anthropic, anthropicKey: "sk-ant-good")
+        await f.status.refreshEngineReadiness()
+
+        f.keys.anthropicKey = "sk-ant-goo"
+        #expect(f.status.issues.isEmpty)
+
+        f.keys.anthropicKey = ""
+        #expect(f.status.issues.isEmpty)
+    }
+
     @Test func reconnecting_the_microphone_clears_the_microphone_issue() async throws {
         let mics = DeviceList()
         let f = try makeFixtures(deviceUID: "uid-1", devices: mics)
