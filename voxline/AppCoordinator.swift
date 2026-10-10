@@ -8,10 +8,6 @@ final class AppCoordinator {
     var pipeline: CapturePipeline?
     var transcriber: TranscriptionService?
     var engines: TranscriptionEngines?
-    var llm: LLMService?
-    var modes: ModeRouter?
-    var inserter: TextInserter?
-    var frontmost: FrontmostApp?
     var capture: AudioCaptureService?
     var soundPlayer: HotkeySoundPlayer?
     /// Set by the app delegate before `startIfNeeded`.
@@ -192,7 +188,6 @@ final class AppCoordinator {
         self.engines = engines
         self.appliedEngine = settings.transcriptionEngine
 
-        // Modes
         let modes: [Mode]
         do {
             let store = try ModeStore()
@@ -202,19 +197,11 @@ final class AppCoordinator {
             modes = ModeStore.shippedDefaults
         }
         let router = ModeRouter(modes: modes)
-
-        // LLM
         let llm = LLMService(settings: settings, keychain: DataProtectionKeychain())
-        self.llm = llm
-        self.modes = router
-
-        // Output
         let paste = PasteInjector()
         let inserter = TextInserter(paste: paste)
         let frontmost = FrontmostApp()
         let fieldInspector = AXFocusedFieldInspector()
-        self.inserter = inserter
-        self.frontmost = frontmost
 
         let contextCapture = DefaultContextCaptureService(
             frontmost: frontmost,
@@ -247,8 +234,7 @@ final class AppCoordinator {
         let pill = RecordingPillWindow()
         pillWindow = pill
         pill.show(state: state)
-        observeToastChanges(state: state)
-        observePillContentChanges(state: state)
+        observePillChanges(state: state)
         buildMeetings(state: state, settings: settings)
     }
 
@@ -572,21 +558,6 @@ final class AppCoordinator {
         }
     }
 
-    /// Re-runs `pillWindow.updateVisibility` whenever `state.toastMessage`
-    /// changes, so a toast (such as "Copied" after a history-row click) pops
-    /// the pill open, and the pill hides again when `flashToast` clears it.
-    private func observeToastChanges(state: AppState) {
-        withObservationTracking {
-            _ = state.toastMessage
-        } onChange: { [weak self, weak state] in
-            Task { @MainActor in
-                guard let self, let state else { return }
-                self.pillWindow?.updateVisibility(state: state)
-                self.observeToastChanges(state: state)
-            }
-        }
-    }
-
     private func observeCancellableChanges(state: AppState) {
         withObservationTracking {
             _ = state.isCancellable
@@ -599,11 +570,14 @@ final class AppCoordinator {
         }
     }
 
-    /// Re-runs `pillWindow.updateVisibility` whenever the live transcript,
-    /// pipeline phase, or status changes, so the pill grows to show text as
-    /// soon as the first partial arrives and re-anchors bottom-center.
-    private func observePillContentChanges(state: AppState) {
+    /// Re-runs `pillWindow.updateVisibility` whenever the toast, live
+    /// transcript, pipeline phase, or status changes, so a toast (such as
+    /// "Copied" after a history-row click) pops the pill open until
+    /// `flashToast` clears it, and the pill grows to show text as soon as the
+    /// first partial arrives and re-anchors bottom-center.
+    private func observePillChanges(state: AppState) {
         withObservationTracking {
+            _ = state.toastMessage
             _ = state.liveTranscript
             _ = state.pipelinePhase
             _ = state.status
@@ -611,7 +585,7 @@ final class AppCoordinator {
             Task { @MainActor in
                 guard let self, let state else { return }
                 self.pillWindow?.updateVisibility(state: state)
-                self.observePillContentChanges(state: state)
+                self.observePillChanges(state: state)
             }
         }
     }

@@ -159,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         observeStatusForUpdates()
     }
 
-    /// Mirrors the `observeHotkeyEnabledChanges` / `observeToastChanges`
+    /// Mirrors the `observeHotkeyEnabledChanges` / `observePillChanges`
     /// pattern in `AppCoordinator`: each fire re-arms the tracker so we
     /// keep getting callbacks across the lifetime of the app.
     private func observeStatusForUpdates() {
@@ -172,7 +172,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.observeStatusForUpdates()
             }
         }
-        // Also seed the initial value.
         dictationActivity.observe(status: appState.status)
     }
 
