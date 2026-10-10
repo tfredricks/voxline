@@ -119,8 +119,9 @@ final class AudioCaptureService {
     /// modifier lands means the recording captures from the first syllable.
     /// No tap is installed and nothing is delivered. Errors are
     /// swallowed here and surface properly from start() if the user completes
-    /// the chord.
+    /// the chord. A warm engine stays running while the chord is armed.
     func prewarm() {
+        apply(warmth.handle(.prewarmRequested))
         guard !engine.isRunning else { return }
         routeInput()
         // Touch the input format so the engine builds its input graph before
@@ -138,7 +139,7 @@ final class AudioCaptureService {
     /// Stop an engine that was prewarmed but never used (armed edge released
     /// without completing the chord, or recording was refused). No-op while a
     /// real capture is running, and while a keep-warm window is open: that
-    /// engine stops when the window ends.
+    /// engine stops when the window ends, or here if it ended while armed.
     func stopPrewarm() {
         guard !isCapturing else { return }
         apply(warmth.handle(.prewarmCancelled))

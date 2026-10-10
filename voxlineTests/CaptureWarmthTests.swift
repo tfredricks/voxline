@@ -52,6 +52,49 @@ import Testing
         #expect(warmth.keepWarmPending)
     }
 
+    @Test func arming_a_chord_changes_nothing_on_its_own() {
+        var warmth = CaptureWarmth()
+        #expect(warmth.handle(.prewarmRequested) == [])
+        warmth.handle(.captureStopped)
+        #expect(warmth.handle(.prewarmRequested) == [])
+        #expect(warmth.keepWarmPending)
+    }
+
+    @Test func the_window_ending_while_a_chord_is_armed_leaves_the_engine_running() {
+        var warmth = CaptureWarmth()
+        warmth.handle(.captureStopped)
+        warmth.handle(.prewarmRequested)
+        #expect(warmth.handle(.keepWarmElapsed) == [])
+        #expect(!warmth.keepWarmPending)
+        #expect(warmth.handle(.captureStarted) == [], "the chord records on the still-running engine")
+    }
+
+    @Test func a_stop_held_off_by_an_armed_chord_lands_when_it_is_released() {
+        var warmth = CaptureWarmth()
+        warmth.handle(.captureStopped)
+        warmth.handle(.prewarmRequested)
+        warmth.handle(.keepWarmElapsed)
+        #expect(warmth.handle(.prewarmCancelled) == [.stopEngine])
+    }
+
+    @Test func arming_and_releasing_inside_the_window_does_not_extend_it() {
+        var warmth = CaptureWarmth()
+        warmth.handle(.captureStopped)
+        warmth.handle(.prewarmRequested)
+        #expect(warmth.handle(.prewarmCancelled) == [])
+        #expect(warmth.keepWarmPending)
+        #expect(warmth.handle(.keepWarmElapsed) == [.stopEngine])
+    }
+
+    @Test func a_capture_ends_the_armed_hold() {
+        var warmth = CaptureWarmth()
+        warmth.handle(.captureStopped)
+        warmth.handle(.prewarmRequested)
+        warmth.handle(.captureStarted)
+        warmth.handle(.captureStopped)
+        #expect(warmth.handle(.keepWarmElapsed) == [.stopEngine])
+    }
+
     @Test func a_new_input_inside_the_window_stops_the_warm_engine_at_once() {
         var warmth = CaptureWarmth()
         warmth.handle(.captureStopped)
