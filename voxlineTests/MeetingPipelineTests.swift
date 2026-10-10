@@ -47,7 +47,11 @@ final class FakeNotesGenerator: MeetingNotesGenerating, @unchecked Sendable {
 
 final class FakeTranscoder: MeetingAudioTranscoding, @unchecked Sendable {
     private(set) var calls: [URL] = []
-    func transcode(pcm: URL, to m4a: URL) throws { calls.append(pcm) }
+    var onTranscode: ((URL) -> Void)?
+    func transcode(pcm: URL, to m4a: URL) throws {
+        calls.append(pcm)
+        onTranscode?(pcm)
+    }
 }
 
 @MainActor
@@ -236,6 +240,24 @@ final class FakeTranscoder: MeetingAudioTranscoding, @unchecked Sendable {
         let meta = try store.load(id)
         #expect(meta.state == .failed)
         #expect(meta.failureReason != nil)
+    }
+
+    @Test func meeting_is_done_before_its_audio_is_transcoded() async throws {
+        let id = try meeting(mic: speech, system: nil, tap: false)
+        transcriber.responses = [.success(transcript("Hello."))]
+        let store = store
+        let seen = LockedBox<[MeetingMeta]>([])
+        transcoder.onTranscode = { _ in
+            if let meta = try? store.load(id) { seen.mutate { $0.append(meta) } }
+        }
+
+        _ = await makePipeline().process(id)
+
+        let meta = try #require(seen.read().first)
+        #expect(meta.state == .done)
+        #expect(meta.title == "Pricing sync")
+        #expect(meta.notesPath?.hasSuffix("Pricing sync.md") == true)
+        #expect(transcoder.calls.count == 1)
     }
 
     @Test func dont_keep_deletes_audio_without_transcoding() async throws {

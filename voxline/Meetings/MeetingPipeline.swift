@@ -268,7 +268,9 @@ final class MeetingPipeline: MeetingProcessing {
         }
     }
 
-    /// Notes → Markdown file → audio retention → meta marked done.
+    /// Notes → Markdown file → meta marked done → audio retention. Done is
+    /// saved before the transcode so a quit during it can't process the
+    /// meeting again and write a second notes file.
     private func writeDocument(
         _ meta: inout MeetingMeta, utterances: [MeetingUtterance], warnings: [String], config: MeetingPipelineSettings
     ) async throws -> (url: URL, notesOK: Bool, notesMs: Int) {
@@ -282,13 +284,13 @@ final class MeetingPipeline: MeetingProcessing {
                             notes: generated, notesFailure: failure, warnings: warnings),
             startedAt: meta.startedAt, folder: config.notesFolder, suffix: nil
         )
-        await finishAudio(meta.id, retention: config.retention)
-
         meta.state = .done
         meta.title = generated?.title
         meta.notesPath = url.path
         meta.failureReason = nil
         try? store.save(meta)
+
+        await finishAudio(meta.id, retention: config.retention)
         return (url, generated != nil, notesMs)
     }
 
