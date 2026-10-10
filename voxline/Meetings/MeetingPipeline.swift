@@ -307,8 +307,10 @@ final class MeetingPipeline: MeetingProcessing {
                                 notes: generated, notesFailure: nil, warnings: file.warnings),
                 startedAt: meta.startedAt, folder: config.notesFolder, suffix: "regenerated"
             )
+            meta.state = .done
             meta.title = generated.title
             meta.notesPath = url.path
+            meta.failureReason = nil
             try? store.save(meta)
             return .written(url)
         } catch {

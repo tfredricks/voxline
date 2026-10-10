@@ -293,6 +293,29 @@ final class FakeTranscoder: MeetingAudioTranscoding, @unchecked Sendable {
         #expect(FileManager.default.fileExists(atPath: store.directory(for: id).systemPCM.path))
     }
 
+    @Test func regenerate_after_a_failed_notes_write_marks_the_meeting_done() async throws {
+        let id = try meeting(mic: speech, system: nil, tap: false)
+        transcriber.responses = [.success(transcript("Hello."))]
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data().write(to: notesFolder)
+        let pipeline = makePipeline()
+        guard case .failed = await pipeline.process(id) else {
+            Issue.record("expected the notes write to fail")
+            return
+        }
+        #expect(try store.load(id).state == .failed)
+        try FileManager.default.removeItem(at: notesFolder)
+
+        guard case .written(let url) = await pipeline.regenerateNotes(id) else {
+            Issue.record("regenerate failed")
+            return
+        }
+        let meta = try store.load(id)
+        #expect(meta.state == .done)
+        #expect(meta.failureReason == nil)
+        #expect(meta.notesPath == url.path)
+    }
+
     @Test func regenerate_with_notes_failure_returns_failed_and_changes_nothing() async throws {
         let id = try meeting(mic: speech, system: nil, tap: false)
         transcriber.responses = [.success(transcript("Hello."))]
