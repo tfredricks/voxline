@@ -511,10 +511,12 @@ joins the paste-first list before release.
       main window. The recorder stops, and dictating in Notes works.
 - [ ] Issue 12: hold the chord and speak. While still holding, turn voxline off
       in System Settings → Privacy & Security → Accessibility. The recording
-      finishes instead of sticking: the stop sound plays and the pill
-      moves on from "Recording", with no relaunch. Turn Accessibility back on:
-      the next dictation works. Repeat with "Pause Voxline" from the menu bar
-      instead of revoking Accessibility.
+      stops instead of sticking: the stop sound plays, the microphone
+      indicator goes off, the pill moves on from "Recording", and the menu bar
+      keeps the Accessibility error, with no relaunch. Turn Accessibility back
+      on: Esc reaches your apps again and the next dictation works. Repeat
+      with "Pause Voxline" from the menu bar instead of revoking
+      Accessibility: the dictation finishes and lands.
 - [ ] Issue 20: hold the chord, keep talking, and open the menu-bar menu. Leave
       it open until the pill reads "Stopped at 5 minutes", then close it. The
       text lands.

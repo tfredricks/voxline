@@ -228,6 +228,12 @@ app that is no longer sandboxed.
 - Losing Accessibility, or pausing voxline, while you hold the hotkey now
   finishes the recording, instead of leaving the microphone on and dictation
   stuck until you relaunch (issue 12).
+- Pausing voxline while you hold the hotkey now finishes the recording, and
+  losing Accessibility stops the microphone and discards it (nothing can be
+  inserted without Accessibility), instead of leaving the microphone on and
+  dictation stuck until you relaunch (issue 12). The Accessibility error stays
+  showing until you grant it again, even when it lands while a dictation is
+  being cleaned up.
 - The typing fallback no longer splits an emoji in two (issue 16).
 - The restored clipboard keeps its types in their original order, so rich
   text stays rich (issue 17).

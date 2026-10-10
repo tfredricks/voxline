@@ -56,6 +56,10 @@ final class CapturePipeline {
     /// Work resuming after an `await` compares it with the value it captured
     /// and drops its result when a cancel or a newer run has taken over.
     private(set) var generation: UInt64 = 0
+    /// True from a recording's start until it is finalized or discarded.
+    /// Owned here: `state.status` is written by others too, such as a
+    /// permissions error landing mid-recording.
+    private var isRecording = false
     private var live: LiveSession?
     private var startTasks: StartTasks?
     /// The command recording's EditContext and Cmd+C fallback, started at
@@ -190,6 +194,7 @@ final class CapturePipeline {
         state.lastTranscript = nil
         state.lastCleanedText = nil
         state.retryTranscript = nil
+        self.live?.discard()
         let live = LiveSession(
             engine: engines.current,
             config: SessionConfig(vocabularyHints: vocabulary()),
@@ -218,6 +223,7 @@ final class CapturePipeline {
             return
         }
         self.live = live
+        isRecording = true
         scrubbedTranscripts = scrubbed
         state.recordingStartedAt = Date()
         state.audioLevel = 0
@@ -284,12 +290,22 @@ final class CapturePipeline {
     /// the active mode's prompt, and paste the result into the focused field.
     /// Returns as soon as `cancel()` abandons the work. A command recording
     /// that finalizes after command mode was turned off is discarded
-    /// silently, before the Cmd+C fallback or the model runs.
+    /// silently, before the Cmd+C fallback or the model runs. A recording
+    /// whose status someone else replaced meanwhile, as a permissions error
+    /// does, is discarded and that status left showing.
     func finalizeRecording() async {
-        // Only valid entry state is `.recording`. A spurious finalize while
-        // we're already in `.thinking` (an earlier finalize is mid-flight) or
-        // any non-recording state would race with the in-flight pipeline.
-        guard case .recording = state.status, let live else { return }
+        // A spurious finalize while an earlier one is mid-flight, or with no
+        // recording at all, would race with the in-flight pipeline.
+        guard isRecording, let live else { return }
+        guard case .recording = state.status else {
+            AppLog.pipeline.info("recording discarded: status changed while recording")
+            discardRecording()
+            scrubbedTranscripts = nil
+            capHit = false
+            clearRecordingState()
+            return
+        }
+        isRecording = false
         let generation = self.generation
         let startTasks = self.startTasks
         self.startTasks = nil
@@ -318,11 +334,7 @@ final class CapturePipeline {
         var silent = false
         switch state.status {
         case .recording:
-            generation &+= 1
-            capture.stop()
-            live?.discard()
-            startTasks?.cancel()
-            startTasks = nil
+            discardRecording()
             silent = reason == .shortcut
             if silent, let scrubbed = scrubbedTranscripts {
                 state.lastTranscript = scrubbed.last
@@ -349,6 +361,17 @@ final class CapturePipeline {
         if !silent { showToast("Cancelled") }
         finalizeDone?.fire()
         finalizeDone = nil
+    }
+
+    /// Stops capture and drops the recording's session and start tasks;
+    /// bumps `generation` so nothing late from them lands.
+    private func discardRecording() {
+        isRecording = false
+        generation &+= 1
+        capture.stop()
+        live?.discard()
+        startTasks?.cancel()
+        startTasks = nil
     }
 
     /// Cleans up and inserts the last dictation's raw transcript again, for
@@ -761,14 +784,27 @@ final class CapturePipeline {
         state.flashToast(message)
     }
 
+    /// Leaves a permissions error showing: it is sticky, and only the
+    /// coordinator's permission check clears it.
     func resetIdle() {
         clearRecordingState()
+        guard !showsPermissionsError else { return }
         state.status = .idle
     }
 
+    /// A plain error never replaces a permissions error showing.
     func setError(_ message: String, permissions: Bool = false) {
-        state.status = permissions ? .permissionsError(message) : .error(message)
+        if permissions {
+            state.status = .permissionsError(message)
+        } else if !showsPermissionsError {
+            state.status = .error(message)
+        }
         clearRecordingState()
+    }
+
+    private var showsPermissionsError: Bool {
+        if case .permissionsError = state.status { return true }
+        return false
     }
 
     /// Stops feeding and observing the current session, which must already be
@@ -781,6 +817,7 @@ final class CapturePipeline {
 
     /// Shared by idle and error. `retryTranscript` survives both.
     private func clearRecordingState() {
+        isRecording = false
         endLiveSession()
         state.recordingStartedAt = nil
         state.audioLevel = 0

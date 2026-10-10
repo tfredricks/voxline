@@ -361,6 +361,85 @@ import Foundation
         #expect(!h.pipe.wasCancelled)
     }
 
+    // MARK: - Status taken over while recording
+
+    @Test func finalize_after_the_status_was_taken_over_stops_the_recording() async {
+        let h = makeHarness()
+        h.pipe.startRecording()
+        h.state.status = .permissionsError("x")
+
+        await h.pipe.finalizeRecording()
+
+        #expect(h.capture.stopCallCount == 1)
+        #expect(await eventually { h.session.cancelCount == 1 })
+        #expect(h.session.finishCount == 0)
+        #expect(h.capture.onSamples == nil)
+        #expect(!h.state.isCancellable)
+        #expect(h.state.recordingKind == nil)
+        #expect(h.state.status == .permissionsError("x"))
+        #expect(h.state.toastMessage == nil)
+        #expect(h.llm.calls.isEmpty)
+        #expect(h.inserter.calls.isEmpty)
+        #expect(h.history.items.isEmpty)
+
+        await h.pipe.finalizeRecording()
+        #expect(h.capture.stopCallCount == 1, "a second finalize finds nothing to stop")
+    }
+
+    @Test func a_recording_after_a_taken_over_one_starts_clean() async {
+        let h = makeHarness()
+        let second = FakeTranscriptionSession()
+        second.finishResult = .success("second take")
+        h.engine.nextSessions.append(second)
+        h.pipe.startRecording()
+        h.state.status = .permissionsError("x")
+        await h.pipe.finalizeRecording()
+
+        h.state.status = .idle
+        await dictate(h)
+
+        #expect(h.session.finishCount == 0)
+        #expect(await eventually { h.session.cancelCount == 1 })
+        #expect(second.finishCount == 1)
+        #expect(h.llm.calls.map(\.transcript) == ["second take"])
+        #expect(h.inserter.calls.map(\.text) == ["cleaned"])
+        #expect(h.state.status == .idle)
+    }
+
+    @Test func a_permissions_error_set_while_thinking_stays() async {
+        let h = makeHarness()
+        h.llm.holdCleanup = true
+        defer { h.llm.releaseCleanup() }
+        h.pipe.startRecording()
+        let finalize = Task { await h.pipe.finalizeRecording() }
+        #expect(await eventually { h.llm.cleanupGate.waiting == 1 })
+
+        h.state.status = .permissionsError("x")
+        h.llm.releaseCleanup()
+        await finalize.value
+
+        #expect(h.state.status == .permissionsError("x"))
+        #expect(!h.state.isCancellable)
+        #expect(h.state.pipelinePhase == nil)
+    }
+
+    @Test func a_permissions_error_set_while_thinking_outlasts_a_failure() async {
+        let h = makeHarness()
+        h.llm.holdCleanup = true
+        h.llm.nextResult = .failure(LLMError.rateLimited)
+        defer { h.llm.releaseCleanup() }
+        h.pipe.startRecording()
+        let finalize = Task { await h.pipe.finalizeRecording() }
+        #expect(await eventually { h.llm.cleanupGate.waiting == 1 })
+
+        h.state.status = .permissionsError("x")
+        h.llm.releaseCleanup()
+        await finalize.value
+
+        #expect(h.state.status == .permissionsError("x"))
+        #expect(h.fallback.read() == ["hello world"])
+    }
+
     // MARK: - Late results never reach a newer recording
 
     @Test func stale_finalize_leaves_the_next_recording_untouched() async {
