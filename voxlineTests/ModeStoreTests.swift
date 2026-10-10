@@ -75,6 +75,16 @@ import Foundation
         #expect(loaded.first == ModeStore.reconcileShippedPrompts([mailSearch])[0])
     }
 
+    @Test func a_shipped_field_kind_mode_is_added_once() {
+        let mailSearch = Mode(bundleID: "com.apple.mail", displayName: "Mail search", prompt: "terse",
+                              model: nil, temperature: nil, fieldKind: .search)
+        let mail = Mode(bundleID: "com.apple.mail", displayName: "Mail", prompt: "email",
+                        model: nil, temperature: nil)
+        let once = ModeStore.addMissingShippedModes([mail], shipped: [mail, mailSearch])
+        #expect(once == [mail, mailSearch])
+        #expect(ModeStore.addMissingShippedModes(once, shipped: [mail, mailSearch]) == once)
+    }
+
     @Test func shipped_defaults_include_wildcard_fallback() {
         #expect(ModeStore.shippedDefaults.contains(where: { $0.bundleID == Mode.wildcardBundleID }))
     }

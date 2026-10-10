@@ -55,14 +55,15 @@ final class ModeStore {
         }
     }
 
-    /// Appends each shipped mode whose bundle ID has no catch-all mode
-    /// (`fieldKind == nil`) in `modes`, then moves the wildcard modes to the
-    /// end so exact matches stay ahead of them. Returns `modes` unchanged when
-    /// nothing is missing. A shipped mode deleted from the file by hand comes
-    /// back. Pure.
-    static func addMissingShippedModes(_ modes: [Mode]) -> [Mode] {
-        let covered = Set(modes.filter { $0.fieldKind == nil }.map(\.bundleID))
-        let missing = shippedDefaults.filter { !covered.contains($0.bundleID) }
+    /// Appends each shipped mode whose bundle ID and field kind no mode in
+    /// `modes` has, then moves the wildcard modes to the end so exact matches
+    /// stay ahead of them. Returns `modes` unchanged when nothing is missing,
+    /// so a second load changes nothing. A shipped mode deleted from the file
+    /// by hand comes back. Pure.
+    static func addMissingShippedModes(_ modes: [Mode], shipped: [Mode] = shippedDefaults) -> [Mode] {
+        let missing = shipped.filter { shipped in
+            !modes.contains { $0.bundleID == shipped.bundleID && $0.fieldKind == shipped.fieldKind }
+        }
         guard !missing.isEmpty else { return modes }
         func isWildcard(_ mode: Mode) -> Bool { mode.bundleID == Mode.wildcardBundleID }
         return modes.filter { !isWildcard($0) } + missing.filter { !isWildcard($0) }
