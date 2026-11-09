@@ -8,7 +8,9 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
-Everything since 0.3.1, the last published release. The big changes are a
+## [0.7.0] - 2026-11-09
+
+Everything since 0.3.1. The big changes are a
 choice of speech engine with live text while you speak, command mode that
 edits text in place, preset shortcuts, meeting recording and notes, and an
 app that is no longer sandboxed.
@@ -377,7 +379,8 @@ app that is no longer sandboxed.
   synthetic keystrokes. Under the App Sandbox the previous AX-based
   paste-eligibility check always failed and forced the unreliable typing path.
 
-[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/tfredricks/voxline/releases/tag/v0.7.0
 [0.3.1]: https://github.com/tfredricks/voxline/releases/tag/v0.3.1
 [0.3.0]: https://github.com/tfredricks/voxline/releases/tag/v0.3.0
 [0.2.5]: https://github.com/tfredricks/voxline/releases/tag/v0.2.5
