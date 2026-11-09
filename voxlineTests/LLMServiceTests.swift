@@ -564,7 +564,7 @@ import Foundation
         #expect(!StructuredOutputSupport.shared.rejects(model))
     }
 
-    @Test func systemPrompt_without_learned_style_is_unchanged() {
+    @Test func systemPrompt_ends_with_the_mode_prompt() {
         let mode = Mode(bundleID: "*", displayName: "d", prompt: "MODE_STYLE", model: nil, temperature: nil)
         var ctx = CapturedContext.empty
         ctx.customVocabulary = ["LangGraph"]
@@ -574,23 +574,5 @@ import Foundation
             LLMService.vocabularyParagraph,
             LLMService.styleHeader + "\n" + "MODE_STYLE"
         ].joined(separator: "\n\n"))
-    }
-
-    @Test func systemPrompt_appends_the_learned_style_after_the_mode_prompt() throws {
-        let mode = Mode(bundleID: "*", displayName: "d", prompt: "MODE_STYLE", model: nil, temperature: nil)
-        let style = LearnedStyle(categoryName: "Chat", note: "- Drops final periods.", examples: ["Sounds good"])
-        var ctx = CapturedContext.empty
-        ctx.learnedStyle = style
-        let paragraph = try #require(LearnedStyleFormatter.paragraph(style))
-        #expect(LLMService.systemPrompt(mode: mode, context: ctx)
-                == LLMService.preambleCore + "\n\n" + LLMService.styleHeader + "\nMODE_STYLE\n\n" + paragraph)
-    }
-
-    @Test func an_empty_learned_style_adds_nothing() {
-        let mode = Mode(bundleID: "*", displayName: "d", prompt: "MODE_STYLE", model: nil, temperature: nil)
-        var ctx = CapturedContext.empty
-        ctx.learnedStyle = LearnedStyle(categoryName: "Chat", note: " ", examples: [])
-        #expect(LLMService.systemPrompt(mode: mode, context: ctx)
-                == LLMService.preambleCore + "\n\n" + LLMService.styleHeader + "\nMODE_STYLE")
     }
 }

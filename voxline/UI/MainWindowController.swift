@@ -134,9 +134,6 @@ struct MainWindowView: View {
         .task(id: settings.status.readinessKey) {
             await settings.status.refreshEngineReadiness()
         }
-        .onChange(of: settings.learning.vocabularyRevision) { _, _ in
-            settings.vocabulary.reload()
-        }
         .onChange(of: appState.status) { oldStatus, newStatus in
             if oldStatus.blocksRecording && !newStatus.blocksRecording {
                 Task { await settings.status.refreshEngineReadiness() }
@@ -173,7 +170,7 @@ struct MainWindowView: View {
         case .commands:
             CommandsSettingsPage(general: settings.general, command: settings.command)
         case .vocabulary:
-            VocabularySettingsPage(vocabulary: settings.vocabulary, learning: settings.learningSettings)
+            VocabularySettingsPage(vocabulary: settings.vocabulary)
         case .meetings:
             MeetingsSettingsPage(model: settings.meetings)
         }

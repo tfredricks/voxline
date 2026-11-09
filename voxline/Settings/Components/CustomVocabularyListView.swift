@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// SwiftUI section for managing the global custom-vocabulary list. Rows show
-/// each term, marked when Learning added it, with a delete button; an inline
+/// each term with a delete button; an inline
 /// Add field appends after trim + dedupe; the footer counts terms and offers
 /// Clear All, which asks first. Vocab biasing flows through the LLM cleanup
 /// prompt — see `LLMService.vocabularyParagraph`.
@@ -12,27 +12,22 @@ struct CustomVocabularyListView: View {
 
     var body: some View {
         Section("Custom vocabulary") {
-            if viewModel.entries.isEmpty {
+            if viewModel.terms.isEmpty {
                 Text("Add names, products, and acronyms that get mis-transcribed.")
                     .foregroundStyle(.secondary)
                     .font(.callout)
             } else {
-                ForEach(viewModel.entries, id: \.term) { entry in
+                ForEach(viewModel.terms, id: \.self) { term in
                     HStack {
-                        Text(entry.term)
-                        if entry.source == .learned {
-                            Text("Learned")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        Text(term)
                         Spacer()
                         Button {
-                            viewModel.remove(entry.term)
+                            viewModel.remove(term)
                         } label: {
                             Image(systemName: "minus.circle")
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel("Remove \(entry.term)")
+                        .accessibilityLabel("Remove \(term)")
                     }
                 }
             }
@@ -53,10 +48,10 @@ struct CustomVocabularyListView: View {
                     .font(.callout)
                 Spacer()
                 Button("Clear All…") { confirmingClear = true }
-                    .disabled(viewModel.entries.isEmpty)
+                    .disabled(viewModel.terms.isEmpty)
             }
         }
-        .confirmationDialog("Remove all \(viewModel.entries.count) terms?", isPresented: $confirmingClear) {
+        .confirmationDialog("Remove all \(viewModel.terms.count) terms?", isPresented: $confirmingClear) {
             Button("Remove All", role: .destructive) { viewModel.clearAll() }
         } message: {
             Text("This can't be undone.")

@@ -3,8 +3,7 @@
 #
 # Wipes:
 #   - ~/Library/Application Support/voxline, except the recordings below:
-#     modes.json, learning.json (style notes, recent dictations, corrections,
-#     rejected words), and the Whisper model cache (huggingface/)
+#     modes.json and the Whisper model cache (huggingface/)
 #   - The com.voxline.app defaults domain (settings, history, presets,
 #     first-run flag)
 #   - ~/Library/Caches/com.voxline.app (ANE compiled bundle)

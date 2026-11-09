@@ -272,17 +272,6 @@ import Foundation
         #expect(AppSettings(defaults: d).saveBakeoffClips == false)
     }
 
-    @Test func learning_toggles_default_on_and_persist() {
-        var settings = AppSettings(defaults: makeDefaults())
-        #expect(settings.learnWords)
-        #expect(settings.learnStyle)
-        settings.learnWords = false
-        settings.learnStyle = false
-        #expect(!settings.learnWords)
-        #expect(!settings.learnStyle)
-        #expect(settings.defaults.object(forKey: AppSettings.Key.learnWords) as? Bool == false)
-    }
-
     @Test func show_in_dock_defaults_to_false() {
         #expect(AppSettings(defaults: makeDefaults()).showInDock == false)
     }

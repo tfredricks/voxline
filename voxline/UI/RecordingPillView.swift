@@ -73,15 +73,10 @@ struct RecordingPillView: View {
     @ViewBuilder
     private var toastView: some View {
         if let toast = state.toastMessage {
-            HStack(spacing: PillLayout.retrySpacing) {
-                Text(toast)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                if let action = state.toastAction {
-                    PillActionButton(title: action.title) { action.perform() }
-                }
-            }
+            Text(toast)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
     }
 

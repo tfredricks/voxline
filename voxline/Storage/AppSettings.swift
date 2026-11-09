@@ -28,8 +28,6 @@ struct AppSettings: @unchecked Sendable {
         static let meetingConsentNoticeShown = "voxline.meetings.consentNoticeShown"
         static let meetingSilentSystemNoticeShown = "voxline.meetings.silentSystemNoticeShown"
         static let meetingCapSeconds = "voxline.debug.meetingCapSeconds"
-        static let learnWords = "voxline.learning.words"
-        static let learnStyle = "voxline.learning.style"
         static let showInDock = "voxline.showInDock"
     }
 
@@ -197,25 +195,11 @@ struct AppSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Key.saveBakeoffClips) }
     }
 
-    /// Settings → Vocabulary (Learning): add words the user fixes after a dictation to
-    /// the custom vocabulary. Absent reads as on.
-    var learnWords: Bool {
-        get { defaults.object(forKey: Key.learnWords) == nil ? true : defaults.bool(forKey: Key.learnWords) }
-        set { defaults.set(newValue, forKey: Key.learnWords) }
-    }
-
     /// When true the app stays a regular Dock app; when false the Dock icon
     /// shows only while a main-level window is open.
     var showInDock: Bool {
         get { defaults.bool(forKey: Key.showInDock) }
         set { defaults.set(newValue, forKey: Key.showInDock) }
-    }
-
-    /// Settings → Vocabulary (Learning): keep recent dictations and edits per category
-    /// and send a learned style note with cleanup. Absent reads as on.
-    var learnStyle: Bool {
-        get { defaults.object(forKey: Key.learnStyle) == nil ? true : defaults.bool(forKey: Key.learnStyle) }
-        set { defaults.set(newValue, forKey: Key.learnStyle) }
     }
 
     /// Where meeting notes files are written.

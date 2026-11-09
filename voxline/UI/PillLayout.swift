@@ -42,10 +42,9 @@ enum PillLayout {
         return retryable
     }
 
-    /// Whether the pill takes clicks: while it offers Retry, and while a
-    /// toast shows an action button.
-    static func acceptsClicks(content: PillContent, hasToastAction: Bool) -> Bool {
-        content == .retry || (content == .toast && hasToastAction)
+    /// Whether the pill takes clicks: only while it offers Retry.
+    static func acceptsClicks(content: PillContent) -> Bool {
+        content == .retry
     }
 
     /// Width of a toast's or Retry offer's content: the text, plus the

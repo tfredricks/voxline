@@ -105,23 +105,6 @@ app that is no longer sandboxed.
   Transcribed on this Mac by Apple Speech, kept only in memory, and gone when
   you stop; the notes after Stop are unchanged. Settings → Meetings → Live
   transcript turns it off (it needs the timer shown).
-- **Learning from your corrections.** Fix a misheard name in the field after
-  dictating it and voxline adds it to Custom vocabulary, with Undo in the
-  pill; a word you remove is not learned again. To see the fix, voxline reads
-  the field for up to 30 seconds after each dictation, never in password
-  fields or terminals, and still catches a fix you made before dictating
-  again. The window ends early when the dictated text leaves the field, for
-  example when you send the message, so what you type next is never read as
-  a correction. A fix counts only once it has stayed put for a second, so a
-  word caught half typed or half deleted is never learned, and a dictation
-  you delete is not kept.
-- **Style notes.** voxline keeps a short note on how you write in each kind of
-  app (chat, email, writing, code, general), refreshed every 20 dictations,
-  and sends it with cleanup together with two recent dictations from the same
-  app. Settings → Vocabulary has a switch for words and one for style (both on),
-  the notes, which you can edit (an edited note is never overwritten unless
-  you choose Regenerate), and Reset Learning. A refresh still in flight when
-  you reset or turn style learning off is dropped.
 - **Main window.** Open Voxline from the menu bar (or click the Dock icon) for
   a window with Home — status, permissions, and recent meetings with a link to
   the notes folder — and Settings, which moved in from its own window. Closing
@@ -178,8 +161,7 @@ app that is no longer sandboxed.
   to the clipboard instead of reporting success.
 - Command mode reads the selection through Accessibility; the synthetic
   copy is now only a fallback for apps that expose no selection.
-- **Custom vocabulary** marks the words voxline learned, and has Clear All,
-  which asks first.
+- **Custom vocabulary** has Clear All, which asks first.
 
 ### Removed
 

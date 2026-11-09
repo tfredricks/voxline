@@ -10,8 +10,6 @@ final class AppCoordinator {
     var engines: TranscriptionEngines?
     var capture: AudioCaptureService?
     var soundPlayer: HotkeySoundPlayer?
-    /// Set by the app delegate before `startIfNeeded`.
-    var learning: LearningCoordinator?
 
     private var pillWindow: RecordingPillWindow?
     private var keyInterceptor: KeyInterceptor?
@@ -221,8 +219,7 @@ final class AppCoordinator {
             historyStore: historyStore,
             contextCapture: contextCapture,
             selectionSnapshot: DefaultSelectionSnapshot(),
-            editContextReader: EditContextReader(),
-            learning: learning
+            editContextReader: EditContextReader()
         )
         self.pipeline = pipeline
         capture.onInterrupted = { [weak pipeline] in pipeline?.handleCaptureInterrupted() }

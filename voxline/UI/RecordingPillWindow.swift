@@ -53,7 +53,7 @@ final class RecordingPillWindow {
         guard let panel else { return }
         updateRetryOffer(state: state)
         let content = PillLayout.content(status: state.status, hasToast: state.toastMessage != nil, retryOffered: retryUntil != nil)
-        panel.ignoresMouseEvents = !PillLayout.acceptsClicks(content: content, hasToastAction: state.toastAction != nil)
+        panel.ignoresMouseEvents = !PillLayout.acceptsClicks(content: content)
         updateRootView(state: state, retryVisible: content == .retry)
         guard content != .hidden else {
             if panel.isVisible {
@@ -67,9 +67,7 @@ final class RecordingPillWindow {
         let compactWidth: CGFloat?
         switch content {
         case .toast:
-            compactWidth = state.toastMessage.map {
-                PillLayout.messageWidth(textWidth: Self.toastTextWidth($0), hasButton: state.toastAction != nil)
-            }
+            compactWidth = state.toastMessage.map(Self.toastTextWidth)
         case .retry:
             let message = PillLayout.firstSentence(state.status.errorMessage ?? "")
             compactWidth = PillLayout.messageWidth(textWidth: Self.toastTextWidth(message), hasButton: true)

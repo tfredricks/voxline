@@ -86,7 +86,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
     lazy var historyStore = DictationHistoryStore()
     let coordinator = AppCoordinator()
-    lazy var learning = LearningCoordinator.live(state: appState)
     let aboutWindow = AboutWindowController()
     let historyWindow = HistoryWindowController()
     let activationPolicy = ActivationPolicyController()
@@ -125,7 +124,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 chords: { [weak generalVM] in generalVM?.chords ?? AppSettings().chords },
                 onChange: { [weak coordinator] in coordinator?.meetingSettingsDidChange() }
             ),
-            learning: learning,
             engineReadiness: { [weak coordinator] id in
                 await coordinator?.readiness(of: id)
             }
@@ -159,7 +157,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         activationPolicy.start()
-        coordinator.learning = learning
         coordinator.presentMainWindow = { [weak self] page in self?.showMainWindow(page) }
         coordinator.startIfNeeded(state: appState, historyStore: historyStore, launchedAtLogin: launchedAtLogin)
         _ = updateService // force-init so Sparkle's scheduler starts
