@@ -8,6 +8,10 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
+### Changed
+
+- **Developer terms.** Cleanup now repairs misheard software terms ("dove" → "dev", "get hub" → "GitHub"), the speech engine gets a built-in list of developer vocabulary as recognition hints, and editors, terminals, Claude and Codex share one developer style that punctuates prose prompts and leaves commands as typed. Cleanup also gets up to 40 identifiers visible in the focused window (file names, `camelCase` and `snake_case` names), so "capture pipeline" comes out as `CapturePipeline` when that name is on screen.
+
 ## [0.7.0] - 2026-11-09
 
 Everything since 0.3.1. The big changes are a

@@ -128,9 +128,16 @@ final class ModeStore {
     """
 
     static let codePrompt = """
-    Code, terminal command, or technical identifier. Do not add or change \
-    punctuation or capitalization the speaker didn't dictate. Do not \
-    rephrase. Pass through symbols, numbers, and identifiers verbatim.
+    Developer tool: an editor, a terminal, or an AI coding assistant. \
+    The speaker is a software developer, so read ambiguous words as \
+    software terms. Most dictation here is prose (a prompt to a coding \
+    assistant, a commit message, a comment): give it natural punctuation \
+    and capitalization, and do not rephrase. Write tools, commands, file \
+    names, and identifiers the way they are typed (`npm`, `kubectl`, \
+    `README.md`, `camelCase`), matching any spelling visible in the \
+    Context. When the transcript is itself a shell command or a line of \
+    code, return it as typed, with no sentence capitalization or \
+    trailing period.
     """
 
     static let shippedDefaults: [Mode] = [
@@ -166,6 +173,8 @@ final class ModeStore {
         Mode(bundleID: "com.microsoft.VSCode",              displayName: "VS Code",     prompt: codePrompt,    model: nil, temperature: nil, category: .code),
         Mode(bundleID: "com.todesktop.230313mzl4w4u92",     displayName: "Cursor",      prompt: codePrompt,    model: nil, temperature: nil, category: .code),
         Mode(bundleID: "com.apple.dt.Xcode",                displayName: "Xcode",       prompt: codePrompt,    model: nil, temperature: nil, category: .code),
+        Mode(bundleID: "com.anthropic.claudefordesktop",    displayName: "Claude",      prompt: codePrompt,    model: nil, temperature: nil, category: .code),
+        Mode(bundleID: "com.openai.codex",                  displayName: "Codex",       prompt: codePrompt,    model: nil, temperature: nil, category: .code),
         // Wildcard fallback (must stay last)
         Mode(bundleID: Mode.wildcardBundleID,               displayName: "Default",     prompt: defaultPrompt, model: nil, temperature: nil, category: .general),
     ]

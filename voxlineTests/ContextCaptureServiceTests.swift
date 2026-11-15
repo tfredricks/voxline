@@ -16,7 +16,23 @@ import Foundation
 
     struct StubProbe: AXContextProbing {
         let result: AXContextProbeResult
+        var nearby: [String] = []
         func probe(deadline: CaptureDeadline) -> AXContextProbeResult { result }
+        func nearbyText() -> [String] { nearby }
+    }
+
+    @Test func capture_harvests_identifiers_from_nearby_text_and_title_but_not_for_secure_fields() async {
+        let inspector = FakeFieldInspector(); inspector.field = FocusedField(role: "AXTextArea", subrole: nil)
+        let probe = StubProbe(result: AXContextProbeResult(windowTitle: "AppState.swift"), nearby: ["edit user_id here"])
+        func capture() async -> CapturedContext {
+            await DefaultContextCaptureService(
+                frontmost: FakeFrontmost(), appNameProvider: { "Xcode" }, fieldInspector: inspector,
+                axProbe: probe, isAXTrusted: { true }, budgetMs: 50
+            ).capture()
+        }
+        #expect(await capture().onScreenIdentifiers == ["user_id", "AppState.swift"])
+        inspector.field = FocusedField(role: "AXTextField", subrole: "AXSecureTextField")
+        #expect(await capture().onScreenIdentifiers.isEmpty)
     }
 
     @Test func capture_aggregates_app_field_and_probe() async {

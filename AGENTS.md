@@ -8,7 +8,7 @@ voxline is a native macOS menu-bar app (SwiftUI + AppKit, Swift Package Manager 
 
 1. `Audio/` captures mic input while the hotkey is held.
 2. `Transcription/` turns the audio into text with the selected engine: Apple Speech (the default), Whisper on-device via [WhisperKit](https://github.com/argmaxinc/WhisperKit) (SPM dep: `argmaxinc/argmax-oss-swift`), or OpenAI Realtime (cloud, opt-in).
-3. `Context/` assembles a context block (per-app mode prompt, focused-field AX info, custom vocabulary).
+3. `Context/` assembles a context block (per-app mode prompt, focused-field AX info, custom vocabulary, and identifiers visible in the focused window: `AXContextProbe.nearbyText` read by the pure `IdentifierHarvester`).
 4. `LLM/` sends the transcript + context to Anthropic or OpenAI for cleanup (`AnthropicClient.swift` / `OpenAIClient.swift` behind `LLMService.swift`).
 5. `Output/` inserts the result through Accessibility, or pastes and restores the clipboard.
 
@@ -20,7 +20,7 @@ The second (command) chord runs the same capture, but the transcript is an instr
 
 - `voxline/Audio`, `Context`, `Diagnostics`, `Hotkey`, `LLM`, `Meetings`, `MenuBar`, `Modes`, `Output`, `Permissions`, `Pipeline`, `Settings`, `Storage`, `Transcription`, `UI`, `Updates`, `Util`, `Wizard` — app source, one folder per concern.
 - `voxline/Meetings/` — meeting recording (mic + Core Audio process tap) and post-stop processing (`MeetingPipeline`: WhisperKit, SpeakerKit, LLM notes, Markdown). Separate from the dictation pipeline. The live transcript in the timer chip (`LiveMeetingTranscript`) is one Apple Speech session per track, fed by `MeetingRecorder`'s sample observer, folded by the pure `LiveTranscriptAssembler`, display only and never persisted; the post-stop pipeline does not use it.
-- `voxline/Modes/ModeStore.swift` — the per-app prompt table (27 app bundle IDs plus the `*` default mode: Slack, Zoom, Teams, Messages, Discord, Mail, Outlook, Spark, Word, Pages, Notes, Excel, PowerPoint, Keynote, Numbers, Terminal, iTerm, VS Code, Cursor, Xcode, and others). Add new apps here.
+- `voxline/Modes/ModeStore.swift` — the per-app prompt table (29 app bundle IDs plus the `*` default mode: Slack, Zoom, Teams, Messages, Discord, Mail, Outlook, Spark, Word, Pages, Notes, Excel, PowerPoint, Keynote, Numbers, Terminal, iTerm, VS Code, Cursor, Xcode, Claude, Codex, and others). Add new apps here.
 - `voxline/Transcription/Engines/` — one adapter per speech engine, each behind the `TranscriptionEngine` / `TranscriptionSession` protocols in `Transcription/TranscriptionEngine.swift`. `Transcription/TranscriptionEngines.swift` owns the instances and the selection; `TranscriptionService.swift` is WhisperKit's model manager.
 - `voxline/Hotkey/` — two chords share one machine (`ChordSet`, `HotkeyStateMachine`, `ModifierTracker`). `KeyInterceptor.swift` is the active tap that swallows Esc while voxline is busy and fires the preset shortcuts (`KeyCombo`, `KeyComboValidator`; the presets themselves live in `Storage/PresetStore.swift`). Every `CGEvent` voxline posts goes through `Output/SyntheticKeys` and carries a tag that both taps ignore — never call `CGEvent.post` anywhere else.
 - `voxline/Context/EditContextReader.swift` — reads the focused field for commands and presets through `AXTextElement` (tri-state `AXRead`): selection, a 12,000-unit window around the cursor, and a refusal for secure fields. `FieldWindow` and `EditPlanner` are the pure pieces. Every range that meets AX is a UTF-16 offset (`UTF16Range`), never a `String.Index` distance.

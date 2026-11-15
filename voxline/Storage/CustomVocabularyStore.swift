@@ -23,6 +23,21 @@ struct CustomVocabularyStore: @unchecked Sendable {
         defaults.set(Self.normalize(terms), forKey: Self.key)
     }
 
+    /// Software terms speech engines mishear ("dev" as "dove"). Sent to the
+    /// engine as recognition hints only; the cleanup prompt never sees them,
+    /// because its canonical-spelling rule would turn a real "dove" into "dev".
+    static let developerTerms = [
+        "dev", "prod", "staging", "repo", "repos", "localhost", "git", "GitHub", "GitLab",
+        "commit", "rebase", "worktree", "monorepo", "PR", "CI", "API", "CLI", "SDK", "JSON",
+        "YAML", "SQL", "Postgres", "Redis", "Docker", "Kubernetes", "kubectl", "npm", "pnpm",
+        "npx", "Node", "TypeScript", "JavaScript", "Python", "pytest", "SwiftUI", "Xcode",
+        "async", "await", "regex", "env", "config", "auth", "OAuth", "JWT", "backend",
+        "frontend", "middleware", "endpoint", "webhook", "refactor", "linter", "stdout",
+        "stderr", "sudo", "grep", "bash", "zsh", "Homebrew", "AWS", "Terraform", "nginx",
+        "Claude Code", "Anthropic", "OpenAI", "LLM", "MCP", "Codex", "VS Code", "changelog",
+        "README", "Markdown", "boolean", "enum", "struct", "tuple", "UUID", "SSH", "DNS",
+    ]
+
     private static func normalize(_ terms: [String]) -> [String] {
         var seen = Set<String>()
         var out: [String] = []

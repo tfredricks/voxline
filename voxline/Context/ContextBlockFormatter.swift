@@ -15,6 +15,7 @@ import Foundation
 /// - Text before cursor: "..."
 /// - Text after cursor: "..."
 /// - Custom vocabulary: ...
+/// - Identifiers on screen: ...
 ///
 /// Return only the final text to insert. Do not add quotes, prefixes, or commentary.
 /// ```
@@ -77,6 +78,10 @@ enum ContextBlockFormatter {
         if !c.customVocabulary.isEmpty {
             let escaped = c.customVocabulary.map(escape).joined(separator: ", ")
             lines.append("- Custom vocabulary: \(escaped)")
+        }
+
+        if !c.isSecureField, !c.onScreenIdentifiers.isEmpty {
+            lines.append("- Identifiers on screen: \(c.onScreenIdentifiers.map(escape).joined(separator: ", "))")
         }
 
         return lines

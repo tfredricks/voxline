@@ -191,7 +191,7 @@ final class CapturePipeline {
         self.live?.discard()
         let live = LiveSession(
             engine: engines.current,
-            config: SessionConfig(vocabularyHints: vocabulary()),
+            config: SessionConfig(vocabularyHints: vocabulary() + CustomVocabularyStore.developerTerms),
             savesBakeoffClip: saveBakeoffClips()
         )
         let generation = self.generation

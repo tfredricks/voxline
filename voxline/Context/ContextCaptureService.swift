@@ -90,6 +90,13 @@ struct DefaultContextCaptureService: ContextCapturing {
         if deadline.isExpired {
             c.captureNotes.append("ax-timeout")
         }
+
+        // After the timed capture: this read takes longer and nothing needs
+        // it until the speaker has finished.
+        if axTrusted && !c.isSecureField {
+            c.onScreenIdentifiers = IdentifierHarvester.identifiers(in: axProbe.nearbyText() + [c.windowTitle ?? ""])
+            AppLog.context.info("identifiers on screen: \(c.onScreenIdentifiers.count)")
+        }
         return c
     }
 }

@@ -35,4 +35,12 @@ extension AXUIElement {
         }
         return (value as! AXUIElement)
     }
+
+    /// Read an attribute holding a list of elements, such as the children.
+    /// Empty on AX failure or type mismatch.
+    func elementsAttribute(_ attribute: CFString) -> [AXUIElement] {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(self, attribute, &value) == .success else { return [] }
+        return value as? [AXUIElement] ?? []
+    }
 }

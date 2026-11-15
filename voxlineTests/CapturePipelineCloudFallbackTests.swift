@@ -106,7 +106,7 @@ import Foundation
         #expect(h.localSession.appended.flatMap { $0 } == Self.speech)
         #expect(h.localSession.finishCount == 1)
         #expect(h.local.openedConfigs == h.cloud.openedConfigs)
-        #expect(h.local.openedConfigs.map(\.vocabularyHints) == [["Voxline"]])
+        #expect(h.local.openedConfigs.map(\.vocabularyHints) == [["Voxline"] + CustomVocabularyStore.developerTerms])
         #expect(h.llm.calls.map(\.transcript) == ["local text"])
         #expect(h.inserter.calls.map(\.text) == ["cleaned"])
         #expect(h.state.toastMessage == Self.fellBack)

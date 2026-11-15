@@ -22,6 +22,9 @@ struct CapturedContext: Equatable, Sendable {
     var textAfterCursor: String?
     var selectedText: String?
     var customVocabulary: [String]
+    /// Names visible in the focused window that are typed differently from
+    /// how they are said. See `IdentifierHarvester`.
+    var onScreenIdentifiers: [String] = []
     /// Wall-clock duration of the capture, in milliseconds. Diagnostic only.
     var captureDurationMs: Int
     /// Short reason codes like "ax-timeout", "secure-field", "ax-not-trusted".

@@ -222,6 +222,7 @@ import Foundation
         #expect(preamble.contains("Strip fillers"))
         #expect(preamble.contains("Resolve self-corrections"))
         #expect(preamble.contains("Preserve proper nouns"))
+        #expect(preamble.contains("\"push it to dove\" → \"push it to dev\""))
     }
 
     @Test func systemPrompt_with_empty_context_and_no_vocabulary_is_lean() {
@@ -242,6 +243,18 @@ import Foundation
         #expect(prompt.contains(LLMService.vocabularyParagraph))
         #expect(prompt.contains(LLMService.preambleCore))
         #expect(prompt.hasSuffix(LLMService.styleHeader + "\n" + "MODE_STYLE"))
+    }
+
+    @Test func systemPrompt_with_on_screen_identifiers_adds_their_paragraph_and_line() {
+        let mode = Mode(bundleID: "*", displayName: "d", prompt: "MODE_STYLE", model: nil, temperature: nil)
+        var ctx = CapturedContext.empty
+        ctx.onScreenIdentifiers = ["CapturePipeline", "user_id"]
+        #expect(LLMService.systemPrompt(mode: mode, context: ctx).contains(LLMService.identifiersParagraph))
+        #expect(ContextBlockFormatter.format(transcript: "t", context: ctx)
+            .contains("- Identifiers on screen: CapturePipeline, user_id"))
+        ctx.isSecureField = true
+        #expect(!LLMService.systemPrompt(mode: mode, context: ctx).contains(LLMService.identifiersParagraph))
+        #expect(!ContextBlockFormatter.format(transcript: "t", context: ctx).contains("Identifiers on screen"))
     }
 
     @Test func systemPrompt_with_text_before_cursor_adds_the_context_paragraph() {

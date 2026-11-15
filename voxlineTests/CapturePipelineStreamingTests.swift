@@ -244,7 +244,7 @@ import Foundation
         let h = makeHarness(vocabulary: ["Voxline", "WhisperKit"])
         h.pipe.startRecording()
         await h.pipe.finalizeRecording()
-        #expect(h.engine.openedConfigs.map(\.vocabularyHints) == [["Voxline", "WhisperKit"]])
+        #expect(h.engine.openedConfigs.map(\.vocabularyHints) == [["Voxline", "WhisperKit"] + CustomVocabularyStore.developerTerms])
     }
 
     @Test func early_audio_reaches_session_after_open() async {

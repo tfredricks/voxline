@@ -151,6 +151,8 @@ import Foundation
         #expect(prompt(for: "com.microsoft.VSCode")              == ModeStore.codePrompt)
         #expect(prompt(for: "com.todesktop.230313mzl4w4u92")     == ModeStore.codePrompt)
         #expect(prompt(for: "com.apple.dt.Xcode")                == ModeStore.codePrompt)
+        #expect(prompt(for: "com.anthropic.claudefordesktop")    == ModeStore.codePrompt)
+        #expect(prompt(for: "com.openai.codex")                  == ModeStore.codePrompt)
 
         // Wildcard fallback
         #expect(prompt(for: Mode.wildcardBundleID)       == ModeStore.defaultPrompt)

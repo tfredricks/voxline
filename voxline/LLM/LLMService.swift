@@ -34,6 +34,17 @@ struct LLMService: LLMServing, MeetingNotesGenerating {
     - Preserve proper nouns, technical terms, code identifiers, brand \
     names, and the speaker's word choice verbatim. Do not normalize, \
     paraphrase, or formalize.
+    - Repair speech-recognition mishearings. When a word or phrase makes \
+    no sense where it sits but a similar-sounding one clearly does, \
+    write the one the speaker said. Software terms are the usual \
+    victims; give them their standard spelling. Examples:
+        "push it to dove" → "push it to dev"
+        "open a pull request on get hub" → "open a pull request on GitHub"
+        "parse the jason file" → "parse the JSON file"
+        "run pie test" → "run pytest"
+        "cube control get pods" → "kubectl get pods"
+      Only repair when the heard word does not fit; a word that makes \
+    sense as spoken stays.
     """
 
     /// Included only when the user message carries a Context section.
@@ -64,6 +75,20 @@ struct LLMService: LLMServing, MeetingNotesGenerating {
     other content between, collapse it to a single occurrence.
     """
 
+    /// Included only when the Context block lists on-screen identifiers.
+    static let identifiersParagraph = """
+    If an `Identifiers on screen` line appears in the Context block, it \
+    lists names (files, functions, variables, branches) visible in the \
+    app the speaker is working in. When the speaker says one of them as \
+    ordinary words, write it with the listed spelling. Examples:
+        List has `CapturePipeline`, transcript says `capture pipeline` → `CapturePipeline`.
+        List has `user_id`, transcript says `user ID` → `user_id`.
+        List has `README.md`, transcript says `read me dot MD` → `README.md`.
+    Use an entry only where the speaker is naming that thing; ordinary \
+    words that merely resemble an entry stay as spoken. Never add an \
+    entry the speaker did not say.
+    """
+
     static let styleHeader = "Style guidance for this dictation:"
 
     /// The cleanup system prompt: the fixed preamble, then the Context and
@@ -77,6 +102,9 @@ struct LLMService: LLMServing, MeetingNotesGenerating {
         }
         if !context.customVocabulary.isEmpty {
             parts.append(vocabularyParagraph)
+        }
+        if !context.isSecureField, !context.onScreenIdentifiers.isEmpty {
+            parts.append(identifiersParagraph)
         }
         parts.append(styleHeader + "\n" + mode.prompt)
         return parts.joined(separator: "\n\n")

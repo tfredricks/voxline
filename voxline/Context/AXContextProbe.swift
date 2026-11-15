@@ -18,6 +18,13 @@ struct AXContextProbeResult: Equatable, Sendable {
 /// already expired, return all-nil immediately.
 protocol AXContextProbing: Sendable {
     func probe(deadline: CaptureDeadline) -> AXContextProbeResult
+    /// Text visible in the focused window, the focused field's first, for
+    /// `IdentifierHarvester`. Runs on its own budget after `probe`.
+    func nearbyText() -> [String]
+}
+
+extension AXContextProbing {
+    func nearbyText() -> [String] { [] }
 }
 
 /// Real AX-backed implementation. All AX calls are synchronous cross-process
@@ -80,6 +87,55 @@ struct DefaultAXContextProbe: AXContextProbing {
     private func readWindowTitle(focused: AXUIElement) -> String? {
         guard let window = focused.elementAttribute(kAXWindowAttribute as CFString) else { return nil }
         return clip(window.stringAttribute(kAXTitleAttribute), Self.windowTitleMax)
+    }
+
+    static let nearbyBudgetMs = 150
+    static let nearbyNodeMax = 300
+    static let nearbyStringMax = 2_000
+    static let nearbyFieldMax = 4_000
+
+    func nearbyText() -> [String] {
+        guard AXIsProcessTrusted() else { return [] }
+        let deadline = CaptureDeadline(totalMilliseconds: Self.nearbyBudgetMs)
+        let focused = AXUIElement.systemWideFocusedElement()
+        let app = NSWorkspace.shared.frontmostApplication.map { AXUIElementCreateApplication($0.processIdentifier) }
+        // Electron apps build their accessibility tree only once asked, so
+        // the first dictation into one finds little.
+        if let app { AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue) }
+
+        var texts: [String] = []
+        if let focused, let value = focused.stringAttribute(kAXValueAttribute) {
+            let nsValue = value as NSString
+            let end = min(caretLocation(focused: focused) ?? nsValue.length, nsValue.length)
+            let start = max(0, end - Self.nearbyFieldMax)
+            texts.append(nsValue.substring(with: NSRange(location: start, length: end - start)))
+        }
+
+        let window = focused?.elementAttribute(kAXWindowAttribute as CFString)
+            ?? app?.elementAttribute(kAXFocusedWindowAttribute as CFString)
+        var queue = window.map { [$0] } ?? []
+        var visited = 0
+        while !queue.isEmpty, visited < Self.nearbyNodeMax, !deadline.isExpired {
+            let node = queue.removeFirst()
+            visited += 1
+            for attribute in [kAXTitleAttribute, kAXValueAttribute] {
+                if let text = node.stringAttribute(attribute), !text.isEmpty {
+                    texts.append(String(text.prefix(Self.nearbyStringMax)))
+                }
+            }
+            queue += node.elementsAttribute(kAXChildrenAttribute as CFString)
+        }
+        return texts
+    }
+
+    private func caretLocation(focused: AXUIElement) -> Int? {
+        var rangeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
+              let rangeValue, CFGetTypeID(rangeValue) == AXValueGetTypeID() else { return nil }
+        let axValue = rangeValue as! AXValue
+        var range = CFRange(location: 0, length: 0)
+        guard AXValueGetType(axValue) == .cfRange, AXValueGetValue(axValue, .cfRange, &range) else { return nil }
+        return max(0, range.location)
     }
 
     private func readBeforeAfter(focused: AXUIElement) -> (String?, String?) {
