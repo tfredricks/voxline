@@ -8,6 +8,8 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-20
+
 ### Added
 
 - **Add to vocabulary shortcut.** Settings → Commands has a shortcut that adds the selected word or name to your custom vocabulary, so a name voxline keeps getting wrong only needs fixing once. It reads the selection the way presets do, so it works in VS Code, Electron apps and browsers too.
@@ -395,7 +397,8 @@ app that is no longer sandboxed.
   synthetic keystrokes. Under the App Sandbox the previous AX-based
   paste-eligibility check always failed and forced the unreliable typing path.
 
-[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/tfredricks/voxline/releases/tag/v0.7.2
 [0.7.1]: https://github.com/tfredricks/voxline/releases/tag/v0.7.1
 [0.7.0]: https://github.com/tfredricks/voxline/releases/tag/v0.7.0
 [0.3.1]: https://github.com/tfredricks/voxline/releases/tag/v0.3.1
