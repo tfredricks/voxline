@@ -3,13 +3,13 @@
     <channel>
         <title>voxline</title>
         <item>
-            <title>0.7.1</title>
-            <pubDate>Sun, 15 Nov 2026 14:12:39 +0000</pubDate>
-            <sparkle:version>784</sparkle:version>
-            <sparkle:shortVersionString>0.7.1</sparkle:shortVersionString>
+            <title>0.7.2</title>
+            <pubDate>Fri, 20 Nov 2026 18:32:14 +0000</pubDate>
+            <sparkle:version>786</sparkle:version>
+            <sparkle:shortVersionString>0.7.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/tfredricks/voxline/releases/download/v0.7.1/voxline-0.7.1.dmg" length="4584127" type="application/octet-stream" sparkle:edSignature="DLeRKqMePhpRUU5FNpzFa41kvezPNcDccwg8YrMmobAbzOQitCAWxrgsgS461iRoH3TsKs/VhIPXYn1YgKjAAg=="/>
+            <enclosure url="https://github.com/tfredricks/voxline/releases/download/v0.7.2/voxline-0.7.2.dmg" length="4595878" type="application/octet-stream" sparkle:edSignature="T6FLrdHdhXBVirSwWE8fudOdshPtswLsrdU7agVXersdxZkzksn4j4/wEEn5+zQ3sniYyJJIwi6Jv+tFS8x/Dw=="/>
         </item>
     </channel>
 </rss>
