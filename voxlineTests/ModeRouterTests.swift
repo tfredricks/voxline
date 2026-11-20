@@ -91,4 +91,20 @@ import Testing
         // Inspector returned nil — must not pick the search-only Slack mode.
         #expect(router.mode(for: "com.tinyspeck.slackmacgap", field: nil)?.prompt == "default")
     }
+
+    // MARK: - Site routing
+
+    @Test func site_mode_wins_over_browser_bundle_id_and_matches_subdomains() {
+        let router = ModeRouter(modes: [
+            Mode(bundleID: "mail.google.com", displayName: "Gmail", prompt: "gmail", model: nil, temperature: nil),
+            Mode(bundleID: "notion.so", displayName: "Notion (web)", prompt: "notion", model: nil, temperature: nil),
+            Mode(bundleID: "com.google.Chrome", displayName: "Chrome", prompt: "chrome", model: nil, temperature: nil),
+            Mode(bundleID: Mode.wildcardBundleID, displayName: "Default", prompt: "default", model: nil, temperature: nil)
+        ])
+        #expect(router.mode(for: "com.google.Chrome", site: "mail.google.com")?.prompt == "gmail")
+        #expect(router.mode(for: "com.google.Chrome", site: "www.notion.so")?.prompt == "notion")
+        #expect(router.mode(for: "com.google.Chrome", site: "notnotion.so")?.prompt == "chrome")
+        #expect(router.mode(for: "com.google.Chrome", site: "example.com")?.prompt == "chrome")
+        #expect(router.mode(for: "com.apple.Safari", site: "example.com")?.prompt == "default")
+    }
 }

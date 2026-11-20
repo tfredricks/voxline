@@ -20,6 +20,7 @@ struct AppSettings: @unchecked Sendable {
         static let saveBakeoffClips = "voxline.debug.saveBakeoffClips"
         static let meetingNotesFolder = "voxline.meetings.notesFolder"
         static let meetingShortcut = "voxline.meetings.shortcut"
+        static let vocabularyShortcut = "voxline.vocabulary.shortcut"
         static let meetingNotesModel = "voxline.meetings.notesModel"
         static let meetingAudioRetention = "voxline.meetings.audioRetention"
         static let meetingShowTimer = "voxline.meetings.showTimer"
@@ -215,16 +216,26 @@ struct AppSettings: @unchecked Sendable {
 
     /// Start/stop shortcut for meeting recording; nil when not set.
     var meetingShortcut: KeyCombo? {
-        get {
-            guard let data = defaults.data(forKey: Key.meetingShortcut) else { return nil }
-            return try? JSONDecoder().decode(KeyCombo.self, from: data)
-        }
-        set {
-            if let newValue, let data = try? JSONEncoder().encode(newValue) {
-                defaults.set(data, forKey: Key.meetingShortcut)
-            } else {
-                defaults.removeObject(forKey: Key.meetingShortcut)
-            }
+        get { combo(forKey: Key.meetingShortcut) }
+        set { setCombo(newValue, forKey: Key.meetingShortcut) }
+    }
+
+    /// Adds the selected text to the custom vocabulary; nil when not set.
+    var vocabularyShortcut: KeyCombo? {
+        get { combo(forKey: Key.vocabularyShortcut) }
+        set { setCombo(newValue, forKey: Key.vocabularyShortcut) }
+    }
+
+    private func combo(forKey key: String) -> KeyCombo? {
+        guard let data = defaults.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(KeyCombo.self, from: data)
+    }
+
+    private func setCombo(_ combo: KeyCombo?, forKey key: String) {
+        if let combo, let data = try? JSONEncoder().encode(combo) {
+            defaults.set(data, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
         }
     }
 

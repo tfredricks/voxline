@@ -51,6 +51,7 @@ struct CustomVocabularyListView: View {
                     .disabled(viewModel.terms.isEmpty)
             }
         }
+        .onAppear { viewModel.reload() }
         .confirmationDialog("Remove all \(viewModel.terms.count) terms?", isPresented: $confirmingClear) {
             Button("Remove All", role: .destructive) { viewModel.clearAll() }
         } message: {

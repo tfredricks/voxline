@@ -27,7 +27,8 @@ import Testing
             chords: { chords },
             onChange: { counter?.count += 1 },
             translate: translate ?? noTyping,
-            reserved: reserved
+            reserved: reserved,
+            settings: AppSettings(defaults: defaults)
         )
     }
 
@@ -289,5 +290,33 @@ import Testing
         #expect(vm.warning(for: row.id) == nil)
         chords = ChordSet(dictation: .default, command: HotkeyChord(modifierA: .leftCommand, modifierB: .leftOption))
         #expect(vm.warning(for: row.id) == "⌘⌥ is your command hotkey")
+    }
+
+    // MARK: - Add to vocabulary
+
+    @Test func vocabulary_shortcut_saves_and_clears() {
+        let d = suite()
+        let counter = Counter()
+        let vm = make(d, counter: counter)
+        let combo = KeyCombo(keyCode: 9, modifiers: [.control, .option])
+
+        #expect(vm.updateVocabularyShortcut(combo) == .ok)
+        #expect(AppSettings(defaults: d).vocabularyShortcut == combo)
+        #expect(make(d).vocabularyShortcut == combo)
+        vm.clearVocabularyShortcut()
+        #expect(AppSettings(defaults: d).vocabularyShortcut == nil)
+        #expect(counter.count == 2)
+    }
+
+    @Test func vocabulary_shortcut_conflicts_with_presets_and_the_meeting_shortcut() {
+        let meeting = KeyCombo(keyCode: 46, modifiers: [.control, .option])
+        let vm = make(suite(), reserved: { [meeting] })
+        #expect(vm.updateVocabularyShortcut(meeting) == .rejected(CommandSettingsViewModel.meetingShortcutTaken))
+        #expect(vm.updateVocabularyShortcut(vm.presets[0].combo) != .ok)
+        #expect(vm.vocabularyShortcut == nil)
+
+        let combo = KeyCombo(keyCode: 9, modifiers: [.control, .option])
+        vm.updateVocabularyShortcut(combo)
+        #expect(vm.updateCombo(combo, for: vm.presets[0].id) == .rejected(CommandSettingsViewModel.vocabularyShortcutTaken))
     }
 }

@@ -375,6 +375,23 @@ Left Shift + Left Control (dictation) and Left Shift + Left Option (command).
 - [ ] Press Esc while the pill reads "Editing…". The pill says "Cancelled" and
       nothing is inserted.
 
+## Add to vocabulary and site modes
+
+- [ ] Settings → Commands → Vocabulary: record ⌃⌥V. Recording the meeting
+      shortcut or a preset's shortcut there is rejected, and recording ⌃⌥V on
+      a preset or as the meeting shortcut is rejected.
+- [ ] Select a name in Notes, VS Code, and Gmail in Chrome and press ⌃⌥V.
+      Each time the toast reads "Added “<name>” to vocabulary" and the name
+      shows on Settings → Vocabulary. Pressing it again says it is already
+      there; a selected sentence says "Select a word or name to add".
+- [ ] In a password field, ⌃⌥V adds nothing.
+- [ ] Dictate into a Gmail compose box in Chrome and in Safari: History shows
+      the Email mode, not Default. Same for a Slack message in the browser
+      (Chat). The very first dictation after launching Chrome may still be
+      Default; note it if later ones are too.
+- [ ] Dictate "Hello." then, with the cursor right after it, dictate "how are
+      you": the field reads "Hello. How are you" with one space.
+
 ## Drafting at the cursor
 
 - [ ] Open a message in Mail and start a reply with nothing selected. Hold the

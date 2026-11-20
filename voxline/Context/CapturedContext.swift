@@ -25,6 +25,9 @@ struct CapturedContext: Equatable, Sendable {
     /// Names visible in the focused window that are typed differently from
     /// how they are said. See `IdentifierHarvester`.
     var onScreenIdentifiers: [String] = []
+    /// Host of the web page holding the focused field. Routes site modes;
+    /// never sent to the LLM.
+    var pageHost: String? = nil
     /// Wall-clock duration of the capture, in milliseconds. Diagnostic only.
     var captureDurationMs: Int
     /// Short reason codes like "ax-timeout", "secure-field", "ax-not-trusted".

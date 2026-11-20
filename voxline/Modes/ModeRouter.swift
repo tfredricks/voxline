@@ -9,13 +9,19 @@ struct ModeRouter {
     var modes: [Mode]
 
     /// Resolution priority (most → least specific):
+    ///   0. a site mode whose key is `site` or a parent domain of it
+    ///      (`notion.so` matches `www.notion.so`)
     ///   1. exact bundleID + matching `fieldKind`
     ///   2. exact bundleID + `fieldKind == nil` (the app's catch-all)
     ///   3. wildcard bundleID + matching `fieldKind`
     ///   4. wildcard bundleID + `fieldKind == nil`
     /// A nil `bundleID` (no frontmost app) skips steps 1 and 2.
     /// A nil `field` (inspector unavailable) skips steps 1 and 3.
-    func mode(for bundleID: String?, field: FocusedField? = nil) -> Mode? {
+    func mode(for bundleID: String?, field: FocusedField? = nil, site: String? = nil) -> Mode? {
+        if let site,
+           let siteMode = modes.first(where: { site == $0.bundleID || site.hasSuffix("." + $0.bundleID) }) {
+            return siteMode
+        }
         let kind = field?.kind
 
         if let bundleID, let kind,

@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 /// Swallows Esc while a run can be cancelled, the meeting shortcut while
-/// armed, and preset shortcuts while presets are armed, reporting each on
+/// armed, and the add-to-vocabulary and preset shortcuts while presets are armed, reporting each on
 /// the main actor. An active session
 /// event tap running on its own thread, so a busy main thread never stalls
 /// keyboard input. Everything else passes through untouched.
@@ -19,9 +19,12 @@ final class KeyInterceptor: @unchecked Sendable {
         var meetingArmed: Bool = false
         /// Starts or stops meeting recording. Checked before presets.
         var meetingToggle: KeyCombo? = nil
+        /// Adds the selection to the vocabulary. Armed with the presets,
+        /// checked before them.
+        var addToVocabulary: KeyCombo? = nil
     }
 
-    enum Fired: Equatable { case escape, preset(UUID), meeting }
+    enum Fired: Equatable { case escape, preset(UUID), meeting, addToVocabulary }
     enum Decision: Equatable { case pass, swallow, swallowAndFire(Fired) }
 
     static let installRetryInterval: Duration = .seconds(10)
@@ -29,6 +32,7 @@ final class KeyInterceptor: @unchecked Sendable {
     private let onEscape: @MainActor () -> Void
     private let onPreset: @MainActor (UUID) -> Void
     private let onMeeting: @MainActor () -> Void
+    private let onAddToVocabulary: @MainActor () -> Void
     private let lock = NSLock()
     private var current = Config()
     private var swallowedDowns: Set<UInt16> = []
@@ -40,11 +44,13 @@ final class KeyInterceptor: @unchecked Sendable {
     init(
         onEscape: @escaping @MainActor () -> Void,
         onPreset: @escaping @MainActor (UUID) -> Void,
-        onMeeting: @escaping @MainActor () -> Void = {}
+        onMeeting: @escaping @MainActor () -> Void = {},
+        onAddToVocabulary: @escaping @MainActor () -> Void = {}
     ) {
         self.onEscape = onEscape
         self.onPreset = onPreset
         self.onMeeting = onMeeting
+        self.onAddToVocabulary = onAddToVocabulary
     }
 
     var config: Config {
@@ -82,6 +88,10 @@ final class KeyInterceptor: @unchecked Sendable {
         if config.meetingArmed, let toggle = config.meetingToggle, toggle == KeyCombo(keyCode: keyCode, modifiers: families) {
             downs.insert(keyCode)
             return (isAutorepeat ? .swallow : .swallowAndFire(.meeting), downs)
+        }
+        if config.presetsArmed, let add = config.addToVocabulary, add == KeyCombo(keyCode: keyCode, modifiers: families) {
+            downs.insert(keyCode)
+            return (isAutorepeat ? .swallow : .swallowAndFire(.addToVocabulary), downs)
         }
         if config.presetsArmed, let id = config.presets[KeyCombo(keyCode: keyCode, modifiers: families)] {
             downs.insert(keyCode)
@@ -244,12 +254,14 @@ final class KeyInterceptor: @unchecked Sendable {
             let onEscape = onEscape
             let onPreset = onPreset
             let onMeeting = onMeeting
+            let onAddToVocabulary = onAddToVocabulary
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     switch fired {
                     case .escape: onEscape()
                     case .preset(let id): onPreset(id)
                     case .meeting: onMeeting()
+                    case .addToVocabulary: onAddToVocabulary()
                     }
                 }
             }

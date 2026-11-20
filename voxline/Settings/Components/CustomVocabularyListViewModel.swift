@@ -50,7 +50,8 @@ final class CustomVocabularyListViewModel {
         reload()
     }
 
-    private func reload() {
+    /// Re-reads the store, which the add-to-vocabulary shortcut writes to.
+    func reload() {
         terms = store.load()
     }
 }

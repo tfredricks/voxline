@@ -79,6 +79,7 @@ struct DefaultContextCaptureService: ContextCapturing {
         if axTrusted && !deadline.isExpired {
             let probe = axProbe.probe(deadline: deadline)
             c.windowTitle = probe.windowTitle
+            c.pageHost = probe.pageHost
             if !c.isSecureField {
                 c.textBeforeCursor = probe.textBeforeCursor
                 c.textAfterCursor = probe.textAfterCursor

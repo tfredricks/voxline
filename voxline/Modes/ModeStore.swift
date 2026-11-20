@@ -175,6 +175,17 @@ final class ModeStore {
         Mode(bundleID: "com.apple.dt.Xcode",                displayName: "Xcode",       prompt: codePrompt,    model: nil, temperature: nil, category: .code),
         Mode(bundleID: "com.anthropic.claudefordesktop",    displayName: "Claude",      prompt: codePrompt,    model: nil, temperature: nil, category: .code),
         Mode(bundleID: "com.openai.codex",                  displayName: "Codex",       prompt: codePrompt,    model: nil, temperature: nil, category: .code),
+        // Web pages, keyed by host; ModeRouter checks these before the browser's bundle ID
+        Mode(bundleID: "mail.google.com",                   displayName: "Gmail",       prompt: emailPrompt,   model: nil, temperature: nil, category: .email),
+        Mode(bundleID: "outlook.office.com",                displayName: "Outlook (web)", prompt: emailPrompt, model: nil, temperature: nil, category: .email),
+        Mode(bundleID: "outlook.live.com",                  displayName: "Outlook.com", prompt: emailPrompt,   model: nil, temperature: nil, category: .email),
+        Mode(bundleID: "app.slack.com",                     displayName: "Slack (web)", prompt: chatPrompt,    model: nil, temperature: nil, category: .chat),
+        Mode(bundleID: "teams.microsoft.com",               displayName: "Teams (web)", prompt: chatPrompt,    model: nil, temperature: nil, category: .chat),
+        Mode(bundleID: "web.whatsapp.com",                  displayName: "WhatsApp Web", prompt: chatPrompt,   model: nil, temperature: nil, category: .chat),
+        Mode(bundleID: "discord.com",                       displayName: "Discord (web)", prompt: chatPrompt,  model: nil, temperature: nil, category: .chat),
+        Mode(bundleID: "docs.google.com",                   displayName: "Google Docs", prompt: writingPrompt, model: nil, temperature: nil, category: .writing),
+        Mode(bundleID: "notion.so",                         displayName: "Notion (web)", prompt: writingPrompt, model: nil, temperature: nil, category: .writing),
+        Mode(bundleID: "github.com",                        displayName: "GitHub",      prompt: codePrompt,    model: nil, temperature: nil, category: .code),
         // Wildcard fallback (must stay last)
         Mode(bundleID: Mode.wildcardBundleID,               displayName: "Default",     prompt: defaultPrompt, model: nil, temperature: nil, category: .general),
     ]

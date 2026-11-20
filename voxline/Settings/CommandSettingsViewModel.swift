@@ -9,21 +9,25 @@ import Observation
 final class CommandSettingsViewModel {
 
     static let meetingShortcutTaken = "This shortcut starts and stops meeting recording."
+    static let vocabularyShortcutTaken = "This shortcut adds the selection to your vocabulary."
 
     private(set) var presets: [PresetShortcut]
+    private(set) var vocabularyShortcut: KeyCombo?
 
     private let store: PresetStore
     private let chords: () -> ChordSet
     private let onChange: () -> Void
     private let translate: KeyComboValidator.Translator
     private let reserved: () -> [KeyCombo]
+    private var settings: AppSettings
 
     init(
         store: PresetStore = PresetStore(),
         chords: @escaping () -> ChordSet,
         onChange: @escaping () -> Void,
         translate: @escaping KeyComboValidator.Translator = KeyComboValidator.liveTranslator,
-        reserved: @escaping () -> [KeyCombo] = { [] }
+        reserved: @escaping () -> [KeyCombo] = { [] },
+        settings: AppSettings = AppSettings()
     ) {
         self.store = store
         self.chords = chords
@@ -31,6 +35,8 @@ final class CommandSettingsViewModel {
         self.translate = translate
         self.reserved = reserved
         self.presets = store.load()
+        self.settings = settings
+        self.vocabularyShortcut = settings.vocabularyShortcut
     }
 
     func updateName(_ name: String, for id: PresetShortcut.ID) {
@@ -89,8 +95,41 @@ final class CommandSettingsViewModel {
         }
     }
 
-    private func validate(_ combo: KeyCombo, for id: PresetShortcut.ID) -> KeyComboValidator.Verdict {
+    // MARK: - Add to vocabulary
+
+    /// A rejected combo is not applied. An accepted one, with or without a
+    /// warning, is applied and saved.
+    @discardableResult
+    func updateVocabularyShortcut(_ combo: KeyCombo) -> KeyComboValidator.Verdict {
+        let verdict = validate(combo, for: nil)
+        if case .rejected = verdict { return verdict }
+        settings.vocabularyShortcut = combo
+        vocabularyShortcut = combo
+        onChange()
+        return verdict
+    }
+
+    func clearVocabularyShortcut() {
+        settings.vocabularyShortcut = nil
+        vocabularyShortcut = nil
+        onChange()
+    }
+
+    /// The add-to-vocabulary shortcut validated as `warning(for:)` does a
+    /// preset's. Nil when there is none or it is clean.
+    var vocabularyShortcutWarning: String? {
+        guard let vocabularyShortcut else { return nil }
+        switch validate(vocabularyShortcut, for: nil) {
+        case .ok: return nil
+        case .warning(let message), .rejected(let message): return message
+        }
+    }
+
+    /// `id` is the preset being validated; nil validates the
+    /// add-to-vocabulary shortcut against every preset.
+    private func validate(_ combo: KeyCombo, for id: PresetShortcut.ID?) -> KeyComboValidator.Verdict {
         if reserved().contains(combo) { return .rejected(Self.meetingShortcutTaken) }
+        if id != nil, combo == vocabularyShortcut { return .rejected(Self.vocabularyShortcutTaken) }
         let others = presets.filter { $0.id != id && !$0.needsShortcut }.map(\.combo)
         return KeyComboValidator.validate(combo, others: others, chords: chords(), translate: translate)
     }

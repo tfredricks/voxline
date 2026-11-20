@@ -74,6 +74,7 @@ final class MeetingSettingsViewModel {
     @discardableResult
     func updateShortcut(_ combo: KeyCombo) -> KeyComboValidator.Verdict {
         if KeyInterceptor.presetMap(presets())[combo] != nil { return .rejected(Self.presetTaken) }
+        if combo == settings.vocabularyShortcut { return .rejected(CommandSettingsViewModel.vocabularyShortcutTaken) }
         let verdict = validate(combo)
         if case .rejected = verdict { return verdict }
         settings.meetingShortcut = combo

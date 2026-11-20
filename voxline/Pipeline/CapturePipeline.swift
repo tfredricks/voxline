@@ -39,6 +39,7 @@ final class CapturePipeline {
     /// Commands use this model when set, else `llmModelID`.
     let commandModelID: @Sendable () -> String?
     let vocabulary: @Sendable () -> [String]
+    let addVocabularyTerm: @Sendable (String) -> Void
     private let skipShortUtterances: @Sendable () -> Bool
     /// Read at insert time; the release gate waits on the trigger's modifiers.
     let chords: @Sendable () -> ChordSet
@@ -117,6 +118,10 @@ final class CapturePipeline {
         llmModelID: @escaping @Sendable () -> String = { AppSettings().llmModel },
         commandModelID: @escaping @Sendable () -> String? = { AppSettings().commandModel },
         vocabulary: @escaping @Sendable () -> [String] = { CustomVocabularyStore().load() },
+        addVocabularyTerm: @escaping @Sendable (String) -> Void = { term in
+            let store = CustomVocabularyStore()
+            store.save(store.load() + [term])
+        },
         skipShortUtterances: @escaping @Sendable () -> Bool = { AppSettings().skipShortUtterances },
         chords: @escaping @Sendable () -> ChordSet = { AppSettings().chords },
         releaseGate: ModifierReleaseGate = ModifierReleaseGate(),
@@ -140,6 +145,7 @@ final class CapturePipeline {
         self.llmModelID = llmModelID
         self.commandModelID = commandModelID
         self.vocabulary = vocabulary
+        self.addVocabularyTerm = addVocabularyTerm
         self.skipShortUtterances = skipShortUtterances
         self.chords = chords
         self.releaseGate = releaseGate
@@ -479,7 +485,7 @@ final class CapturePipeline {
             state.retryTranscript = nil
             return refuseSecureField()
         }
-        guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
+        guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field, site: snapshot.context.pageHost) else {
             return setError(Self.noModeMessage(bundleID: snapshot.bundleID), retryable: true)
         }
         cancellableDictation = (transcript, mode, snapshot.context)
@@ -580,7 +586,7 @@ final class CapturePipeline {
         let snapshot = await snapshotFocus().value
         guard generation == self.generation else { return }
         guard snapshot.field?.kind != .secure else { return refuseSecureField() }
-        guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field) else {
+        guard let mode = modes.mode(for: snapshot.bundleID, field: snapshot.field, site: snapshot.context.pageHost) else {
             return setError(Self.noModeMessage(bundleID: snapshot.bundleID), retryable: true)
         }
         cancellableDictation = (transcript, mode, snapshot.context)
@@ -650,7 +656,8 @@ final class CapturePipeline {
         }
 
         let insertStart = ContinuousClock.now
-        let outcome = await inserter.insert(cleaned, at: .liveSelection, expectedElement: nil,
+        let spaced = DictationSpacing.spaced(cleaned, before: context.textBeforeCursor, bundleID: snapshot.bundleID)
+        let outcome = await inserter.insert(spaced, at: .liveSelection, expectedElement: nil,
                                             bundleID: snapshot.bundleID, trigger: chords().dictation.families)
         guard generation == self.generation else { return }
         switch outcome {

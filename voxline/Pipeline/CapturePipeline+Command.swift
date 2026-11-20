@@ -114,6 +114,59 @@ extension CapturePipeline {
         await edit(request, target: target, run: run, generation: generation)
     }
 
+    // MARK: - Add to vocabulary
+
+    /// Adds the selected text to the custom vocabulary. Reads the selection
+    /// the way presets do, Cmd+C fallback included, so it works in apps whose
+    /// fields AX can't read. Logs no text.
+    func addSelectionToVocabulary(trigger: ModifierFamilies) async {
+        switch state.status {
+        case .idle, .error:
+            break
+        default:
+            return
+        }
+        let generation = beginRun()
+        let reader = editContextReader
+        let read = await Task.detached(priority: .userInitiated) { reader.read() }.value
+        guard generation == self.generation else { return }
+        let resolved = await resolveCopyFallback(read, trigger: trigger, generation: generation)
+        guard generation == self.generation else { return }
+        let selection: String?
+        switch resolved {
+        case .failure(let refusal):
+            return endRefused(refusal)
+        case .success(let target):
+            selection = target.context.selection?.text
+        }
+        resetIdle()
+        guard let term = Self.vocabularyTerm(from: selection) else {
+            AppLog.pipeline.info("add to vocabulary: no usable selection")
+            return showToast("Select a word or name to add")
+        }
+        guard !vocabulary().contains(term) else {
+            return showToast("“\(term)” is already in your vocabulary")
+        }
+        addVocabularyTerm(term)
+        AppLog.pipeline.info("add to vocabulary: added a term")
+        showToast("Added “\(term)” to vocabulary")
+    }
+
+    /// The selection as a vocabulary term: trimmed, one line, at most
+    /// `vocabularyTermMaxWords` words and `vocabularyTermMaxLength`
+    /// characters. Nil for anything longer, which is text, not a term.
+    nonisolated static func vocabularyTerm(from selection: String?) -> String? {
+        guard let term = selection?.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?\"“”")),
+              !term.isEmpty, term.count <= vocabularyTermMaxLength,
+              !term.contains(where: \.isNewline),
+              term.split(whereSeparator: \.isWhitespace).count <= vocabularyTermMaxWords
+        else { return nil }
+        return term
+    }
+
+    nonisolated static let vocabularyTermMaxWords = 4
+    nonisolated static let vocabularyTermMaxLength = 60
+
     // MARK: - Commands
 
     /// Waits for the recording's EditContext read and, when it needs one,

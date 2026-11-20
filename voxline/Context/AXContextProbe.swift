@@ -11,6 +11,8 @@ struct AXContextProbeResult: Equatable, Sendable {
     var textBeforeCursor: String?
     var textAfterCursor: String?
     var selectedText: String?
+    /// Host of the web page holding the focused field, lowercased.
+    var pageHost: String?
 }
 
 /// Probes the system-wide focused element for value-bearing signals. Each
@@ -43,6 +45,7 @@ struct DefaultAXContextProbe: AXContextProbing {
     static let selectedTextMax = 500
     static let beforeCursorMax = 200
     static let afterCursorMax = 100
+    static let webAreaSearchDepth = 40
 
     func probe(deadline: CaptureDeadline) -> AXContextProbeResult {
         var result = AXContextProbeResult()
@@ -62,6 +65,8 @@ struct DefaultAXContextProbe: AXContextProbing {
             let (before, after) = readBeforeAfter(focused: focused)
             result.textBeforeCursor = before
             result.textAfterCursor = after
+
+            result.pageHost = readPageHost(focused: focused, deadline: deadline)
         }
 
         // Catalyst-app fallback: when the system-wide focused element is
@@ -136,6 +141,23 @@ struct DefaultAXContextProbe: AXContextProbing {
         var range = CFRange(location: 0, length: 0)
         guard AXValueGetType(axValue) == .cfRange, AXValueGetValue(axValue, .cfRange, &range) else { return nil }
         return max(0, range.location)
+    }
+
+    /// The `AXURL` host of the nearest `AXWebArea` ancestor. Nil outside web
+    /// content, and when the walk runs past the deadline or the depth cap.
+    private func readPageHost(focused: AXUIElement, deadline: CaptureDeadline) -> String? {
+        var element: AXUIElement? = focused
+        for _ in 0..<Self.webAreaSearchDepth {
+            guard let current = element, !deadline.isExpired else { return nil }
+            if current.stringAttribute(kAXRoleAttribute) == "AXWebArea" {
+                var value: CFTypeRef?
+                guard AXUIElementCopyAttributeValue(current, "AXURL" as CFString, &value) == .success else { return nil }
+                let url = (value as? URL) ?? (value as? String).flatMap(URL.init(string:))
+                return url?.host?.lowercased()
+            }
+            element = current.elementAttribute(kAXParentAttribute as CFString)
+        }
+        return nil
     }
 
     private func readBeforeAfter(focused: AXUIElement) -> (String?, String?) {

@@ -317,4 +317,18 @@ import Testing
         let config = KeyInterceptor.Config(presetsArmed: true, presets: [ctrlOptionM: presetID], meetingArmed: true, meetingToggle: ctrlOptionM)
         #expect(decide(46, flags: [.maskControl, .maskAlternate], config: config).decision == .swallowAndFire(.meeting))
     }
+
+    // MARK: - Add to vocabulary
+
+    @Test func armed_vocabulary_combo_is_swallowed_and_fires_before_presets() {
+        let config = KeyInterceptor.Config(presetsArmed: true, presets: [ctrlOptionM: presetID], addToVocabulary: ctrlOptionM)
+        let d = decide(46, flags: [.maskControl, .maskAlternate], config: config)
+        #expect(d.decision == .swallowAndFire(.addToVocabulary))
+        #expect(d.swallowedDowns == [46])
+    }
+
+    @Test func unarmed_vocabulary_combo_passes() {
+        let config = KeyInterceptor.Config(presetsArmed: false, addToVocabulary: ctrlOptionM)
+        #expect(decide(46, flags: [.maskControl, .maskAlternate], config: config).decision == .pass)
+    }
 }

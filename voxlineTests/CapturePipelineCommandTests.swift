@@ -55,6 +55,7 @@ import Testing
         let context: FakeContextCapture
         let copied: LockedBox<[String]>
         let log: LockedBox<[String]>
+        let addedTerms: LockedBox<[String]>
     }
 
     nonisolated static let defaultModes = [
@@ -87,6 +88,7 @@ import Testing
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         let history = DictationHistoryStore(defaults: defaults)
+        let addedTerms = LockedBox<[String]>([])
         let pipe = CapturePipeline(
             state: state,
             capture: capture,
@@ -103,6 +105,7 @@ import Testing
             llmModelID: { "test-model" },
             commandModelID: { commandModel },
             vocabulary: { ["Voxline"] },
+            addVocabularyTerm: { term in addedTerms.mutate { $0.append(term) } },
             skipShortUtterances: { false },
             chords: chords,
             releaseGate: gate
@@ -113,7 +116,8 @@ import Testing
         inserter.onClipboardRestoreWait = { log.mutate { $0.append("clipboard") } }
         return Harness(
             pipe: pipe, state: state, capture: capture, session: session, llm: llm, inserter: inserter,
-            reader: reader, copies: copySnapshot, history: history, context: context, copied: copied, log: log
+            reader: reader, copies: copySnapshot, history: history, context: context, copied: copied, log: log,
+            addedTerms: addedTerms
         )
     }
 
@@ -1039,6 +1043,52 @@ import Testing
         let call = try #require(h.inserter.calls.first)
         #expect(call.target == .liveSelection)
         #expect(call.trigger == .option)
+    }
+
+    // MARK: - Add to vocabulary
+
+    @Test func add_to_vocabulary_adds_the_trimmed_selection() async {
+        let h = makeHarness(reader: FakeEditContextReader(.success(Self.unavailableContext(selection: "  Sinead O’Connor. "))))
+        await h.pipe.addSelectionToVocabulary(trigger: .option)
+
+        #expect(h.addedTerms.read() == ["Sinead O’Connor"])
+        #expect(h.state.toastMessage == "Added “Sinead O’Connor” to vocabulary")
+        #expect(h.state.status == .idle)
+        #expect(h.llm.commandRequests.isEmpty)
+    }
+
+    @Test func add_to_vocabulary_uses_the_copy_fallback() async {
+        let h = makeHarness(reader: .needingCopy(), copies: ["LangGraph"])
+        await h.pipe.addSelectionToVocabulary(trigger: .option)
+
+        #expect(h.copies.reads.read() == 1)
+        #expect(h.addedTerms.read() == ["LangGraph"])
+    }
+
+    @Test func add_to_vocabulary_rejects_long_or_missing_selections() async {
+        for selection in [nil, "", "this is a whole sentence, not a term", "two\nlines"] as [String?] {
+            let h = makeHarness(reader: FakeEditContextReader(.success(Self.unavailableContext(selection: selection))))
+            await h.pipe.addSelectionToVocabulary(trigger: .option)
+
+            #expect(h.addedTerms.read().isEmpty)
+            #expect(h.state.toastMessage == "Select a word or name to add")
+        }
+    }
+
+    @Test func add_to_vocabulary_skips_a_term_already_there() async {
+        let h = makeHarness(reader: FakeEditContextReader(.success(Self.unavailableContext(selection: "Voxline"))))
+        await h.pipe.addSelectionToVocabulary(trigger: .option)
+
+        #expect(h.addedTerms.read().isEmpty)
+        #expect(h.state.toastMessage == "“Voxline” is already in your vocabulary")
+    }
+
+    @Test func add_to_vocabulary_refuses_secure_fields() async {
+        let h = makeHarness(reader: FakeEditContextReader(.failure(.secureField)))
+        await h.pipe.addSelectionToVocabulary(trigger: .option)
+
+        #expect(h.addedTerms.read().isEmpty)
+        #expect(h.state.toastMessage == "Command mode is off in password fields")
     }
 
     @Test func preset_with_nothing_copied_toasts() async {

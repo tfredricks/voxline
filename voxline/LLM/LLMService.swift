@@ -45,6 +45,16 @@ struct LLMService: LLMServing, MeetingNotesGenerating {
         "cube control get pods" → "kubectl get pods"
       Only repair when the heard word does not fit; a word that makes \
     sense as spoken stays.
+    - Turn spoken punctuation and layout into the symbol or break: \
+    "period", "comma", "question mark", "colon", "new line", "new \
+    paragraph". When the word belongs to the sentence ("the trial period \
+    ended"), keep it as a word.
+    - Write numbers, dates, times, and money in standard written form. \
+    Examples:
+        "five thirty pm" → "5:30 PM"
+        "three hundred dollars" → "$300"
+        "january fifteenth" → "January 15"
+      Small counts in running prose may stay words ("two options").
     """
 
     /// Included only when the user message carries a Context section.

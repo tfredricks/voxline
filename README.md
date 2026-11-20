@@ -43,7 +43,7 @@ Result: hold a hotkey, say what you mean — even messily — and watch clean pr
 - **AI cleanup, not raw dump** — fillers, false starts, and rambling are smoothed out. Punctuation and capitalization are added automatically.
 - **Command mode: edit by voice** — hold the command chord (Left Shift + Left Option by default), say what to do, and let go. With text selected, the selection is replaced: *"make this a bullet list"*, *"translate this to Spanish"*, *"make this shorter"*. With nothing selected, the result goes in at the cursor (*"draft a short reply agreeing to the Thursday time"*), or, for an instruction about existing text (*"make the last paragraph shorter"*), only the part that changed is replaced. An edit is a normal ⌘Z-undoable change.
 - **Preset edit shortcuts** — select text anywhere and press ⌥1, ⌥2, or ⌥3 to fix grammar, make it concise, or make it professional, with no recording. The shortcuts and their instructions are an editable table in Settings → Commands.
-- **Context-aware per-app formatting** — voxline detects the frontmost app and tunes the output for it: terse Slack messages, structured email replies, code-comment style in your IDE, search-box one-liners. Ships with sensible defaults for 29 common apps out of the box.
+- **Context-aware per-app formatting** — voxline detects the frontmost app and tunes the output for it: terse Slack messages, structured email replies, code-comment style in your IDE, search-box one-liners. Ships with sensible defaults for 29 common apps out of the box, plus web apps in your browser such as Gmail, Slack, Google Docs and GitHub.
 - **Dictation history** — the last 25 dictations, cleaned text and raw transcript side by side, in a History window; click any row to copy it back to the clipboard.
 - **Bring your own LLM key** — Anthropic or OpenAI, your account, your costs. Keys live in macOS Keychain.
 - **Menu-bar native, with a real window when you want it** — a main window with Home (status, setup issues, permissions, recent meetings) and six settings pages; close it and voxline keeps running in the menu bar. No Dock icon unless the window is open, or turn on Settings → General → Show Voxline in Dock.
@@ -115,7 +115,7 @@ Pick one in Settings → Dictation → Engine.
 | Whisper | On your Mac | Close on accuracy, but takes about half a second longer to finish. Needs a one-time model download (below). |
 | OpenAI | OpenAI's servers | Cloud transcription (`gpt-4o-transcribe`) with your own OpenAI key. Audio leaves your Mac — see [Privacy](#privacy). Never the default. |
 
-Switching engines prepares the new one in the background; if it needs a download, the menu bar shows progress and dictation waits. If OpenAI fails mid-dictation, voxline transcribes the same audio again on-device. Your custom vocabulary, including words voxline learned from your corrections, is applied during cleanup whichever engine you use; Apple Speech and OpenAI also use it as recognition hints. To measure the engines on your own voice, see [docs/bakeoff.md](docs/bakeoff.md).
+Switching engines prepares the new one in the background; if it needs a download, the menu bar shows progress and dictation waits. If OpenAI fails mid-dictation, voxline transcribes the same audio again on-device. Your custom vocabulary is applied during cleanup whichever engine you use; Apple Speech and OpenAI also use it as recognition hints. To measure the engines on your own voice, see [docs/bakeoff.md](docs/bakeoff.md).
 
 ### Whisper models (on-device)
 

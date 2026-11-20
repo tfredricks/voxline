@@ -25,6 +25,8 @@ enum ModeCategory: String, Codable, CaseIterable {
 struct Mode: Codable, Equatable {
     static let wildcardBundleID = "*"
 
+    /// An app's bundle ID, `*`, or a web host such as `mail.google.com`
+    /// for a site mode (see `ModeRouter`).
     var bundleID: String
     var displayName: String
     var prompt: String

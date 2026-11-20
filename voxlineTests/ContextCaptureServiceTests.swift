@@ -42,7 +42,8 @@ import Foundation
             windowTitle: "#sales-pipeline — Acme",
             textBeforeCursor: "Hey Kamil,",
             textAfterCursor: nil,
-            selectedText: "highlighted"
+            selectedText: "highlighted",
+            pageHost: "app.slack.com"
         ))
         let svc = DefaultContextCaptureService(
             frontmost: front,
@@ -61,6 +62,7 @@ import Foundation
         #expect(c.isSecureField == false)
         #expect(c.textBeforeCursor == "Hey Kamil,")
         #expect(c.selectedText == "highlighted")
+        #expect(c.pageHost == "app.slack.com")
         #expect(c.customVocabulary.isEmpty, "the pipeline adds the vocabulary")
         #expect(c.captureNotes.contains("ax-not-trusted") == false)
     }

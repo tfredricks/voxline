@@ -42,6 +42,14 @@ import Testing
         #expect(changes.read() == 1)
     }
 
+    @Test func shortcut_used_by_add_to_vocabulary_is_rejected() {
+        var settings = AppSettings(defaults: defaults)
+        settings.vocabularyShortcut = combo
+        let vm = model()
+        #expect(vm.updateShortcut(combo) == .rejected(CommandSettingsViewModel.vocabularyShortcutTaken))
+        #expect(vm.shortcut == nil)
+    }
+
     @Test func shortcut_used_by_a_preset_is_rejected() {
         var preset = PresetShortcut.defaults[0]
         preset.combo = combo

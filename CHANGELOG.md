@@ -8,6 +8,16 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
+### Added
+
+- **Add to vocabulary shortcut.** Settings → Commands has a shortcut that adds the selected word or name to your custom vocabulary, so a name voxline keeps getting wrong only needs fixing once. It reads the selection the way presets do, so it works in VS Code, Electron apps and browsers too.
+- **Site modes in browsers.** Dictating into Gmail, Outlook on the web, Slack, Teams, WhatsApp Web, Discord, Google Docs, Notion or GitHub in a browser now uses that site's style (email, chat, writing or developer) instead of the default.
+
+### Changed
+
+- **Spacing between dictations.** A dictation right after text that doesn't end in a space now starts with one, so back-to-back dictations no longer run together ("Hello.How are you"). Terminals and Chinese and Japanese text are left alone.
+- **Spoken punctuation, numbers and dates.** Cleanup turns "period", "comma", "new line" and "new paragraph" into the symbol or break, and writes numbers, times, dates and money in written form ("5:30 PM", "$300", "January 15").
+
 ## [0.7.1] - 2026-11-15
 
 ### Changed

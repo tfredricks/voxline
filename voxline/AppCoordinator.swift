@@ -282,6 +282,11 @@ final class AppCoordinator {
             onMeeting: { [weak self] in
                 self?.hotkeyMonitor?.noteSwallowedKeyDown()
                 self?.toggleMeetingRecording()
+            },
+            onAddToVocabulary: { [weak self] in
+                self?.hotkeyMonitor?.noteSwallowedKeyDown()
+                guard let combo = AppSettings().vocabularyShortcut else { return }
+                Task { await self?.pipeline?.addSelectionToVocabulary(trigger: combo.modifiers) }
             }
         )
         presetMap = KeyInterceptor.presetMap(presetStore.load())
@@ -434,11 +439,12 @@ final class AppCoordinator {
             presets: presetMap,
             chordFamilies: hotkeyMonitor?.chords.families ?? [],
             meetingArmed: presetsArmed,
-            meetingToggle: AppSettings().meetingShortcut
+            meetingToggle: AppSettings().meetingShortcut,
+            addToVocabulary: AppSettings().vocabularyShortcut
         )
     }
 
-    /// Settings → Commands saved the presets.
+    /// Settings → Commands saved the presets or the add-to-vocabulary shortcut.
     func presetsDidChange() {
         presetMap = KeyInterceptor.presetMap(presetStore.load())
         refreshInterceptorConfig()

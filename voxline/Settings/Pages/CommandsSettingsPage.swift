@@ -46,6 +46,26 @@ struct CommandsSettingsPage: View {
                     .foregroundStyle(.secondary)
                     .font(.callout)
             }
+
+            Section("Vocabulary") {
+                LabeledContent("Add selection to vocabulary") {
+                    HStack(spacing: 8) {
+                        KeyComboRecorderView(combo: command.vocabularyShortcut, onRecord: { command.updateVocabularyShortcut($0) })
+                        if command.vocabularyShortcut != nil {
+                            Button("Clear") { command.clearVocabularyShortcut() }
+                        }
+                    }
+                }
+                if let warning = command.vocabularyShortcutWarning {
+                    Text(warning)
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text("Select a name or term voxline keeps getting wrong, then press this shortcut to add it to your custom vocabulary.")
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+            }
         }
     }
 }
