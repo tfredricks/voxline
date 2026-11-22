@@ -77,6 +77,29 @@ import Foundation
         #expect(mock.capturedRequest?.url?.host == "api.openai.com")
     }
 
+    @Test func cleanup_drops_a_self_revision_from_the_reply() async throws {
+        let mock = MockHTTPClient()
+        let reply = "Let's just check.\\n\\nWait, I need to correct my output: drop \\\"just\\\". Final text:\\n\\nLet's check."
+        mock.stubResponse = (
+            data: Data(#"{"content":[{"type":"text","text":"\#(reply)"}]}"#.utf8),
+            status: 200
+        )
+        var settings = AppSettings(defaults: defaultsSuite())
+        settings.llmProvider = .anthropic
+        let kc = InMemoryKeychain()
+        try kc.set("k", forKey: KeychainAccount.anthropic)
+
+        let service = LLMService(settings: settings, keychain: kc, http: mock)
+        let mode = Mode(bundleID: "*", displayName: "d", prompt: "S", model: nil, temperature: nil)
+
+        let out = try await service.cleanup(transcript: "let's just check", mode: mode, context: .empty)
+        #expect(out == "Let's check.")
+    }
+
+    @Test func preambleCore_forbids_revising_the_reply() {
+        #expect(LLMService.preambleCore.contains("write the cleaned text exactly once"))
+    }
+
     @Test func mode_model_override_wins_over_settings_model() async throws {
         let mock = MockHTTPClient()
         mock.stubResponse = (
