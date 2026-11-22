@@ -8,6 +8,12 @@ once it reaches its first tagged release.
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-22
+
+### Fixed
+
+- **Model second thoughts no longer appear in dictations.** Cleanup sometimes inserted a first draft, a note like "Wait, I need to correct my output…", and then the corrected text. voxline now inserts only the final text, and the cleanup prompt tells the model to write its answer once.
+
 ## [0.7.2] - 2026-11-20
 
 ### Added
@@ -397,7 +403,8 @@ app that is no longer sandboxed.
   synthetic keystrokes. Under the App Sandbox the previous AX-based
   paste-eligibility check always failed and forced the unreliable typing path.
 
-[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/tfredricks/voxline/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/tfredricks/voxline/releases/tag/v0.7.3
 [0.7.2]: https://github.com/tfredricks/voxline/releases/tag/v0.7.2
 [0.7.1]: https://github.com/tfredricks/voxline/releases/tag/v0.7.1
 [0.7.0]: https://github.com/tfredricks/voxline/releases/tag/v0.7.0
